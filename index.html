@@ -2069,7 +2069,7 @@
     // CONFIGURATION
     // ═══════════════════════════════════════════════════════════════════
     const CONFIG = {
-        STORAGE_KEY: 'mynd-v4y',
+        STORAGE_KEY: 'mynd-v4z',
         ONBOARDING_KEY: 'mynd-onboarded',
         THEME_KEY: 'mynd-theme',
         API_KEY: 'mynd-api-key',
@@ -2773,6 +2773,7 @@
         const hasChildren = data.children && data.children.length > 0;
         const childCount = hasChildren ? data.children.length : 0;
         const isExpanded = store.expandedNodes.has(data.id);
+        const needsExtraSpace = hasChildren && isExpanded && childCount > 2;
         
         // Position calculation
         let baseRadius, expandedRadius;
@@ -2782,26 +2783,29 @@
         } else if (level === 1) {
             baseRadius = CONFIG.LAYOUT.level1Radius;
             expandedRadius = CONFIG.LAYOUT.level1RadiusExpanded;
-            // Push level 1 nodes with expanded children further out
-            if (hasChildren && isExpanded) {
-                baseRadius += Math.min(childCount * 1.5, 6);
-                expandedRadius += Math.min(childCount * 1.5, 6);
+            // Push level 1 nodes with 3+ expanded children further out
+            if (needsExtraSpace) {
+                const extraChildren = childCount - 2;
+                baseRadius += Math.min(extraChildren * 1.5, 6);
+                expandedRadius += Math.min(extraChildren * 1.5, 6);
             }
         } else if (level === 2) {
             baseRadius = CONFIG.LAYOUT.level2Radius;
             expandedRadius = CONFIG.LAYOUT.level2Radius + 2;
-            // Push level 2 nodes with expanded children further out
-            if (hasChildren && isExpanded) {
-                baseRadius += Math.min(childCount * 1.2, 5);
-                expandedRadius += Math.min(childCount * 1.2, 5);
+            // Push level 2 nodes with 3+ expanded children further out
+            if (needsExtraSpace) {
+                const extraChildren = childCount - 2;
+                baseRadius += Math.min(extraChildren * 1.2, 5);
+                expandedRadius += Math.min(extraChildren * 1.2, 5);
             }
         } else {
             baseRadius = CONFIG.LAYOUT.level3Radius || 3.5;
             expandedRadius = baseRadius + 1.5;
-            // Push deeper nodes with expanded children further out
-            if (hasChildren && isExpanded) {
-                baseRadius += Math.min(childCount * 1.0, 4);
-                expandedRadius += Math.min(childCount * 1.0, 4);
+            // Push deeper nodes with 3+ expanded children further out
+            if (needsExtraSpace) {
+                const extraChildren = childCount - 2;
+                baseRadius += Math.min(extraChildren * 1.0, 4);
+                expandedRadius += Math.min(extraChildren * 1.0, 4);
             }
         }
         
@@ -3281,6 +3285,8 @@
             selectedNode.userData.selected = false;
         }
         
+        const nodeId = mesh.userData.id;
+        
         // Toggle expand/collapse if node has children
         if (mesh.userData.children?.length > 0) {
             if (mesh.userData.isExpanded) {
@@ -3289,6 +3295,9 @@
                 expandNode(mesh);
             }
         }
+        
+        // Re-fetch mesh after expand/collapse (scene may have been rebuilt)
+        mesh = nodes.get(nodeId) || mesh;
         
         selectedNode = mesh;
         mesh.userData.selected = true;
