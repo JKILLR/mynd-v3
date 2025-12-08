@@ -2318,7 +2318,7 @@
     // CONFIGURATION
     // ═══════════════════════════════════════════════════════════════════
     const CONFIG = {
-        STORAGE_KEY: 'mynd-v5e',
+        STORAGE_KEY: 'mynd-v5g',
         ONBOARDING_KEY: 'mynd-onboarded',
         THEME_KEY: 'mynd-theme',
         API_KEY: 'mynd-api-key',
@@ -3527,15 +3527,19 @@
             selectedNode.userData.selected = false;
         }
         
-        // Toggle expand/collapse only if node was already selected (second click)
-        if (wasAlreadySelected && mesh.userData.children?.length > 0) {
-            if (mesh.userData.isExpanded) {
-                collapseNode(mesh);
-            } else {
+        // Expand/collapse logic:
+        // - First click on collapsed node: expand immediately
+        // - Second click on expanded node: collapse
+        if (mesh.userData.children?.length > 0) {
+            if (!mesh.userData.isExpanded) {
+                // Always expand on click if not expanded
                 expandNode(mesh);
+                mesh = nodes.get(nodeId) || mesh;
+            } else if (wasAlreadySelected) {
+                // Only collapse if clicking again on already-selected expanded node
+                collapseNode(mesh);
+                mesh = nodes.get(nodeId) || mesh;
             }
-            // Re-fetch mesh after expand/collapse (scene may have been rebuilt)
-            mesh = nodes.get(nodeId) || mesh;
         }
         
         selectedNode = mesh;
@@ -3729,6 +3733,92 @@
         showToast('Collapsed all nodes', 'success');
     }
 
+    // Label decluttering - hide labels that overlap with others
+    function declutterLabels() {
+        const visibleLabels = [];
+        const padding = 12; // pixels of padding between labels
+        
+        // Collect all visible labels with their screen positions
+        nodes.forEach(mesh => {
+            if (!mesh.visible || !mesh.userData.labelSprite) return;
+            
+            const sprite = mesh.userData.labelSprite;
+            const pos = mesh.position.clone();
+            pos.project(camera);
+            
+            // Skip if behind camera
+            if (pos.z > 1) {
+                sprite.material.opacity = 0;
+                return;
+            }
+            
+            // Convert to screen coordinates
+            const screenX = (pos.x * 0.5 + 0.5) * window.innerWidth;
+            const screenY = (-pos.y * 0.5 + 0.5) * window.innerHeight;
+            
+            // Get approximate label size in screen pixels based on text length
+            const dist = camera.position.distanceTo(mesh.position);
+            const textLength = (mesh.userData.label || '').length;
+            const labelWidth = Math.max(60, textLength * 8) * (20 / Math.max(dist, 5));
+            const labelHeight = 24 * (20 / Math.max(dist, 5));
+            
+            // Priority: selected nodes > root > by depth (shallower = higher priority)
+            const depth = mesh.userData.depth || 0;
+            const isSelected = mesh.userData.selected;
+            const isRoot = mesh.userData.id === 'root';
+            const priority = isSelected ? 1000 : (isRoot ? 500 : 100 - depth * 10);
+            
+            visibleLabels.push({
+                sprite,
+                mesh,
+                x: screenX,
+                y: screenY,
+                width: labelWidth,
+                height: labelHeight,
+                priority,
+                baseOpacity: mesh.userData.labelBaseOpacity || 1,
+                shouldShow: true
+            });
+        });
+        
+        // Sort by priority (higher priority labels get shown first)
+        visibleLabels.sort((a, b) => b.priority - a.priority);
+        
+        // Check for overlaps and hide lower priority labels
+        for (let i = 0; i < visibleLabels.length; i++) {
+            if (!visibleLabels[i].shouldShow) continue;
+            
+            const labelA = visibleLabels[i];
+            
+            for (let j = i + 1; j < visibleLabels.length; j++) {
+                if (!visibleLabels[j].shouldShow) continue;
+                
+                const labelB = visibleLabels[j];
+                
+                // Check for rectangle overlap
+                const overlapX = Math.abs(labelA.x - labelB.x) < (labelA.width + labelB.width) / 2 + padding;
+                const overlapY = Math.abs(labelA.y - labelB.y) < (labelA.height + labelB.height) / 2 + padding;
+                
+                if (overlapX && overlapY) {
+                    // Hide the lower priority label (labelB since array is sorted)
+                    visibleLabels[j].shouldShow = false;
+                }
+            }
+        }
+        
+        // Apply visibility with smooth fade
+        visibleLabels.forEach(label => {
+            const targetOpacity = label.shouldShow ? label.baseOpacity : 0;
+            const currentOpacity = label.sprite.material.opacity;
+            // Smooth transition
+            label.sprite.material.opacity = currentOpacity + (targetOpacity - currentOpacity) * 0.12;
+            // Clamp very small values to 0
+            if (label.sprite.material.opacity < 0.03) {
+                label.sprite.material.opacity = 0;
+            }
+        });
+    }
+
     // Animation loop
     function animate() {
         requestAnimationFrame(animate);
@@ -3792,7 +3882,8 @@
                 const labelScale = 0.6 * Math.max(0.5, Math.min(1.2, dist / 15));
                 const aspect = mesh.userData.labelSprite.scale.x / mesh.userData.labelSprite.scale.y;
                 mesh.userData.labelSprite.scale.set(labelScale * aspect, labelScale, 1);
-                mesh.userData.labelSprite.material.opacity = Math.max(0.7, Math.min(1, 35 / dist));
+                // Store distance-based opacity for declutter to use
+                mesh.userData.labelBaseOpacity = Math.max(0.7, Math.min(1, 35 / dist));
             }
             
             // Selection glow
@@ -3802,6 +3893,9 @@
                 mesh.material.emissiveIntensity = 0.5;
             }
         });
+        
+        // Label decluttering - hide overlapping labels
+        declutterLabels();
         
         // Smooth camera animation (runs even during interaction if animation is active)
         if (cameraArcAnimation) {
@@ -3886,12 +3980,26 @@
     let draggedNode = null;
     let dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
     let dragOffset = new THREE.Vector3();
+    let childOffsets = new Map(); // Store offsets for children when dragging expanded node
     let pointerDownTime = 0;
     let pointerDownPos = { x: 0, y: 0 };
     let clickedOnEmpty = false;
 
+    // Get all visible descendants of a node
+    function getVisibleDescendants(mesh, descendants = []) {
+        if (!mesh.userData.children) return descendants;
+        mesh.userData.children.forEach(childData => {
+            const childMesh = nodes.get(childData.id);
+            if (childMesh && childMesh.visible) {
+                descendants.push(childMesh);
+                getVisibleDescendants(childMesh, descendants);
+            }
+        });
+        return descendants;
+    }
+
     function onPointerDown(event) {
-        if (event.target.closest('#info-panel, #side-panel, #top-controls, #quick-capture, #spotlight-overlay, #modal-overlay, #menu-dropdown, #theme-picker, #depth-indicator, #radial-menu')) {
+        if (event.target.closest('#info-panel, #side-panel, #top-controls, #quick-capture, #spotlight-overlay, #modal-overlay, #menu-dropdown, #theme-picker, #depth-indicator, #radial-menu, #voice-indicator, #voice-backdrop, #api-key-modal')) {
             return;
         }
         
@@ -3909,9 +4017,8 @@
         
         if (intersects.length > 0) {
             const mesh = intersects[0].object;
-            selectNode(mesh);
             
-            // Move mode - start dragging
+            // Move mode - start dragging immediately, don't select (which might collapse)
             if (moveMode) {
                 draggedNode = mesh;
                 controls.enabled = false;
@@ -3926,7 +4033,17 @@
                 const intersectPoint = new THREE.Vector3();
                 raycaster.ray.intersectPlane(dragPlane, intersectPoint);
                 dragOffset.subVectors(mesh.position, intersectPoint);
+                
+                // Store offsets for all visible descendants so they move with parent
+                childOffsets.clear();
+                const descendants = getVisibleDescendants(mesh);
+                descendants.forEach(childMesh => {
+                    const offset = childMesh.position.clone().sub(mesh.position);
+                    childOffsets.set(childMesh.userData.id, offset);
+                });
             } else {
+                selectNode(mesh);
+                
                 // Double-tap to expand all children
                 if (mesh.userData.lastTap && Date.now() - mesh.userData.lastTap < 300) {
                     expandAllDescendants(mesh);
@@ -3955,7 +4072,25 @@
             draggedNode.userData.spring.target.copy(newPos);
             draggedNode.userData.basePosition = [newPos.x, newPos.y, newPos.z];
             
-            // Update connection line
+            // Move all children with the parent
+            childOffsets.forEach((offset, childId) => {
+                const childMesh = nodes.get(childId);
+                if (childMesh && childMesh.visible) {
+                    const childNewPos = newPos.clone().add(offset);
+                    childMesh.userData.spring.target.copy(childNewPos);
+                    childMesh.userData.basePosition = [childNewPos.x, childNewPos.y, childNewPos.z];
+                    
+                    // Update child's connection line
+                    if (childMesh.userData.connectionLine && childMesh.userData.parent) {
+                        const parentMesh = nodes.get(childMesh.userData.parent.id);
+                        if (parentMesh) {
+                            updateConnection(childMesh, parentMesh);
+                        }
+                    }
+                }
+            });
+            
+            // Update connection line for dragged node
             if (draggedNode.userData.connectionLine && draggedNode.userData.parent) {
                 const parentMesh = nodes.get(draggedNode.userData.parent.id);
                 if (parentMesh) {
@@ -3967,6 +4102,27 @@
     
     function onPointerUp(event) {
         if (draggedNode && moveMode) {
+            // Save final positions to store
+            const nodeData = store.findNode(draggedNode.userData.id);
+            if (nodeData) {
+                const pos = draggedNode.userData.spring.target;
+                nodeData.customPosition = { x: pos.x, y: pos.y, z: pos.z };
+            }
+            
+            // Save child positions too
+            childOffsets.forEach((offset, childId) => {
+                const childMesh = nodes.get(childId);
+                if (childMesh) {
+                    const childData = store.findNode(childId);
+                    if (childData) {
+                        const pos = childMesh.userData.spring.target;
+                        childData.customPosition = { x: pos.x, y: pos.y, z: pos.z };
+                    }
+                }
+            });
+            
+            store.save();
+            childOffsets.clear();
             draggedNode = null;
             controls.enabled = true;
             renderer.domElement.style.cursor = 'grab';
