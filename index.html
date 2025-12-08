@@ -153,6 +153,30 @@
             --shadow-lg: 0 8px 40px rgba(0,0,0,0.08);
             --shadow-glow: 0 0 30px var(--accent-glow);
         }
+        
+        /* Theme: Sunset - Warm peachy orange */
+        [data-theme="sunset"] {
+            --bg-deep: #fef3e2;
+            --bg-primary: #fff7ed;
+            --bg-secondary: #ffedd5;
+            --bg-tertiary: #fed7aa;
+            --bg-elevated: #fdba74;
+            --text-primary: #431407;
+            --text-secondary: #7c2d12;
+            --text-muted: #c2410c;
+            --accent: #f97316;
+            --accent-light: #fb923c;
+            --accent-glow: rgba(249, 115, 22, 0.35);
+            --glass-bg: rgba(255, 247, 237, 0.92);
+            --glass-border: rgba(67, 20, 7, 0.08);
+            --nebula-1: rgba(249, 115, 22, 0.12);
+            --nebula-2: rgba(251, 146, 60, 0.10);
+            --nebula-3: rgba(234, 88, 12, 0.08);
+            --shadow-sm: 0 2px 8px rgba(67, 20, 7, 0.06);
+            --shadow-md: 0 4px 20px rgba(67, 20, 7, 0.08);
+            --shadow-lg: 0 8px 40px rgba(67, 20, 7, 0.10);
+            --shadow-glow: 0 0 30px var(--accent-glow);
+        }
 
         /* ═══════════════════════════════════════════════════════════
            BASE STYLES
@@ -695,6 +719,15 @@
         .side-btn.active {
             background: var(--accent);
             color: white;
+        }
+        
+        #btn-voice.active {
+            animation: pulse-recording 1s ease-in-out infinite;
+        }
+        
+        @keyframes pulse-recording {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 var(--accent-glow); }
+            50% { transform: scale(1.05); box-shadow: 0 0 20px 5px var(--accent-glow); }
         }
         
         .side-btn svg {
@@ -1805,7 +1838,7 @@
     
     <!-- Theme Picker -->
     <div id="theme-picker">
-        <div class="theme-option active" data-theme="midnight">
+        <div class="theme-option" data-theme="midnight">
             <div class="theme-preview"><span style="background:#7c3aed"></span><span style="background:#0a0a0f"></span></div>
             <span class="theme-name">Midnight</span>
         </div>
@@ -1820,6 +1853,10 @@
         <div class="theme-option" data-theme="forest">
             <div class="theme-preview"><span style="background:#22c55e"></span><span style="background:#0a120a"></span></div>
             <span class="theme-name">Forest</span>
+        </div>
+        <div class="theme-option active" data-theme="sunset">
+            <div class="theme-preview"><span style="background:#f97316"></span><span style="background:#fef3e2"></span></div>
+            <span class="theme-name">Sunset</span>
         </div>
         <div class="theme-option" data-theme="professional">
             <div class="theme-preview"><span style="background:#c4705a"></span><span style="background:#faf9f7"></span></div>
@@ -1888,7 +1925,7 @@
             <svg viewBox="0 0 24 24"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
             <span class="side-btn-label">Move</span>
         </div>
-        <div class="side-btn" id="btn-voice" title="AI Assistant">
+        <div class="side-btn" id="btn-voice" title="Voice AI - Click to speak">
             <svg viewBox="0 0 24 24"><line x1="4" y1="8" x2="4" y2="16"/><line x1="8" y1="5" x2="8" y2="19"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="16" y1="5" x2="16" y2="19"/><line x1="20" y1="8" x2="20" y2="16"/></svg>
             <span class="side-btn-label">AI</span>
         </div>
@@ -2069,7 +2106,7 @@
     // CONFIGURATION
     // ═══════════════════════════════════════════════════════════════════
     const CONFIG = {
-        STORAGE_KEY: 'mynd-v4z',
+        STORAGE_KEY: 'mynd-v5d',
         ONBOARDING_KEY: 'mynd-onboarded',
         THEME_KEY: 'mynd-theme',
         API_KEY: 'mynd-api-key',
@@ -2111,7 +2148,7 @@
     
     // Get colors based on current theme
     function getThemeColors() {
-        const theme = document.documentElement.getAttribute('data-theme') || 'midnight';
+        const theme = document.documentElement.getAttribute('data-theme') || 'sunset';
         return theme === 'professional' ? CONFIG.COLORS_PROFESSIONAL : CONFIG.COLORS;
     }
     
@@ -2558,20 +2595,21 @@
     // THEME MANAGER
     // ═══════════════════════════════════════════════════════════════════
     const themeManager = {
-        current: 'midnight',
+        current: 'sunset',
         
         init() {
             const saved = localStorage.getItem(CONFIG.THEME_KEY);
-            if (saved) this.set(saved);
+            if (saved) {
+                this.set(saved);
+            } else {
+                // Default to sunset for new users
+                this.set('sunset');
+            }
         },
         
         set(theme) {
             this.current = theme;
-            if (theme === 'midnight') {
-                document.documentElement.removeAttribute('data-theme');
-            } else {
-                document.documentElement.setAttribute('data-theme', theme);
-            }
+            document.documentElement.setAttribute('data-theme', theme);
             localStorage.setItem(CONFIG.THEME_KEY, theme);
             
             // Update theme picker UI
@@ -2583,7 +2621,7 @@
         },
         
         toggle() {
-            const themes = ['midnight', 'sunrise', 'ocean', 'forest'];
+            const themes = ['midnight', 'sunrise', 'ocean', 'forest', 'sunset', 'professional'];
             const currentIndex = themes.indexOf(this.current);
             const nextIndex = (currentIndex + 1) % themes.length;
             this.set(themes[nextIndex]);
@@ -2776,36 +2814,29 @@
         const needsExtraSpace = hasChildren && isExpanded && childCount > 2;
         
         // Position calculation
-        let baseRadius, expandedRadius;
+        let baseRadius;
         if (level === 0) {
             baseRadius = 0;
-            expandedRadius = 0;
         } else if (level === 1) {
             baseRadius = CONFIG.LAYOUT.level1Radius;
-            expandedRadius = CONFIG.LAYOUT.level1RadiusExpanded;
             // Push level 1 nodes with 3+ expanded children further out
             if (needsExtraSpace) {
                 const extraChildren = childCount - 2;
                 baseRadius += Math.min(extraChildren * 1.5, 6);
-                expandedRadius += Math.min(extraChildren * 1.5, 6);
             }
         } else if (level === 2) {
             baseRadius = CONFIG.LAYOUT.level2Radius;
-            expandedRadius = CONFIG.LAYOUT.level2Radius + 2;
             // Push level 2 nodes with 3+ expanded children further out
             if (needsExtraSpace) {
                 const extraChildren = childCount - 2;
                 baseRadius += Math.min(extraChildren * 1.2, 5);
-                expandedRadius += Math.min(extraChildren * 1.2, 5);
             }
         } else {
             baseRadius = CONFIG.LAYOUT.level3Radius || 3.5;
-            expandedRadius = baseRadius + 1.5;
             // Push deeper nodes with 3+ expanded children further out
             if (needsExtraSpace) {
                 const extraChildren = childCount - 2;
                 baseRadius += Math.min(extraChildren * 1.0, 4);
-                expandedRadius += Math.min(extraChildren * 1.0, 4);
             }
         }
         
@@ -2822,7 +2853,7 @@
             const verticalOffset = (index % 2 === 0 ? 0.2 : -0.2);
             
             data.basePosition = [Math.cos(angle) * baseRadius, verticalOffset, Math.sin(angle) * baseRadius];
-            data.expandedPosition = [Math.cos(angle) * expandedRadius, verticalOffset, Math.sin(angle) * expandedRadius];
+            data.expandedPosition = [...data.basePosition]; // Same as base - only pushed out with 3+ children
             data.position = [...data.basePosition];
             data.branchAngle = angle;
         } else {
@@ -2847,11 +2878,7 @@
                 parentPos[1] + verticalOffset,
                 parentPos[2] + Math.sin(childAngle) * adjustedRadius
             ];
-            data.expandedPosition = [
-                parentPos[0] + Math.cos(childAngle) * (adjustedRadius + 2),
-                parentPos[1] + verticalOffset,
-                parentPos[2] + Math.sin(childAngle) * (adjustedRadius + 2)
-            ];
+            data.expandedPosition = [...data.basePosition]; // Same as base - only pushed out with 3+ children
             data.position = [...data.basePosition];
             data.branchAngle = childAngle;
         }
@@ -2894,7 +2921,7 @@
         ctx.scale(2, 2);
         
         // Background - check for light themes (sunrise is light, others are dark)
-        const theme = document.documentElement.getAttribute('data-theme') || 'midnight';
+        const theme = document.documentElement.getAttribute('data-theme') || 'sunset';
         const isDark = theme !== 'sunrise';
         
         ctx.fillStyle = isDark ? 'rgba(18, 18, 26, 0.9)' : 'rgba(255, 255, 255, 0.95)';
@@ -3280,31 +3307,31 @@
     }
 
     function selectNode(mesh) {
+        const nodeId = mesh.userData.id;
+        const wasAlreadySelected = selectedNode === mesh;
+        
         // Deselect previous
         if (selectedNode && selectedNode !== mesh) {
             selectedNode.userData.selected = false;
         }
         
-        const nodeId = mesh.userData.id;
-        
-        // Toggle expand/collapse if node has children
-        if (mesh.userData.children?.length > 0) {
+        // Toggle expand/collapse only if node was already selected (second click)
+        if (wasAlreadySelected && mesh.userData.children?.length > 0) {
             if (mesh.userData.isExpanded) {
                 collapseNode(mesh);
             } else {
                 expandNode(mesh);
             }
+            // Re-fetch mesh after expand/collapse (scene may have been rebuilt)
+            mesh = nodes.get(nodeId) || mesh;
         }
-        
-        // Re-fetch mesh after expand/collapse (scene may have been rebuilt)
-        mesh = nodes.get(nodeId) || mesh;
         
         selectedNode = mesh;
         mesh.userData.selected = true;
         store.selectedNodeId = mesh.userData.id;
         
-        // Skip camera animation if auto-camera is disabled
-        if (!autoCameraEnabled) {
+        // Skip camera animation if auto-camera is disabled or node was already selected
+        if (!autoCameraEnabled || wasAlreadySelected) {
             audio.select();
             haptic.light();
             bus.emit('node:selected', { data: mesh.userData });
@@ -4134,13 +4161,27 @@ Generate 3-4 unique, creative child node ideas that would be valuable additions.
                     store.addNode(nodeId, { label: idea, color: node.color });
                 });
                 
+                // Mark node as expanded BEFORE building scene so children are visible
+                store.expandedNodes.add(nodeId);
+                
                 buildScene();
                 
-                // Expand to show new nodes
+                // Get the mesh and ensure it's marked as expanded
                 const mesh = nodes.get(nodeId);
                 if (mesh) {
-                    expandNode(mesh);
-                    selectNode(mesh);
+                    mesh.userData.isExpanded = true;
+                    
+                    // Make sure all children are visible
+                    mesh.userData.children?.forEach(childData => {
+                        const childMesh = nodes.get(childData.id);
+                        if (childMesh) {
+                            childMesh.visible = true;
+                            if (childMesh.userData.outlineMesh) childMesh.userData.outlineMesh.visible = true;
+                            if (childMesh.userData.labelSprite) childMesh.userData.labelSprite.visible = true;
+                            if (childMesh.userData.connectionLine) childMesh.userData.connectionLine.visible = true;
+                            childMesh.userData.collapsed = false;
+                        }
+                    });
                     
                     // Celebration
                     const screenPos = mesh.position.clone().project(camera);
@@ -4409,6 +4450,192 @@ Generate 3-4 unique, creative child node ideas that would be valuable additions.
         autoCamBtn.classList.toggle('active', autoCameraEnabled);
         showToast(autoCameraEnabled ? 'Auto camera enabled' : 'Auto camera disabled', 'info');
     });
+    
+    // Voice AI recording state
+    let isRecording = false;
+    let speechRecognition = null;
+    
+    // Initialize speech recognition
+    function initSpeechRecognition() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            return null;
+        }
+        
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+        
+        return recognition;
+    }
+    
+    // Process voice command with AI
+    async function processVoiceCommand(transcript, parentNodeId) {
+        const apiKey = localStorage.getItem(CONFIG.API_KEY);
+        if (!apiKey) {
+            const key = prompt('Enter your Anthropic API key for AI features:');
+            if (key) {
+                localStorage.setItem(CONFIG.API_KEY, key);
+            } else {
+                showToast('API key required for AI features', 'error');
+                return;
+            }
+        }
+        
+        const parentNode = store.findNode(parentNodeId);
+        if (!parentNode) return;
+        
+        showToast('Processing voice command...', 'info');
+        
+        try {
+            const path = store.getPath(parentNodeId);
+            const context = path.map(n => n.label).join(' → ');
+            const existingChildren = parentNode.children?.map(c => c.label).join(', ') || 'none';
+            
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': localStorage.getItem(CONFIG.API_KEY),
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 500,
+                    messages: [{
+                        role: 'user',
+                        content: `You are helping build a mind map. The current selected node is "${parentNode.label}" in context: ${context}. Existing children: ${existingChildren}.
+
+The user said: "${transcript}"
+
+Based on what the user said, generate appropriate child nodes to add. Interpret their intent - they might be:
+- Listing items to add (e.g., "add apples, bananas, and oranges")
+- Describing a single idea (e.g., "I want to track my fitness goals")
+- Giving a general direction (e.g., "brainstorm some project ideas")
+
+Return ONLY a JSON array of strings with concise node labels. Example: ["Node 1", "Node 2", "Node 3"]
+Keep labels short (1-4 words each). Generate 1-5 nodes based on what makes sense for the input.`
+                    }]
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('API request failed');
+            }
+            
+            const data = await response.json();
+            const text = data.content[0].text;
+            const ideas = JSON.parse(text);
+            
+            if (Array.isArray(ideas) && ideas.length > 0) {
+                ideas.forEach(idea => {
+                    store.addNode(parentNodeId, { label: idea, color: parentNode.color });
+                });
+                
+                // Mark node as expanded BEFORE building scene
+                store.expandedNodes.add(parentNodeId);
+                
+                buildScene();
+                
+                // Get the mesh and ensure children are visible
+                const mesh = nodes.get(parentNodeId);
+                if (mesh) {
+                    mesh.userData.isExpanded = true;
+                    
+                    mesh.userData.children?.forEach(childData => {
+                        const childMesh = nodes.get(childData.id);
+                        if (childMesh) {
+                            childMesh.visible = true;
+                            if (childMesh.userData.outlineMesh) childMesh.userData.outlineMesh.visible = true;
+                            if (childMesh.userData.labelSprite) childMesh.userData.labelSprite.visible = true;
+                            if (childMesh.userData.connectionLine) childMesh.userData.connectionLine.visible = true;
+                            childMesh.userData.collapsed = false;
+                        }
+                    });
+                    
+                    // Celebration
+                    const screenPos = mesh.position.clone().project(camera);
+                    const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
+                    const y = (-screenPos.y * 0.5 + 0.5) * window.innerHeight;
+                    createCelebration(x, y, parentNode.color, 8);
+                }
+                
+                audio.success();
+                haptic.success();
+                showToast(`Added ${ideas.length} nodes from voice!`, 'success');
+            }
+        } catch (error) {
+            console.error('Voice AI error:', error);
+            showToast('Failed to process voice command', 'error');
+        }
+    }
+    
+    // AI/Voice button - record voice and add nodes
+    const voiceBtn = document.getElementById('btn-voice');
+    
+    voiceBtn.addEventListener('click', () => {
+        if (!selectedNode) {
+            showToast('Select a node first', 'info');
+            return;
+        }
+        
+        if (!speechRecognition) {
+            speechRecognition = initSpeechRecognition();
+        }
+        
+        if (!speechRecognition) {
+            showToast('Voice recognition not supported in this browser', 'error');
+            return;
+        }
+        
+        if (isRecording) {
+            // Stop recording
+            speechRecognition.stop();
+            return;
+        }
+        
+        // Start recording
+        isRecording = true;
+        voiceBtn.classList.add('active');
+        showToast('Listening... speak now', 'info');
+        
+        const parentNodeId = selectedNode.userData.id;
+        
+        speechRecognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            console.log('Voice transcript:', transcript);
+            processVoiceCommand(transcript, parentNodeId);
+        };
+        
+        speechRecognition.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            if (event.error === 'no-speech') {
+                showToast('No speech detected. Try again.', 'info');
+            } else if (event.error === 'not-allowed') {
+                showToast('Microphone access denied. Please enable it in browser settings.', 'error');
+            } else {
+                showToast('Voice recognition error: ' + event.error, 'error');
+            }
+            isRecording = false;
+            voiceBtn.classList.remove('active');
+        };
+        
+        speechRecognition.onend = () => {
+            isRecording = false;
+            voiceBtn.classList.remove('active');
+        };
+        
+        try {
+            speechRecognition.start();
+        } catch (error) {
+            console.error('Failed to start recognition:', error);
+            showToast('Failed to start voice recognition', 'error');
+            isRecording = false;
+            voiceBtn.classList.remove('active');
+        }
+    });
 
     // ═══════════════════════════════════════════════════════════════════
     // TOP CONTROLS
@@ -4422,7 +4649,7 @@ Generate 3-4 unique, creative child node ideas that would be valuable additions.
     
     document.querySelectorAll('.theme-option').forEach(opt => {
         opt.addEventListener('click', () => {
-            const oldTheme = document.documentElement.getAttribute('data-theme') || 'midnight';
+            const oldTheme = document.documentElement.getAttribute('data-theme') || 'sunset';
             const newTheme = opt.dataset.theme;
             themeManager.set(newTheme);
             themePicker.classList.remove('active');
