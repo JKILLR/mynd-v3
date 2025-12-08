@@ -2069,7 +2069,7 @@
     // CONFIGURATION
     // ═══════════════════════════════════════════════════════════════════
     const CONFIG = {
-        STORAGE_KEY: 'mynd-v4w',
+        STORAGE_KEY: 'mynd-v4y',
         ONBOARDING_KEY: 'mynd-onboarded',
         THEME_KEY: 'mynd-theme',
         API_KEY: 'mynd-api-key',
@@ -2769,6 +2769,11 @@
         else if (level === 2) data.size = CONFIG.NODE_SIZES.level2;
         else data.size = Math.max(0.3, CONFIG.NODE_SIZES.default - (level - 3) * 0.05);
         
+        // Check if this node has children (needs more space)
+        const hasChildren = data.children && data.children.length > 0;
+        const childCount = hasChildren ? data.children.length : 0;
+        const isExpanded = store.expandedNodes.has(data.id);
+        
         // Position calculation
         let baseRadius, expandedRadius;
         if (level === 0) {
@@ -2777,12 +2782,27 @@
         } else if (level === 1) {
             baseRadius = CONFIG.LAYOUT.level1Radius;
             expandedRadius = CONFIG.LAYOUT.level1RadiusExpanded;
+            // Push level 1 nodes with expanded children further out
+            if (hasChildren && isExpanded) {
+                baseRadius += Math.min(childCount * 1.5, 6);
+                expandedRadius += Math.min(childCount * 1.5, 6);
+            }
         } else if (level === 2) {
             baseRadius = CONFIG.LAYOUT.level2Radius;
             expandedRadius = CONFIG.LAYOUT.level2Radius + 2;
+            // Push level 2 nodes with expanded children further out
+            if (hasChildren && isExpanded) {
+                baseRadius += Math.min(childCount * 1.2, 5);
+                expandedRadius += Math.min(childCount * 1.2, 5);
+            }
         } else {
             baseRadius = CONFIG.LAYOUT.level3Radius || 3.5;
             expandedRadius = baseRadius + 1.5;
+            // Push deeper nodes with expanded children further out
+            if (hasChildren && isExpanded) {
+                baseRadius += Math.min(childCount * 1.0, 4);
+                expandedRadius += Math.min(childCount * 1.0, 4);
+            }
         }
         
         if (level === 0) {
@@ -3116,53 +3136,27 @@
         mesh.userData.isExpanded = true;
         store.expandedNodes.add(mesh.userData.id);
         
-        const parentPos = mesh.position.clone();
+        // Rebuild scene to recalculate positions with proper spacing
+        // This ensures parent nodes with children get pushed out
+        buildScene();
         
-        mesh.userData.children.forEach((childData, i) => {
-            const childMesh = nodes.get(childData.id);
-            if (!childMesh) return;
-            
-            // Use pre-calculated basePosition from the mesh userData
-            const targetPos = new THREE.Vector3(
-                childMesh.userData.basePosition[0],
-                childMesh.userData.basePosition[1],
-                childMesh.userData.basePosition[2]
-            );
-            
-            childMesh.visible = true;
-            if (childMesh.userData.outlineMesh) childMesh.userData.outlineMesh.visible = true;
-            if (childMesh.userData.labelSprite) childMesh.userData.labelSprite.visible = true;
-            if (childMesh.userData.connectionLine) childMesh.userData.connectionLine.visible = true;
-            childMesh.userData.collapsed = false;
-            childMesh.userData.collapseId = null; // Cancel any pending collapse
-            
-            // Reset scale target to importance value
-            const importance = childMesh.userData.importance || 1;
-            childMesh.userData.spring.scaleTarget = importance;
-            
-            if (animate) {
-                // Start from parent position
-                childMesh.position.copy(parentPos);
-                if (childMesh.userData.outlineMesh) childMesh.userData.outlineMesh.position.copy(parentPos);
-                childMesh.scale.set(0.5 * importance, 0.5 * importance, 0.5 * importance);
-                if (childMesh.userData.outlineMesh) childMesh.userData.outlineMesh.scale.set(0.5 * importance, 0.5 * importance, 0.5 * importance);
-                childMesh.material.opacity = 0.3;
-                
-                // Animate to target
-                childMesh.userData.spring.target.copy(targetPos);
-            } else {
-                childMesh.position.copy(targetPos);
-                if (childMesh.userData.outlineMesh) childMesh.userData.outlineMesh.position.copy(targetPos);
-                childMesh.userData.spring.target.copy(targetPos);
-                childMesh.scale.set(importance, importance, importance);
-                if (childMesh.userData.outlineMesh) childMesh.userData.outlineMesh.scale.set(importance * 1.03, importance * 1.03, importance * 1.03);
-            }
-            
-            // Update connection
-            if (childMesh.userData.connectionLine) {
-                updateConnection(childMesh, mesh);
-            }
-        });
+        // Re-get the mesh after rebuild
+        const newMesh = nodes.get(mesh.userData.id);
+        if (newMesh) {
+            // Ensure children are visible and animated
+            newMesh.userData.children?.forEach((childData) => {
+                const childMesh = nodes.get(childData.id);
+                if (childMesh && animate) {
+                    // Start children from parent position for animation
+                    const parentPos = newMesh.position.clone();
+                    childMesh.position.copy(parentPos);
+                    if (childMesh.userData.outlineMesh) childMesh.userData.outlineMesh.position.copy(parentPos);
+                    const importance = childMesh.userData.importance || 1;
+                    childMesh.scale.set(0.5 * importance, 0.5 * importance, 0.5 * importance);
+                    childMesh.material.opacity = 0.3;
+                }
+            });
+        }
         
         if (animate) {
             audio.expand();
@@ -3263,6 +3257,10 @@
         if (animate && depth === 0) {
             audio.collapse();
             haptic.light();
+            
+            // Rebuild scene after collapse animation to recalculate spacing
+            const totalDuration = baseDelay + thisLevelDuration + 300;
+            setTimeout(() => buildScene(), totalDuration);
         }
         
         // Return total time for this level and nested
