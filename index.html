@@ -723,11 +723,192 @@
         
         #btn-voice.active {
             animation: pulse-recording 1s ease-in-out infinite;
+            background: var(--accent);
+            color: white;
+        }
+        
+        #btn-voice.recording {
+            background: #EF8354;
+            color: white;
+            animation: voicePulse 1.5s ease-in-out infinite;
+        }
+        
+        #btn-voice.processing {
+            background: #4ECDC4;
+            color: white;
         }
         
         @keyframes pulse-recording {
             0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 var(--accent-glow); }
             50% { transform: scale(1.05); box-shadow: 0 0 20px 5px var(--accent-glow); }
+        }
+        
+        @keyframes voicePulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 131, 84, 0.5); }
+            50% { box-shadow: 0 0 0 12px rgba(239, 131, 84, 0); }
+        }
+        
+        /* Voice Indicator Modal */
+        #voice-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 449;
+            background: rgba(0,0,0,0.5);
+            display: none;
+        }
+        #voice-backdrop.active { display: block; }
+        
+        #voice-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 450;
+            background: var(--bg-secondary);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: var(--space-6);
+            text-align: center;
+            display: none;
+            min-width: 280px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        #voice-indicator.active {
+            display: block;
+            animation: fadeIn 0.2s ease-out;
+        }
+        
+        .voice-icon {
+            margin-bottom: var(--space-4);
+            color: #EF8354;
+        }
+        .voice-icon.recording svg { animation: voiceIconPulse 1s ease-in-out infinite; }
+        .voice-icon.processing { color: #4ECDC4; }
+        @keyframes voiceIconPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        .voice-status {
+            font-family: var(--font-display);
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: var(--space-2);
+        }
+        
+        .voice-transcript {
+            font-size: 14px;
+            color: var(--text-secondary);
+            min-height: 40px;
+            padding: var(--space-3);
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+            margin-top: var(--space-3);
+        }
+        
+        .voice-hint {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: var(--space-3);
+        }
+        
+        .voice-cancel {
+            margin-top: var(--space-4);
+            padding: var(--space-2) var(--space-4);
+            background: var(--glass-bg-light);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+        .voice-cancel:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+        
+        /* API Key Modal */
+        #api-key-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 500;
+            background: rgba(30,34,51,0.8);
+            backdrop-filter: blur(8px);
+            display: none;
+            place-items: center;
+        }
+        #api-key-modal.active { display: grid; }
+        
+        .api-key-content {
+            background: var(--bg-secondary);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: var(--space-6);
+            width: min(400px, calc(100vw - 32px));
+        }
+        
+        .api-key-title {
+            font-family: var(--font-display);
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: var(--space-2);
+        }
+        
+        .api-key-desc {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: var(--space-4);
+            line-height: 1.5;
+        }
+        
+        .api-key-status {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: var(--space-3);
+            padding: var(--space-2);
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+        }
+        .api-key-status.configured { color: #4ECDC4; }
+        
+        .api-key-input {
+            width: 100%;
+            padding: var(--space-3);
+            background: var(--bg-tertiary);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-primary);
+            margin-bottom: var(--space-4);
+        }
+        .api-key-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        .api-key-buttons {
+            display: flex;
+            gap: var(--space-3);
+            justify-content: flex-end;
+        }
+        
+        .api-key-btn {
+            padding: var(--space-3) var(--space-5);
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+        }
+        .api-key-btn.primary {
+            background: var(--accent);
+            color: white;
+        }
+        .api-key-btn.secondary {
+            background: var(--glass-bg-light);
+            border: 1px solid var(--glass-border);
+            color: var(--text-secondary);
         }
         
         .side-btn svg {
@@ -1874,6 +2055,10 @@
             <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h8M6 16h.01M10 16h.01M14 16h.01M18 16h.01"/></svg>
             Shortcuts
         </div>
+        <div class="menu-item" id="menu-voice-settings">
+            <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            Voice AI Settings
+        </div>
         <div class="menu-divider"></div>
         <div class="menu-item" id="menu-new">
             <svg viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
@@ -1932,6 +2117,33 @@
         <div class="side-btn active" id="btn-autocam" title="Toggle Auto Camera">
             <svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
             <span class="side-btn-label">Auto Cam</span>
+        </div>
+    </div>
+    
+    <!-- Voice AI Indicator -->
+    <div id="voice-backdrop"></div>
+    <div id="voice-indicator">
+        <div class="voice-icon" id="voice-icon">
+            <svg id="voice-icon-mic" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            <svg id="voice-icon-brain" style="display:none" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4c0 .74.2 1.43.56 2.02A4 4 0 0 0 6 12c0 1.2.52 2.27 1.35 3A4 4 0 0 0 6 18a4 4 0 0 0 4 4h.09c.49 0 .97-.07 1.41-.2"/><path d="M12 2a4 4 0 0 1 4 4c0 .74-.2 1.43-.56 2.02A4 4 0 0 1 18 12c0 1.2-.52 2.27-1.35 3A4 4 0 0 1 18 18a4 4 0 0 1-4 4h-.09c-.49 0-.97-.07-1.41-.2"/><path d="M12 2v20"/><path d="M9 10h6"/><path d="M9 14h6"/></svg>
+        </div>
+        <div class="voice-status" id="voice-status">Listening...</div>
+        <div class="voice-transcript" id="voice-transcript">Say something...</div>
+        <div class="voice-hint">Tap anywhere or press Escape to cancel</div>
+        <button class="voice-cancel" id="voice-cancel">Cancel</button>
+    </div>
+    
+    <!-- API Key Modal -->
+    <div id="api-key-modal">
+        <div class="api-key-content">
+            <div class="api-key-title">Voice AI Settings</div>
+            <div class="api-key-desc">Enter your Anthropic API key to enable voice-powered node creation. Your key is stored locally and never sent anywhere except Anthropic's API.</div>
+            <div class="api-key-status" id="api-key-status">No API key configured</div>
+            <input type="password" class="api-key-input" id="api-key-input" placeholder="sk-ant-api03-...">
+            <div class="api-key-buttons">
+                <button class="api-key-btn secondary" id="api-key-cancel">Cancel</button>
+                <button class="api-key-btn primary" id="api-key-save">Save</button>
+            </div>
         </div>
     </div>
     
@@ -2106,7 +2318,7 @@
     // CONFIGURATION
     // ═══════════════════════════════════════════════════════════════════
     const CONFIG = {
-        STORAGE_KEY: 'mynd-v5d',
+        STORAGE_KEY: 'mynd-v5e',
         ONBOARDING_KEY: 'mynd-onboarded',
         THEME_KEY: 'mynd-theme',
         API_KEY: 'mynd-api-key',
@@ -3814,6 +4026,9 @@
                 break;
                 
             case 'Escape':
+                if (voiceAI.isRecording || voiceAI.isProcessing) {
+                    voiceAI.stop();
+                }
                 closeSpotlight();
                 closeModal();
                 deselectNode();
@@ -4451,190 +4666,402 @@ Generate 3-4 unique, creative child node ideas that would be valuable additions.
         showToast(autoCameraEnabled ? 'Auto camera enabled' : 'Auto camera disabled', 'info');
     });
     
-    // Voice AI recording state
-    let isRecording = false;
-    let speechRecognition = null;
-    
-    // Initialize speech recognition
-    function initSpeechRecognition() {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            return null;
-        }
+    // ═══════════════════════════════════════════════════════════════════
+    // VOICE AI SYSTEM
+    // ═══════════════════════════════════════════════════════════════════
+    const voiceAI = {
+        recognition: null,
+        isRecording: false,
+        isProcessing: false,
+        apiKey: localStorage.getItem(CONFIG.API_KEY) || '',
         
-        const recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        recognition.lang = 'en-US';
+        init() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                console.warn('Speech recognition not supported');
+                return false;
+            }
+            
+            this.recognition = new SpeechRecognition();
+            this.recognition.continuous = false;
+            this.recognition.interimResults = true;
+            this.recognition.lang = 'en-US';
+            
+            this.recognition.onstart = () => {
+                console.log('Voice recognition started');
+            };
+            
+            this.recognition.onresult = (event) => {
+                const transcript = Array.from(event.results)
+                    .map(result => result[0].transcript)
+                    .join('');
+                document.getElementById('voice-transcript').textContent = transcript || 'Listening...';
+            };
+            
+            this.recognition.onend = () => {
+                if (this.isRecording) {
+                    const transcript = document.getElementById('voice-transcript').textContent;
+                    if (transcript && transcript !== 'Listening...' && transcript !== 'Say something...') {
+                        this.processWithAI(transcript);
+                    } else {
+                        this.stop();
+                    }
+                }
+            };
+            
+            this.recognition.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                if (event.error === 'not-allowed') {
+                    showToast('Microphone access denied', 'error');
+                }
+                this.stop();
+            };
+            
+            return true;
+        },
         
-        return recognition;
-    }
-    
-    // Process voice command with AI
-    async function processVoiceCommand(transcript, parentNodeId) {
-        const apiKey = localStorage.getItem(CONFIG.API_KEY);
-        if (!apiKey) {
-            const key = prompt('Enter your Anthropic API key for AI features:');
-            if (key) {
-                localStorage.setItem(CONFIG.API_KEY, key);
-            } else {
-                showToast('API key required for AI features', 'error');
+        start() {
+            console.log('Voice start called, apiKey exists:', !!this.apiKey);
+            
+            if (!this.apiKey) {
+                this.showSettings();
                 return;
             }
-        }
-        
-        const parentNode = store.findNode(parentNodeId);
-        if (!parentNode) return;
-        
-        showToast('Processing voice command...', 'info');
-        
-        try {
-            const path = store.getPath(parentNodeId);
-            const context = path.map(n => n.label).join(' → ');
-            const existingChildren = parentNode.children?.map(c => c.label).join(', ') || 'none';
             
-            const response = await fetch('https://api.anthropic.com/v1/messages', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': localStorage.getItem(CONFIG.API_KEY),
-                    'anthropic-version': '2023-06-01',
-                    'anthropic-dangerous-direct-browser-access': 'true'
-                },
-                body: JSON.stringify({
-                    model: 'claude-sonnet-4-20250514',
-                    max_tokens: 500,
-                    messages: [{
-                        role: 'user',
-                        content: `You are helping build a mind map. The current selected node is "${parentNode.label}" in context: ${context}. Existing children: ${existingChildren}.
-
-The user said: "${transcript}"
-
-Based on what the user said, generate appropriate child nodes to add. Interpret their intent - they might be:
-- Listing items to add (e.g., "add apples, bananas, and oranges")
-- Describing a single idea (e.g., "I want to track my fitness goals")
-- Giving a general direction (e.g., "brainstorm some project ideas")
-
-Return ONLY a JSON array of strings with concise node labels. Example: ["Node 1", "Node 2", "Node 3"]
-Keep labels short (1-4 words each). Generate 1-5 nodes based on what makes sense for the input.`
-                    }]
-                })
-            });
+            // Show UI immediately
+            this.isRecording = true;
+            this.updateUI('recording');
+            document.getElementById('voice-transcript').textContent = 'Say something...';
             
-            if (!response.ok) {
-                throw new Error('API request failed');
+            if (!this.recognition && !this.init()) {
+                showToast('Voice not supported in this browser', 'error');
+                this.stop();
+                return;
             }
             
-            const data = await response.json();
-            const text = data.content[0].text;
-            const ideas = JSON.parse(text);
+            try {
+                this.recognition.start();
+                haptic.medium();
+            } catch (e) {
+                console.error('Failed to start recognition:', e);
+                this.stop();
+                showToast('Failed to start voice recognition', 'error');
+            }
+        },
+        
+        stop() {
+            this.isRecording = false;
+            this.isProcessing = false;
+            if (this.recognition) {
+                try { this.recognition.stop(); } catch (e) {}
+            }
+            this.updateUI('idle');
+        },
+        
+        updateUI(state) {
+            const voiceBtn = document.getElementById('btn-voice');
+            const indicator = document.getElementById('voice-indicator');
+            const backdrop = document.getElementById('voice-backdrop');
+            const icon = document.getElementById('voice-icon');
+            const micIcon = document.getElementById('voice-icon-mic');
+            const brainIcon = document.getElementById('voice-icon-brain');
+            const status = document.getElementById('voice-status');
             
-            if (Array.isArray(ideas) && ideas.length > 0) {
-                ideas.forEach(idea => {
-                    store.addNode(parentNodeId, { label: idea, color: parentNode.color });
+            voiceBtn.classList.remove('recording', 'processing', 'active');
+            indicator.classList.remove('active');
+            backdrop.classList.remove('active');
+            icon.classList.remove('recording', 'processing');
+            
+            if (state === 'recording') {
+                voiceBtn.classList.add('recording');
+                indicator.classList.add('active');
+                backdrop.classList.add('active');
+                icon.classList.add('recording');
+                micIcon.style.display = 'block';
+                brainIcon.style.display = 'none';
+                status.textContent = 'Listening...';
+            } else if (state === 'processing') {
+                voiceBtn.classList.add('processing');
+                indicator.classList.add('active');
+                backdrop.classList.add('active');
+                icon.classList.add('processing');
+                micIcon.style.display = 'none';
+                brainIcon.style.display = 'block';
+                status.textContent = 'Thinking...';
+            } else {
+                micIcon.style.display = 'block';
+                brainIcon.style.display = 'none';
+            }
+        },
+        
+        async processWithAI(transcript) {
+            this.isRecording = false;
+            this.isProcessing = true;
+            this.updateUI('processing');
+            
+            // Fix common speech recognition errors
+            let cleanedTranscript = transcript.trim()
+                .replace(/\bnote\b/gi, 'node')
+                .replace(/\bnotes\b/gi, 'nodes')
+                .replace(/\bknow\b/gi, 'node')
+                .replace(/\bno\b(?=\s+called)/gi, 'node')
+                .replace(/\bmode\b(?=\s+called)/gi, 'node')
+                .replace(/\badd a no\b/gi, 'add a node')
+                .replace(/\bnew no\b/gi, 'new node')
+                .replace(/\bcreate a no\b/gi, 'create a node');
+            
+            console.log('Original transcript:', transcript);
+            console.log('Cleaned transcript:', cleanedTranscript);
+            
+            try {
+                // Build context about current mind map
+                const allNodes = store.getAllNodes();
+                const nodeContext = allNodes.slice(0, 30).map(n => ({
+                    id: n.id,
+                    label: n.label,
+                    color: n.color,
+                    hasChildren: n.children && n.children.length > 0
+                }));
+                
+                const selectedNodeData = store.selectedNodeId ? store.findNode(store.selectedNodeId) : null;
+                const currentContext = selectedNodeData ? `"${selectedNodeData.label}" (id: ${selectedNodeData.id})` : 'root "My Mind"';
+                
+                const prompt = `You are a voice assistant for MYND, a 3D mind mapping app. Users create and manage NODES (not notes - this is a mind map, not a note-taking app).
+
+IMPORTANT: When user says anything that sounds like "note", "notes", "no", "know" - they mean "NODE" or "NODES".
+
+USER COMMAND: "${cleanedTranscript}"
+
+CURRENT STATE:
+- Selected node: ${currentContext}
+- Existing nodes: ${JSON.stringify(nodeContext)}
+
+AVAILABLE COLORS (use exact hex codes):
+Orange=#EF8354, Teal=#4ECDC4, Purple=#9B5DE5, Yellow=#F7B731, Pink=#FF6B9D, Blue=#45B7D1, Green=#26DE81, Lavender=#A29BFE, Red=#FF4444, White=#FFFFFF, Black=#222222, Lime=#32CD32, Cyan=#00CED1, Gold=#FFD700
+
+ACTIONS:
+1. "add" - Create a new node (default action if unclear)
+2. "edit" - Change an existing node's label or color  
+3. "delete" - Remove a node
+
+RESPOND WITH JSON ONLY:
+{
+  "action": "add|edit|delete",
+  "label": "Node Name (properly capitalized)",
+  "color": "#HEX or null",
+  "targetId": "for edit/delete: node id",
+  "parentId": "for add: use 'selected' (default), 'root', or specific node id"
+}
+
+EXAMPLES:
+- "add a node called Christmas and make it green" → {"action":"add","label":"Christmas","color":"#26DE81","parentId":"selected"}
+- "new red node called urgent" → {"action":"add","label":"Urgent","color":"#FF4444","parentId":"selected"}
+- "create vacation planning under goals" → {"action":"add","label":"Vacation Planning","color":null,"parentId":"goals"}
+- "make goals blue" → {"action":"edit","label":null,"targetId":"goals","color":"#45B7D1"}
+- "rename ideas to brainstorm" → {"action":"edit","label":"Brainstorm","targetId":"ideas","color":null}
+- "delete the black node" → {"action":"delete","targetId":"node-black"}
+
+JSON only, no other text:`;
+
+                const response = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': this.apiKey.trim(),
+                        'anthropic-version': '2023-06-01',
+                        'anthropic-dangerous-direct-browser-access': 'true'
+                    },
+                    body: JSON.stringify({
+                        model: 'claude-sonnet-4-20250514',
+                        max_tokens: 300,
+                        messages: [{
+                            role: 'user',
+                            content: prompt
+                        }]
+                    })
                 });
                 
-                // Mark node as expanded BEFORE building scene
-                store.expandedNodes.add(parentNodeId);
-                
-                buildScene();
-                
-                // Get the mesh and ensure children are visible
-                const mesh = nodes.get(parentNodeId);
-                if (mesh) {
-                    mesh.userData.isExpanded = true;
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('API Error:', response.status, errorData);
                     
-                    mesh.userData.children?.forEach(childData => {
-                        const childMesh = nodes.get(childData.id);
-                        if (childMesh) {
-                            childMesh.visible = true;
-                            if (childMesh.userData.outlineMesh) childMesh.userData.outlineMesh.visible = true;
-                            if (childMesh.userData.labelSprite) childMesh.userData.labelSprite.visible = true;
-                            if (childMesh.userData.connectionLine) childMesh.userData.connectionLine.visible = true;
-                            childMesh.userData.collapsed = false;
-                        }
-                    });
-                    
-                    // Celebration
-                    const screenPos = mesh.position.clone().project(camera);
-                    const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
-                    const y = (-screenPos.y * 0.5 + 0.5) * window.innerHeight;
-                    createCelebration(x, y, parentNode.color, 8);
+                    if (response.status === 401) {
+                        throw new Error('Invalid API key. Check your key in Voice AI Settings.');
+                    } else if (response.status === 429) {
+                        throw new Error('Rate limit exceeded. Please wait a moment and try again.');
+                    } else if (response.status === 400) {
+                        throw new Error('Bad request. The voice input may be too long.');
+                    } else if (response.status === 500 || response.status === 503) {
+                        throw new Error('AI service temporarily unavailable. Try again shortly.');
+                    } else if (errorData.error?.message) {
+                        throw new Error(errorData.error.message);
+                    } else {
+                        throw new Error(`Connection error (${response.status}). Check your internet.`);
+                    }
                 }
                 
-                audio.success();
-                haptic.success();
-                showToast(`Added ${ideas.length} nodes from voice!`, 'success');
+                const data = await response.json();
+                
+                if (!data.content || !data.content[0] || !data.content[0].text) {
+                    throw new Error('Empty response from AI. Try speaking more clearly.');
+                }
+                
+                const content = data.content[0].text;
+                console.log('AI response:', content);
+                
+                // Parse the JSON response
+                const jsonMatch = content.match(/\{[\s\S]*\}/);
+                if (!jsonMatch) {
+                    throw new Error('Could not understand that. Try a clearer command like "add node called Work"');
+                }
+                
+                let result;
+                try {
+                    result = JSON.parse(jsonMatch[0]);
+                } catch (parseError) {
+                    throw new Error('AI response was unclear. Try rephrasing your command.');
+                }
+                
+                console.log('Parsed result:', result);
+                
+                // Handle different actions
+                if (result.action === 'delete' && result.targetId) {
+                    const targetNode = store.findNode(result.targetId);
+                    if (targetNode && targetNode.id !== store.data.id) {
+                        const label = targetNode.label;
+                        if (store.deleteNode(result.targetId)) {
+                            showToast(`Deleted "${label}"`, 'success');
+                            haptic.success();
+                        }
+                    } else {
+                        showToast(`Couldn't find node to delete`, 'error');
+                        haptic.error();
+                    }
+                } else if (result.action === 'edit' && result.targetId) {
+                    const targetNode = store.findNode(result.targetId);
+                    if (targetNode) {
+                        const updates = {};
+                        if (result.label) updates.label = result.label;
+                        if (result.color && result.color !== 'null') updates.color = result.color;
+                        store.updateNode(result.targetId, updates);
+                        showToast(`Updated "${targetNode.label}"`, 'success');
+                        haptic.success();
+                    } else {
+                        showToast(`Couldn't find node to edit`, 'error');
+                        haptic.error();
+                    }
+                } else {
+                    // Default: add node
+                    let parentId;
+                    if (result.parentId === 'selected') {
+                        parentId = store.selectedNodeId || store.data.id;
+                    } else if (result.parentId === 'root') {
+                        parentId = store.data.id;
+                    } else {
+                        parentId = result.parentId || store.selectedNodeId || store.data.id;
+                    }
+                    
+                    const parentNode = store.findNode(parentId);
+                    if (!parentNode) {
+                        parentId = store.selectedNodeId || store.data.id;
+                    }
+                    
+                    const nodeData = { label: result.label };
+                    if (result.color && result.color !== 'null' && result.color !== null) {
+                        nodeData.color = result.color;
+                    }
+                    
+                    store.addNode(parentId, nodeData);
+                    
+                    // Rebuild scene and show celebration
+                    buildScene();
+                    const newNode = store.findNode(parentId);
+                    if (newNode) {
+                        const mesh = nodes.get(parentId);
+                        if (mesh) {
+                            const screenPos = mesh.position.clone().project(camera);
+                            const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
+                            const y = (-screenPos.y * 0.5 + 0.5) * window.innerHeight;
+                            createCelebration(x, y, nodeData.color || newNode.color, 12);
+                        }
+                    }
+                    
+                    const colorNote = nodeData.color ? ` (${nodeData.color})` : '';
+                    showToast(`Added "${result.label}"${colorNote}`, 'success');
+                    haptic.success();
+                }
+                
+            } catch (error) {
+                console.error('AI processing error:', error);
+                showToast(error.message || 'Failed to process', 'error');
+                haptic.error();
+            } finally {
+                this.stop();
             }
-        } catch (error) {
-            console.error('Voice AI error:', error);
-            showToast('Failed to process voice command', 'error');
-        }
-    }
-    
-    // AI/Voice button - record voice and add nodes
-    const voiceBtn = document.getElementById('btn-voice');
-    
-    voiceBtn.addEventListener('click', () => {
-        if (!selectedNode) {
-            showToast('Select a node first', 'info');
-            return;
-        }
+        },
         
-        if (!speechRecognition) {
-            speechRecognition = initSpeechRecognition();
-        }
-        
-        if (!speechRecognition) {
-            showToast('Voice recognition not supported in this browser', 'error');
-            return;
-        }
-        
-        if (isRecording) {
-            // Stop recording
-            speechRecognition.stop();
-            return;
-        }
-        
-        // Start recording
-        isRecording = true;
-        voiceBtn.classList.add('active');
-        showToast('Listening... speak now', 'info');
-        
-        const parentNodeId = selectedNode.userData.id;
-        
-        speechRecognition.onresult = (event) => {
-            const transcript = event.results[0][0].transcript;
-            console.log('Voice transcript:', transcript);
-            processVoiceCommand(transcript, parentNodeId);
-        };
-        
-        speechRecognition.onerror = (event) => {
-            console.error('Speech recognition error:', event.error);
-            if (event.error === 'no-speech') {
-                showToast('No speech detected. Try again.', 'info');
-            } else if (event.error === 'not-allowed') {
-                showToast('Microphone access denied. Please enable it in browser settings.', 'error');
+        showSettings() {
+            const modal = document.getElementById('api-key-modal');
+            const input = document.getElementById('api-key-input');
+            const status = document.getElementById('api-key-status');
+            
+            if (this.apiKey) {
+                input.value = this.apiKey;
+                status.textContent = '✓ API key configured';
+                status.classList.add('configured');
             } else {
-                showToast('Voice recognition error: ' + event.error, 'error');
+                input.value = '';
+                status.textContent = 'No API key configured';
+                status.classList.remove('configured');
             }
-            isRecording = false;
-            voiceBtn.classList.remove('active');
-        };
+            
+            modal.classList.add('active');
+            input.focus();
+        },
         
-        speechRecognition.onend = () => {
-            isRecording = false;
-            voiceBtn.classList.remove('active');
-        };
+        hideSettings() {
+            document.getElementById('api-key-modal').classList.remove('active');
+        },
         
-        try {
-            speechRecognition.start();
-        } catch (error) {
-            console.error('Failed to start recognition:', error);
-            showToast('Failed to start voice recognition', 'error');
-            isRecording = false;
-            voiceBtn.classList.remove('active');
+        saveApiKey() {
+            const input = document.getElementById('api-key-input');
+            const key = input.value.trim();
+            
+            if (key) {
+                this.apiKey = key;
+                localStorage.setItem(CONFIG.API_KEY, key);
+                showToast('API key saved', 'success');
+            } else {
+                this.apiKey = '';
+                localStorage.removeItem(CONFIG.API_KEY);
+                showToast('API key removed', 'success');
+            }
+            
+            this.hideSettings();
         }
+    };
+    
+    // Voice button click handler
+    document.getElementById('btn-voice').addEventListener('click', () => {
+        if (voiceAI.isRecording || voiceAI.isProcessing) {
+            voiceAI.stop();
+        } else {
+            voiceAI.start();
+        }
+    });
+    
+    // Voice indicator event handlers
+    document.getElementById('voice-cancel').addEventListener('click', () => voiceAI.stop());
+    document.getElementById('voice-backdrop').addEventListener('click', () => voiceAI.stop());
+    document.getElementById('voice-indicator').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) voiceAI.stop();
+    });
+    
+    // API key modal handlers
+    document.getElementById('api-key-save').addEventListener('click', () => voiceAI.saveApiKey());
+    document.getElementById('api-key-cancel').addEventListener('click', () => voiceAI.hideSettings());
+    document.getElementById('api-key-modal').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) voiceAI.hideSettings();
     });
 
     // ═══════════════════════════════════════════════════════════════════
@@ -4707,6 +5134,11 @@ Keep labels short (1-4 words each). Generate 1-5 nodes based on what makes sense
         const hints = document.getElementById('keyboard-hints');
         hints.classList.add('visible');
         setTimeout(() => hints.classList.remove('visible'), 5000);
+    });
+    
+    document.getElementById('menu-voice-settings').addEventListener('click', () => {
+        menuDropdown.classList.remove('active');
+        voiceAI.showSettings();
     });
     
     document.getElementById('menu-help').addEventListener('click', () => {
