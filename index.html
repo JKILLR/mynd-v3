@@ -903,7 +903,7 @@
         #api-key-modal {
             position: fixed;
             inset: 0;
-            z-index: 500;
+            z-index: 10001;
             background: rgba(30,34,51,0.8);
             backdrop-filter: blur(8px);
             display: none;
@@ -1809,8 +1809,13 @@
             width: 24px;
             height: 24px;
             stroke: white;
-            fill: none;
+            fill: white;
             stroke-width: 2;
+        }
+        
+        .onboarding-choice.ai .onboarding-choice-icon svg {
+            stroke: none;
+            fill: white;
         }
         
         .onboarding-choice.scratch .onboarding-choice-icon {
@@ -6220,9 +6225,9 @@ JSON only, no other text:`;
                 `;
                 document.body.appendChild(overlay);
                 
-                // Re-attach event listeners
-                document.getElementById('onboarding-ai').addEventListener('click', () => {
-                    mapName = document.getElementById('onboarding-name').value.trim() || 'My Mind';
+                // Re-attach event listeners to the NEW overlay specifically
+                overlay.querySelector('.onboarding-choice.ai').addEventListener('click', () => {
+                    mapName = overlay.querySelector('#onboarding-name').value.trim() || 'My Mind';
                     
                     // Check for API key first
                     const apiKey = localStorage.getItem(CONFIG.API_KEY);
@@ -6235,14 +6240,14 @@ JSON only, no other text:`;
                     }
                 });
                 
-                document.getElementById('onboarding-scratch').addEventListener('click', () => {
-                    mapName = document.getElementById('onboarding-name').value.trim() || 'My Mind';
+                overlay.querySelector('.onboarding-choice.scratch').addEventListener('click', () => {
+                    mapName = overlay.querySelector('#onboarding-name').value.trim() || 'My Mind';
                     createBasicMapStructure();
                 });
                 
-                document.getElementById('onboarding-name').addEventListener('keydown', (e) => {
+                overlay.querySelector('#onboarding-name').addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') {
-                        mapName = document.getElementById('onboarding-name').value.trim() || 'My Mind';
+                        mapName = overlay.querySelector('#onboarding-name').value.trim() || 'My Mind';
                         
                         // Check for API key first
                         const apiKey = localStorage.getItem(CONFIG.API_KEY);
@@ -6617,8 +6622,9 @@ Replace placeholder labels with real content from user's answers. MUST have exac
         completeOnboarding();
     }
 
-    // AI-Assisted Setup choice
-    document.getElementById('onboarding-ai').addEventListener('click', () => {
+    // AI-Assisted Setup choice - use class selector for clarity
+    document.querySelector('#onboarding-overlay .onboarding-choice.ai').addEventListener('click', () => {
+        console.log('AI Assist clicked');
         mapName = document.getElementById('onboarding-name').value.trim() || 'My Mind';
         
         // Check for API key first
@@ -6634,13 +6640,14 @@ Replace placeholder labels with real content from user's answers. MUST have exac
         }
     });
     
-    // Start from Scratch choice
-    document.getElementById('onboarding-scratch').addEventListener('click', () => {
+    // Start from Scratch choice - use class selector for clarity
+    document.querySelector('#onboarding-overlay .onboarding-choice.scratch').addEventListener('click', () => {
+        console.log('Start from Scratch clicked');
         mapName = document.getElementById('onboarding-name').value.trim() || 'My Mind';
         createBasicMapStructure();
     });
     
-    document.getElementById('onboarding-name').addEventListener('keydown', (e) => {
+    document.querySelector('#onboarding-overlay #onboarding-name').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             mapName = document.getElementById('onboarding-name').value.trim() || 'My Mind';
             
