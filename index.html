@@ -4529,8 +4529,43 @@
         animate();
     }
 
+    function zoomToFitMap(extraZoom = 0) {
+        // Calculate bounds of all visible nodes
+        let maxDist = 0;
+        nodes.forEach(mesh => {
+            if (mesh.visible) {
+                const dist = mesh.position.length();
+                maxDist = Math.max(maxDist, dist);
+            }
+        });
+        
+        const isMobile = window.innerWidth <= 768;
+        // Zoom out enough to see all nodes plus some padding
+        const targetDist = Math.max(maxDist * 2.5 + extraZoom, isMobile ? 40 : 30);
+        const targetPos = new THREE.Vector3(0, targetDist * 0.4, targetDist);
+        const startPos = camera.position.clone();
+        const duration = 800;
+        const startTime = Date.now();
+        
+        cameraTargetGoal.set(0, 0, 0);
+        
+        function animate() {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const ease = easeOutCubic(progress);
+            
+            camera.position.lerpVectors(startPos, targetPos, ease);
+            controls.target.lerp(new THREE.Vector3(0, 0, 0), ease);
+            
+            if (progress < 1) requestAnimationFrame(animate);
+        }
+        animate();
+    }
+
     function expandAll() {
-        // Get all nodes that need expanding, sorted by depth (shallowest first)
+        const isMobile = window.innerWidth <= 768;
+        
+        // Get all nodes that need expanding, sorted by level (shallowest first)
         const toExpand = [];
         nodes.forEach(mesh => {
             if (mesh.userData.children?.length && !mesh.userData.isExpanded) {
@@ -4538,8 +4573,11 @@
             }
         });
         
-        // Sort by depth
-        toExpand.sort((a, b) => (a.userData.depth || 0) - (b.userData.depth || 0));
+        // Sort by level (shallowest first)
+        toExpand.sort((a, b) => (a.userData.level || 0) - (b.userData.level || 0));
+        
+        // Slower stagger on mobile to reduce lag
+        const staggerTime = isMobile ? 150 : 60;
         
         // Expand with staggered animation
         toExpand.forEach((mesh, index) => {
@@ -4547,23 +4585,36 @@
                 if (!mesh.userData.isExpanded) {
                     expandNode(mesh, true);
                 }
-            }, index * 60);
+            }, index * staggerTime);
         });
+        
+        // Zoom out to see expanded map
+        const totalDuration = toExpand.length * staggerTime;
+        setTimeout(() => {
+            zoomToFitMap(10);
+        }, Math.min(totalDuration + 200, 1500));
         
         showToast('Expanding all nodes...', 'success');
     }
 
     function collapseAll() {
-        // Get all expanded nodes, sorted by depth (deepest first for proper collapse order)
+        const isMobile = window.innerWidth <= 768;
+        
+        // Get all expanded nodes, sorted by level (deepest first for proper collapse order)
+        // Skip root node (level 0) - keep level 1 nodes visible but collapse their children
         const toCollapse = [];
         nodes.forEach(mesh => {
-            if (mesh.userData.isExpanded) {
+            // Only collapse nodes that are expanded AND have level >= 1 (not the root)
+            if (mesh.userData.isExpanded && (mesh.userData.level || 0) >= 1) {
                 toCollapse.push(mesh);
             }
         });
         
-        // Sort by depth descending (deepest first)
-        toCollapse.sort((a, b) => (b.userData.depth || 0) - (a.userData.depth || 0));
+        // Sort by level descending (deepest first)
+        toCollapse.sort((a, b) => (b.userData.level || 0) - (a.userData.level || 0));
+        
+        // Slower stagger on mobile
+        const staggerTime = isMobile ? 100 : 50;
         
         // Collapse with staggered animation
         toCollapse.forEach((mesh, index) => {
@@ -4571,10 +4622,16 @@
                 if (mesh.userData.isExpanded) {
                     collapseNode(mesh, true);
                 }
-            }, index * 50);
+            }, index * staggerTime);
         });
         
-        showToast('Collapsing all nodes...', 'success');
+        // Zoom to fit after collapse
+        const totalDuration = toCollapse.length * staggerTime;
+        setTimeout(() => {
+            zoomToFitMap(0);
+        }, Math.min(totalDuration + 500, 2000));
+        
+        showToast('Collapsing nodes...', 'success');
     }
 
     // Label decluttering - hide labels that overlap with others
