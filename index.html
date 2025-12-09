@@ -728,13 +728,13 @@
         }
         
         #btn-voice.recording {
-            background: #EF8354;
+            background: #fb923c;
             color: white;
             animation: voicePulse 1.5s ease-in-out infinite;
         }
         
         #btn-voice.processing {
-            background: #4ECDC4;
+            background: #2dd4bf;
             color: white;
         }
         
@@ -780,10 +780,10 @@
         
         .voice-icon {
             margin-bottom: var(--space-4);
-            color: #EF8354;
+            color: #fb923c;
         }
         .voice-icon.recording svg { animation: voiceIconPulse 1s ease-in-out infinite; }
-        .voice-icon.processing { color: #4ECDC4; }
+        .voice-icon.processing { color: #2dd4bf; }
         @keyframes voiceIconPulse {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.1); }
@@ -1588,7 +1588,7 @@
         #onboarding-overlay {
             position: fixed;
             inset: 0;
-            z-index: 1000;
+            z-index: 10000;
             background: var(--bg-deep);
             display: flex;
             flex-direction: column;
@@ -1694,6 +1694,73 @@
         
         .onboarding-skip:hover {
             color: var(--text-secondary);
+        }
+        
+        /* Choice Buttons */
+        .onboarding-choices {
+            display: flex;
+            gap: var(--space-4);
+            margin-top: var(--space-6);
+            margin-bottom: var(--space-4);
+        }
+        
+        .onboarding-choice {
+            flex: 1;
+            padding: var(--space-5);
+            background: var(--bg-secondary);
+            border: 2px solid var(--glass-border);
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all var(--duration-fast);
+            text-align: center;
+        }
+        
+        .onboarding-choice:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-glow);
+        }
+        
+        .onboarding-choice-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto var(--space-3);
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .onboarding-choice-icon svg {
+            width: 24px;
+            height: 24px;
+            stroke: white;
+            fill: none;
+            stroke-width: 2;
+        }
+        
+        .onboarding-choice.scratch .onboarding-choice-icon {
+            background: linear-gradient(135deg, var(--text-secondary) 0%, var(--text-muted) 100%);
+        }
+        
+        .onboarding-choice-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: var(--space-2);
+        }
+        
+        .onboarding-choice-desc {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+        
+        @media (max-width: 500px) {
+            .onboarding-choices {
+                flex-direction: column;
+            }
         }
         
         /* Questionnaire Styles */
@@ -2178,17 +2245,31 @@
     </div>
     
     <!-- Onboarding -->
-    <div id="onboarding-overlay" style="display: none;">
+    <div id="onboarding-overlay" style="display: flex;">
         <!-- Welcome Screen -->
         <div class="onboarding-content" id="onboarding-welcome">
             <div class="onboarding-logo">M</div>
             <h1 class="onboarding-title">Welcome to MYND</h1>
-            <p class="onboarding-subtitle">Your thoughts, beautifully organized in 3D space. Answer a few quick questions to kickstart your personal mind map.</p>
+            <p class="onboarding-subtitle">Your thoughts, beautifully organized in 3D space.</p>
             <div class="onboarding-input-wrapper">
                 <input type="text" id="onboarding-name" placeholder="What should we call your mind map?" value="My Mind">
-                <button id="onboarding-start">Begin →</button>
             </div>
-            <span class="onboarding-skip" id="onboarding-skip">Skip intro</span>
+            <div class="onboarding-choices">
+                <div class="onboarding-choice ai" id="onboarding-ai">
+                    <div class="onboarding-choice-icon">
+                        <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5A2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5a2.5 2.5 0 0 0 2.5 2.5a2.5 2.5 0 0 0 2.5-2.5a2.5 2.5 0 0 0-2.5-2.5z"/></svg>
+                    </div>
+                    <div class="onboarding-choice-title">AI-Assisted Setup</div>
+                    <div class="onboarding-choice-desc">Answer a few questions and let AI build your personalized mind map</div>
+                </div>
+                <div class="onboarding-choice scratch" id="onboarding-scratch">
+                    <div class="onboarding-choice-icon">
+                        <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                    </div>
+                    <div class="onboarding-choice-title">Start from Scratch</div>
+                    <div class="onboarding-choice-desc">Begin with a simple template and build your own structure</div>
+                </div>
+            </div>
         </div>
         
         <!-- Questionnaire -->
@@ -2552,9 +2633,9 @@
     // CONFIGURATION
     // ═══════════════════════════════════════════════════════════════════
     const CONFIG = {
-        STORAGE_KEY: 'mynd-v5q',
-        ONBOARDING_KEY: 'mynd-onboarded-v8',
-        THEME_KEY: 'mynd-theme',
+        STORAGE_KEY: 'mynd-v6c',
+        ONBOARDING_KEY: 'mynd-onboarded-v17',
+        THEME_KEY: 'mynd-theme-v6',
         API_KEY: 'mynd-api-key',
         
         COLORS: [
@@ -2572,23 +2653,23 @@
         ],
         
         SPRING: {
-            stiffness: 0.1,
-            damping: 0.96
+            stiffness: 0.15,
+            damping: 0.88
         },
         
         NODE_SIZES: {
             root: 1.8,
-            level1: 0.9,
-            level2: 0.7,
-            default: 0.55
+            level1: 0.85,
+            level2: 0.6,
+            default: 0.45
         },
         
         LAYOUT: {
-            level1Radius: 6.5,
+            level1Radius: 6.0,
             level1RadiusExpanded: 8,
             level2Radius: 5.5,
-            level3Radius: 4.5,
-            spreadAngle: Math.PI * 1.5
+            level3Radius: 4.0,
+            spreadAngle: Math.PI * 1.2
         }
     };
     
@@ -3036,19 +3117,20 @@
     // THEME MANAGER
     // ═══════════════════════════════════════════════════════════════════
     const themeManager = {
-        current: 'sunset',
+        current: 'sunrise',
         
         init() {
             const saved = localStorage.getItem(CONFIG.THEME_KEY);
             if (saved) {
-                this.set(saved);
+                this.set(saved, true); // Skip color update on init
             } else {
-                // Default to sunset for new users
-                this.set('sunset');
+                // Default to sunrise for new users
+                this.set('sunrise', true);
             }
         },
         
-        set(theme) {
+        set(theme, skipColorUpdate = false) {
+            const oldTheme = this.current;
             this.current = theme;
             document.documentElement.setAttribute('data-theme', theme);
             localStorage.setItem(CONFIG.THEME_KEY, theme);
@@ -3058,7 +3140,16 @@
                 opt.classList.toggle('active', opt.dataset.theme === theme);
             });
             
-            bus.emit('theme:changed', { theme });
+            // Update node colors when switching to/from professional
+            if (!skipColorUpdate && oldTheme !== theme) {
+                const wasProfessional = oldTheme === 'professional';
+                const isProfessional = theme === 'professional';
+                if (wasProfessional !== isProfessional) {
+                    updateNodeColorsForTheme(oldTheme, theme);
+                }
+            }
+            
+            bus.emit('theme:changed', { theme, oldTheme });
         },
         
         toggle() {
@@ -3114,10 +3205,10 @@
         // Controls
         controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
-        controls.dampingFactor = 0.08;
+        controls.dampingFactor = 0.12;
         controls.rotateSpeed = 0.5;
         controls.minDistance = 8;
-        controls.maxDistance = 80;
+        controls.maxDistance = 200;
         controls.enablePan = true;
         controls.panSpeed = 0.8;
         controls.maxPolarAngle = Math.PI * 0.85;
@@ -3239,47 +3330,86 @@
         scene.add(particleSystem);
     }
 
+    // Count all descendants of a node
+    function countDescendants(data) {
+        if (!data.children || data.children.length === 0) return 0;
+        let count = data.children.length;
+        data.children.forEach(child => {
+            count += countDescendants(child);
+        });
+        return count;
+    }
+    
+    // Count visible (expanded) descendants
+    function countVisibleDescendants(data) {
+        if (!data.children || data.children.length === 0) return 0;
+        if (!store.expandedNodes.has(data.id)) return 0;
+        
+        let count = data.children.length;
+        data.children.forEach(child => {
+            count += countVisibleDescendants(child);
+        });
+        return count;
+    }
+    
+    // Get max depth of expanded descendants
+    function getExpandedDepth(data, currentDepth = 0) {
+        if (!data.children || data.children.length === 0) return currentDepth;
+        if (!store.expandedNodes.has(data.id)) return currentDepth;
+        
+        let maxDepth = currentDepth;
+        data.children.forEach(child => {
+            const childDepth = getExpandedDepth(child, currentDepth + 1);
+            if (childDepth > maxDepth) maxDepth = childDepth;
+        });
+        return maxDepth;
+    }
+
     function calculatePositions(data, parentPos = [0, 0, 0], level = 0, parentAngle = 0, total = 1, index = 0) {
         data.level = level;
         
-        // Size based on level
+        // Size based on level - smaller for deeper nodes
         if (level === 0) data.size = CONFIG.NODE_SIZES.root;
         else if (level === 1) data.size = CONFIG.NODE_SIZES.level1;
         else if (level === 2) data.size = CONFIG.NODE_SIZES.level2;
-        else data.size = Math.max(0.3, CONFIG.NODE_SIZES.default - (level - 3) * 0.05);
+        else data.size = Math.max(0.25, CONFIG.NODE_SIZES.default - (level - 3) * 0.06);
         
-        // Check if this node has children (needs more space)
+        // Check descendants for spacing
         const hasChildren = data.children && data.children.length > 0;
         const childCount = hasChildren ? data.children.length : 0;
         const isExpanded = store.expandedNodes.has(data.id);
-        const needsExtraSpace = hasChildren && isExpanded && childCount > 2;
+        const visibleDescendants = countVisibleDescendants(data);
+        const expandedDepth = getExpandedDepth(data);
         
         // Position calculation
         let baseRadius;
         if (level === 0) {
             baseRadius = 0;
         } else if (level === 1) {
-            // Scale radius based on number of siblings for better spacing
-            baseRadius = CONFIG.LAYOUT.level1Radius + Math.max(0, (total - 4) * 0.8);
-            // Push level 1 nodes with 3+ expanded children further out
-            if (needsExtraSpace) {
-                const extraChildren = childCount - 2;
-                baseRadius += Math.min(extraChildren * 1.5, 6);
+            // Level 1: Grow proportionally with descendants
+            baseRadius = CONFIG.LAYOUT.level1Radius;
+            baseRadius += Math.max(0, (total - 4) * 0.8);
+            // Push based on visible descendants
+            if (isExpanded && visibleDescendants > 0) {
+                baseRadius += Math.min(visibleDescendants * 0.25, 7);
+            }
+            // Extra push for deep branches
+            if (expandedDepth > 1) {
+                baseRadius += Math.min((expandedDepth - 1) * 1.2, 5);
             }
         } else if (level === 2) {
-            // Scale radius based on number of siblings
-            baseRadius = CONFIG.LAYOUT.level2Radius + Math.max(0, (total - 3) * 0.5);
-            // Push level 2 nodes with 3+ expanded children further out
-            if (needsExtraSpace) {
-                const extraChildren = childCount - 2;
-                baseRadius += Math.min(extraChildren * 1.2, 5);
+            // Level 2: More aggressive spacing to spread out
+            baseRadius = CONFIG.LAYOUT.level2Radius;
+            baseRadius += Math.max(0, (total - 2) * 0.8);
+            if (isExpanded && visibleDescendants > 0) {
+                baseRadius += Math.min(visibleDescendants * 0.5, 8);
             }
         } else {
-            baseRadius = CONFIG.LAYOUT.level3Radius || 4.5;
-            // Push deeper nodes with 3+ expanded children further out
-            if (needsExtraSpace) {
-                const extraChildren = childCount - 2;
-                baseRadius += Math.min(extraChildren * 1.0, 4);
+            // Level 3+: Scale based on siblings and descendants
+            baseRadius = Math.max(2.5, CONFIG.LAYOUT.level3Radius - (level - 3) * 0.2);
+            baseRadius += Math.max(0, (total - 2) * 0.6);
+            if (isExpanded && visibleDescendants > 0) {
+                baseRadius += Math.min(visibleDescendants * 0.4, 5);
             }
         }
         
@@ -3289,20 +3419,22 @@
             data.expandedPosition = [0, 0, 0];
             data.branchAngle = 0;
         } else if (level === 1) {
-            // Spread evenly around center, starting from top
+            // Spread evenly around center
             const angleStep = (Math.PI * 2) / Math.max(total, 1);
             const startAngle = -Math.PI / 2;
             const angle = startAngle + angleStep * index;
-            // More varied vertical offset for visual interest
-            const verticalOffset = Math.sin(index * 1.2) * 1.2 + (index % 3 - 1) * 0.4;
+            const verticalOffset = (index % 2 === 0 ? 0.3 : -0.3) + (index % 3 - 1) * 0.2;
             
             data.basePosition = [Math.cos(angle) * baseRadius, verticalOffset, Math.sin(angle) * baseRadius];
-            data.expandedPosition = [...data.basePosition]; // Same as base - only pushed out with 3+ children
+            data.expandedPosition = [...data.basePosition];
             data.position = [...data.basePosition];
             data.branchAngle = angle;
         } else {
-            // Branch outward from parent - ensure children are far enough from parent
-            const spreadAngle = Math.min(CONFIG.LAYOUT.spreadAngle, Math.PI * 0.5 + total * 0.15);
+            // Branch outward from parent
+            // Spread angle scales with number of siblings
+            const baseSpread = Math.PI * 0.5;
+            const siblingSpread = Math.min(total * 0.15, Math.PI * 0.4);
+            const spreadAngle = Math.min(baseSpread + siblingSpread, Math.PI * 1.1);
             const halfSpread = spreadAngle / 2;
             const outwardAngle = Math.atan2(parentPos[2], parentPos[0]);
             
@@ -3313,16 +3445,16 @@
                 childAngle = outwardAngle - halfSpread + (spreadAngle / (total - 1)) * index;
             }
             
-            const verticalOffset = (index - (total - 1) / 2) * 0.5;
-            // Add extra spacing based on number of siblings
-            const adjustedRadius = baseRadius + Math.max(0, (total - 1) * 0.6);
+            // Vertical spread scales with siblings
+            const verticalSpacing = 0.4 + Math.min(total * 0.05, 0.3);
+            const verticalOffset = (index - (total - 1) / 2) * verticalSpacing;
             
             data.basePosition = [
-                parentPos[0] + Math.cos(childAngle) * adjustedRadius,
+                parentPos[0] + Math.cos(childAngle) * baseRadius,
                 parentPos[1] + verticalOffset,
-                parentPos[2] + Math.sin(childAngle) * adjustedRadius
+                parentPos[2] + Math.sin(childAngle) * baseRadius
             ];
-            data.expandedPosition = [...data.basePosition]; // Same as base - only pushed out with 3+ children
+            data.expandedPosition = [...data.basePosition];
             data.position = [...data.basePosition];
             data.branchAngle = childAngle;
         }
@@ -3489,17 +3621,11 @@
         const parentMesh = nodes.get(parentData.id);
         if (!parentMesh) return null;
         
-        const curve = new THREE.QuadraticBezierCurve3(
+        // Straight line from parent to child
+        const points = [
             parentMesh.position.clone(),
-            new THREE.Vector3(
-                (parentMesh.position.x + childMesh.position.x) / 2,
-                (parentMesh.position.y + childMesh.position.y) / 2 - 0.5,
-                (parentMesh.position.z + childMesh.position.z) / 2
-            ),
             childMesh.position.clone()
-        );
-        
-        const points = curve.getPoints(20);
+        ];
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
         
         const material = new THREE.LineBasicMaterial({
@@ -3520,17 +3646,11 @@
         const line = childMesh.userData.connectionLine;
         if (!line) return;
         
-        const curve = new THREE.QuadraticBezierCurve3(
+        // Straight line update
+        const points = [
             parentMesh.position.clone(),
-            new THREE.Vector3(
-                (parentMesh.position.x + childMesh.position.x) / 2,
-                (parentMesh.position.y + childMesh.position.y) / 2 - 0.3,
-                (parentMesh.position.z + childMesh.position.z) / 2
-            ),
             childMesh.position.clone()
-        );
-        
-        const points = curve.getPoints(20);
+        ];
         line.geometry.setFromPoints(points);
     }
 
@@ -3582,6 +3702,31 @@
         
         updateDepthIndicator();
     }
+    
+    // Smoothly update node positions without rebuilding scene
+    function updateNodePositions() {
+        const contextNode = store.findNode(currentContextId);
+        if (!contextNode) return;
+        
+        // Recalculate positions
+        const processedData = calculatePositions(JSON.parse(JSON.stringify(contextNode)));
+        
+        // Update spring targets for existing visible nodes
+        function updatePositionsRecursive(data) {
+            const mesh = nodes.get(data.id);
+            if (mesh && mesh.visible) {
+                const newPos = new THREE.Vector3(data.position[0], data.position[1], data.position[2]);
+                mesh.userData.spring.target.copy(newPos);
+                mesh.userData.basePosition = [...data.position];
+            }
+            
+            if (data.children) {
+                data.children.forEach(child => updatePositionsRecursive(child));
+            }
+        }
+        
+        updatePositionsRecursive(processedData);
+    }
 
     function updateLabelsForTheme() {
         // Just update label sprite textures without rebuilding the scene
@@ -3611,18 +3756,35 @@
         mesh.userData.isExpanded = true;
         store.expandedNodes.add(mesh.userData.id);
         
+        // Store old positions of all visible nodes before rebuild
+        const oldPositions = new Map();
+        nodes.forEach((m, id) => {
+            if (m.visible) {
+                oldPositions.set(id, m.position.clone());
+            }
+        });
+        
         // Rebuild scene to recalculate positions with proper spacing
-        // This ensures parent nodes with children get pushed out
         buildScene();
         
         // Re-get the mesh after rebuild
         const newMesh = nodes.get(mesh.userData.id);
-        if (newMesh) {
-            // Ensure children are visible and animated
+        if (newMesh && animate) {
+            // Restore old positions for existing nodes so they animate smoothly
+            oldPositions.forEach((oldPos, id) => {
+                const m = nodes.get(id);
+                if (m && m.visible) {
+                    m.position.copy(oldPos);
+                    if (m.userData.outlineMesh) {
+                        m.userData.outlineMesh.position.copy(oldPos);
+                    }
+                }
+            });
+            
+            // Start children from parent position for animation
             newMesh.userData.children?.forEach((childData) => {
                 const childMesh = nodes.get(childData.id);
-                if (childMesh && animate) {
-                    // Start children from parent position for animation
+                if (childMesh) {
                     const parentPos = newMesh.position.clone();
                     childMesh.position.copy(parentPos);
                     if (childMesh.userData.outlineMesh) childMesh.userData.outlineMesh.position.copy(parentPos);
@@ -3653,12 +3815,12 @@
             if (childMesh && childMesh.userData.children?.length > 0) {
                 setTimeout(() => {
                     expandAllDescendants(childMesh, animate, false);
-                }, animate ? 150 * (i + 1) : 0);
+                }, animate ? 80 * (i + 1) : 0);
             }
         });
         
         if (animate && isFirst) {
-            showToast('Expanded all children', 'info');
+            showToast('Expanded all descendants', 'info');
         }
     }
 
@@ -3733,9 +3895,9 @@
             audio.collapse();
             haptic.light();
             
-            // Rebuild scene after collapse animation to recalculate spacing
-            const totalDuration = baseDelay + thisLevelDuration + 300;
-            setTimeout(() => buildScene(), totalDuration);
+            // Smoothly update positions after collapse animation (don't rebuild)
+            const totalDuration = baseDelay + thisLevelDuration + 100;
+            setTimeout(() => updateNodePositions(), totalDuration);
         }
         
         // Return total time for this level and nested
@@ -3750,7 +3912,7 @@
         }
     }
 
-    function selectNode(mesh) {
+    function selectNode(mesh, isDoubleClick = false) {
         const nodeId = mesh.userData.id;
         const wasAlreadySelected = selectedNode === mesh;
         
@@ -3760,15 +3922,20 @@
         }
         
         // Expand/collapse logic:
-        // - First click on collapsed node: expand immediately
-        // - Second click on expanded node: collapse
+        // - Single click on collapsed node: expand direct children only
+        // - Single click on expanded node: collapse all descendants
+        // - Double click: expand all layers of children
         if (mesh.userData.children?.length > 0) {
-            if (!mesh.userData.isExpanded) {
-                // Always expand on click if not expanded
+            if (isDoubleClick) {
+                // Double click: expand all descendants
+                expandAllDescendants(mesh);
+                mesh = nodes.get(nodeId) || mesh;
+            } else if (!mesh.userData.isExpanded) {
+                // Single click on collapsed: expand direct children only
                 expandNode(mesh);
                 mesh = nodes.get(nodeId) || mesh;
-            } else if (wasAlreadySelected) {
-                // Only collapse if clicking again on already-selected expanded node
+            } else {
+                // Single click on expanded: collapse all descendants
                 collapseNode(mesh);
                 mesh = nodes.get(nodeId) || mesh;
             }
@@ -3778,8 +3945,8 @@
         mesh.userData.selected = true;
         store.selectedNodeId = mesh.userData.id;
         
-        // Skip camera animation if auto-camera is disabled or node was already selected
-        if (!autoCameraEnabled || wasAlreadySelected) {
+        // Skip camera animation if auto-camera is disabled
+        if (!autoCameraEnabled) {
             audio.select();
             haptic.light();
             bus.emit('node:selected', { data: mesh.userData });
@@ -3816,11 +3983,11 @@
         if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
         
         // Arc boost - how much to zoom out at midpoint (more for bigger rotations)
-        const arcBoost = Math.abs(angleDiff) > 0.5 ? 5 : 2;
+        const arcBoost = Math.abs(angleDiff) > 0.5 ? 3 : 1;
         
         cameraArcAnimation = {
             startTime: performance.now(),
-            duration: 1200, // slower, smoother
+            duration: 800, // Faster, smoother
             startTarget: controls.target.clone(),
             endTarget: endTarget,
             startTheta: currentTheta,
@@ -3965,7 +4132,7 @@
                 if (!mesh.userData.isExpanded) {
                     expandNode(mesh, true);
                 }
-            }, index * 100);
+            }, index * 60);
         });
         
         showToast('Expanding all nodes...', 'success');
@@ -3989,7 +4156,7 @@
                 if (mesh.userData.isExpanded) {
                     collapseNode(mesh, true);
                 }
-            }, index * 80);
+            }, index * 50);
         });
         
         showToast('Collapsing all nodes...', 'success');
@@ -4100,51 +4267,66 @@
             const spring = mesh.userData.spring;
             if (!spring) return;
             
-            // Smooth position lerp (no spring bounce)
-            const lerpFactor = 0.15;
-            mesh.position.lerp(spring.target, lerpFactor);
+            // Check if node is still animating (position or scale)
+            const posDiff = mesh.position.distanceTo(spring.target);
+            const scaleDiff = Math.abs(mesh.scale.x - spring.scaleTarget);
+            const isAnimating = posDiff > 0.01 || scaleDiff > 0.01;
+            
+            // Adaptive lerp - slower for longer distances (smoother repositioning)
+            const baseLerp = 0.12;
+            const lerpFactor = posDiff > 3 ? 0.06 : (posDiff > 1.5 ? 0.08 : baseLerp);
+            
+            // Smooth position lerp
+            if (posDiff > 0.001) {
+                mesh.position.lerp(spring.target, lerpFactor);
+            } else if (posDiff > 0) {
+                mesh.position.copy(spring.target);
+                // Final connection update when settling
+                if (mesh.userData.connectionLine && mesh.userData.parent) {
+                    const parentMesh = nodes.get(mesh.userData.parent.id);
+                    if (parentMesh) updateConnection(mesh, parentMesh);
+                }
+            }
             
             // Outline follows
             if (mesh.userData.outlineMesh) {
                 mesh.userData.outlineMesh.position.copy(mesh.position);
             }
             
-            // Gentle floating
-            const floatY = Math.sin(time * spring.floatSpeed + spring.floatOffset) * 0.05;
-            mesh.position.y += floatY;
-            if (mesh.userData.outlineMesh) {
-                mesh.userData.outlineMesh.position.y = mesh.position.y;
+            // Smooth scale lerp
+            const currentScale = mesh.scale.x;
+            if (scaleDiff > 0.001) {
+                const newScale = currentScale + (spring.scaleTarget - currentScale) * 0.15;
+                mesh.scale.set(newScale, newScale, newScale);
+            } else {
+                mesh.scale.set(spring.scaleTarget, spring.scaleTarget, spring.scaleTarget);
             }
             
-            // Smooth scale lerp (no spring bounce)
-            const currentScale = mesh.scale.x;
-            const newScale = currentScale + (spring.scaleTarget - currentScale) * 0.18;
-            mesh.scale.set(newScale, newScale, newScale);
-            
             if (mesh.userData.outlineMesh) {
-                mesh.userData.outlineMesh.scale.set(newScale * 1.03, newScale * 1.03, newScale * 1.03);
+                const s = mesh.scale.x * 1.03;
+                mesh.userData.outlineMesh.scale.set(s, s, s);
             }
             
             // Opacity for new nodes
             if (mesh.material.opacity < 1) {
-                mesh.material.opacity = Math.min(1, mesh.material.opacity + 0.08);
+                mesh.material.opacity = Math.min(1, mesh.material.opacity + 0.1);
             }
             
-            // Update connections
-            if (mesh.userData.connectionLine && mesh.userData.parent) {
+            // Update connections only when node is animating
+            if (isAnimating && mesh.userData.connectionLine && mesh.userData.parent) {
                 const parentMesh = nodes.get(mesh.userData.parent.id);
                 if (parentMesh) {
                     updateConnection(mesh, parentMesh);
                 }
             }
             
-            // Label visibility and scale
-            if (mesh.userData.labelSprite) {
+            // Label visibility and scale (less frequent updates)
+            if (mesh.userData.labelSprite && (!mesh.userData.lastLabelUpdate || time - mesh.userData.lastLabelUpdate > 0.1)) {
+                mesh.userData.lastLabelUpdate = time;
                 const dist = camera.position.distanceTo(mesh.position);
                 const labelScale = 0.6 * Math.max(0.5, Math.min(1.2, dist / 15));
                 const aspect = mesh.userData.labelSprite.scale.x / mesh.userData.labelSprite.scale.y;
                 mesh.userData.labelSprite.scale.set(labelScale * aspect, labelScale, 1);
-                // Store distance-based opacity for declutter to use
                 mesh.userData.labelBaseOpacity = Math.max(0.7, Math.min(1, 35 / dist));
             }
             
@@ -4156,18 +4338,22 @@
             }
         });
         
-        // Label decluttering - hide overlapping labels
-        declutterLabels();
+        // Label decluttering - run every few frames for performance
+        if (!animate.frameCount) animate.frameCount = 0;
+        animate.frameCount++;
+        if (animate.frameCount % 3 === 0) {
+            declutterLabels();
+        }
         
         // Smooth camera animation (runs even during interaction if animation is active)
         if (cameraArcAnimation) {
             const elapsed = performance.now() - cameraArcAnimation.startTime;
             const progress = Math.min(elapsed / cameraArcAnimation.duration, 1);
             
-            // Smooth easing (ease-in-out for smoother arc)
+            // Smoother cubic ease-in-out
             const ease = progress < 0.5 
-                ? 2 * progress * progress 
-                : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+                ? 4 * progress * progress * progress
+                : 1 - Math.pow(-2 * progress + 2, 3) / 2;
             
             // Lerp target position
             controls.target.lerpVectors(
@@ -4246,6 +4432,8 @@
     let pointerDownTime = 0;
     let pointerDownPos = { x: 0, y: 0 };
     let clickedOnEmpty = false;
+    let lastClickTime = 0;
+    let lastClickedNodeId = null;
 
     // Get all visible descendants of a node
     function getVisibleDescendants(mesh, descendants = []) {
@@ -4304,17 +4492,19 @@
                     childOffsets.set(childMesh.userData.id, offset);
                 });
             } else {
-                selectNode(mesh);
+                // Check for double-click on same node
+                const now = Date.now();
+                const isDoubleClick = (now - lastClickTime < 350) && (lastClickedNodeId === mesh.userData.id);
                 
-                // Double-tap to expand all children
-                if (mesh.userData.lastTap && Date.now() - mesh.userData.lastTap < 300) {
-                    expandAllDescendants(mesh);
-                }
-                mesh.userData.lastTap = Date.now();
+                lastClickTime = now;
+                lastClickedNodeId = mesh.userData.id;
+                
+                selectNode(mesh, isDoubleClick);
             }
         } else {
             // Clicked on empty space - track for potential deselect on pointer up
             clickedOnEmpty = true;
+            lastClickedNodeId = null;
         }
     }
     
@@ -5565,12 +5755,26 @@ JSON only, no other text:`;
                     <div class="onboarding-content" id="onboarding-welcome">
                         <div class="onboarding-logo">M</div>
                         <h1 class="onboarding-title">Create New Map</h1>
-                        <p class="onboarding-subtitle">Answer a few questions to personalize your new mind map, or skip to start fresh.</p>
+                        <p class="onboarding-subtitle">Your thoughts, beautifully organized in 3D space.</p>
                         <div class="onboarding-input-wrapper">
                             <input type="text" id="onboarding-name" placeholder="What should we call your mind map?" value="My Mind">
-                            <button id="onboarding-start">Begin →</button>
                         </div>
-                        <span class="onboarding-skip" id="onboarding-skip">Skip to empty map</span>
+                        <div class="onboarding-choices">
+                            <div class="onboarding-choice ai" id="onboarding-ai">
+                                <div class="onboarding-choice-icon">
+                                    <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5A2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5a2.5 2.5 0 0 0 2.5 2.5a2.5 2.5 0 0 0 2.5-2.5a2.5 2.5 0 0 0-2.5-2.5z"/></svg>
+                                </div>
+                                <div class="onboarding-choice-title">AI-Assisted Setup</div>
+                                <div class="onboarding-choice-desc">Answer a few questions and let AI build your personalized mind map</div>
+                            </div>
+                            <div class="onboarding-choice scratch" id="onboarding-scratch">
+                                <div class="onboarding-choice-icon">
+                                    <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                                </div>
+                                <div class="onboarding-choice-title">Start from Scratch</div>
+                                <div class="onboarding-choice-desc">Begin with a simple template and build your own structure</div>
+                            </div>
+                        </div>
                     </div>
                     <div class="onboarding-questionnaire" id="onboarding-questionnaire">
                         <div class="question-header">
@@ -5607,9 +5811,14 @@ JSON only, no other text:`;
                 document.body.appendChild(overlay);
                 
                 // Re-attach event listeners
-                document.getElementById('onboarding-start').addEventListener('click', () => {
+                document.getElementById('onboarding-ai').addEventListener('click', () => {
                     mapName = document.getElementById('onboarding-name').value.trim() || 'My Mind';
                     showQuestionnaire();
+                });
+                
+                document.getElementById('onboarding-scratch').addEventListener('click', () => {
+                    mapName = document.getElementById('onboarding-name').value.trim() || 'My Mind';
+                    createBasicMapStructure();
                 });
                 
                 document.getElementById('onboarding-name').addEventListener('keydown', (e) => {
@@ -5617,13 +5826,6 @@ JSON only, no other text:`;
                         mapName = document.getElementById('onboarding-name').value.trim() || 'My Mind';
                         showQuestionnaire();
                     }
-                });
-                
-                document.getElementById('onboarding-skip').addEventListener('click', () => {
-                    const name = document.getElementById('onboarding-name').value.trim() || 'My Mind';
-                    store.updateNode(store.data.id, { label: name });
-                    buildScene();
-                    completeOnboarding();
                 });
                 
                 document.getElementById('question-next').addEventListener('click', () => {
@@ -5767,8 +5969,13 @@ JSON only, no other text:`;
     
     function checkOnboarding() {
         const onboarded = localStorage.getItem(CONFIG.ONBOARDING_KEY);
-        if (!onboarded) {
-            document.getElementById('onboarding-overlay').style.display = 'flex';
+        const overlay = document.getElementById('onboarding-overlay');
+        if (onboarded) {
+            // Already onboarded - hide overlay
+            overlay.style.display = 'none';
+        } else {
+            // Show onboarding
+            overlay.style.display = 'flex';
         }
     }
     
@@ -5845,7 +6052,7 @@ ${answersContext}
 
 Return this EXACT JSON structure (with your own labels based on answers):
 
-{"nodes":[{"label":"Goals","color":"#EF8354","children":[{"label":"Short Term","children":[{"label":"Action 1"},{"label":"Action 2"}]},{"label":"Long Term","children":[{"label":"Action 1"},{"label":"Action 2"}]}]},{"label":"Growth","color":"#4ECDC4","children":[{"label":"Skills","children":[{"label":"Step 1"},{"label":"Step 2"}]},{"label":"Learning","children":[{"label":"Resource 1"},{"label":"Resource 2"}]}]},{"label":"Projects","color":"#9B5DE5","children":[{"label":"Current","children":[{"label":"Task 1"},{"label":"Task 2"}]},{"label":"Planned","children":[{"label":"Idea 1"},{"label":"Idea 2"}]}]},{"label":"Wellness","color":"#26DE81","children":[{"label":"Physical","children":[{"label":"Habit 1"},{"label":"Habit 2"}]},{"label":"Mental","children":[{"label":"Practice 1"},{"label":"Practice 2"}]}]}]}
+{"nodes":[{"label":"Goals","color":"#60a5fa","children":[{"label":"Short Term","children":[{"label":"Action 1"},{"label":"Action 2"}]},{"label":"Long Term","children":[{"label":"Action 1"},{"label":"Action 2"}]}]},{"label":"Growth","color":"#2dd4bf","children":[{"label":"Skills","children":[{"label":"Step 1"},{"label":"Step 2"}]},{"label":"Learning","children":[{"label":"Resource 1"},{"label":"Resource 2"}]}]},{"label":"Projects","color":"#c084fc","children":[{"label":"Current","children":[{"label":"Task 1"},{"label":"Task 2"}]},{"label":"Planned","children":[{"label":"Idea 1"},{"label":"Idea 2"}]}]},{"label":"Wellness","color":"#4ade80","children":[{"label":"Physical","children":[{"label":"Habit 1"},{"label":"Habit 2"}]},{"label":"Mental","children":[{"label":"Practice 1"},{"label":"Practice 2"}]}]}]}
 
 Replace placeholder labels with real content from user's answers. MUST have exactly 4 top-level nodes. JSON only.`
                     }]
@@ -5906,7 +6113,7 @@ Replace placeholder labels with real content from user's answers. MUST have exac
             const topNodes = structure.nodes.slice(0, 4);
             
             topNodes.forEach(category => {
-                const categoryColor = category.color || '#EF8354';
+                const categoryColor = category.color || '#60a5fa';
                 console.log('📁 Adding category:', category.label, 'with', category.children?.length, 'children');
                 
                 const categoryNode = store.addNode(store.data.id, {
@@ -5956,17 +6163,21 @@ Replace placeholder labels with real content from user's answers. MUST have exac
     }
     
     function createBasicMapStructure() {
-        console.log('⚠️ FALLBACK: Creating basic structure without AI');
+        console.log('📝 Creating basic structure from scratch');
         // Create basic structure without AI
         store.updateNode(store.data.id, { label: mapName });
         store.data.children = []; // Clear any existing children
         
-        // Add default categories based on common themes
+        // Use colors from current theme palette
+        const colors = getThemeColors();
+        
+        // Add default categories for starting from scratch
+        // Using distinct colors that don't match root (orange)
         const categories = [
-            { label: 'Goals', color: '#EF8354' },
-            { label: 'Projects', color: '#9B5DE5' },
-            { label: 'Ideas', color: '#F7B731' },
-            { label: 'Learning', color: '#4ECDC4' }
+            { label: 'Goals', color: colors[4] },      // Blue
+            { label: 'Ideas', color: colors[3] },      // Yellow
+            { label: 'To Do', color: colors[7] },      // Purple
+            { label: 'Wants', color: colors[2] }       // Teal
         ];
         
         categories.forEach(cat => {
@@ -5978,9 +6189,16 @@ Replace placeholder labels with real content from user's answers. MUST have exac
         completeOnboarding();
     }
 
-    document.getElementById('onboarding-start').addEventListener('click', () => {
+    // AI-Assisted Setup choice
+    document.getElementById('onboarding-ai').addEventListener('click', () => {
         mapName = document.getElementById('onboarding-name').value.trim() || 'My Mind';
         showQuestionnaire();
+    });
+    
+    // Start from Scratch choice
+    document.getElementById('onboarding-scratch').addEventListener('click', () => {
+        mapName = document.getElementById('onboarding-name').value.trim() || 'My Mind';
+        createBasicMapStructure();
     });
     
     document.getElementById('onboarding-name').addEventListener('keydown', (e) => {
@@ -5988,12 +6206,6 @@ Replace placeholder labels with real content from user's answers. MUST have exac
             mapName = document.getElementById('onboarding-name').value.trim() || 'My Mind';
             showQuestionnaire();
         }
-    });
-
-    document.getElementById('onboarding-skip').addEventListener('click', () => {
-        store.updateNode(store.data.id, { label: 'My Mind' });
-        buildScene();
-        completeOnboarding();
     });
     
     document.getElementById('question-next').addEventListener('click', () => {
@@ -6046,6 +6258,12 @@ Replace placeholder labels with real content from user's answers. MUST have exac
     // ═══════════════════════════════════════════════════════════════════
     async function init() {
         try {
+            // Check onboarding first - hide overlay immediately if already completed
+            const onboarded = localStorage.getItem(CONFIG.ONBOARDING_KEY);
+            if (onboarded) {
+                document.getElementById('onboarding-overlay').style.display = 'none';
+            }
+            
             themeManager.init();
             initScene();
             
@@ -6054,9 +6272,6 @@ Replace placeholder labels with real content from user's answers. MUST have exac
                 document.getElementById('loading').classList.add('hidden');
                 setTimeout(() => document.getElementById('loading').remove(), 500);
             }, 500);
-            
-            // Check onboarding
-            setTimeout(checkOnboarding, 600);
             
             // Show keyboard hints briefly
             setTimeout(() => {
