@@ -2552,8 +2552,8 @@
     // CONFIGURATION
     // ═══════════════════════════════════════════════════════════════════
     const CONFIG = {
-        STORAGE_KEY: 'mynd-v5o',
-        ONBOARDING_KEY: 'mynd-onboarded-v6',
+        STORAGE_KEY: 'mynd-v5p',
+        ONBOARDING_KEY: 'mynd-onboarded-v7',
         THEME_KEY: 'mynd-theme',
         API_KEY: 'mynd-api-key',
         
@@ -2584,11 +2584,11 @@
         },
         
         LAYOUT: {
-            level1Radius: 5.0,
-            level1RadiusExpanded: 7,
-            level2Radius: 5.0,
-            level3Radius: 4.0,
-            spreadAngle: Math.PI * 1.4
+            level1Radius: 6.5,
+            level1RadiusExpanded: 8,
+            level2Radius: 5.5,
+            level3Radius: 4.5,
+            spreadAngle: Math.PI * 1.5
         }
     };
     
@@ -2678,12 +2678,7 @@
         label: 'My Mind',
         color: '#fb923c',
         description: '',
-        children: [
-            { id: 'ideas', label: 'Ideas', color: '#2dd4bf', description: '', children: [] },
-            { id: 'projects', label: 'Projects', color: '#fbbf24', description: '', children: [] },
-            { id: 'goals', label: 'Goals', color: '#f472b6', description: '', children: [] },
-            { id: 'learning', label: 'Learning', color: '#60a5fa', description: '', children: [] }
-        ]
+        children: []
     };
 
     class Store {
@@ -3264,21 +3259,23 @@
         if (level === 0) {
             baseRadius = 0;
         } else if (level === 1) {
-            baseRadius = CONFIG.LAYOUT.level1Radius;
+            // Scale radius based on number of siblings for better spacing
+            baseRadius = CONFIG.LAYOUT.level1Radius + Math.max(0, (total - 4) * 0.8);
             // Push level 1 nodes with 3+ expanded children further out
             if (needsExtraSpace) {
                 const extraChildren = childCount - 2;
                 baseRadius += Math.min(extraChildren * 1.5, 6);
             }
         } else if (level === 2) {
-            baseRadius = CONFIG.LAYOUT.level2Radius;
+            // Scale radius based on number of siblings
+            baseRadius = CONFIG.LAYOUT.level2Radius + Math.max(0, (total - 3) * 0.5);
             // Push level 2 nodes with 3+ expanded children further out
             if (needsExtraSpace) {
                 const extraChildren = childCount - 2;
                 baseRadius += Math.min(extraChildren * 1.2, 5);
             }
         } else {
-            baseRadius = CONFIG.LAYOUT.level3Radius || 3.5;
+            baseRadius = CONFIG.LAYOUT.level3Radius || 4.5;
             // Push deeper nodes with 3+ expanded children further out
             if (needsExtraSpace) {
                 const extraChildren = childCount - 2;
@@ -3296,7 +3293,8 @@
             const angleStep = (Math.PI * 2) / Math.max(total, 1);
             const startAngle = -Math.PI / 2;
             const angle = startAngle + angleStep * index;
-            const verticalOffset = (index % 2 === 0 ? 0.2 : -0.2);
+            // More varied vertical offset for visual interest
+            const verticalOffset = Math.sin(index * 1.2) * 1.2 + (index % 3 - 1) * 0.4;
             
             data.basePosition = [Math.cos(angle) * baseRadius, verticalOffset, Math.sin(angle) * baseRadius];
             data.expandedPosition = [...data.basePosition]; // Same as base - only pushed out with 3+ children
@@ -5866,8 +5864,9 @@ Replace the placeholder labels with real content from the user's answers. Keep t
     }
     
     function createMapFromStructure(structure) {
-        // Update root label
+        // Update root label and clear any existing children
         store.updateNode(store.data.id, { label: mapName });
+        store.data.children = []; // Clear existing children
         
         console.log('🏗️ Creating map from structure, nodes:', structure.nodes?.length);
         
@@ -5921,6 +5920,7 @@ Replace the placeholder labels with real content from the user's answers. Keep t
             });
         }
         
+        store.save();
         buildScene();
         completeOnboarding();
     }
@@ -5929,6 +5929,7 @@ Replace the placeholder labels with real content from the user's answers. Keep t
         console.log('⚠️ FALLBACK: Creating basic structure without AI');
         // Create basic structure without AI
         store.updateNode(store.data.id, { label: mapName });
+        store.data.children = []; // Clear any existing children
         
         // Add default categories based on common themes
         const categories = [
@@ -5942,6 +5943,7 @@ Replace the placeholder labels with real content from the user's answers. Keep t
             store.addNode(store.data.id, cat);
         });
         
+        store.save();
         buildScene();
         completeOnboarding();
     }
