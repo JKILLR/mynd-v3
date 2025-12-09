@@ -2552,8 +2552,8 @@
     // CONFIGURATION
     // ═══════════════════════════════════════════════════════════════════
     const CONFIG = {
-        STORAGE_KEY: 'mynd-v5k',
-        ONBOARDING_KEY: 'mynd-onboarded-v4',
+        STORAGE_KEY: 'mynd-v5l',
+        ONBOARDING_KEY: 'mynd-onboarded-v5',
         THEME_KEY: 'mynd-theme',
         API_KEY: 'mynd-api-key',
         
@@ -5803,54 +5803,82 @@ JSON only, no other text:`;
                     max_tokens: 2500,
                     messages: [{
                         role: 'user',
-                        content: `You are the AI core of MYND, a mind mapping app. A new user answered these onboarding questions:
+                        content: `You are building a mind map structure from user onboarding answers.
 
+USER'S ANSWERS:
 ${answersContext}
 
-YOUR TASK: Create a mind map structure with TWO layers.
+CREATE EXACTLY THIS STRUCTURE:
 
-LAYER 1 (3-5 nodes max): Broad thematic categories that ORGANIZE their answers. Examples:
-- "Short-term Goals" (for immediate objectives)
-- "Life Vision" (for long-term dreams)  
-- "Personal Growth" (for skills, learning)
-- "Wellness" (for health, recharge activities)
-- "Projects" (for specific things they're working on)
-- "Organize" (for areas needing decluttering)
+LAYER 1: EXACTLY 3-5 broad categories (NO MORE THAN 5!)
+Examples: "Goals", "Projects", "Growth", "Wellness", "Ideas"
 
-Choose categories that make sense for THIS user's answers. Don't use generic defaults - tailor them.
+LAYER 2: Each Layer 1 node gets 2-3 children based on their answers
 
-LAYER 2 (2-4 children per category): Brainstormed items based on their answers. This is where you EXTRAPOLATE:
-- If they said "learn Spanish" → under Personal Growth, add: "Spanish Basics", "Find Language Partner", "Daily Practice Routine"
-- If they said "start a business" → under Projects, add: "Market Research", "MVP Development", "Launch Strategy"
-- If they said "exercise more" → under Wellness, add: "Morning Workout", "Join a Gym", "Track Progress"
+LAYER 3: Each Layer 2 node gets 2-3 specific action items (brainstormed by you)
 
-DO NOT just copy their answers as nodes. BREAK THEM DOWN into actionable sub-items.
+COLORS:
+- Orange #EF8354: Goals, ambitions
+- Teal #4ECDC4: Learning, growth
+- Purple #9B5DE5: Projects
+- Green #26DE81: Wellness
+- Yellow #F7B731: Ideas
+- Blue #45B7D1: Career
 
-COLORS (use consistently per category):
-- #EF8354 (Orange) - Goals, ambitions
-- #4ECDC4 (Teal) - Learning, growth
-- #9B5DE5 (Purple) - Projects, tasks
-- #26DE81 (Green) - Wellness, self-care
-- #F7B731 (Yellow) - Ideas, creativity
-- #45B7D1 (Blue) - Career, work
-- #FF6B9D (Pink) - Relationships
+STRICT RULES:
+- MAXIMUM 5 nodes in Layer 1
+- EVERY Layer 1 node MUST have children
+- EVERY Layer 2 node MUST have children
+- Layer 3 children are actionable items YOU brainstorm
 
-JSON FORMAT:
+EXAMPLE OUTPUT:
 {
   "nodes": [
     {
-      "label": "Category Name",
-      "color": "#HEX",
+      "label": "Goals",
+      "color": "#EF8354",
       "children": [
-        { "label": "Brainstormed Item 1" },
-        { "label": "Brainstormed Item 2" },
-        { "label": "Brainstormed Item 3" }
+        {
+          "label": "Launch My App",
+          "children": [
+            { "label": "Finish MVP" },
+            { "label": "Beta Testing" },
+            { "label": "App Store Submission" }
+          ]
+        },
+        {
+          "label": "Financial Freedom",
+          "children": [
+            { "label": "Create Budget" },
+            { "label": "Start Investing" }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "Wellness",
+      "color": "#26DE81",
+      "children": [
+        {
+          "label": "Exercise",
+          "children": [
+            { "label": "Morning Runs" },
+            { "label": "Gym Membership" }
+          ]
+        },
+        {
+          "label": "Mental Health",
+          "children": [
+            { "label": "Meditation" },
+            { "label": "Digital Detox" }
+          ]
+        }
       ]
     }
   ]
 }
 
-Remember: 3-5 top categories, each with 2-4 brainstormed children. Children inherit parent color. JSON only:`
+Generate the JSON now. Remember: MAX 5 Layer 1 nodes, and EVERY node must have children with their own children. JSON only:`
                     }]
                 })
             });
@@ -5879,22 +5907,36 @@ Remember: 3-5 top categories, each with 2-4 brainstormed children. Children inhe
         // Update root label
         store.updateNode(store.data.id, { label: mapName });
         
-        // Add nodes from AI structure (2 levels: categories + brainstormed children)
+        // Add nodes from AI structure (3 levels deep)
         if (structure.nodes && Array.isArray(structure.nodes)) {
-            structure.nodes.forEach(category => {
+            // Limit to max 5 top-level nodes
+            const topNodes = structure.nodes.slice(0, 5);
+            
+            topNodes.forEach(category => {
                 const categoryColor = category.color || '#EF8354';
                 const categoryId = store.addNode(store.data.id, {
                     label: category.label,
                     color: categoryColor
                 });
                 
-                // Add brainstormed children
+                // Layer 2: Children of category
                 if (category.children && Array.isArray(category.children)) {
                     category.children.forEach(child => {
-                        store.addNode(categoryId, {
+                        const childColor = child.color || categoryColor;
+                        const childId = store.addNode(categoryId, {
                             label: child.label,
-                            color: child.color || categoryColor
+                            color: childColor
                         });
+                        
+                        // Layer 3: Grandchildren (action items)
+                        if (child.children && Array.isArray(child.children)) {
+                            child.children.forEach(grandchild => {
+                                store.addNode(childId, {
+                                    label: grandchild.label,
+                                    color: grandchild.color || childColor
+                                });
+                            });
+                        }
                     });
                 }
             });
