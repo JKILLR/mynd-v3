@@ -2552,8 +2552,8 @@
     // CONFIGURATION
     // ═══════════════════════════════════════════════════════════════════
     const CONFIG = {
-        STORAGE_KEY: 'mynd-v5p',
-        ONBOARDING_KEY: 'mynd-onboarded-v7',
+        STORAGE_KEY: 'mynd-v5q',
+        ONBOARDING_KEY: 'mynd-onboarded-v8',
         THEME_KEY: 'mynd-theme',
         API_KEY: 'mynd-api-key',
         
@@ -3093,7 +3093,7 @@
         // Camera
         camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
         const isMobile = window.innerWidth <= 768;
-        camera.position.set(0, isMobile ? 12 : 8, isMobile ? 35 : 25);
+        camera.position.set(0, isMobile ? 18 : 14, isMobile ? 50 : 40);
         
         // Renderer
         renderer = new THREE.WebGLRenderer({ 
@@ -3948,21 +3948,51 @@
     }
 
     function expandAll() {
+        // Get all nodes that need expanding, sorted by depth (shallowest first)
+        const toExpand = [];
         nodes.forEach(mesh => {
             if (mesh.userData.children?.length && !mesh.userData.isExpanded) {
-                expandNode(mesh, false);
+                toExpand.push(mesh);
             }
         });
-        showToast('Expanded all nodes', 'success');
+        
+        // Sort by depth
+        toExpand.sort((a, b) => (a.userData.depth || 0) - (b.userData.depth || 0));
+        
+        // Expand with staggered animation
+        toExpand.forEach((mesh, index) => {
+            setTimeout(() => {
+                if (!mesh.userData.isExpanded) {
+                    expandNode(mesh, true);
+                }
+            }, index * 100);
+        });
+        
+        showToast('Expanding all nodes...', 'success');
     }
 
     function collapseAll() {
+        // Get all expanded nodes, sorted by depth (deepest first for proper collapse order)
+        const toCollapse = [];
         nodes.forEach(mesh => {
             if (mesh.userData.isExpanded) {
-                collapseNode(mesh, false);
+                toCollapse.push(mesh);
             }
         });
-        showToast('Collapsed all nodes', 'success');
+        
+        // Sort by depth descending (deepest first)
+        toCollapse.sort((a, b) => (b.userData.depth || 0) - (a.userData.depth || 0));
+        
+        // Collapse with staggered animation
+        toCollapse.forEach((mesh, index) => {
+            setTimeout(() => {
+                if (mesh.userData.isExpanded) {
+                    collapseNode(mesh, true);
+                }
+            }, index * 80);
+        });
+        
+        showToast('Collapsing all nodes...', 'success');
     }
 
     // Label decluttering - hide labels that overlap with others
@@ -5802,11 +5832,11 @@ JSON only, no other text:`;
                     model: 'claude-sonnet-4-20250514',
                     max_tokens: 4000,
                     temperature: 0,
-                    system: `You create mind map structures as JSON. You ALWAYS include nested children. You NEVER create flat structures. Every node at level 1 MUST have children, and those children MUST have their own children.`,
+                    system: `You create mind map structures as JSON. You ALWAYS include nested children. You NEVER create flat structures. Every node at level 1 MUST have children, and those children MUST have their own children. You ALWAYS create EXACTLY 4 top-level nodes.`,
                     messages: [{
                         role: 'user',
                         content: `Based on these answers, create a mind map with EXACTLY this structure:
-- 3-4 main categories (Level 1)  
+- EXACTLY 4 main categories (Level 1) - no more, no less
 - Each category has 2-3 topics (Level 2)
 - Each topic has 2-3 actions (Level 3)
 
@@ -5815,9 +5845,9 @@ ${answersContext}
 
 Return this EXACT JSON structure (with your own labels based on answers):
 
-{"nodes":[{"label":"Goals","color":"#EF8354","children":[{"label":"Short Term Goal","children":[{"label":"Action 1"},{"label":"Action 2"}]},{"label":"Long Term Goal","children":[{"label":"Action 1"},{"label":"Action 2"}]}]},{"label":"Growth","color":"#4ECDC4","children":[{"label":"Skill Area","children":[{"label":"Step 1"},{"label":"Step 2"}]}]},{"label":"Wellness","color":"#26DE81","children":[{"label":"Health Area","children":[{"label":"Habit 1"},{"label":"Habit 2"}]}]}]}
+{"nodes":[{"label":"Goals","color":"#EF8354","children":[{"label":"Short Term","children":[{"label":"Action 1"},{"label":"Action 2"}]},{"label":"Long Term","children":[{"label":"Action 1"},{"label":"Action 2"}]}]},{"label":"Growth","color":"#4ECDC4","children":[{"label":"Skills","children":[{"label":"Step 1"},{"label":"Step 2"}]},{"label":"Learning","children":[{"label":"Resource 1"},{"label":"Resource 2"}]}]},{"label":"Projects","color":"#9B5DE5","children":[{"label":"Current","children":[{"label":"Task 1"},{"label":"Task 2"}]},{"label":"Planned","children":[{"label":"Idea 1"},{"label":"Idea 2"}]}]},{"label":"Wellness","color":"#26DE81","children":[{"label":"Physical","children":[{"label":"Habit 1"},{"label":"Habit 2"}]},{"label":"Mental","children":[{"label":"Practice 1"},{"label":"Practice 2"}]}]}]}
 
-Replace the placeholder labels with real content from the user's answers. Keep the nested structure! JSON only, no other text.`
+Replace placeholder labels with real content from user's answers. MUST have exactly 4 top-level nodes. JSON only.`
                     }]
                 })
             });
@@ -5873,7 +5903,7 @@ Replace the placeholder labels with real content from the user's answers. Keep t
         // Add nodes from AI structure (3 levels deep)
         if (structure.nodes && Array.isArray(structure.nodes)) {
             // Limit to max 5 top-level nodes
-            const topNodes = structure.nodes.slice(0, 5);
+            const topNodes = structure.nodes.slice(0, 4);
             
             topNodes.forEach(category => {
                 const categoryColor = category.color || '#EF8354';
