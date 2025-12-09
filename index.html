@@ -2552,8 +2552,8 @@
     // CONFIGURATION
     // ═══════════════════════════════════════════════════════════════════
     const CONFIG = {
-        STORAGE_KEY: 'mynd-v5l',
-        ONBOARDING_KEY: 'mynd-onboarded-v5',
+        STORAGE_KEY: 'mynd-v5o',
+        ONBOARDING_KEY: 'mynd-onboarded-v6',
         THEME_KEY: 'mynd-theme',
         API_KEY: 'mynd-api-key',
         
@@ -5787,8 +5787,10 @@ JSON only, no other text:`;
         
         try {
             const answersContext = onboardingQuestions.map((q, i) => 
-                `Q: ${q}\nA: ${questionAnswers[i] || '(skipped)'}`
+                `Q${i+1}: ${q}\nA${i+1}: ${questionAnswers[i] || '(skipped)'}`
             ).join('\n\n');
+            
+            console.log('🚀 Calling AI with answers:', answersContext);
             
             const response = await fetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
@@ -5800,101 +5802,61 @@ JSON only, no other text:`;
                 },
                 body: JSON.stringify({
                     model: 'claude-sonnet-4-20250514',
-                    max_tokens: 2500,
+                    max_tokens: 4000,
+                    temperature: 0,
+                    system: `You create mind map structures as JSON. You ALWAYS include nested children. You NEVER create flat structures. Every node at level 1 MUST have children, and those children MUST have their own children.`,
                     messages: [{
                         role: 'user',
-                        content: `You are building a mind map structure from user onboarding answers.
+                        content: `Based on these answers, create a mind map with EXACTLY this structure:
+- 3-4 main categories (Level 1)  
+- Each category has 2-3 topics (Level 2)
+- Each topic has 2-3 actions (Level 3)
 
-USER'S ANSWERS:
+User's answers:
 ${answersContext}
 
-CREATE EXACTLY THIS STRUCTURE:
+Return this EXACT JSON structure (with your own labels based on answers):
 
-LAYER 1: EXACTLY 3-5 broad categories (NO MORE THAN 5!)
-Examples: "Goals", "Projects", "Growth", "Wellness", "Ideas"
+{"nodes":[{"label":"Goals","color":"#EF8354","children":[{"label":"Short Term Goal","children":[{"label":"Action 1"},{"label":"Action 2"}]},{"label":"Long Term Goal","children":[{"label":"Action 1"},{"label":"Action 2"}]}]},{"label":"Growth","color":"#4ECDC4","children":[{"label":"Skill Area","children":[{"label":"Step 1"},{"label":"Step 2"}]}]},{"label":"Wellness","color":"#26DE81","children":[{"label":"Health Area","children":[{"label":"Habit 1"},{"label":"Habit 2"}]}]}]}
 
-LAYER 2: Each Layer 1 node gets 2-3 children based on their answers
-
-LAYER 3: Each Layer 2 node gets 2-3 specific action items (brainstormed by you)
-
-COLORS:
-- Orange #EF8354: Goals, ambitions
-- Teal #4ECDC4: Learning, growth
-- Purple #9B5DE5: Projects
-- Green #26DE81: Wellness
-- Yellow #F7B731: Ideas
-- Blue #45B7D1: Career
-
-STRICT RULES:
-- MAXIMUM 5 nodes in Layer 1
-- EVERY Layer 1 node MUST have children
-- EVERY Layer 2 node MUST have children
-- Layer 3 children are actionable items YOU brainstorm
-
-EXAMPLE OUTPUT:
-{
-  "nodes": [
-    {
-      "label": "Goals",
-      "color": "#EF8354",
-      "children": [
-        {
-          "label": "Launch My App",
-          "children": [
-            { "label": "Finish MVP" },
-            { "label": "Beta Testing" },
-            { "label": "App Store Submission" }
-          ]
-        },
-        {
-          "label": "Financial Freedom",
-          "children": [
-            { "label": "Create Budget" },
-            { "label": "Start Investing" }
-          ]
-        }
-      ]
-    },
-    {
-      "label": "Wellness",
-      "color": "#26DE81",
-      "children": [
-        {
-          "label": "Exercise",
-          "children": [
-            { "label": "Morning Runs" },
-            { "label": "Gym Membership" }
-          ]
-        },
-        {
-          "label": "Mental Health",
-          "children": [
-            { "label": "Meditation" },
-            { "label": "Digital Detox" }
-          ]
-        }
-      ]
-    }
-  ]
-}
-
-Generate the JSON now. Remember: MAX 5 Layer 1 nodes, and EVERY node must have children with their own children. JSON only:`
+Replace the placeholder labels with real content from the user's answers. Keep the nested structure! JSON only, no other text.`
                     }]
                 })
             });
             
             if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                console.error('❌ API error:', response.status, errData);
                 throw new Error('API request failed');
             }
             
             const data = await response.json();
-            const content = data.content[0].text;
+            const content = data.content?.[0]?.text || '';
+            console.log('📝 AI response:', content);
+            
+            // Find JSON in response
             const jsonMatch = content.match(/\{[\s\S]*\}/);
             
             if (jsonMatch) {
-                const structure = JSON.parse(jsonMatch[0]);
-                createMapFromStructure(structure);
+                try {
+                    const structure = JSON.parse(jsonMatch[0]);
+                    console.log('✅ Parsed structure:', structure);
+                    console.log('📊 Top level nodes:', structure.nodes?.length);
+                    
+                    // Validate structure has nested children
+                    if (structure.nodes?.[0]?.children?.[0]?.children) {
+                        console.log('✅ Structure has 3 levels - using AI result');
+                        createMapFromStructure(structure);
+                    } else {
+                        console.error('❌ Structure missing nested children, using fallback');
+                        createBasicMapStructure();
+                    }
+                } catch (parseError) {
+                    console.error('❌ JSON parse error:', parseError);
+                    createBasicMapStructure();
+                }
             } else {
+                console.error('❌ No JSON found in response');
                 createBasicMapStructure();
             }
         } catch (error) {
@@ -5907,6 +5869,8 @@ Generate the JSON now. Remember: MAX 5 Layer 1 nodes, and EVERY node must have c
         // Update root label
         store.updateNode(store.data.id, { label: mapName });
         
+        console.log('🏗️ Creating map from structure, nodes:', structure.nodes?.length);
+        
         // Add nodes from AI structure (3 levels deep)
         if (structure.nodes && Array.isArray(structure.nodes)) {
             // Limit to max 5 top-level nodes
@@ -5914,24 +5878,39 @@ Generate the JSON now. Remember: MAX 5 Layer 1 nodes, and EVERY node must have c
             
             topNodes.forEach(category => {
                 const categoryColor = category.color || '#EF8354';
-                const categoryId = store.addNode(store.data.id, {
+                console.log('📁 Adding category:', category.label, 'with', category.children?.length, 'children');
+                
+                const categoryNode = store.addNode(store.data.id, {
                     label: category.label,
                     color: categoryColor
                 });
+                
+                if (!categoryNode) {
+                    console.error('Failed to create category node');
+                    return;
+                }
                 
                 // Layer 2: Children of category
                 if (category.children && Array.isArray(category.children)) {
                     category.children.forEach(child => {
                         const childColor = child.color || categoryColor;
-                        const childId = store.addNode(categoryId, {
+                        console.log('  📄 Adding child:', child.label, 'with', child.children?.length, 'grandchildren');
+                        
+                        const childNode = store.addNode(categoryNode.id, {
                             label: child.label,
                             color: childColor
                         });
                         
+                        if (!childNode) {
+                            console.error('Failed to create child node');
+                            return;
+                        }
+                        
                         // Layer 3: Grandchildren (action items)
                         if (child.children && Array.isArray(child.children)) {
                             child.children.forEach(grandchild => {
-                                store.addNode(childId, {
+                                console.log('    📌 Adding grandchild:', grandchild.label);
+                                store.addNode(childNode.id, {
                                     label: grandchild.label,
                                     color: grandchild.color || childColor
                                 });
@@ -5947,6 +5926,7 @@ Generate the JSON now. Remember: MAX 5 Layer 1 nodes, and EVERY node must have c
     }
     
     function createBasicMapStructure() {
+        console.log('⚠️ FALLBACK: Creating basic structure without AI');
         // Create basic structure without AI
         store.updateNode(store.data.id, { label: mapName });
         
