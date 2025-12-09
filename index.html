@@ -2552,8 +2552,8 @@
     // CONFIGURATION
     // ═══════════════════════════════════════════════════════════════════
     const CONFIG = {
-        STORAGE_KEY: 'mynd-v5i',
-        ONBOARDING_KEY: 'mynd-onboarded-v2',
+        STORAGE_KEY: 'mynd-v5j',
+        ONBOARDING_KEY: 'mynd-onboarded-v3',
         THEME_KEY: 'mynd-theme',
         API_KEY: 'mynd-api-key',
         
@@ -5800,45 +5800,85 @@ JSON only, no other text:`;
                 },
                 body: JSON.stringify({
                     model: 'claude-sonnet-4-20250514',
-                    max_tokens: 1500,
+                    max_tokens: 2500,
                     messages: [{
                         role: 'user',
                         content: `You are the AI core of MYND, a 3D mind mapping app that visually represents a user's internal world—thoughts, goals, desires, and aspirations.
 
-A new user just answered onboarding questions. Based on their responses, create an initial mind map structure that will help them organize their thinking and take action.
+A new user just answered onboarding questions. Your job is to DEEPLY EXTRAPOLATE from their answers to create a rich, actionable mind map that breaks down their goals and interests into concrete steps and sub-categories.
 
 USER'S RESPONSES:
 ${answersContext}
 
-Create a JSON structure with top-level categories and relevant child nodes based on their answers. Be thoughtful and specific—use their actual words and goals where possible.
+CRITICAL INSTRUCTIONS:
+1. Create ONLY 3-4 top-level nodes (not more!) - these should be major life themes from their answers
+2. Each top-level node MUST have 2-4 children
+3. Each child SHOULD have 2-3 grandchildren (go deep, not wide!)
+4. EXTRAPOLATE: If they say "learn guitar", break it down into "Find a Teacher", "Practice Schedule", "Songs to Learn", etc.
+5. EXTRAPOLATE: If they say "start a business", break it down into phases, tasks, skills needed
+6. Use their ACTUAL words for top-level nodes when possible, then expand with your insights
+7. Make grandchildren ACTIONABLE and SPECIFIC
 
-REQUIREMENTS:
-- Create 3-5 top-level nodes (main life categories based on their answers)
-- Each top-level node should have 2-4 children that are specific to what they shared
-- Use these colors strategically:
-  - Goals/Ambitions: #EF8354 (Orange)
-  - Growth/Learning: #4ECDC4 (Teal)  
-  - Projects/Tasks: #9B5DE5 (Purple)
-  - Relationships/People: #FF6B9D (Pink)
-  - Wellness/Self-care: #26DE81 (Green)
-  - Ideas/Creativity: #F7B731 (Yellow)
-  - Career/Work: #45B7D1 (Blue)
+COLOR STRATEGY (inherit from parent unless specified):
+- Goals/Ambitions: #EF8354 (Orange)
+- Growth/Learning: #4ECDC4 (Teal)  
+- Projects/Tasks: #9B5DE5 (Purple)
+- Relationships/People: #FF6B9D (Pink)
+- Wellness/Self-care: #26DE81 (Green)
+- Ideas/Creativity: #F7B731 (Yellow)
+- Career/Work: #45B7D1 (Blue)
 
-RESPOND WITH JSON ONLY in this exact format:
+RESPOND WITH JSON ONLY:
 {
   "nodes": [
     {
-      "label": "Category Name",
+      "label": "Their Goal or Theme",
       "color": "#HEX",
       "children": [
-        { "label": "Specific Item", "color": "#HEX" },
-        { "label": "Another Item", "color": "#HEX" }
+        { 
+          "label": "Sub-category",
+          "children": [
+            { "label": "Specific Action" },
+            { "label": "Another Action" }
+          ]
+        },
+        { 
+          "label": "Another Sub-category",
+          "children": [
+            { "label": "Specific Action" },
+            { "label": "Another Action" }
+          ]
+        }
       ]
     }
   ]
 }
 
-Make the labels specific and actionable based on what they shared. JSON only:`
+EXAMPLE - If user says "I want to get healthier":
+{
+  "nodes": [{
+    "label": "Get Healthier",
+    "color": "#26DE81",
+    "children": [
+      { "label": "Exercise Routine", "children": [
+        { "label": "Morning Walks" },
+        { "label": "Gym 3x/Week" },
+        { "label": "Track Progress" }
+      ]},
+      { "label": "Nutrition", "children": [
+        { "label": "Meal Prep Sundays" },
+        { "label": "Reduce Sugar" },
+        { "label": "More Vegetables" }
+      ]},
+      { "label": "Sleep Quality", "children": [
+        { "label": "10pm Bedtime" },
+        { "label": "No Screens Before Bed" }
+      ]}
+    ]
+  }]
+}
+
+Now create a deep, meaningful structure for THIS user. JSON only:`
                     }]
                 })
             });
@@ -5867,20 +5907,32 @@ Make the labels specific and actionable based on what they shared. JSON only:`
         // Update root label
         store.updateNode(store.data.id, { label: mapName });
         
-        // Add nodes from AI structure
+        // Add nodes from AI structure (supports 3 levels deep)
         if (structure.nodes && Array.isArray(structure.nodes)) {
             structure.nodes.forEach(topNode => {
+                const topColor = topNode.color || '#EF8354';
                 const topId = store.addNode(store.data.id, {
                     label: topNode.label,
-                    color: topNode.color || '#EF8354'
+                    color: topColor
                 });
                 
                 if (topNode.children && Array.isArray(topNode.children)) {
                     topNode.children.forEach(child => {
-                        store.addNode(topId, {
+                        const childColor = child.color || topColor;
+                        const childId = store.addNode(topId, {
                             label: child.label,
-                            color: child.color || topNode.color || '#EF8354'
+                            color: childColor
                         });
+                        
+                        // Handle grandchildren (3rd level)
+                        if (child.children && Array.isArray(child.children)) {
+                            child.children.forEach(grandchild => {
+                                store.addNode(childId, {
+                                    label: grandchild.label,
+                                    color: grandchild.color || childColor
+                                });
+                            });
+                        }
                     });
                 }
             });
