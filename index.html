@@ -4565,73 +4565,148 @@
     function expandAll() {
         const isMobile = window.innerWidth <= 768;
         
-        // Get all nodes that need expanding, sorted by level (shallowest first)
+        // Store which nodes need expanding and their parent positions
         const toExpand = [];
         nodes.forEach(mesh => {
             if (mesh.userData.children?.length && !mesh.userData.isExpanded) {
-                toExpand.push(mesh);
+                toExpand.push({
+                    id: mesh.userData.id,
+                    parentPos: mesh.position.clone(),
+                    childIds: mesh.userData.children.map(c => c.id)
+                });
             }
         });
         
-        // Sort by level (shallowest first)
-        toExpand.sort((a, b) => (a.userData.level || 0) - (b.userData.level || 0));
+        if (toExpand.length === 0) {
+            showToast('All nodes already expanded', 'info');
+            return;
+        }
         
-        // Slower stagger on mobile to reduce lag
-        const staggerTime = isMobile ? 150 : 60;
-        
-        // Expand with staggered animation
-        toExpand.forEach((mesh, index) => {
-            setTimeout(() => {
-                if (!mesh.userData.isExpanded) {
-                    expandNode(mesh, true);
-                }
-            }, index * staggerTime);
+        // Store old positions of ALL visible nodes before rebuild
+        const oldPositions = new Map();
+        nodes.forEach((m, id) => {
+            if (m.visible) {
+                oldPositions.set(id, m.position.clone());
+            }
         });
         
+        // Mark ALL nodes as expanded at once (no animation, no rebuild yet)
+        toExpand.forEach(({ id }) => {
+            store.expandedNodes.add(id);
+        });
+        
+        // Single scene rebuild
+        buildScene();
+        
+        // Restore old positions for existing nodes
+        oldPositions.forEach((oldPos, id) => {
+            const m = nodes.get(id);
+            if (m) {
+                m.position.copy(oldPos);
+                if (m.userData.outlineMesh) {
+                    m.userData.outlineMesh.position.copy(oldPos);
+                }
+            }
+        });
+        
+        // Position NEW children at their parent positions (for animation)
+        toExpand.forEach(({ parentPos, childIds }) => {
+            childIds.forEach(childId => {
+                const childMesh = nodes.get(childId);
+                if (childMesh && !oldPositions.has(childId)) {
+                    // This is a newly visible node - start at parent
+                    childMesh.position.copy(parentPos);
+                    if (childMesh.userData.outlineMesh) {
+                        childMesh.userData.outlineMesh.position.copy(parentPos);
+                    }
+                    const importance = childMesh.userData.importance || 1;
+                    childMesh.scale.set(0.3 * importance, 0.3 * importance, 0.3 * importance);
+                    childMesh.material.opacity = 0.3;
+                    
+                    // Also hide grandchildren initially
+                    if (childMesh.userData.children) {
+                        childMesh.userData.children.forEach(grandchild => {
+                            const gcMesh = nodes.get(grandchild.id);
+                            if (gcMesh && !oldPositions.has(grandchild.id)) {
+                                gcMesh.position.copy(parentPos);
+                                if (gcMesh.userData.outlineMesh) {
+                                    gcMesh.userData.outlineMesh.position.copy(parentPos);
+                                }
+                                gcMesh.scale.set(0.1, 0.1, 0.1);
+                                gcMesh.material.opacity = 0;
+                            }
+                        });
+                    }
+                }
+            });
+        });
+        
+        // Play sound once
+        audio.expand();
+        haptic.light();
+        
         // Zoom out to see expanded map
-        const totalDuration = toExpand.length * staggerTime;
         setTimeout(() => {
             zoomToFitMap(10);
-        }, Math.min(totalDuration + 200, 1500));
+        }, 300);
         
-        showToast('Expanding all nodes...', 'success');
+        showToast('Expanded all nodes', 'success');
     }
 
     function collapseAll() {
         const isMobile = window.innerWidth <= 768;
         
-        // Get all expanded nodes, sorted by level (deepest first for proper collapse order)
-        // Skip root node (level 0) - keep level 1 nodes visible but collapse their children
-        const toCollapse = [];
+        // Find all nodes that will be hidden (children of level 1 nodes)
+        const nodesToHide = [];
+        const level1Nodes = [];
+        
         nodes.forEach(mesh => {
-            // Only collapse nodes that are expanded AND have level >= 1 (not the root)
-            if (mesh.userData.isExpanded && (mesh.userData.level || 0) >= 1) {
-                toCollapse.push(mesh);
+            const level = mesh.userData.level || 0;
+            if (level === 1 && mesh.userData.isExpanded) {
+                level1Nodes.push(mesh);
+            }
+            if (level >= 2) {
+                nodesToHide.push(mesh);
             }
         });
         
-        // Sort by level descending (deepest first)
-        toCollapse.sort((a, b) => (b.userData.level || 0) - (a.userData.level || 0));
+        if (level1Nodes.length === 0) {
+            showToast('Already collapsed', 'info');
+            return;
+        }
         
-        // Slower stagger on mobile
-        const staggerTime = isMobile ? 100 : 50;
-        
-        // Collapse with staggered animation
-        toCollapse.forEach((mesh, index) => {
-            setTimeout(() => {
-                if (mesh.userData.isExpanded) {
-                    collapseNode(mesh, true);
+        // Animate nodes back to their parent positions
+        nodesToHide.forEach(mesh => {
+            // Find parent position
+            const parent = mesh.userData.parent;
+            if (parent) {
+                const parentMesh = nodes.get(parent.id);
+                if (parentMesh) {
+                    mesh.userData.spring.target.copy(parentMesh.position);
+                    mesh.userData.spring.scaleTarget = 0.1;
                 }
-            }, index * staggerTime);
+            }
+            // Hide labels and connections
+            if (mesh.userData.labelSprite) mesh.userData.labelSprite.visible = false;
+            if (mesh.userData.connectionLine) mesh.userData.connectionLine.visible = false;
         });
         
-        // Zoom to fit after collapse
-        const totalDuration = toCollapse.length * staggerTime;
-        setTimeout(() => {
-            zoomToFitMap(0);
-        }, Math.min(totalDuration + 500, 2000));
+        // Mark level 1 nodes as collapsed
+        level1Nodes.forEach(mesh => {
+            mesh.userData.isExpanded = false;
+            store.expandedNodes.delete(mesh.userData.id);
+        });
         
-        showToast('Collapsing nodes...', 'success');
+        // After animation completes, do a clean rebuild
+        setTimeout(() => {
+            buildScene();
+            zoomToFitMap(0);
+        }, isMobile ? 600 : 400);
+        
+        audio.collapse && audio.collapse();
+        haptic.light();
+        
+        showToast('Collapsed all nodes', 'success');
     }
 
     // Label decluttering - hide labels that overlap with others
