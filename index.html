@@ -2319,7 +2319,7 @@
     <div id="particle-bg"></div>
     
     <!-- 3D Canvas -->
-    <div id="canvas-container"></div>
+    <div id="canvas-container" role="application" aria-label="3D mind map visualization - use mouse to rotate, scroll to zoom"></div>
     
     <!-- Focus Mode Overlay -->
     <div id="focus-overlay"></div>
@@ -2409,14 +2409,14 @@
     
     <!-- Top Controls -->
     <div id="top-controls">
-        <button class="icon-btn" id="theme-btn" title="Theme">
-            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        <button class="icon-btn" id="theme-btn" title="Theme" aria-label="Change color theme">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
         </button>
-        <button class="icon-btn" id="menu-btn" title="Menu">
-            <svg viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        <button class="icon-btn" id="menu-btn" title="Menu" aria-label="Open menu">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
-        <button class="icon-btn" id="undo-btn" title="Undo" disabled>
-            <svg viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+        <button class="icon-btn" id="undo-btn" title="Undo" aria-label="Undo last action" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
         </button>
     </div>
     
@@ -2487,34 +2487,34 @@
     </div>
     
     <!-- Side Panel -->
-    <div id="side-panel">
-        <div class="side-btn" id="btn-home" title="Reset View">
-            <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    <div id="side-panel" role="toolbar" aria-label="Mind map controls">
+        <div class="side-btn" id="btn-home" title="Reset View" role="button" aria-label="Reset camera to home view">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
             <span class="side-btn-label">Home</span>
         </div>
-        <div class="side-btn" id="btn-expand" title="Expand All">
-            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+        <div class="side-btn" id="btn-expand" title="Expand All" role="button" aria-label="Expand all nodes">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
             <span class="side-btn-label">Expand</span>
         </div>
-        <div class="side-btn" id="btn-collapse" title="Collapse All">
-            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/></svg>
+        <div class="side-btn" id="btn-collapse" title="Collapse All" role="button" aria-label="Collapse all nodes">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/></svg>
             <span class="side-btn-label">Collapse</span>
         </div>
-        <div class="side-divider"></div>
-        <div class="side-btn" id="btn-add" title="Add Node">
-            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <div class="side-divider" role="separator"></div>
+        <div class="side-btn" id="btn-add" title="Add Node" role="button" aria-label="Add new node">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             <span class="side-btn-label">Add</span>
         </div>
-        <div class="side-btn" id="btn-move" title="Move Mode">
-            <svg viewBox="0 0 24 24"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+        <div class="side-btn" id="btn-move" title="Move Mode" role="button" aria-label="Toggle move mode for dragging nodes">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
             <span class="side-btn-label">Move</span>
         </div>
-        <div class="side-btn" id="btn-voice" title="Voice AI - Click to speak">
-            <svg viewBox="0 0 24 24"><line x1="4" y1="8" x2="4" y2="16"/><line x1="8" y1="5" x2="8" y2="19"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="16" y1="5" x2="16" y2="19"/><line x1="20" y1="8" x2="20" y2="16"/></svg>
+        <div class="side-btn" id="btn-voice" title="Voice AI - Click to speak" role="button" aria-label="Start voice AI assistant">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="8" x2="4" y2="16"/><line x1="8" y1="5" x2="8" y2="19"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="16" y1="5" x2="16" y2="19"/><line x1="20" y1="8" x2="20" y2="16"/></svg>
             <span class="side-btn-label">AI</span>
         </div>
-        <div class="side-btn active" id="btn-autocam" title="Toggle Auto Camera">
-            <svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+        <div class="side-btn active" id="btn-autocam" title="Toggle Auto Camera" role="button" aria-label="Toggle automatic camera movement" aria-pressed="true">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
             <span class="side-btn-label">Auto Cam</span>
         </div>
     </div>
@@ -2581,25 +2581,25 @@
                 <input type="range" id="info-importance" min="0.5" max="2" step="0.1" value="1" />
             </div>
         </div>
-        <div class="info-actions">
-            <button class="info-action danger" id="action-delete">
-                <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        <div class="info-actions" role="group" aria-label="Node actions">
+            <button class="info-action danger" id="action-delete" aria-label="Delete this node">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 Delete
             </button>
-            <button class="info-action secondary" id="action-edit">
-                <svg viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+            <button class="info-action secondary" id="action-edit" aria-label="Edit node details">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
                 Edit
             </button>
-            <button class="info-action secondary" id="action-dive">
-                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="8 12 12 16 16 12"/><line x1="12" y1="8" x2="12" y2="16"/></svg>
+            <button class="info-action secondary" id="action-dive" aria-label="Dive into this node">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="8 12 12 16 16 12"/><line x1="12" y1="8" x2="12" y2="16"/></svg>
                 Dive
             </button>
-            <button class="info-action ai" id="action-brainstorm">
-                <svg viewBox="0 0 24 24"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+            <button class="info-action ai" id="action-brainstorm" aria-label="AI brainstorm ideas for this node">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
                 Brainstorm
             </button>
-            <button class="info-action primary" id="action-add">
-                <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <button class="info-action primary" id="action-add" aria-label="Add a child node">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Add Child
             </button>
         </div>
@@ -2834,7 +2834,14 @@
             selectedPriority: 1000,
             rootPriority: 500,
             depthPenalty: 10,
-            declutterInterval: 3 // frames between declutter runs
+            declutterInterval: 3, // frames between declutter runs
+            // Label sprite rendering
+            fontSize: 42,
+            spritePadding: 20,
+            minWidth: 60,
+            charWidth: 8,
+            scaleFactor: 20,
+            minDistance: 5
         },
         
         // Particles
@@ -2984,8 +2991,17 @@
         load() {
             try {
                 const saved = localStorage.getItem(CONFIG.STORAGE_KEY);
-                if (saved) return JSON.parse(saved);
-            } catch (e) {}
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    // Validate basic structure
+                    if (parsed && parsed.id && parsed.label) {
+                        return parsed;
+                    }
+                    console.warn('Invalid saved data structure, using defaults');
+                }
+            } catch (e) {
+                console.warn('Failed to parse saved data, using defaults:', e.message);
+            }
             return JSON.parse(JSON.stringify(defaultData));
         }
         
@@ -2993,7 +3009,9 @@
             try {
                 localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(this.data));
                 bus.emit('data:saved');
-            } catch (e) {}
+            } catch (e) {
+                console.warn('Failed to save data:', e.message);
+            }
         }
         
         saveSnapshot(name = 'change') {
@@ -3253,8 +3271,8 @@
                 
                 const dist = camera.position.distanceTo(mesh.position);
                 const textLength = (mesh.userData.label || '').length;
-                const labelWidth = Math.max(60, textLength * 8) * (20 / Math.max(dist, 5));
-                const labelHeight = 24 * (20 / Math.max(dist, 5));
+                const labelWidth = Math.max(cfg.minWidth, textLength * cfg.charWidth) * (cfg.scaleFactor / Math.max(dist, cfg.minDistance));
+                const labelHeight = 24 * (cfg.scaleFactor / Math.max(dist, cfg.minDistance));
                 
                 const depth = mesh.userData.depth || 0;
                 const isSelected = mesh.userData.selected;
@@ -3884,8 +3902,8 @@
         const labelText = text || 'Untitled';
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        const fontSize = 42;
-        const padding = 20;
+        const fontSize = CONFIG.LABELS.fontSize;
+        const padding = CONFIG.LABELS.spritePadding;
         
         ctx.font = `600 ${fontSize}px Inter, system-ui, sans-serif`;
         const textWidth = ctx.measureText(labelText).width;
@@ -4670,14 +4688,15 @@
             // Get approximate label size in screen pixels based on text length
             const dist = camera.position.distanceTo(mesh.position);
             const textLength = (mesh.userData.label || '').length;
-            const labelWidth = Math.max(60, textLength * 8) * (20 / Math.max(dist, 5));
-            const labelHeight = 24 * (20 / Math.max(dist, 5));
+            const cfg = CONFIG.LABELS;
+            const labelWidth = Math.max(cfg.minWidth, textLength * cfg.charWidth) * (cfg.scaleFactor / Math.max(dist, cfg.minDistance));
+            const labelHeight = 24 * (cfg.scaleFactor / Math.max(dist, cfg.minDistance));
             
             // Priority: selected nodes > root > by depth (shallower = higher priority)
             const depth = mesh.userData.depth || 0;
             const isSelected = mesh.userData.selected;
             const isRoot = mesh.userData.id === 'root';
-            const priority = isSelected ? 1000 : (isRoot ? 500 : 100 - depth * 10);
+            const priority = isSelected ? cfg.selectedPriority : (isRoot ? cfg.rootPriority : cfg.basePriority - depth * cfg.depthPenalty);
             
             visibleLabels.push({
                 sprite,
