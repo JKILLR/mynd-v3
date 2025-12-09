@@ -10,47 +10,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         /* ═══════════════════════════════════════════════════════════
-           THEME SYSTEM - Multiple Beautiful Themes
+           THEME SYSTEM - 6 Modern Themes
            ═══════════════════════════════════════════════════════════ */
         :root {
-            /* Base Theme - Midnight (Default) */
-            --bg-deep: #0a0a0f;
-            --bg-primary: #12121a;
-            --bg-secondary: #1a1a24;
-            --bg-tertiary: #22222e;
-            --bg-elevated: #2a2a38;
-            
-            --text-primary: #ffffff;
-            --text-secondary: #a0a0b0;
-            --text-muted: #606070;
-            
-            --accent: #7c3aed;
-            --accent-light: #a78bfa;
-            --accent-glow: rgba(124, 58, 237, 0.4);
-            
-            --coral: #f97316;
-            --coral-light: #fb923c;
-            --teal: #14b8a6;
-            --pink: #ec4899;
-            --blue: #3b82f6;
-            --green: #22c55e;
-            --yellow: #eab308;
-            --purple: #a855f7;
-            
-            --glass-bg: rgba(18, 18, 26, 0.8);
-            --glass-bg-light: rgba(255, 255, 255, 0.05);
-            --glass-border: rgba(255, 255, 255, 0.08);
-            --glass-blur: 20px;
-            
-            --nebula-1: rgba(124, 58, 237, 0.15);
-            --nebula-2: rgba(236, 72, 153, 0.1);
-            --nebula-3: rgba(20, 184, 166, 0.08);
-            
-            --shadow-sm: 0 2px 8px rgba(0,0,0,0.3);
-            --shadow-md: 0 4px 20px rgba(0,0,0,0.4);
-            --shadow-lg: 0 8px 40px rgba(0,0,0,0.5);
-            --shadow-glow: 0 0 40px var(--accent-glow);
-            
+            /* Base/Shared Variables */
             --font-display: 'Space Grotesk', sans-serif;
             --font-body: 'Inter', sans-serif;
             --font-mono: 'JetBrains Mono', monospace;
@@ -75,109 +38,218 @@
             --z-spotlight: 250;
             --z-modal: 300;
             --z-toast: 400;
-        }
-        
-        /* Theme: Sunrise */
-        [data-theme="sunrise"] {
-            --bg-deep: #fef7f0;
-            --bg-primary: #fff8f3;
-            --bg-secondary: #fff0e6;
-            --bg-tertiary: #ffe8d9;
-            --bg-elevated: #ffdfc9;
-            --text-primary: #1f1108;
-            --text-secondary: #6b5344;
-            --text-muted: #a08878;
-            --accent: #ea580c;
-            --accent-light: #f97316;
-            --accent-glow: rgba(234, 88, 12, 0.3);
-            --glass-bg: rgba(255, 248, 243, 0.9);
+            
+            /* Default to Sandstone theme */
+            --bg-deep: #F9F7F0;
+            --bg-primary: #FAF9F6;
+            --bg-secondary: #F5F3EE;
+            --bg-tertiary: #EBE8E2;
+            --bg-elevated: #E5E1D8;
+            --text-primary: #2C2C2C;
+            --text-secondary: #5A5A52;
+            --text-muted: #8A8A7E;
+            --accent: #C4978A;
+            --accent-light: #D4A89A;
+            --accent-glow: rgba(196, 151, 138, 0.3);
+            --glass-bg: rgba(250, 249, 246, 0.92);
             --glass-border: rgba(0, 0, 0, 0.06);
-            --nebula-1: rgba(251, 146, 60, 0.15);
-            --nebula-2: rgba(234, 179, 8, 0.1);
-            --nebula-3: rgba(239, 68, 68, 0.08);
-            --shadow-sm: 0 2px 8px rgba(0,0,0,0.08);
-            --shadow-md: 0 4px 20px rgba(0,0,0,0.1);
-            --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
-        }
-        
-        /* Theme: Ocean */
-        [data-theme="ocean"] {
-            --bg-deep: #0c1929;
-            --bg-primary: #0f2135;
-            --bg-secondary: #142940;
-            --bg-tertiary: #1a334d;
-            --bg-elevated: #1f3d5a;
-            --accent: #0ea5e9;
-            --accent-light: #38bdf8;
-            --accent-glow: rgba(14, 165, 233, 0.4);
-            --nebula-1: rgba(14, 165, 233, 0.15);
-            --nebula-2: rgba(20, 184, 166, 0.12);
-            --nebula-3: rgba(59, 130, 246, 0.1);
-        }
-        
-        /* Theme: Forest */
-        [data-theme="forest"] {
-            --bg-deep: #0a120a;
-            --bg-primary: #0f1a0f;
-            --bg-secondary: #152215;
-            --bg-tertiary: #1c2b1c;
-            --bg-elevated: #243524;
-            --accent: #22c55e;
-            --accent-light: #4ade80;
-            --accent-glow: rgba(34, 197, 94, 0.4);
-            --nebula-1: rgba(34, 197, 94, 0.12);
-            --nebula-2: rgba(132, 204, 22, 0.1);
-            --nebula-3: rgba(20, 184, 166, 0.08);
-        }
-        
-        /* Theme: Professional - Natural/Organic */
-        [data-theme="professional"] {
-            --bg-deep: #f7f5f2;
-            --bg-primary: #faf9f7;
-            --bg-secondary: #f5f3f0;
-            --bg-tertiary: #f0ece8;
-            --bg-elevated: #eae5df;
-            --text-primary: #2d2d2d;
-            --text-secondary: #5a5a52;
-            --text-muted: #8a8a7e;
-            --accent: #c4705a;
-            --accent-light: #d4887a;
-            --accent-glow: rgba(196, 112, 90, 0.35);
-            --glass-bg: rgba(250, 249, 247, 0.95);
-            --glass-border: rgba(45, 45, 45, 0.06);
-            --nebula-1: rgba(196, 112, 90, 0.10);
-            --nebula-2: rgba(122, 139, 110, 0.08);
-            --nebula-3: rgba(107, 124, 122, 0.06);
+            --glass-blur: 20px;
+            --nebula-1: rgba(177, 116, 87, 0.08);
+            --nebula-2: rgba(74, 73, 71, 0.06);
+            --nebula-3: rgba(216, 210, 194, 0.1);
             --shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
-            --shadow-md: 0 4px 20px rgba(0,0,0,0.06);
-            --shadow-lg: 0 8px 40px rgba(0,0,0,0.08);
-            --shadow-glow: 0 0 30px var(--accent-glow);
+            --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
+            --shadow-lg: 0 8px 32px rgba(0,0,0,0.08);
+            --shadow-glow: 0 0 24px var(--accent-glow);
+            
+            /* AI/Brainstorm button colors */
+            --purple: #8B5CF6;
+            --pink: #EC4899;
         }
         
-        /* Theme: Sunset - Warm peachy orange */
-        [data-theme="sunset"] {
-            --bg-deep: #fef3e2;
-            --bg-primary: #fff7ed;
-            --bg-secondary: #ffedd5;
-            --bg-tertiary: #fed7aa;
-            --bg-elevated: #fdba74;
-            --text-primary: #431407;
-            --text-secondary: #7c2d12;
-            --text-muted: #c2410c;
-            --accent: #f97316;
-            --accent-light: #fb923c;
-            --accent-glow: rgba(249, 115, 22, 0.35);
-            --glass-bg: rgba(255, 247, 237, 0.92);
-            --glass-border: rgba(67, 20, 7, 0.08);
-            --nebula-1: rgba(249, 115, 22, 0.12);
-            --nebula-2: rgba(251, 146, 60, 0.10);
-            --nebula-3: rgba(234, 88, 12, 0.08);
-            --shadow-sm: 0 2px 8px rgba(67, 20, 7, 0.06);
-            --shadow-md: 0 4px 20px rgba(67, 20, 7, 0.08);
-            --shadow-lg: 0 8px 40px rgba(67, 20, 7, 0.10);
-            --shadow-glow: 0 0 30px var(--accent-glow);
+        /* ═══════════════════════════════════════════════════════════
+           Theme 1: SANDSTONE - Natural/Professional (Default)
+           Inspired by: Milk, Light Stone, Desert Clay, Graphite
+           ═══════════════════════════════════════════════════════════ */
+        [data-theme="sandstone"] {
+            --bg-deep: #F9F7F0;
+            --bg-primary: #FAF9F6;
+            --bg-secondary: #F5F3EE;
+            --bg-tertiary: #EBE8E2;
+            --bg-elevated: #E5E1D8;
+            --text-primary: #2C2C2C;
+            --text-secondary: #5A5A52;
+            --text-muted: #8A8A7E;
+            --accent: #C4978A;
+            --accent-light: #D4A89A;
+            --accent-glow: rgba(196, 151, 138, 0.3);
+            --glass-bg: rgba(250, 249, 246, 0.92);
+            --glass-border: rgba(0, 0, 0, 0.06);
+            --nebula-1: rgba(196, 151, 138, 0.08);
+            --nebula-2: rgba(74, 73, 71, 0.06);
+            --nebula-3: rgba(216, 210, 194, 0.1);
+            --shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
+            --shadow-lg: 0 8px 32px rgba(0,0,0,0.08);
         }
-
+        
+        /* ═══════════════════════════════════════════════════════════
+           Theme 2: CORAL - Ultra-flat Cartoon/Pastel
+           Inspired by: Clean white UI, soft pastels, no shadows
+           ═══════════════════════════════════════════════════════════ */
+        [data-theme="coral"] {
+            --bg-deep: #FAFAFA;
+            --bg-primary: #FFFFFF;
+            --bg-secondary: #F5F5F5;
+            --bg-tertiary: #EEEEEE;
+            --bg-elevated: #E8E8E8;
+            --text-primary: #1A1A1A;
+            --text-secondary: #666666;
+            --text-muted: #999999;
+            --accent: #E87D7D;
+            --accent-light: #F09999;
+            --accent-glow: rgba(232, 125, 125, 0.2);
+            --glass-bg: rgba(255, 255, 255, 0.95);
+            --glass-border: rgba(0, 0, 0, 0.04);
+            --glass-blur: 0px;
+            --nebula-1: rgba(0, 0, 0, 0);
+            --nebula-2: rgba(0, 0, 0, 0);
+            --nebula-3: rgba(0, 0, 0, 0);
+            --shadow-sm: none;
+            --shadow-md: none;
+            --shadow-lg: none;
+            --shadow-glow: none;
+        }
+        
+        /* Minimal theme specific - remove all visual noise */
+        [data-theme="coral"] .brand,
+        [data-theme="coral"] .icon-btn,
+        [data-theme="coral"] #side-panel,
+        [data-theme="coral"] #info-panel,
+        [data-theme="coral"] .modal-content,
+        [data-theme="coral"] #theme-picker,
+        [data-theme="coral"] #menu-dropdown {
+            box-shadow: none !important;
+            border: 1px solid #E0E0E0 !important;
+        }
+        
+        [data-theme="coral"] .brand-logo {
+            background: var(--accent) !important;
+            box-shadow: none !important;
+        }
+        
+        /* ═══════════════════════════════════════════════════════════
+           Theme 3: EMBER - Warm Light
+           Inspired by: Burnt orange to cream gradient on warm white
+           ═══════════════════════════════════════════════════════════ */
+        [data-theme="ember"] {
+            --bg-deep: #FAF6F0;
+            --bg-primary: #FDF9F4;
+            --bg-secondary: #F5F0E8;
+            --bg-tertiary: #EDE6DC;
+            --bg-elevated: #E5DCD0;
+            --text-primary: #2A2420;
+            --text-secondary: #5A5048;
+            --text-muted: #8A8078;
+            --accent: #E87830;
+            --accent-light: #F49848;
+            --accent-glow: rgba(232, 120, 48, 0.3);
+            --glass-bg: rgba(253, 249, 244, 0.95);
+            --glass-border: rgba(42, 36, 32, 0.08);
+            --nebula-1: rgba(232, 120, 48, 0.1);
+            --nebula-2: rgba(244, 152, 72, 0.08);
+            --nebula-3: rgba(255, 200, 100, 0.06);
+            --shadow-sm: 0 2px 8px rgba(42, 36, 32, 0.06);
+            --shadow-md: 0 4px 20px rgba(42, 36, 32, 0.08);
+            --shadow-lg: 0 8px 40px rgba(42, 36, 32, 0.1);
+        }
+        
+        /* ═══════════════════════════════════════════════════════════
+           Theme 4: FROST - Glassmorphism Light
+           Inspired by: Frosted glass panels, soft backgrounds
+           ═══════════════════════════════════════════════════════════ */
+        [data-theme="frost"] {
+            --bg-deep: #E8ECF0;
+            --bg-primary: #F0F4F8;
+            --bg-secondary: #E4E8EC;
+            --bg-tertiary: #D8DDE4;
+            --bg-elevated: #CCD4DC;
+            --text-primary: #1A2030;
+            --text-secondary: #4A5568;
+            --text-muted: #718096;
+            --accent: #5B8DEF;
+            --accent-light: #7DA8F5;
+            --accent-glow: rgba(91, 141, 239, 0.3);
+            --glass-bg: rgba(255, 255, 255, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.4);
+            --glass-blur: 24px;
+            --nebula-1: rgba(91, 141, 239, 0.1);
+            --nebula-2: rgba(125, 168, 245, 0.08);
+            --nebula-3: rgba(200, 220, 255, 0.1);
+            --shadow-sm: 0 2px 8px rgba(0,0,0,0.06);
+            --shadow-md: 0 4px 20px rgba(0,0,0,0.08);
+            --shadow-lg: 0 8px 40px rgba(0,0,0,0.1);
+        }
+        
+        /* Frost theme glassmorphism enhancements */
+        [data-theme="frost"] .brand,
+        [data-theme="frost"] .icon-btn,
+        [data-theme="frost"] #side-panel,
+        [data-theme="frost"] #info-panel,
+        [data-theme="frost"] .modal-content,
+        [data-theme="frost"] #theme-picker,
+        [data-theme="frost"] #menu-dropdown,
+        [data-theme="frost"] .spotlight-container,
+        [data-theme="frost"] #quick-capture {
+            background: rgba(255, 255, 255, 0.55) !important;
+            backdrop-filter: blur(24px) saturate(180%) !important;
+            -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.5) !important;
+        }
+        
+        /* ═══════════════════════════════════════════════════════════
+           Theme 5: OBSIDIAN - Glassmorphism Dark
+           Inspired by: Dark translucent panels, deep blue-gray
+           ═══════════════════════════════════════════════════════════ */
+        [data-theme="obsidian"] {
+            --bg-deep: #1A1D24;
+            --bg-primary: #20242C;
+            --bg-secondary: #282D38;
+            --bg-tertiary: #323844;
+            --bg-elevated: #3C4452;
+            --text-primary: #F0F2F5;
+            --text-secondary: #A0A8B8;
+            --text-muted: #687080;
+            --accent: #EF8354;
+            --accent-light: #F59B70;
+            --accent-glow: rgba(239, 131, 84, 0.35);
+            --glass-bg: rgba(32, 36, 44, 0.75);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-blur: 24px;
+            --nebula-1: rgba(239, 131, 84, 0.1);
+            --nebula-2: rgba(79, 93, 117, 0.12);
+            --nebula-3: rgba(191, 192, 192, 0.06);
+            --shadow-sm: 0 2px 8px rgba(0,0,0,0.3);
+            --shadow-md: 0 4px 20px rgba(0,0,0,0.4);
+            --shadow-lg: 0 8px 40px rgba(0,0,0,0.5);
+        }
+        
+        /* Obsidian theme glassmorphism enhancements */
+        [data-theme="obsidian"] .brand,
+        [data-theme="obsidian"] .icon-btn,
+        [data-theme="obsidian"] #side-panel,
+        [data-theme="obsidian"] #info-panel,
+        [data-theme="obsidian"] .modal-content,
+        [data-theme="obsidian"] #theme-picker,
+        [data-theme="obsidian"] #menu-dropdown,
+        [data-theme="obsidian"] .spotlight-container,
+        [data-theme="obsidian"] #quick-capture {
+            background: rgba(32, 36, 44, 0.7) !important;
+            backdrop-filter: blur(24px) saturate(150%) !important;
+            -webkit-backdrop-filter: blur(24px) saturate(150%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        }
+        
         /* ═══════════════════════════════════════════════════════════
            BASE STYLES
            ═══════════════════════════════════════════════════════════ */
@@ -1201,14 +1273,15 @@
         }
         
         .info-action.danger {
-            background: rgba(239, 68, 68, 0.1);
-            color: #ef4444;
-            border: 1px solid rgba(239, 68, 68, 0.2);
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            border: 1px solid var(--glass-border);
         }
         
         .info-action.danger:hover {
             background: #ef4444;
             color: white;
+            border-color: #ef4444;
         }
 
         /* ═══════════════════════════════════════════════════════════
@@ -2334,29 +2407,25 @@
     
     <!-- Theme Picker -->
     <div id="theme-picker">
-        <div class="theme-option" data-theme="midnight">
-            <div class="theme-preview"><span style="background:#7c3aed"></span><span style="background:#0a0a0f"></span></div>
-            <span class="theme-name">Midnight</span>
+        <div class="theme-option active" data-theme="sandstone">
+            <div class="theme-preview"><span style="background:#C4978A"></span><span style="background:#F9F7F0"></span></div>
+            <span class="theme-name">Sandstone</span>
         </div>
-        <div class="theme-option" data-theme="sunrise">
-            <div class="theme-preview"><span style="background:#ea580c"></span><span style="background:#fef7f0"></span></div>
-            <span class="theme-name">Sunrise</span>
+        <div class="theme-option" data-theme="coral">
+            <div class="theme-preview"><span style="background:#E87D7D"></span><span style="background:#FFFFFF"></span></div>
+            <span class="theme-name">Coral</span>
         </div>
-        <div class="theme-option" data-theme="ocean">
-            <div class="theme-preview"><span style="background:#0ea5e9"></span><span style="background:#0c1929"></span></div>
-            <span class="theme-name">Ocean</span>
+        <div class="theme-option" data-theme="ember">
+            <div class="theme-preview"><span style="background:#E87830"></span><span style="background:#FAF6F0"></span></div>
+            <span class="theme-name">Ember</span>
         </div>
-        <div class="theme-option" data-theme="forest">
-            <div class="theme-preview"><span style="background:#22c55e"></span><span style="background:#0a120a"></span></div>
-            <span class="theme-name">Forest</span>
+        <div class="theme-option" data-theme="frost">
+            <div class="theme-preview"><span style="background:#5B8DEF"></span><span style="background:#E8ECF0"></span></div>
+            <span class="theme-name">Frost</span>
         </div>
-        <div class="theme-option active" data-theme="sunset">
-            <div class="theme-preview"><span style="background:#f97316"></span><span style="background:#fef3e2"></span></div>
-            <span class="theme-name">Sunset</span>
-        </div>
-        <div class="theme-option" data-theme="professional">
-            <div class="theme-preview"><span style="background:#c4705a"></span><span style="background:#faf9f7"></span></div>
-            <span class="theme-name">Professional</span>
+        <div class="theme-option" data-theme="obsidian">
+            <div class="theme-preview"><span style="background:#EF8354"></span><span style="background:#1A1D24"></span></div>
+            <span class="theme-name">Obsidian</span>
         </div>
     </div>
     
@@ -2630,53 +2699,162 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
     // ═══════════════════════════════════════════════════════════════════
-    // CONFIGURATION
+    // CONSOLIDATED CONFIGURATION - All constants in one place
     // ═══════════════════════════════════════════════════════════════════
     const CONFIG = {
+        // Storage Keys
         STORAGE_KEY: 'mynd-v6c',
         ONBOARDING_KEY: 'mynd-onboarded-v17',
-        THEME_KEY: 'mynd-theme-v6',
+        THEME_KEY: 'mynd-theme-v7',
         API_KEY: 'mynd-api-key',
         
+        // Color Palettes for each theme
+        THEME_COLORS: {
+            // Sandstone - Natural earthy tones (graphite first for root)
+            sandstone: [
+                '#3A3A3A', '#B17457', '#8B9D83', '#C4887A', '#6B7C7A',
+                '#4A4947', '#9AABA0', '#D8D2C2', '#A89078', '#7A8B70',
+                '#5E6B5A', '#C0A898', '#8A9488', '#D4C4B0', '#6B6B63',
+                '#A09080', '#C8B8A0', '#787870'
+            ],
+            // Coral - Soft pastels, flat cartoon look
+            coral: [
+                '#A8D5E5', '#E87D7D', '#B8A9C9', '#95D5B2', '#F5C396',
+                '#89CFF0', '#F4A4A4', '#C3B1E1', '#A7E8BD', '#FFD8A8',
+                '#98D8C8', '#EFA8A8', '#D4C4E0', '#BEE5B0', '#F8C8A8',
+                '#A0C8D0', '#E0C0C0', '#C8C8C8'
+            ],
+            // Ember - Warm gradient from burnt orange to cream (rich orange first for root)
+            ember: [
+                '#C04818', '#E85820', '#F07028', '#F88830', '#FFA040',
+                '#FFB858', '#FFD070', '#FFE088', '#D4C4A0', '#B0A080',
+                '#907860', '#C89060', '#E8A848', '#F0C060', '#D8B078',
+                '#A88858', '#C8A070', '#E8D098'
+            ],
+            // Frost - Cool soft blues and grays (white first for root)
+            frost: [
+                '#FFFFFF', '#5B8DEF', '#7DA8F5', '#6B9BD0', '#8FB8E8',
+                '#5D7D9A', '#7A9AB8', '#4A6A8A', '#98B8D8', '#6888A8',
+                '#88A8C8', '#5878A0', '#A8C8E8', '#7898B8', '#6080A0',
+                '#90B0D0', '#4868A0', '#B0D0F0'
+            ],
+            // Obsidian - Coral accent with cool grays
+            obsidian: [
+                '#EF8354', '#F59B70', '#BFC0C0', '#4F5D75', '#7A8899',
+                '#E8956A', '#8D99AE', '#F0A880', '#6B7B8C', '#D08060',
+                '#9EAAB8', '#C87850', '#5A6A7A', '#E09070', '#A8B4C0',
+                '#B07058', '#7888A0', '#D4A088'
+            ]
+        },
+        
+        // Legacy fallback (will be mapped to sandstone)
         COLORS: [
-            '#fb923c', '#f472b6', '#2dd4bf', '#fbbf24', '#60a5fa',
-            '#4ade80', '#facc15', '#c084fc', '#f87171', '#22d3ee',
-            '#a3e635', '#fb7185', '#a78bfa', '#34d399', '#fcd34d',
-            '#818cf8', '#ffffff', '#94a3b8'
+            '#3A3A3A', '#B17457', '#8B9D83', '#C4887A', '#6B7C7A',
+            '#4A4947', '#9AABA0', '#D8D2C2', '#A89078', '#7A8B70',
+            '#5E6B5A', '#C0A898', '#8A9488', '#D4C4B0', '#6B6B63',
+            '#A09080', '#C8B8A0', '#787870'
         ],
         
         COLORS_PROFESSIONAL: [
-            '#d4887a', '#9aaa98', '#a0b5b2', '#c0a8a0', '#a0aab8',
-            '#85ab90', '#d0c090', '#b8a0c0', '#d0a0a0', '#88c0c8',
-            '#b0c890', '#d4a0a8', '#a8a0c8', '#88c8a8', '#d4c8a0',
-            '#a0a0c8', '#f0ece8', '#a8a8a0'
+            '#3A3A3A', '#B17457', '#8B9D83', '#C4887A', '#6B7C7A',
+            '#4A4947', '#9AABA0', '#D8D2C2', '#A89078', '#7A8B70',
+            '#5E6B5A', '#C0A898', '#8A9488', '#D4C4B0', '#6B6B63',
+            '#A09080', '#C8B8A0', '#787870'
         ],
         
+        // Spring Physics
         SPRING: {
             stiffness: 0.15,
             damping: 0.88
         },
         
+        // Node Sizes
         NODE_SIZES: {
             root: 1.8,
             level1: 0.85,
             level2: 0.6,
-            default: 0.45
+            default: 0.45,
+            minSize: 0.25
         },
         
+        // Layout
         LAYOUT: {
             level1Radius: 6.0,
             level1RadiusExpanded: 8,
             level2Radius: 5.5,
             level3Radius: 4.0,
-            spreadAngle: Math.PI * 1.2
+            spreadAngle: Math.PI * 1.2,
+            descendantSpacingFactor: 0.25,
+            maxDescendantPush: 7
+        },
+        
+        // Animation - consolidated timing constants
+        ANIMATION: {
+            springLerpBase: 0.12,
+            springLerpSlow: 0.06,
+            springLerpMedium: 0.08,
+            scaleLerp: 0.15,
+            positionThreshold: 0.001,
+            scaleThreshold: 0.001,
+            animatingThreshold: 0.01,
+            cameraArcDuration: 600,
+            cameraFollowSpeed: 0.03
+        },
+        
+        // Timing (ms)
+        TIMING: {
+            expandStagger: 50,
+            collapseStagger: 40,
+            collapseHideDelay: 200,
+            toastDuration: 3000,
+            labelUpdateInterval: 100
+        },
+        
+        // Label Decluttering
+        LABELS: {
+            padding: 12,
+            fadeSpeed: 0.12,
+            minOpacity: 0.03,
+            basePriority: 100,
+            selectedPriority: 1000,
+            rootPriority: 500,
+            depthPenalty: 10,
+            declutterInterval: 3 // frames between declutter runs
+        },
+        
+        // Particles
+        PARTICLES: {
+            count: 200,
+            spread: 100,
+            baseSize: 0.15,
+            opacity: 0.4,
+            rotationSpeed: 0.02
+        }
+    };
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // UTILITY FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════════
+    const Utils = {
+        // Smoother easing functions for transitions
+        easing: {
+            smoothStep: t => t * t * (3 - 2 * t),
+            smootherStep: t => t * t * t * (t * (t * 6 - 15) + 10),
+            outCubic: t => 1 - Math.pow(1 - t, 3),
+            outQuart: t => 1 - Math.pow(1 - t, 4)
+        },
+        
+        // Check if theme is dark
+        isDarkTheme() {
+            const theme = document.documentElement.getAttribute('data-theme') || 'sandstone';
+            return ['obsidian'].includes(theme);
         }
     };
     
     // Get colors based on current theme
     function getThemeColors() {
-        const theme = document.documentElement.getAttribute('data-theme') || 'sunset';
-        return theme === 'professional' ? CONFIG.COLORS_PROFESSIONAL : CONFIG.COLORS;
+        const theme = document.documentElement.getAttribute('data-theme') || 'sandstone';
+        return CONFIG.THEME_COLORS[theme] || CONFIG.THEME_COLORS.sandstone;
     }
     
     // Map a color from one palette to another by index
@@ -2691,14 +2869,21 @@
     
     // Update all node colors for theme change
     function updateNodeColorsForTheme(oldTheme, newTheme) {
-        const fromPalette = oldTheme === 'professional' ? CONFIG.COLORS_PROFESSIONAL : CONFIG.COLORS;
-        const toPalette = newTheme === 'professional' ? CONFIG.COLORS_PROFESSIONAL : CONFIG.COLORS;
+        const fromPalette = CONFIG.THEME_COLORS[oldTheme] || CONFIG.THEME_COLORS.sandstone;
+        const toPalette = CONFIG.THEME_COLORS[newTheme] || CONFIG.THEME_COLORS.sandstone;
         
         if (typeof nodes === 'undefined' || !nodes) return;
         
         nodes.forEach((mesh) => {
             const oldColor = mesh.userData.color;
-            const newColor = remapColor(oldColor, fromPalette, toPalette);
+            let newColor;
+            
+            // Root node always gets the first color of the new palette
+            if (mesh.userData.id === 'mynd') {
+                newColor = toPalette[0];
+            } else {
+                newColor = remapColor(oldColor, fromPalette, toPalette);
+            }
             
             if (newColor !== oldColor) {
                 mesh.userData.color = newColor;
@@ -2715,6 +2900,13 @@
                 store.updateNode(mesh.userData.id, { color: newColor });
             }
         });
+        
+        // Also update label colors if switching between light/dark themes
+        const wasLight = !['obsidian'].includes(oldTheme);
+        const isLight = !['obsidian'].includes(newTheme);
+        if (wasLight !== isLight) {
+            updateLabelsForTheme();
+        }
     }
     
     // Update color pickers for current theme
@@ -2757,7 +2949,7 @@
     const defaultData = {
         id: 'mynd',
         label: 'My Mind',
-        color: '#fb923c',
+        color: '#3A3A3A',
         description: '',
         children: []
     };
@@ -2950,6 +3142,155 @@
     const store = new Store();
 
     // ═══════════════════════════════════════════════════════════════════
+    // CONNECTION MANAGER - Batched Connection Updates for Performance
+    // ═══════════════════════════════════════════════════════════════════
+    const ConnectionManager = {
+        pendingUpdates: new Set(),
+        
+        // Queue a connection for update (called during animation)
+        queueUpdate(childMesh) {
+            this.pendingUpdates.add(childMesh);
+        },
+        
+        // Process all pending updates in a single batch
+        processBatch() {
+            if (this.pendingUpdates.size === 0) return;
+            
+            this.pendingUpdates.forEach(childMesh => {
+                const line = childMesh.userData.connectionLine;
+                if (!line || !childMesh.userData.parent) return;
+                
+                const parentMesh = nodes.get(childMesh.userData.parent.id);
+                if (!parentMesh) return;
+                
+                const points = [parentMesh.position.clone(), childMesh.position.clone()];
+                line.geometry.setFromPoints(points);
+            });
+            
+            this.pendingUpdates.clear();
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════
+    // LABEL SYSTEM - Smart Decluttering with Camera Movement Detection
+    // ═══════════════════════════════════════════════════════════════════
+    const LabelSystem = {
+        lastCameraPosition: null,
+        lastCameraTarget: null,
+        needsUpdate: true,
+        frameCounter: 0,
+        
+        // Initialize tracking vectors (called after scene init)
+        init(camera, controls) {
+            this.lastCameraPosition = camera.position.clone();
+            this.lastCameraTarget = controls.target.clone();
+        },
+        
+        // Check if camera has moved significantly
+        checkCameraMovement(camera, controls) {
+            if (!this.lastCameraPosition) return;
+            
+            const posDiff = camera.position.distanceToSquared(this.lastCameraPosition);
+            const targetDiff = controls.target.distanceToSquared(this.lastCameraTarget);
+            
+            if (posDiff > 0.01 || targetDiff > 0.01) {
+                this.lastCameraPosition.copy(camera.position);
+                this.lastCameraTarget.copy(controls.target);
+                this.needsUpdate = true;
+            }
+        },
+        
+        // Mark labels as needing update (call when nodes change)
+        markDirty() {
+            this.needsUpdate = true;
+        },
+        
+        // Run decluttering - only when needed
+        update(camera, nodesMap) {
+            this.frameCounter++;
+            
+            // Only run every N frames unless marked dirty
+            if (!this.needsUpdate && this.frameCounter % CONFIG.LABELS.declutterInterval !== 0) {
+                return;
+            }
+            
+            this.needsUpdate = false;
+            const cfg = CONFIG.LABELS;
+            const visibleLabels = [];
+            
+            nodesMap.forEach(mesh => {
+                if (!mesh.visible || !mesh.userData.labelSprite) return;
+                
+                const sprite = mesh.userData.labelSprite;
+                const pos = mesh.position.clone().project(camera);
+                
+                // Behind camera
+                if (pos.z > 1) {
+                    sprite.material.opacity = Math.max(0, sprite.material.opacity - cfg.fadeSpeed);
+                    return;
+                }
+                
+                const screenX = (pos.x * 0.5 + 0.5) * window.innerWidth;
+                const screenY = (-pos.y * 0.5 + 0.5) * window.innerHeight;
+                
+                const dist = camera.position.distanceTo(mesh.position);
+                const textLength = (mesh.userData.label || '').length;
+                const labelWidth = Math.max(60, textLength * 8) * (20 / Math.max(dist, 5));
+                const labelHeight = 24 * (20 / Math.max(dist, 5));
+                
+                const depth = mesh.userData.depth || 0;
+                const isSelected = mesh.userData.selected;
+                const isRoot = mesh.userData.level === 0;
+                const priority = isSelected ? cfg.selectedPriority : 
+                                (isRoot ? cfg.rootPriority : cfg.basePriority - depth * cfg.depthPenalty);
+                
+                visibleLabels.push({
+                    sprite,
+                    x: screenX,
+                    y: screenY,
+                    width: labelWidth,
+                    height: labelHeight,
+                    priority,
+                    baseOpacity: mesh.userData.labelBaseOpacity || 1,
+                    shouldShow: true
+                });
+            });
+            
+            // Sort by priority (highest first)
+            visibleLabels.sort((a, b) => b.priority - a.priority);
+            
+            // Hide overlapping labels (lower priority ones)
+            for (let i = 0; i < visibleLabels.length; i++) {
+                if (!visibleLabels[i].shouldShow) continue;
+                
+                for (let j = i + 1; j < visibleLabels.length; j++) {
+                    if (!visibleLabels[j].shouldShow) continue;
+                    
+                    const a = visibleLabels[i];
+                    const b = visibleLabels[j];
+                    
+                    const overlapX = Math.abs(a.x - b.x) < (a.width + b.width) / 2 + cfg.padding;
+                    const overlapY = Math.abs(a.y - b.y) < (a.height + b.height) / 2 + cfg.padding;
+                    
+                    if (overlapX && overlapY) {
+                        visibleLabels[j].shouldShow = false;
+                    }
+                }
+            }
+            
+            // Apply smooth fade transitions
+            visibleLabels.forEach(label => {
+                const targetOpacity = label.shouldShow ? label.baseOpacity : 0;
+                const currentOpacity = label.sprite.material.opacity;
+                label.sprite.material.opacity = currentOpacity + (targetOpacity - currentOpacity) * cfg.fadeSpeed;
+                if (label.sprite.material.opacity < cfg.minOpacity) {
+                    label.sprite.material.opacity = 0;
+                }
+            });
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════
     // UTILITIES
     // ═══════════════════════════════════════════════════════════════════
     function escapeHTML(str) {
@@ -3117,15 +3458,16 @@
     // THEME MANAGER
     // ═══════════════════════════════════════════════════════════════════
     const themeManager = {
-        current: 'sunrise',
+        current: 'sandstone',
+        themes: ['sandstone', 'coral', 'ember', 'frost', 'obsidian'],
         
         init() {
             const saved = localStorage.getItem(CONFIG.THEME_KEY);
-            if (saved) {
+            if (saved && this.themes.includes(saved)) {
                 this.set(saved, true); // Skip color update on init
             } else {
-                // Default to sunrise for new users
-                this.set('sunrise', true);
+                // Default to sandstone for new users
+                this.set('sandstone', true);
             }
         },
         
@@ -3140,23 +3482,18 @@
                 opt.classList.toggle('active', opt.dataset.theme === theme);
             });
             
-            // Update node colors when switching to/from professional
+            // Update node colors when switching themes (different palettes)
             if (!skipColorUpdate && oldTheme !== theme) {
-                const wasProfessional = oldTheme === 'professional';
-                const isProfessional = theme === 'professional';
-                if (wasProfessional !== isProfessional) {
-                    updateNodeColorsForTheme(oldTheme, theme);
-                }
+                updateNodeColorsForTheme(oldTheme, theme);
             }
             
             bus.emit('theme:changed', { theme, oldTheme });
         },
         
         toggle() {
-            const themes = ['midnight', 'sunrise', 'ocean', 'forest', 'sunset', 'professional'];
-            const currentIndex = themes.indexOf(this.current);
-            const nextIndex = (currentIndex + 1) % themes.length;
-            this.set(themes[nextIndex]);
+            const currentIndex = this.themes.indexOf(this.current);
+            const nextIndex = (currentIndex + 1) % this.themes.length;
+            this.set(this.themes[nextIndex]);
         }
     };
 
@@ -3208,7 +3545,7 @@
         controls.dampingFactor = 0.12;
         controls.rotateSpeed = 0.5;
         controls.minDistance = 8;
-        controls.maxDistance = 200;
+        controls.maxDistance = 80;
         controls.enablePan = true;
         controls.panSpeed = 0.8;
         controls.maxPolarAngle = Math.PI * 0.85;
@@ -3280,6 +3617,10 @@
         
         // Build initial scene
         currentContextId = store.data.id;
+        
+        // Initialize label system with camera tracking
+        LabelSystem.init(camera, controls);
+        
         buildScene();
         
         // Resize handler
@@ -3496,9 +3837,9 @@
         canvas.height = height * 2;
         ctx.scale(2, 2);
         
-        // Background - check for light themes (sunrise is light, others are dark)
-        const theme = document.documentElement.getAttribute('data-theme') || 'sunset';
-        const isDark = theme !== 'sunrise';
+        // Background - check for dark themes
+        const theme = document.documentElement.getAttribute('data-theme') || 'sandstone';
+        const isDark = ['obsidian'].includes(theme);
         
         ctx.fillStyle = isDark ? 'rgba(18, 18, 26, 0.9)' : 'rgba(255, 255, 255, 0.95)';
         ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
@@ -3701,6 +4042,9 @@
         });
         
         updateDepthIndicator();
+        
+        // Mark labels for declutter recalculation
+        LabelSystem.markDirty();
     }
     
     // Smoothly update node positions without rebuilding scene
@@ -3833,6 +4177,8 @@
         
         const parentPos = mesh.position.clone();
         const childCount = mesh.userData.children.length;
+        const staggerDelay = CONFIG.TIMING.collapseStagger;
+        const hideDelay = CONFIG.TIMING.collapseHideDelay;
         
         // First recursively collapse all grandchildren and get max delay
         let maxNestedDelay = 0;
@@ -3848,7 +4194,7 @@
         
         // Wait for nested collapses to finish, then collapse this level
         const baseDelay = maxNestedDelay;
-        const thisLevelDuration = childCount * 40 + 200;
+        const thisLevelDuration = childCount * staggerDelay + hideDelay;
         
         mesh.userData.children.forEach((childData, index) => {
             const childMesh = nodes.get(childData.id);
@@ -3858,7 +4204,7 @@
             childMesh.userData.collapseId = Date.now(); // Track this collapse operation
             const thisCollapseId = childMesh.userData.collapseId;
             
-            const staggerDelay = baseDelay + index * 40;
+            const itemDelay = baseDelay + index * staggerDelay;
             
             if (animate) {
                 setTimeout(() => {
@@ -3872,7 +4218,7 @@
                     // Animate back to parent position
                     childMesh.userData.spring.target.copy(parentPos);
                     childMesh.userData.spring.scaleTarget = 0.1;
-                }, staggerDelay);
+                }, itemDelay);
                 
                 // Hide node after animation completes
                 setTimeout(() => {
@@ -3882,7 +4228,7 @@
                     
                     childMesh.visible = false;
                     if (childMesh.userData.outlineMesh) childMesh.userData.outlineMesh.visible = false;
-                }, staggerDelay + 200);
+                }, itemDelay + hideDelay);
             } else {
                 childMesh.visible = false;
                 if (childMesh.userData.outlineMesh) childMesh.userData.outlineMesh.visible = false;
@@ -4248,15 +4594,16 @@
         });
     }
 
-    // Animation loop
+    // Animation loop - modularized and optimized
     function animate() {
         requestAnimationFrame(animate);
         
         const time = Date.now() * 0.001;
+        const cfg = CONFIG.ANIMATION;
         
         // Animate particles
         if (particleSystem) {
-            particleSystem.rotation.y = time * 0.02;
+            particleSystem.rotation.y = time * CONFIG.PARTICLES.rotationSpeed;
             particleSystem.rotation.x = Math.sin(time * 0.01) * 0.1;
         }
         
@@ -4270,22 +4617,17 @@
             // Check if node is still animating (position or scale)
             const posDiff = mesh.position.distanceTo(spring.target);
             const scaleDiff = Math.abs(mesh.scale.x - spring.scaleTarget);
-            const isAnimating = posDiff > 0.01 || scaleDiff > 0.01;
+            const isAnimating = posDiff > cfg.animatingThreshold || scaleDiff > cfg.animatingThreshold;
             
             // Adaptive lerp - slower for longer distances (smoother repositioning)
-            const baseLerp = 0.12;
-            const lerpFactor = posDiff > 3 ? 0.06 : (posDiff > 1.5 ? 0.08 : baseLerp);
+            const lerpFactor = posDiff > 3 ? cfg.springLerpSlow : 
+                              (posDiff > 1.5 ? cfg.springLerpMedium : cfg.springLerpBase);
             
             // Smooth position lerp
-            if (posDiff > 0.001) {
+            if (posDiff > cfg.positionThreshold) {
                 mesh.position.lerp(spring.target, lerpFactor);
             } else if (posDiff > 0) {
                 mesh.position.copy(spring.target);
-                // Final connection update when settling
-                if (mesh.userData.connectionLine && mesh.userData.parent) {
-                    const parentMesh = nodes.get(mesh.userData.parent.id);
-                    if (parentMesh) updateConnection(mesh, parentMesh);
-                }
             }
             
             // Outline follows
@@ -4295,8 +4637,8 @@
             
             // Smooth scale lerp
             const currentScale = mesh.scale.x;
-            if (scaleDiff > 0.001) {
-                const newScale = currentScale + (spring.scaleTarget - currentScale) * 0.15;
+            if (scaleDiff > cfg.scaleThreshold) {
+                const newScale = currentScale + (spring.scaleTarget - currentScale) * cfg.scaleLerp;
                 mesh.scale.set(newScale, newScale, newScale);
             } else {
                 mesh.scale.set(spring.scaleTarget, spring.scaleTarget, spring.scaleTarget);
@@ -4312,16 +4654,13 @@
                 mesh.material.opacity = Math.min(1, mesh.material.opacity + 0.1);
             }
             
-            // Update connections only when node is animating
+            // Queue connection updates for batch processing
             if (isAnimating && mesh.userData.connectionLine && mesh.userData.parent) {
-                const parentMesh = nodes.get(mesh.userData.parent.id);
-                if (parentMesh) {
-                    updateConnection(mesh, parentMesh);
-                }
+                ConnectionManager.queueUpdate(mesh);
             }
             
             // Label visibility and scale (less frequent updates)
-            if (mesh.userData.labelSprite && (!mesh.userData.lastLabelUpdate || time - mesh.userData.lastLabelUpdate > 0.1)) {
+            if (mesh.userData.labelSprite && (!mesh.userData.lastLabelUpdate || time - mesh.userData.lastLabelUpdate > CONFIG.TIMING.labelUpdateInterval / 1000)) {
                 mesh.userData.lastLabelUpdate = time;
                 const dist = camera.position.distanceTo(mesh.position);
                 const labelScale = 0.6 * Math.max(0.5, Math.min(1.2, dist / 15));
@@ -4338,22 +4677,20 @@
             }
         });
         
-        // Label decluttering - run every few frames for performance
-        if (!animate.frameCount) animate.frameCount = 0;
-        animate.frameCount++;
-        if (animate.frameCount % 3 === 0) {
-            declutterLabels();
-        }
+        // Batch process all connection updates
+        ConnectionManager.processBatch();
+        
+        // Smart label decluttering - checks camera movement and runs only when needed
+        LabelSystem.checkCameraMovement(camera, controls);
+        LabelSystem.update(camera, nodes);
         
         // Smooth camera animation (runs even during interaction if animation is active)
         if (cameraArcAnimation) {
             const elapsed = performance.now() - cameraArcAnimation.startTime;
             const progress = Math.min(elapsed / cameraArcAnimation.duration, 1);
             
-            // Smoother cubic ease-in-out
-            const ease = progress < 0.5 
-                ? 4 * progress * progress * progress
-                : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+            // Use smootherStep for silkier transitions
+            const ease = Utils.easing.smootherStep(progress);
             
             // Lerp target position
             controls.target.lerpVectors(
@@ -4410,7 +4747,7 @@
         } else if (!userInteracting) {
             // Normal slow follow when no arc animation and not interacting
             const targetDiff = new THREE.Vector3().subVectors(cameraTargetGoal, controls.target);
-            const step = targetDiff.multiplyScalar(0.03);
+            const step = targetDiff.multiplyScalar(CONFIG.ANIMATION.cameraFollowSpeed);
             controls.target.add(step);
             camera.position.add(step);
         }
@@ -5711,7 +6048,7 @@ JSON only, no other text:`;
     
     document.querySelectorAll('.theme-option').forEach(opt => {
         opt.addEventListener('click', () => {
-            const oldTheme = document.documentElement.getAttribute('data-theme') || 'sunset';
+            const oldTheme = document.documentElement.getAttribute('data-theme') || 'sandstone';
             const newTheme = opt.dataset.theme;
             themeManager.set(newTheme);
             themePicker.classList.remove('active');
