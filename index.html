@@ -2552,8 +2552,8 @@
     // CONFIGURATION
     // ═══════════════════════════════════════════════════════════════════
     const CONFIG = {
-        STORAGE_KEY: 'mynd-v5j',
-        ONBOARDING_KEY: 'mynd-onboarded-v3',
+        STORAGE_KEY: 'mynd-v5k',
+        ONBOARDING_KEY: 'mynd-onboarded-v4',
         THEME_KEY: 'mynd-theme',
         API_KEY: 'mynd-api-key',
         
@@ -5803,82 +5803,54 @@ JSON only, no other text:`;
                     max_tokens: 2500,
                     messages: [{
                         role: 'user',
-                        content: `You are the AI core of MYND, a 3D mind mapping app that visually represents a user's internal world—thoughts, goals, desires, and aspirations.
+                        content: `You are the AI core of MYND, a mind mapping app. A new user answered these onboarding questions:
 
-A new user just answered onboarding questions. Your job is to DEEPLY EXTRAPOLATE from their answers to create a rich, actionable mind map that breaks down their goals and interests into concrete steps and sub-categories.
-
-USER'S RESPONSES:
 ${answersContext}
 
-CRITICAL INSTRUCTIONS:
-1. Create ONLY 3-4 top-level nodes (not more!) - these should be major life themes from their answers
-2. Each top-level node MUST have 2-4 children
-3. Each child SHOULD have 2-3 grandchildren (go deep, not wide!)
-4. EXTRAPOLATE: If they say "learn guitar", break it down into "Find a Teacher", "Practice Schedule", "Songs to Learn", etc.
-5. EXTRAPOLATE: If they say "start a business", break it down into phases, tasks, skills needed
-6. Use their ACTUAL words for top-level nodes when possible, then expand with your insights
-7. Make grandchildren ACTIONABLE and SPECIFIC
+YOUR TASK: Create a mind map structure with TWO layers.
 
-COLOR STRATEGY (inherit from parent unless specified):
-- Goals/Ambitions: #EF8354 (Orange)
-- Growth/Learning: #4ECDC4 (Teal)  
-- Projects/Tasks: #9B5DE5 (Purple)
-- Relationships/People: #FF6B9D (Pink)
-- Wellness/Self-care: #26DE81 (Green)
-- Ideas/Creativity: #F7B731 (Yellow)
-- Career/Work: #45B7D1 (Blue)
+LAYER 1 (3-5 nodes max): Broad thematic categories that ORGANIZE their answers. Examples:
+- "Short-term Goals" (for immediate objectives)
+- "Life Vision" (for long-term dreams)  
+- "Personal Growth" (for skills, learning)
+- "Wellness" (for health, recharge activities)
+- "Projects" (for specific things they're working on)
+- "Organize" (for areas needing decluttering)
 
-RESPOND WITH JSON ONLY:
+Choose categories that make sense for THIS user's answers. Don't use generic defaults - tailor them.
+
+LAYER 2 (2-4 children per category): Brainstormed items based on their answers. This is where you EXTRAPOLATE:
+- If they said "learn Spanish" → under Personal Growth, add: "Spanish Basics", "Find Language Partner", "Daily Practice Routine"
+- If they said "start a business" → under Projects, add: "Market Research", "MVP Development", "Launch Strategy"
+- If they said "exercise more" → under Wellness, add: "Morning Workout", "Join a Gym", "Track Progress"
+
+DO NOT just copy their answers as nodes. BREAK THEM DOWN into actionable sub-items.
+
+COLORS (use consistently per category):
+- #EF8354 (Orange) - Goals, ambitions
+- #4ECDC4 (Teal) - Learning, growth
+- #9B5DE5 (Purple) - Projects, tasks
+- #26DE81 (Green) - Wellness, self-care
+- #F7B731 (Yellow) - Ideas, creativity
+- #45B7D1 (Blue) - Career, work
+- #FF6B9D (Pink) - Relationships
+
+JSON FORMAT:
 {
   "nodes": [
     {
-      "label": "Their Goal or Theme",
+      "label": "Category Name",
       "color": "#HEX",
       "children": [
-        { 
-          "label": "Sub-category",
-          "children": [
-            { "label": "Specific Action" },
-            { "label": "Another Action" }
-          ]
-        },
-        { 
-          "label": "Another Sub-category",
-          "children": [
-            { "label": "Specific Action" },
-            { "label": "Another Action" }
-          ]
-        }
+        { "label": "Brainstormed Item 1" },
+        { "label": "Brainstormed Item 2" },
+        { "label": "Brainstormed Item 3" }
       ]
     }
   ]
 }
 
-EXAMPLE - If user says "I want to get healthier":
-{
-  "nodes": [{
-    "label": "Get Healthier",
-    "color": "#26DE81",
-    "children": [
-      { "label": "Exercise Routine", "children": [
-        { "label": "Morning Walks" },
-        { "label": "Gym 3x/Week" },
-        { "label": "Track Progress" }
-      ]},
-      { "label": "Nutrition", "children": [
-        { "label": "Meal Prep Sundays" },
-        { "label": "Reduce Sugar" },
-        { "label": "More Vegetables" }
-      ]},
-      { "label": "Sleep Quality", "children": [
-        { "label": "10pm Bedtime" },
-        { "label": "No Screens Before Bed" }
-      ]}
-    ]
-  }]
-}
-
-Now create a deep, meaningful structure for THIS user. JSON only:`
+Remember: 3-5 top categories, each with 2-4 brainstormed children. Children inherit parent color. JSON only:`
                     }]
                 })
             });
@@ -5907,32 +5879,22 @@ Now create a deep, meaningful structure for THIS user. JSON only:`
         // Update root label
         store.updateNode(store.data.id, { label: mapName });
         
-        // Add nodes from AI structure (supports 3 levels deep)
+        // Add nodes from AI structure (2 levels: categories + brainstormed children)
         if (structure.nodes && Array.isArray(structure.nodes)) {
-            structure.nodes.forEach(topNode => {
-                const topColor = topNode.color || '#EF8354';
-                const topId = store.addNode(store.data.id, {
-                    label: topNode.label,
-                    color: topColor
+            structure.nodes.forEach(category => {
+                const categoryColor = category.color || '#EF8354';
+                const categoryId = store.addNode(store.data.id, {
+                    label: category.label,
+                    color: categoryColor
                 });
                 
-                if (topNode.children && Array.isArray(topNode.children)) {
-                    topNode.children.forEach(child => {
-                        const childColor = child.color || topColor;
-                        const childId = store.addNode(topId, {
+                // Add brainstormed children
+                if (category.children && Array.isArray(category.children)) {
+                    category.children.forEach(child => {
+                        store.addNode(categoryId, {
                             label: child.label,
-                            color: childColor
+                            color: child.color || categoryColor
                         });
-                        
-                        // Handle grandchildren (3rd level)
-                        if (child.children && Array.isArray(child.children)) {
-                            child.children.forEach(grandchild => {
-                                store.addNode(childId, {
-                                    label: grandchild.label,
-                                    color: grandchild.color || childColor
-                                });
-                            });
-                        }
                     });
                 }
             });
