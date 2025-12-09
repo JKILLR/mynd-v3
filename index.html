@@ -2873,22 +2873,25 @@
     }
     
     // Map a color from one palette to another by index
-    function remapColor(color, fromPalette, toPalette) {
+    function remapColor(color, fromPalette, toPalette, nodeIndex = 0) {
         const index = fromPalette.findIndex(c => c.toLowerCase() === color.toLowerCase());
         if (index >= 0 && index < toPalette.length) {
             return toPalette[index];
         }
-        // If not found in palette, return original
-        return color;
+        // If not found in palette, assign based on node index to ensure variety
+        // Skip index 0 (root color) for non-root nodes
+        const assignedIndex = ((nodeIndex % (toPalette.length - 1)) + 1);
+        return toPalette[assignedIndex];
     }
     
     // Update all node colors for theme change
     function updateNodeColorsForTheme(oldTheme, newTheme) {
-        const fromPalette = CONFIG.THEME_COLORS[oldTheme] || CONFIG.THEME_COLORS.sandstone;
-        const toPalette = CONFIG.THEME_COLORS[newTheme] || CONFIG.THEME_COLORS.sandstone;
+        const fromPalette = CONFIG.THEME_COLORS[oldTheme] || CONFIG.THEME_COLORS.coral;
+        const toPalette = CONFIG.THEME_COLORS[newTheme] || CONFIG.THEME_COLORS.coral;
         
         if (typeof nodes === 'undefined' || !nodes) return;
         
+        let nodeIndex = 0;
         nodes.forEach((mesh) => {
             const oldColor = mesh.userData.color;
             let newColor;
@@ -2897,23 +2900,23 @@
             if (mesh.userData.id === 'mynd') {
                 newColor = toPalette[0];
             } else {
-                newColor = remapColor(oldColor, fromPalette, toPalette);
+                newColor = remapColor(oldColor, fromPalette, toPalette, nodeIndex);
+                nodeIndex++;
             }
             
-            if (newColor !== oldColor) {
-                mesh.userData.color = newColor;
-                mesh.material.color.set(newColor);
-                mesh.material.emissive.set(newColor);
-                if (mesh.userData.outlineMesh) {
-                    mesh.userData.outlineMesh.material.color.set(new THREE.Color(newColor).multiplyScalar(0.3));
-                }
-                // Update connection line color
-                if (mesh.userData.connectionLine) {
-                    mesh.userData.connectionLine.material.color.set(new THREE.Color(newColor).multiplyScalar(0.6));
-                }
-                // Update stored data
-                store.updateNode(mesh.userData.id, { color: newColor });
+            // Always update colors when switching themes
+            mesh.userData.color = newColor;
+            mesh.material.color.set(newColor);
+            mesh.material.emissive.set(newColor);
+            if (mesh.userData.outlineMesh) {
+                mesh.userData.outlineMesh.material.color.set(new THREE.Color(newColor).multiplyScalar(0.3));
             }
+            // Update connection line color
+            if (mesh.userData.connectionLine) {
+                mesh.userData.connectionLine.material.color.set(new THREE.Color(newColor).multiplyScalar(0.6));
+            }
+            // Update stored data
+            store.updateNode(mesh.userData.id, { color: newColor });
         });
         
         // Also update label colors if switching between light/dark themes
@@ -3084,7 +3087,7 @@
             
             const newNode = {
                 id: nodeData.id || `node-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                label: nodeData.label,
+                label: nodeData.label || 'New Node',
                 color: nodeData.color || parent.color,
                 description: nodeData.description || '',
                 children: []
@@ -3878,13 +3881,14 @@
     }
 
     function createLabelSprite(text, color) {
+        const labelText = text || 'Untitled';
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         const fontSize = 42;
         const padding = 20;
         
         ctx.font = `600 ${fontSize}px Inter, system-ui, sans-serif`;
-        const textWidth = ctx.measureText(text).width;
+        const textWidth = ctx.measureText(labelText).width;
         const width = textWidth + padding * 2;
         const height = fontSize + padding * 1.4;
         
@@ -3909,7 +3913,7 @@
         ctx.font = `600 ${fontSize}px Inter, system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(text, width / 2, height / 2);
+        ctx.fillText(labelText, width / 2, height / 2);
         
         const texture = new THREE.CanvasTexture(canvas);
         texture.needsUpdate = true;
@@ -4358,6 +4362,11 @@
         // Use spring target position (final position) rather than current animated position
         const nodePos = mesh.userData.spring?.target?.clone() || mesh.position.clone();
         
+        // Check if node has children - zoom out more if it does
+        const nodeData = store.findNode(mesh.userData.id);
+        const hasChildren = nodeData?.children?.length > 0;
+        const childCount = nodeData?.children?.length || 0;
+        
         // Get current camera spherical coordinates relative to current target
         const currentOffset = new THREE.Vector3().subVectors(camera.position, controls.target);
         const currentRadius = currentOffset.length();
@@ -4375,7 +4384,12 @@
         // Calculate end camera angle - offset so root node appears to the RIGHT of selected node
         // Subtract angle offset so we're viewing from an angle, not straight through the root
         const endTheta = nodeDist2D > 0.5 ? nodeAngle - Math.PI * 0.35 : currentTheta;
-        const endRadius = Math.max(18, nodeDist2D + 14); // More zoomed out, min 18
+        
+        // Zoom out more if node has children - scale based on child count
+        const isMobile = window.innerWidth <= 768;
+        const baseRadius = isMobile ? 22 : 18;
+        const childZoomBonus = hasChildren ? Math.min(childCount * 4, 20) : 0; // up to 20 extra for many children
+        const endRadius = Math.max(baseRadius + childZoomBonus, nodeDist2D + 14 + childZoomBonus);
         const endPhi = Math.PI * 0.35; // consistent downward viewing angle
         
         // Calculate shortest angle difference for arc boost
@@ -5542,8 +5556,8 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
     });
 
     bus.on('node:selected', ({ data }) => {
-        infoTitle.value = data.label;
-        infoColor.style.background = data.color;
+        infoTitle.value = data.label || 'Untitled';
+        infoColor.style.background = data.color || '#888888';
         infoChildren.textContent = `${data.children?.length || 0} children`;
         infoColorPicker.classList.remove('active');
         
@@ -6538,15 +6552,19 @@ Replace placeholder labels with real content from user's answers. MUST have exac
         store.updateNode(store.data.id, { label: mapName });
         store.data.children = []; // Clear existing children
         
+        // Get colors from current theme
+        const themeColors = getThemeColors();
+        
         console.log('🏗️ Creating map from structure, nodes:', structure.nodes?.length);
         
         // Add nodes from AI structure (3 levels deep)
         if (structure.nodes && Array.isArray(structure.nodes)) {
-            // Limit to max 5 top-level nodes
+            // Limit to max 4 top-level nodes
             const topNodes = structure.nodes.slice(0, 4);
             
-            topNodes.forEach(category => {
-                const categoryColor = category.color || '#60a5fa';
+            topNodes.forEach((category, categoryIndex) => {
+                // Use theme colors instead of AI colors - start from index 1 (skip root color)
+                const categoryColor = themeColors[(categoryIndex % 4) + 1];
                 console.log('📁 Adding category:', category.label, 'with', category.children?.length, 'children');
                 
                 const categoryNode = store.addNode(store.data.id, {
@@ -6561,8 +6579,9 @@ Replace placeholder labels with real content from user's answers. MUST have exac
                 
                 // Layer 2: Children of category
                 if (category.children && Array.isArray(category.children)) {
-                    category.children.forEach(child => {
-                        const childColor = child.color || categoryColor;
+                    category.children.forEach((child, childIndex) => {
+                        // Use varied theme colors for children
+                        const childColor = themeColors[(categoryIndex * 3 + childIndex + 5) % themeColors.length];
                         console.log('  📄 Adding child:', child.label, 'with', child.children?.length, 'grandchildren');
                         
                         const childNode = store.addNode(categoryNode.id, {
@@ -6577,11 +6596,12 @@ Replace placeholder labels with real content from user's answers. MUST have exac
                         
                         // Layer 3: Grandchildren (action items)
                         if (child.children && Array.isArray(child.children)) {
-                            child.children.forEach(grandchild => {
+                            child.children.forEach((grandchild, grandchildIndex) => {
+                                const grandchildColor = themeColors[(categoryIndex * 5 + childIndex * 2 + grandchildIndex + 8) % themeColors.length];
                                 console.log('    📌 Adding grandchild:', grandchild.label);
                                 store.addNode(childNode.id, {
                                     label: grandchild.label,
-                                    color: grandchild.color || childColor
+                                    color: grandchildColor
                                 });
                             });
                         }
