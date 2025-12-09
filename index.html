@@ -4565,15 +4565,11 @@
     function expandAll() {
         const isMobile = window.innerWidth <= 768;
         
-        // Store which nodes need expanding and their parent positions
+        // Get all nodes that need expanding, sorted by level (shallowest first)
         const toExpand = [];
         nodes.forEach(mesh => {
             if (mesh.userData.children?.length && !mesh.userData.isExpanded) {
-                toExpand.push({
-                    id: mesh.userData.id,
-                    parentPos: mesh.position.clone(),
-                    childIds: mesh.userData.children.map(c => c.id)
-                });
+                toExpand.push(mesh);
             }
         });
         
@@ -4582,131 +4578,70 @@
             return;
         }
         
-        // Store old positions of ALL visible nodes before rebuild
-        const oldPositions = new Map();
-        nodes.forEach((m, id) => {
-            if (m.visible) {
-                oldPositions.set(id, m.position.clone());
-            }
-        });
+        // Sort by level (shallowest first)
+        toExpand.sort((a, b) => (a.userData.level || 0) - (b.userData.level || 0));
         
-        // Mark ALL nodes as expanded at once (no animation, no rebuild yet)
-        toExpand.forEach(({ id }) => {
-            store.expandedNodes.add(id);
-        });
+        // Slower stagger on mobile to reduce lag
+        const staggerTime = isMobile ? 150 : 60;
         
-        // Single scene rebuild
-        buildScene();
-        
-        // Restore old positions for existing nodes
-        oldPositions.forEach((oldPos, id) => {
-            const m = nodes.get(id);
-            if (m) {
-                m.position.copy(oldPos);
-                if (m.userData.outlineMesh) {
-                    m.userData.outlineMesh.position.copy(oldPos);
+        // Expand with staggered animation
+        toExpand.forEach((mesh, index) => {
+            setTimeout(() => {
+                if (!mesh.userData.isExpanded) {
+                    expandNode(mesh, true);
                 }
-            }
+            }, index * staggerTime);
         });
-        
-        // Position NEW children at their parent positions (for animation)
-        toExpand.forEach(({ parentPos, childIds }) => {
-            childIds.forEach(childId => {
-                const childMesh = nodes.get(childId);
-                if (childMesh && !oldPositions.has(childId)) {
-                    // This is a newly visible node - start at parent
-                    childMesh.position.copy(parentPos);
-                    if (childMesh.userData.outlineMesh) {
-                        childMesh.userData.outlineMesh.position.copy(parentPos);
-                    }
-                    const importance = childMesh.userData.importance || 1;
-                    childMesh.scale.set(0.3 * importance, 0.3 * importance, 0.3 * importance);
-                    childMesh.material.opacity = 0.3;
-                    
-                    // Also hide grandchildren initially
-                    if (childMesh.userData.children) {
-                        childMesh.userData.children.forEach(grandchild => {
-                            const gcMesh = nodes.get(grandchild.id);
-                            if (gcMesh && !oldPositions.has(grandchild.id)) {
-                                gcMesh.position.copy(parentPos);
-                                if (gcMesh.userData.outlineMesh) {
-                                    gcMesh.userData.outlineMesh.position.copy(parentPos);
-                                }
-                                gcMesh.scale.set(0.1, 0.1, 0.1);
-                                gcMesh.material.opacity = 0;
-                            }
-                        });
-                    }
-                }
-            });
-        });
-        
-        // Play sound once
-        audio.expand();
-        haptic.light();
         
         // Zoom out to see expanded map
+        const totalDuration = toExpand.length * staggerTime;
         setTimeout(() => {
             zoomToFitMap(10);
-        }, 300);
+        }, Math.min(totalDuration + 200, 1500));
         
-        showToast('Expanded all nodes', 'success');
+        showToast('Expanding all nodes...', 'success');
     }
 
     function collapseAll() {
         const isMobile = window.innerWidth <= 768;
         
-        // Find all nodes that will be hidden (children of level 1 nodes)
-        const nodesToHide = [];
-        const level1Nodes = [];
-        
+        // Get all expanded nodes, sorted by level (deepest first for proper collapse order)
+        // Skip root node (level 0) - keep level 1 nodes visible but collapse their children
+        const toCollapse = [];
         nodes.forEach(mesh => {
-            const level = mesh.userData.level || 0;
-            if (level === 1 && mesh.userData.isExpanded) {
-                level1Nodes.push(mesh);
-            }
-            if (level >= 2) {
-                nodesToHide.push(mesh);
+            // Only collapse nodes that are expanded AND have level >= 1 (not the root)
+            if (mesh.userData.isExpanded && (mesh.userData.level || 0) >= 1) {
+                toCollapse.push(mesh);
             }
         });
         
-        if (level1Nodes.length === 0) {
+        if (toCollapse.length === 0) {
             showToast('Already collapsed', 'info');
             return;
         }
         
-        // Animate nodes back to their parent positions
-        nodesToHide.forEach(mesh => {
-            // Find parent position
-            const parent = mesh.userData.parent;
-            if (parent) {
-                const parentMesh = nodes.get(parent.id);
-                if (parentMesh) {
-                    mesh.userData.spring.target.copy(parentMesh.position);
-                    mesh.userData.spring.scaleTarget = 0.1;
+        // Sort by level descending (deepest first)
+        toCollapse.sort((a, b) => (b.userData.level || 0) - (a.userData.level || 0));
+        
+        // Slower stagger on mobile
+        const staggerTime = isMobile ? 100 : 50;
+        
+        // Collapse with staggered animation
+        toCollapse.forEach((mesh, index) => {
+            setTimeout(() => {
+                if (mesh.userData.isExpanded) {
+                    collapseNode(mesh, true);
                 }
-            }
-            // Hide labels and connections
-            if (mesh.userData.labelSprite) mesh.userData.labelSprite.visible = false;
-            if (mesh.userData.connectionLine) mesh.userData.connectionLine.visible = false;
+            }, index * staggerTime);
         });
         
-        // Mark level 1 nodes as collapsed
-        level1Nodes.forEach(mesh => {
-            mesh.userData.isExpanded = false;
-            store.expandedNodes.delete(mesh.userData.id);
-        });
-        
-        // After animation completes, do a clean rebuild
+        // Zoom to fit after collapse
+        const totalDuration = toCollapse.length * staggerTime;
         setTimeout(() => {
-            buildScene();
             zoomToFitMap(0);
-        }, isMobile ? 600 : 400);
+        }, Math.min(totalDuration + 500, 2000));
         
-        audio.collapse && audio.collapse();
-        haptic.light();
-        
-        showToast('Collapsed all nodes', 'success');
+        showToast('Collapsing nodes...', 'success');
     }
 
     // Label decluttering - hide labels that overlap with others
@@ -6695,9 +6630,9 @@ Replace placeholder labels with real content from user's answers. MUST have exac
             const topNodes = structure.nodes.slice(0, 4);
             
             topNodes.forEach((category, categoryIndex) => {
-                // Use theme colors instead of AI colors - start from index 1 (skip root color)
+                // Use theme colors for top-level categories - start from index 1 (skip root color)
                 const categoryColor = themeColors[(categoryIndex % 4) + 1];
-                console.log('📁 Adding category:', category.label, 'with', category.children?.length, 'children');
+                console.log('📁 Adding category:', category.label, 'color:', categoryColor);
                 
                 const categoryNode = store.addNode(store.data.id, {
                     label: category.label,
@@ -6709,16 +6644,14 @@ Replace placeholder labels with real content from user's answers. MUST have exac
                     return;
                 }
                 
-                // Layer 2: Children of category
+                // Layer 2: Children of category - INHERIT parent color
                 if (category.children && Array.isArray(category.children)) {
-                    category.children.forEach((child, childIndex) => {
-                        // Use varied theme colors for children
-                        const childColor = themeColors[(categoryIndex * 3 + childIndex + 5) % themeColors.length];
-                        console.log('  📄 Adding child:', child.label, 'with', child.children?.length, 'grandchildren');
+                    category.children.forEach((child) => {
+                        console.log('  📄 Adding child:', child.label, 'inheriting color:', categoryColor);
                         
                         const childNode = store.addNode(categoryNode.id, {
                             label: child.label,
-                            color: childColor
+                            color: categoryColor  // Inherit parent color
                         });
                         
                         if (!childNode) {
@@ -6726,14 +6659,13 @@ Replace placeholder labels with real content from user's answers. MUST have exac
                             return;
                         }
                         
-                        // Layer 3: Grandchildren (action items)
+                        // Layer 3: Grandchildren - INHERIT parent color
                         if (child.children && Array.isArray(child.children)) {
-                            child.children.forEach((grandchild, grandchildIndex) => {
-                                const grandchildColor = themeColors[(categoryIndex * 5 + childIndex * 2 + grandchildIndex + 8) % themeColors.length];
-                                console.log('    📌 Adding grandchild:', grandchild.label);
+                            child.children.forEach((grandchild) => {
+                                console.log('    📌 Adding grandchild:', grandchild.label, 'inheriting color:', categoryColor);
                                 store.addNode(childNode.id, {
                                     label: grandchild.label,
-                                    color: grandchildColor
+                                    color: categoryColor  // Inherit from top-level parent
                                 });
                             });
                         }
