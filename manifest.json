@@ -2,7 +2,7 @@
   "name": "Mynd V3",
   "short_name": "Mynd V3",
   "description": "3D interactive mind map",
-  "start_url": "/mynd-v3/",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a12",
   "theme_color": "#6366f1",
