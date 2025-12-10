@@ -3578,6 +3578,11 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
             <span class="side-btn-label">Auto Cam</span>
         </div>
+        <div class="side-divider" role="separator"></div>
+        <div class="side-btn" id="btn-settings" title="Settings" role="button" aria-label="Open settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span class="side-btn-label">Settings</span>
+        </div>
     </div>
     
     <!-- Voice AI Indicator -->
@@ -3608,16 +3613,34 @@
         <button class="voice-cancel" id="voice-cancel">Cancel</button>
     </div>
     
-    <!-- API Key Modal -->
+    <!-- API Key Modal / Settings -->
     <div id="api-key-modal">
         <div class="api-key-content">
-            <div class="api-key-title">Voice AI Settings</div>
-            <div class="api-key-desc">Enter your Anthropic API key to enable voice-powered node creation. Your key is stored locally and never sent anywhere except Anthropic's API.</div>
-            <div class="api-key-status" id="api-key-status">No API key configured</div>
-            <input type="password" class="api-key-input" id="api-key-input" placeholder="sk-ant-api03-...">
+            <div class="api-key-title">Settings</div>
+            
+            <!-- API Key Section -->
+            <div style="margin-bottom: 20px;">
+                <div style="font-size: 12px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">Anthropic API Key</div>
+                <div class="api-key-desc">Required for voice AI, smart expand, and AI organization. Your key is stored locally.</div>
+                <div class="api-key-status" id="api-key-status">No API key configured</div>
+                <input type="password" class="api-key-input" id="api-key-input" placeholder="sk-ant-api03-...">
+            </div>
+            
+            <!-- Neural Network Section -->
+            <div style="margin-bottom: 20px; padding-top: 16px; border-top: 1px solid var(--glass-border);">
+                <div style="font-size: 12px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">Neural Network</div>
+                <div class="api-key-desc" id="neural-stats-settings">The neural network learns from your mind map to suggest related nodes.</div>
+                <button class="api-key-btn secondary" id="neural-reset-settings-btn" style="margin-top: 10px; background: rgba(220, 38, 38, 0.1); border-color: rgba(220, 38, 38, 0.3); color: #dc2626;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+                    </svg>
+                    Reset Neural Network
+                </button>
+            </div>
+            
             <div class="api-key-buttons">
-                <button class="api-key-btn secondary" id="api-key-cancel">Cancel</button>
-                <button class="api-key-btn primary" id="api-key-save">Save</button>
+                <button class="api-key-btn secondary" id="api-key-cancel">Close</button>
+                <button class="api-key-btn primary" id="api-key-save">Save API Key</button>
             </div>
         </div>
     </div>
@@ -3972,12 +3995,6 @@
                 </svg>
                 Find Related Nodes
             </button>
-            <button class="neural-btn secondary" id="neural-reset-btn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
-                </svg>
-                Reset Neural Network
-            </button>
         </div>
         
         <div class="neural-suggestions" id="neural-suggestions" style="display: none;">
@@ -4142,12 +4159,135 @@
         NEURAL_NET: {
             STORAGE_KEY: 'mynd-neural-model-v1',
             EMBEDDINGS_KEY: 'mynd-embeddings-v1',
+            DB_NAME: 'mynd-neural-db',
+            DB_VERSION: 1,
+            STORE_NAME: 'models',
             embeddingDim: 512, // Universal Sentence Encoder output dimension
             hiddenUnits: 128,
             learningRate: 0.01,
             minTrainingNodes: 5,
             batchSize: 16,
             epochs: 50
+        }
+    };
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // INDEXEDDB STORAGE FOR NEURAL NETWORK
+    // ═══════════════════════════════════════════════════════════════════
+    const NeuralDB = {
+        db: null,
+        
+        async init() {
+            if (this.db) return this.db;
+            
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(CONFIG.NEURAL_NET.DB_NAME, CONFIG.NEURAL_NET.DB_VERSION);
+                
+                request.onerror = () => {
+                    console.error('Failed to open IndexedDB:', request.error);
+                    reject(request.error);
+                };
+                
+                request.onsuccess = () => {
+                    this.db = request.result;
+                    console.log('✓ IndexedDB initialized for neural network storage');
+                    resolve(this.db);
+                };
+                
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    
+                    // Create object store for model data
+                    if (!db.objectStoreNames.contains(CONFIG.NEURAL_NET.STORE_NAME)) {
+                        db.createObjectStore(CONFIG.NEURAL_NET.STORE_NAME, { keyPath: 'id' });
+                        console.log('✓ Created IndexedDB object store');
+                    }
+                };
+            });
+        },
+        
+        async save(key, data) {
+            try {
+                await this.init();
+                
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([CONFIG.NEURAL_NET.STORE_NAME], 'readwrite');
+                    const store = transaction.objectStore(CONFIG.NEURAL_NET.STORE_NAME);
+                    
+                    const request = store.put({ id: key, data: data, timestamp: Date.now() });
+                    
+                    request.onsuccess = () => resolve(true);
+                    request.onerror = () => reject(request.error);
+                });
+            } catch (error) {
+                console.error('IndexedDB save error:', error);
+                return false;
+            }
+        },
+        
+        async load(key) {
+            try {
+                await this.init();
+                
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([CONFIG.NEURAL_NET.STORE_NAME], 'readonly');
+                    const store = transaction.objectStore(CONFIG.NEURAL_NET.STORE_NAME);
+                    
+                    const request = store.get(key);
+                    
+                    request.onsuccess = () => {
+                        if (request.result) {
+                            resolve(request.result.data);
+                        } else {
+                            resolve(null);
+                        }
+                    };
+                    request.onerror = () => reject(request.error);
+                });
+            } catch (error) {
+                console.error('IndexedDB load error:', error);
+                return null;
+            }
+        },
+        
+        async delete(key) {
+            try {
+                await this.init();
+                
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([CONFIG.NEURAL_NET.STORE_NAME], 'readwrite');
+                    const store = transaction.objectStore(CONFIG.NEURAL_NET.STORE_NAME);
+                    
+                    const request = store.delete(key);
+                    
+                    request.onsuccess = () => resolve(true);
+                    request.onerror = () => reject(request.error);
+                });
+            } catch (error) {
+                console.error('IndexedDB delete error:', error);
+                return false;
+            }
+        },
+        
+        async getSize() {
+            try {
+                await this.init();
+                
+                return new Promise((resolve) => {
+                    const transaction = this.db.transaction([CONFIG.NEURAL_NET.STORE_NAME], 'readonly');
+                    const store = transaction.objectStore(CONFIG.NEURAL_NET.STORE_NAME);
+                    
+                    const request = store.getAll();
+                    
+                    request.onsuccess = () => {
+                        const totalSize = JSON.stringify(request.result).length;
+                        resolve(totalSize);
+                    };
+                    request.onerror = () => resolve(0);
+                });
+            } catch (error) {
+                return 0;
+            }
         }
     };
     
@@ -5040,7 +5180,7 @@
             
             // Get our ML predictions first
             const existingChildren = (node.children || []).map(c => c.label);
-            const mlSuggestions = await this.predictChildren(nodeText, existingChildren, 3);
+            const mlSuggestions = await this.predictChildren(nodeText, existingChildren, 2);
             
             // Get path context
             const path = store.getPath(node.id);
@@ -5071,10 +5211,12 @@ ${mlSuggestions.map(s => `- ${s.label} (${Math.round(s.confidence * 100)}% confi
 
 Build on these patterns while adding fresh perspectives.` : 'This is a new type of node - suggest creative expansions.'}
 
-Generate 4-6 child nodes that would help expand this area. Consider:
-- Building on learned patterns if they're relevant
-- Adding new dimensions the user might not have considered
-- Practical next steps or subcategories
+Generate 3-4 child nodes MAX. Quality over quantity. Consider:
+- The most impactful or foundational additions
+- What the user is most likely trying to accomplish
+- Practical next steps or key subcategories
+
+IMPORTANT: Only suggest 3-4 items. If a topic has many aspects, suggest a few high-level categories the user can expand later, rather than many specific items.
 
 Return ONLY a JSON array of objects:
 [{"label": "Node Name", "reasoning": "Brief why"}, ...]`
@@ -5089,7 +5231,9 @@ Return ONLY a JSON array of objects:
                 
                 const jsonMatch = text.match(/\[[\s\S]*\]/);
                 if (jsonMatch) {
-                    const suggestions = JSON.parse(jsonMatch[0]);
+                    let suggestions = JSON.parse(jsonMatch[0]);
+                    // Enforce max 4 suggestions
+                    suggestions = suggestions.slice(0, 4);
                     return {
                         mlSuggestions,
                         aiSuggestions: suggestions,
@@ -5176,81 +5320,81 @@ Return as JSON:
             }
         }
         
-        // Save models to localStorage (as JSON weights)
+        // Save models to IndexedDB (full precision, all models)
         async saveModels() {
             try {
                 const modelData = {
+                    version: 2,
+                    savedAt: Date.now(),
                     categories: this.categories,
                     commonPatterns: this.commonPatterns,
-                    expansionPatterns: Array.from(this.expansionPatterns.entries()),
-                    categoryWeights: null,
-                    connectionWeights: null,
-                    predictionWeights: null
+                    expansionPatterns: Array.from(this.expansionPatterns.entries())
                 };
                 
-                if (this.categoryModel) {
-                    const categoryWeights = [];
-                    for (const layer of this.categoryModel.layers) {
-                        const weights = layer.getWeights();
-                        const layerWeights = [];
-                        for (const w of weights) {
-                            layerWeights.push({
+                // Helper to extract weights from a model
+                const extractWeights = async (model) => {
+                    if (!model) return null;
+                    const weights = [];
+                    for (const layer of model.layers) {
+                        const layerWeights = layer.getWeights();
+                        const extracted = [];
+                        for (const w of layerWeights) {
+                            const data = await w.data();
+                            extracted.push({
                                 shape: w.shape,
-                                data: Array.from(await w.data())
+                                data: Array.from(data) // Full precision
                             });
                         }
-                        categoryWeights.push(layerWeights);
+                        weights.push(extracted);
                     }
-                    modelData.categoryWeights = categoryWeights;
+                    return weights;
+                };
+                
+                // Save all models with full precision
+                modelData.categoryWeights = await extractWeights(this.categoryModel);
+                modelData.connectionWeights = await extractWeights(this.connectionModel);
+                modelData.predictionWeights = await extractWeights(this.predictionModel);
+                
+                // Save to IndexedDB
+                const success = await NeuralDB.save('neural-models', modelData);
+                
+                if (success) {
+                    const sizeKB = JSON.stringify(modelData).length / 1024;
+                    console.log(`✓ Models saved to IndexedDB (${sizeKB.toFixed(1)}KB) - all 3 models with full precision`);
+                } else {
+                    console.warn('⚠️ Failed to save models to IndexedDB');
                 }
                 
-                if (this.connectionModel) {
-                    const connectionWeights = [];
-                    for (const layer of this.connectionModel.layers) {
-                        const weights = layer.getWeights();
-                        const layerWeights = [];
-                        for (const w of weights) {
-                            layerWeights.push({
-                                shape: w.shape,
-                                data: Array.from(await w.data())
-                            });
-                        }
-                        connectionWeights.push(layerWeights);
+                // Clean up old localStorage data if present
+                try {
+                    if (localStorage.getItem(CONFIG.NEURAL_NET.STORAGE_KEY)) {
+                        localStorage.removeItem(CONFIG.NEURAL_NET.STORAGE_KEY);
+                        console.log('✓ Cleaned up old localStorage model data');
                     }
-                    modelData.connectionWeights = connectionWeights;
-                }
-                
-                if (this.predictionModel) {
-                    const predictionWeights = [];
-                    for (const layer of this.predictionModel.layers) {
-                        const weights = layer.getWeights();
-                        const layerWeights = [];
-                        for (const w of weights) {
-                            layerWeights.push({
-                                shape: w.shape,
-                                data: Array.from(await w.data())
-                            });
-                        }
-                        predictionWeights.push(layerWeights);
-                    }
-                    modelData.predictionWeights = predictionWeights;
-                }
-                
-                localStorage.setItem(CONFIG.NEURAL_NET.STORAGE_KEY, JSON.stringify(modelData));
-                console.log('✓ Models saved to localStorage');
+                } catch (e) {}
                 
             } catch (error) {
                 console.error('Failed to save models:', error);
             }
         }
         
-        // Load models from localStorage
+        // Load models from IndexedDB
         async loadModels() {
             try {
-                const saved = localStorage.getItem(CONFIG.NEURAL_NET.STORAGE_KEY);
-                if (!saved) return false;
+                // Try IndexedDB first
+                let modelData = await NeuralDB.load('neural-models');
                 
-                const modelData = JSON.parse(saved);
+                // Fallback to localStorage for migration
+                if (!modelData) {
+                    const saved = localStorage.getItem(CONFIG.NEURAL_NET.STORAGE_KEY);
+                    if (saved) {
+                        console.log('📦 Migrating model data from localStorage to IndexedDB...');
+                        modelData = JSON.parse(saved);
+                    }
+                }
+                
+                if (!modelData) return false;
+                
                 this.categories = modelData.categories || [];
                 this.commonPatterns = modelData.commonPatterns || [];
                 
@@ -5260,56 +5404,53 @@ Return as JSON:
                     console.log(`✓ Loaded ${this.expansionPatterns.size} expansion patterns`);
                 }
                 
+                // Helper to restore weights to a model
+                const restoreWeights = (model, savedWeights) => {
+                    if (!model || !savedWeights) return false;
+                    let layerIndex = 0;
+                    for (const layer of model.layers) {
+                        const layerWeights = savedWeights[layerIndex];
+                        if (layerWeights && layerWeights.length > 0) {
+                            const tensors = layerWeights.map(w => 
+                                tf.tensor(w.data, w.shape)
+                            );
+                            layer.setWeights(tensors);
+                            tensors.forEach(t => t.dispose());
+                        }
+                        layerIndex++;
+                    }
+                    return true;
+                };
+                
+                // Restore category model
                 if (modelData.categoryWeights && this.categories.length > 0) {
                     this.categoryModel = this.buildCategoryModel(this.categories.length);
-                    let layerIndex = 0;
-                    for (const layer of this.categoryModel.layers) {
-                        const savedWeights = modelData.categoryWeights[layerIndex];
-                        if (savedWeights && savedWeights.length > 0) {
-                            const tensors = savedWeights.map(w => 
-                                tf.tensor(w.data, w.shape)
-                            );
-                            layer.setWeights(tensors);
-                            tensors.forEach(t => t.dispose());
-                        }
-                        layerIndex++;
-                    }
-                    console.log('✓ Category model loaded');
+                    restoreWeights(this.categoryModel, modelData.categoryWeights);
+                    console.log('✓ Category model loaded from IndexedDB');
                 }
                 
+                // Restore connection model
                 if (modelData.connectionWeights) {
                     this.connectionModel = this.buildConnectionModel();
-                    let layerIndex = 0;
-                    for (const layer of this.connectionModel.layers) {
-                        const savedWeights = modelData.connectionWeights[layerIndex];
-                        if (savedWeights && savedWeights.length > 0) {
-                            const tensors = savedWeights.map(w => 
-                                tf.tensor(w.data, w.shape)
-                            );
-                            layer.setWeights(tensors);
-                            tensors.forEach(t => t.dispose());
-                        }
-                        layerIndex++;
-                    }
-                    console.log('✓ Connection model loaded');
+                    restoreWeights(this.connectionModel, modelData.connectionWeights);
+                    console.log('✓ Connection model loaded from IndexedDB');
                 }
                 
+                // Restore prediction model
                 if (modelData.predictionWeights) {
                     this.predictionModel = this.buildPredictionModel();
-                    let layerIndex = 0;
-                    for (const layer of this.predictionModel.layers) {
-                        const savedWeights = modelData.predictionWeights[layerIndex];
-                        if (savedWeights && savedWeights.length > 0) {
-                            const tensors = savedWeights.map(w => 
-                                tf.tensor(w.data, w.shape)
-                            );
-                            layer.setWeights(tensors);
-                            tensors.forEach(t => t.dispose());
-                        }
-                        layerIndex++;
-                    }
-                    console.log('✓ Prediction model loaded');
+                    restoreWeights(this.predictionModel, modelData.predictionWeights);
+                    console.log('✓ Prediction model loaded from IndexedDB');
                 }
+                
+                // If we migrated from localStorage, save to IndexedDB and clean up
+                if (!modelData.version) {
+                    console.log('📦 Saving migrated data to IndexedDB...');
+                    await this.saveModels();
+                }
+                
+                const savedAt = modelData.savedAt ? new Date(modelData.savedAt).toLocaleString() : 'unknown';
+                console.log(`✓ Neural network restored (last saved: ${savedAt})`);
                 
                 return true;
                 
@@ -5319,27 +5460,36 @@ Return as JSON:
             }
         }
         
-        // Save embeddings cache
-        saveEmbeddings() {
+        // Save embeddings cache to IndexedDB
+        async saveEmbeddings() {
             try {
                 const data = {};
                 this.embeddings.forEach((value, key) => {
                     data[key] = value;
                 });
-                localStorage.setItem(CONFIG.NEURAL_NET.EMBEDDINGS_KEY, JSON.stringify(data));
+                await NeuralDB.save('embeddings', data);
             } catch (error) {
                 console.error('Failed to save embeddings:', error);
             }
         }
         
-        // Load embeddings cache
-        loadEmbeddings() {
+        // Load embeddings cache from IndexedDB
+        async loadEmbeddings() {
             try {
-                const saved = localStorage.getItem(CONFIG.NEURAL_NET.EMBEDDINGS_KEY);
-                if (saved) {
-                    const data = JSON.parse(saved);
-                    Object.entries(data).forEach(([key, value]) => {
-                        this.embeddings.set(key, value);
+                // Try IndexedDB first
+                let data = await NeuralDB.load('embeddings');
+                
+                // Fallback to localStorage
+                if (!data) {
+                    const saved = localStorage.getItem(CONFIG.NEURAL_NET.EMBEDDINGS_KEY);
+                    if (saved) {
+                        data = JSON.parse(saved);
+                    }
+                }
+                
+                if (data) {
+                    Object.keys(data).forEach(key => {
+                        this.embeddings.set(key, data[key]);
                     });
                     console.log(`✓ Loaded ${this.embeddings.size} cached embeddings`);
                 }
@@ -5383,9 +5533,18 @@ Return as JSON:
             this.commonPatterns = [];
             this.expansionPatterns.clear();
             this.embeddings.clear();
-            localStorage.removeItem(CONFIG.NEURAL_NET.STORAGE_KEY);
-            localStorage.removeItem(CONFIG.NEURAL_NET.EMBEDDINGS_KEY);
-            console.log('✓ Neural network reset');
+            
+            // Clear IndexedDB
+            await NeuralDB.delete('neural-models');
+            await NeuralDB.delete('embeddings');
+            
+            // Clean up old localStorage entries
+            try {
+                localStorage.removeItem(CONFIG.NEURAL_NET.STORAGE_KEY);
+                localStorage.removeItem(CONFIG.NEURAL_NET.EMBEDDINGS_KEY);
+            } catch (e) {}
+            
+            console.log('✓ Neural network reset (IndexedDB and localStorage cleared)');
         }
     }
     
@@ -6081,6 +6240,7 @@ Return as JSON:
         expand: () => audio.play(800, 0.1),
         collapse: () => audio.play(400, 0.1),
         select: () => audio.play(500, 0.05),
+        add: () => audio.play(700, 0.08),
         success: () => { audio.play(523, 0.1); setTimeout(() => audio.play(659, 0.1), 100); },
         error: () => audio.play(200, 0.2)
     };
@@ -6255,7 +6415,7 @@ Return as JSON:
         controls.dampingFactor = 0.12;
         controls.rotateSpeed = 0.5;
         controls.minDistance = 8;
-        controls.maxDistance = 80;
+        controls.maxDistance = 200;
         controls.enablePan = true;
         controls.panSpeed = 0.8;
         controls.maxPolarAngle = Math.PI * 0.85;
@@ -7071,7 +7231,8 @@ Return as JSON:
         
         // Expand/collapse logic:
         // - Single click on collapsed node: expand direct children only
-        // - Single click on expanded node: collapse all descendants
+        // - Single click on expanded node: just select (no collapse)
+        // - Second click on already-selected expanded node: collapse
         // - Double click: expand all layers of children
         if (mesh.userData.children?.length > 0) {
             if (isDoubleClick) {
@@ -7082,11 +7243,12 @@ Return as JSON:
                 // Single click on collapsed: expand direct children only
                 expandNode(mesh);
                 mesh = nodes.get(nodeId) || mesh;
-            } else {
-                // Single click on expanded: collapse all descendants
+            } else if (wasAlreadySelected) {
+                // Second click on already-selected expanded node: collapse
                 collapseNode(mesh);
                 mesh = nodes.get(nodeId) || mesh;
             }
+            // Otherwise: just select the expanded node (don't collapse)
         }
         
         selectedNode = mesh;
@@ -7304,6 +7466,41 @@ Return as JSON:
         }
         animate();
     }
+    
+    // Focus camera on a specific node without full selection animation
+    function focusOnNode(mesh) {
+        if (!mesh) return;
+        
+        const nodePos = mesh.userData.spring?.target?.clone() || mesh.position.clone();
+        
+        // Smoothly move camera target to node
+        cameraTargetGoal.copy(nodePos);
+        
+        // Calculate ideal camera position - maintain current viewing angle but center on node
+        const currentOffset = new THREE.Vector3().subVectors(camera.position, controls.target);
+        const currentRadius = currentOffset.length();
+        
+        // Animate camera to look at node
+        const startTarget = controls.target.clone();
+        const startPos = camera.position.clone();
+        const endTarget = nodePos.clone();
+        const endPos = nodePos.clone().add(currentOffset.normalize().multiplyScalar(Math.min(currentRadius, 30)));
+        
+        const duration = 400;
+        const startTime = Date.now();
+        
+        function animate() {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const ease = easeOutCubic(progress);
+            
+            controls.target.lerpVectors(startTarget, endTarget, ease);
+            camera.position.lerpVectors(startPos, endPos, ease);
+            
+            if (progress < 1) requestAnimationFrame(animate);
+        }
+        animate();
+    }
 
     function expandAll() {
         const isMobile = window.innerWidth <= 768;
@@ -7336,11 +7533,13 @@ Return as JSON:
             }, index * staggerTime);
         });
         
-        // Zoom out to see expanded map
-        const totalDuration = toExpand.length * staggerTime;
-        setTimeout(() => {
-            zoomToFitMap(10);
-        }, Math.min(totalDuration + 200, 1500));
+        // Zoom out to see expanded map (only if auto camera is enabled)
+        if (autoCameraEnabled) {
+            const totalDuration = toExpand.length * staggerTime;
+            setTimeout(() => {
+                zoomToFitMap(10);
+            }, Math.min(totalDuration + 200, 1500));
+        }
         
         showToast('Expanding all nodes...', 'success');
     }
@@ -7378,11 +7577,13 @@ Return as JSON:
             }, index * staggerTime);
         });
         
-        // Zoom to fit after collapse
-        const totalDuration = toCollapse.length * staggerTime;
-        setTimeout(() => {
-            zoomToFitMap(0);
-        }, Math.min(totalDuration + 500, 2000));
+        // Zoom to fit after collapse (only if auto camera is enabled)
+        if (autoCameraEnabled) {
+            const totalDuration = toCollapse.length * staggerTime;
+            setTimeout(() => {
+                zoomToFitMap(0);
+            }, Math.min(totalDuration + 500, 2000));
+        }
         
         showToast('Collapsing nodes...', 'success');
     }
@@ -7680,10 +7881,23 @@ Return as JSON:
         
         raycaster.setFromCamera(mouse, camera);
         const meshes = Array.from(nodes.values()).filter(m => m.visible);
-        const intersects = raycaster.intersectObjects(meshes);
+        const intersects = raycaster.intersectObjects(meshes, true); // Include children (labels)
         
         if (intersects.length > 0) {
-            const mesh = intersects[0].object;
+            // Get the intersected object - might be the label sprite, not the mesh
+            let mesh = intersects[0].object;
+            
+            // If we hit a sprite (label), get the parent mesh instead
+            if (mesh.isSprite && mesh.parent && mesh.parent.userData?.id) {
+                mesh = mesh.parent;
+            }
+            
+            // Make sure we have a valid node mesh with userData
+            if (!mesh.userData?.id) {
+                clickedOnEmpty = true;
+                lastClickedNodeId = null;
+                return;
+            }
             
             // Move mode - start dragging immediately, don't select (which might collapse)
             if (moveMode) {
@@ -8527,13 +8741,16 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         document.getElementById('action-delete').style.display = 
             data.id !== currentContextId ? 'flex' : 'none';
         
-        // Show/hide organize button (show if node has 3+ link children from same domain)
+        // Show/hide organize button
+        // Show if: (1) 2+ link children from same domain, OR (2) 6+ children total
         const organizeBtn = document.getElementById('action-organize');
         if (data.children && data.children.length >= 2) {
             // Count links by domain
             const domainCounts = {};
+            let linkCount = 0;
             data.children.forEach(child => {
                 if (child.link?.domain || child.link?.url) {
+                    linkCount++;
                     let domain = child.link.domain;
                     if (!domain && child.link.url) {
                         try {
@@ -8546,9 +8763,12 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                     }
                 }
             });
-            // Show if any domain has 2+ items
-            const hasMultiple = Object.values(domainCounts).some(count => count >= 2);
-            organizeBtn.style.display = hasMultiple ? 'flex' : 'none';
+            
+            // Show if any domain has 2+ items OR if node has 6+ children
+            const hasMultipleSameDomain = Object.values(domainCounts).some(count => count >= 2);
+            const hasManyChildren = data.children.length >= 6;
+            
+            organizeBtn.style.display = (hasMultipleSameDomain || hasManyChildren) ? 'flex' : 'none';
         } else {
             organizeBtn.style.display = 'none';
         }
@@ -8622,16 +8842,18 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         }
     });
     
-    // Organize button - groups children by domain/platform
+    // Organize button - groups children by domain/platform OR uses AI for regular nodes
     document.getElementById('action-organize').addEventListener('click', async () => {
         if (!selectedNode) return;
         
         const nodeId = selectedNode.userData.id;
         const nodeData = store.findNode(nodeId);
-        if (!nodeData || !nodeData.children) return;
+        if (!nodeData || !nodeData.children || nodeData.children.length < 2) return;
         
-        // Group children by domain
+        // First, try domain-based grouping for links
         const domainGroups = {};
+        let regularNodes = [];
+        
         nodeData.children.forEach(child => {
             if (child.link?.domain || child.link?.url) {
                 let domain = child.link.domain;
@@ -8645,19 +8867,19 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                     if (!domainGroups[domain]) domainGroups[domain] = [];
                     domainGroups[domain].push(child);
                 }
+            } else {
+                regularNodes.push(child);
             }
         });
         
-        // Create folders for domains with 2+ items
         let totalMoved = 0;
         let foldersCreated = 0;
         
+        // Handle link grouping by domain
         for (const [domain, items] of Object.entries(domainGroups)) {
             if (items.length >= 2) {
-                // Get friendly folder name
                 const folderName = LinkManager.getDomainFolderName(domain);
                 
-                // Check if folder already exists
                 const existingFolder = nodeData.children.find(c => 
                     c.label.toLowerCase() === folderName.toLowerCase() && !c.link
                 );
@@ -8666,7 +8888,6 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 if (existingFolder) {
                     folderId = existingFolder.id;
                 } else {
-                    // Create folder
                     const folder = store.addNode(nodeId, {
                         label: folderName,
                         description: `Collection of ${folderName} content`,
@@ -8677,12 +8898,91 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                     foldersCreated++;
                 }
                 
-                // Move items to folder
                 for (const item of items) {
                     if (store.moveNode(item.id, folderId)) {
                         totalMoved++;
                     }
                 }
+            }
+        }
+        
+        // If we have many regular nodes and an API key, use AI to organize
+        const apiKey = localStorage.getItem(CONFIG.API_KEY);
+        if (regularNodes.length >= 5 && apiKey) {
+            showToast('🤖 AI analyzing nodes...', 'info');
+            
+            try {
+                const childrenList = regularNodes.map(c => `- ${c.label}${c.description ? ': ' + c.description.substring(0, 50) : ''}`).join('\n');
+                
+                const prompt = `You are organizing a mind map. The parent node is "${nodeData.label}".
+
+Here are the child nodes that need organizing:
+${childrenList}
+
+Group these into 2-4 logical categories. Each category should have at least 2 items.
+
+Respond with JSON only:
+{
+  "categories": [
+    {
+      "name": "Category Name",
+      "description": "Brief description of this category",
+      "items": ["exact node label 1", "exact node label 2"]
+    }
+  ]
+}
+
+Use EXACT node labels from the list above. Only include nodes that clearly fit a category.`;
+
+                const response = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiKey.trim(),
+                        'anthropic-version': '2023-06-01',
+                        'anthropic-dangerous-direct-browser-access': 'true'
+                    },
+                    body: JSON.stringify({
+                        model: 'claude-sonnet-4-20250514',
+                        max_tokens: 800,
+                        messages: [{ role: 'user', content: prompt }]
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const content = data.content[0].text;
+                    const jsonMatch = content.match(/\{[\s\S]*\}/);
+                    
+                    if (jsonMatch) {
+                        const result = JSON.parse(jsonMatch[0]);
+                        
+                        for (const category of result.categories) {
+                            if (category.items && category.items.length >= 2) {
+                                // Create category folder
+                                const folder = store.addNode(nodeId, {
+                                    label: category.name,
+                                    description: category.description || '',
+                                    color: nodeData.color,
+                                    source: 'ai-organize'
+                                });
+                                foldersCreated++;
+                                
+                                // Move matching items
+                                for (const itemLabel of category.items) {
+                                    const matchingChild = nodeData.children.find(c => 
+                                        c.label.toLowerCase() === itemLabel.toLowerCase()
+                                    );
+                                    if (matchingChild && store.moveNode(matchingChild.id, folder.id)) {
+                                        totalMoved++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('AI organize error:', error);
             }
         }
         
@@ -8695,8 +8995,10 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 const mesh = nodes.get(nodeId);
                 if (mesh) selectNode(mesh);
             }, 100);
+        } else if (regularNodes.length >= 5 && !apiKey) {
+            showToast('Add API key to enable AI organization', 'info');
         } else {
-            showToast('No items to organize', 'info');
+            showToast('No clear groupings found', 'info');
         }
     });
 
@@ -8842,14 +9144,18 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 return;
             }
             
-            // Show UI immediately
+            // Show UI immediately - even if voice isn't supported, text input will work
             this.isRecording = true;
             this.updateUI('recording');
             document.getElementById('voice-transcript').textContent = 'Say something...';
             
+            // Try to initialize speech recognition
             if (!this.recognition && !this.init()) {
-                showToast('Voice not supported in this browser', 'error');
-                this.stop();
+                // Voice not supported, but text input still works
+                console.warn('Voice not supported, text input available');
+                document.getElementById('voice-status').textContent = 'Voice not supported - use text';
+                document.getElementById('voice-transcript').textContent = 'Click "Type" to enter your request';
+                // Don't stop - let user switch to text mode
                 return;
             }
             
@@ -8858,8 +9164,9 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 haptic.medium();
             } catch (e) {
                 console.error('Failed to start recognition:', e);
-                this.stop();
-                showToast('Failed to start voice recognition', 'error');
+                // Don't hide UI - let user switch to text mode
+                document.getElementById('voice-status').textContent = 'Voice unavailable - use text';
+                document.getElementById('voice-transcript').textContent = 'Click "Type" to enter your request';
             }
         },
         
@@ -8936,9 +9243,23 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         },
         
         async processWithAI(transcript) {
+            console.log('processWithAI called with:', transcript);
             this.isRecording = false;
             this.isProcessing = true;
             this.updateUI('processing');
+            
+            // Refresh API key from localStorage (in case it was updated)
+            this.apiKey = localStorage.getItem(CONFIG.API_KEY) || '';
+            
+            // Check for API key
+            if (!this.apiKey) {
+                console.error('No API key!');
+                showToast('API key required. Click the AI button to configure.', 'error');
+                this.stop();
+                return;
+            }
+            
+            console.log('API key exists, proceeding with AI request...');
             
             // Fix common speech recognition errors
             let cleanedTranscript = transcript.trim()
@@ -8955,68 +9276,95 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             console.log('Cleaned transcript:', cleanedTranscript);
             
             try {
-                // Build context about current mind map
-                const allNodes = store.getAllNodes();
-                const nodeContext = allNodes.slice(0, 30).map(n => ({
-                    id: n.id,
-                    label: n.label,
-                    color: n.color,
-                    hasChildren: n.children && n.children.length > 0
-                }));
+                // Build context about current mind map with proper parent tracking
+                const buildNodeList = (node, parentId = null, list = []) => {
+                    list.push({
+                        id: node.id,
+                        label: node.label,
+                        parentId: parentId,
+                        hasChildren: node.children && node.children.length > 0
+                    });
+                    if (node.children) {
+                        node.children.forEach(child => buildNodeList(child, node.id, list));
+                    }
+                    return list;
+                };
+                const nodeContext = buildNodeList(store.data).slice(0, 60);
                 
-                const selectedNodeData = store.selectedNodeId ? store.findNode(store.selectedNodeId) : null;
-                const currentContext = selectedNodeData ? `"${selectedNodeData.label}" (id: ${selectedNodeData.id})` : 'root "My Mind"';
+                const selectedNodeData = selectedNode ? store.findNode(selectedNode.userData.id) : null;
+                const currentContext = selectedNodeData 
+                    ? `"${selectedNodeData.label}" (id: ${selectedNodeData.id})${selectedNodeData.description ? ' - ' + selectedNodeData.description.substring(0, 50) : ''}`
+                    : 'None (will default to root)';
                 
-                const prompt = `You are the AI core of MYND, a 3D mind mapping application that visually represents a user's entire internal world—their thoughts, desires, goals, memories, and aspirations as an interconnected, explorable space.
+                // Build tree structure string for better visualization
+                const buildTreeString = (nodes, parentId = null, depth = 0) => {
+                    const children = nodes.filter(n => n.parentId === parentId);
+                    return children.map(n => {
+                        const indent = '  '.repeat(depth);
+                        const childStr = buildTreeString(nodes, n.id, depth + 1);
+                        return `${indent}- ${n.label} (${n.id})${childStr ? '\n' + childStr : ''}`;
+                    }).join('\n');
+                };
+                const treeStructure = buildTreeString(nodeContext);
+                
+                const prompt = `You are the intelligent AI assistant for MYND, a 3D mind mapping app. The user is building a personal knowledge/goal map.
 
-YOUR ROLE:
-You are a supportive guide, not a dictator. Your purpose is to:
-- Help users build and evolve their personal mind map through voice commands
-- Extract meaning from what users share and translate it into visual nodes
-- Foster self-awareness by helping users see patterns and connections
-- Empower users to take control of their lives through organized thinking
-- Be insightful and nonjudgmental—every thought has value in this space
+USER INPUT: "${cleanedTranscript}"
 
-VOICE COMMAND CONTEXT:
-The user just spoke a voice command. Interpret their intent and respond with an action.
+SELECTED NODE: ${currentContext || 'None selected'}
 
-IMPORTANT: When user says "note", "notes", "no", "know" - they mean "NODE" or "NODES" (this is a mind map, not a note-taking app).
+CURRENT MAP STRUCTURE (with node IDs):
+${treeStructure || '(empty map)'}
 
-USER COMMAND: "${cleanedTranscript}"
+YOUR TASK:
+Interpret the user's input and respond with appropriate action(s).
 
-CURRENT STATE:
-- Selected node: ${currentContext}
-- Existing nodes: ${JSON.stringify(nodeContext)}
+**CRITICAL - PARENT PLACEMENT:**
+- Look at the MAP STRUCTURE above and find the most relevant existing parent node
+- Use the actual node ID (like "node-abc123") from the structure, NOT the label
+- If the topic relates to an existing branch, place it there (e.g., PWA info goes under "App Development" or "PWA Development" if they exist)
+- Only use "selected" if no better parent exists in the tree, or if user explicitly says "add here"
+- Only use "root" for top-level categories
 
-AVAILABLE COLORS (use exact hex codes):
-Orange=#EF8354, Teal=#4ECDC4, Purple=#9B5DE5, Yellow=#F7B731, Pink=#FF6B9D, Blue=#45B7D1, Green=#26DE81, Lavender=#A29BFE, Red=#FF4444, White=#FFFFFF, Black=#222222, Lime=#32CD32, Cyan=#00CED1, Gold=#FFD700
+**ALWAYS INCLUDE:**
+- A meaningful "description" (2-3 sentences) that explains the concept or captures the thought
+- For questions ("what is X?"), the description should answer the question
 
-ACTIONS:
-1. "add" - Create a new node to expand their mental landscape
-2. "edit" - Refine an existing thought (change label or color)
-3. "delete" - Remove a node that no longer serves them
-
-RESPOND WITH JSON ONLY:
+RESPONSE FORMAT (JSON only):
 {
-  "action": "add|edit|delete",
-  "label": "Node Name (properly capitalized, meaningful)",
-  "color": "#HEX or null",
-  "targetId": "for edit/delete: node id",
-  "parentId": "for add: use 'selected' (default), 'root', or specific node id"
+  "actions": [
+    {
+      "action": "add",
+      "label": "Clear, concise node name",
+      "description": "2-3 sentence explanation answering any question or elaborating on the thought",
+      "color": "#HEX or null",
+      "parentId": "USE ACTUAL NODE ID from tree structure above, or 'selected'/'root'"
+    }
+  ]
 }
 
-EXAMPLES:
-- "add a node called Christmas and make it green" → {"action":"add","label":"Christmas","color":"#26DE81","parentId":"selected"}
-- "I want to track my fitness goals" → {"action":"add","label":"Fitness Goals","color":"#4ECDC4","parentId":"selected"}
-- "new red node called urgent" → {"action":"add","label":"Urgent","color":"#FF4444","parentId":"selected"}
-- "create vacation planning under goals" → {"action":"add","label":"Vacation Planning","color":null,"parentId":"goals"}
-- "make goals blue" → {"action":"edit","label":null,"targetId":"goals","color":"#45B7D1"}
-- "rename ideas to brainstorm" → {"action":"edit","label":"Brainstorm","targetId":"ideas","color":null}
-- "delete the black node" → {"action":"delete","targetId":"node-black"}
+For creating new hierarchy when no good parent exists:
+{
+  "actions": [
+    {"action": "add", "label": "New Category", "description": "...", "parentId": "root"},
+    {"action": "add", "label": "Specific Item", "description": "...", "parentId": "PREV_0"}
+  ]
+}
 
-Interpret the user's intent thoughtfully. If they're sharing a thought, goal, or idea, help them add it meaningfully to their mind map.
+EXAMPLES (assuming relevant nodes exist in tree):
 
-JSON only, no other text:`;
+User asks "what is a PWA?" and tree has "App Development (node-app123)":
+{"actions":[{"action":"add","label":"PWA Explained","description":"A Progressive Web App (PWA) is a web application using modern web capabilities to deliver app-like experiences. PWAs can work offline, send push notifications, and be installed on home screens without app stores.","color":null,"parentId":"node-app123"}]}
+
+User says "need to refactor the code" and tree has "Code Optimization (node-code456)":
+{"actions":[{"action":"add","label":"Refactoring Plan","description":"Breaking down the monolithic codebase into smaller, maintainable modules. Priority areas include separating CSS, creating reusable components, and organizing JavaScript into logical modules.","color":"#EF8354","parentId":"node-code456"}]}
+
+User shares a thought with no relevant parent in tree:
+{"actions":[{"action":"add","label":"Random Idea","description":"A thought worth capturing for later review and potential development into something more concrete.","color":null,"parentId":"selected"}]}
+
+AVAILABLE COLORS: Orange=#EF8354, Teal=#4ECDC4, Purple=#9B5DE5, Yellow=#F7B731, Pink=#FF6B9D, Blue=#45B7D1, Green=#26DE81, Lavender=#A29BFE
+
+Respond with JSON only:`;
 
                 const response = await fetch('https://api.anthropic.com/v1/messages', {
                     method: 'POST',
@@ -9028,7 +9376,7 @@ JSON only, no other text:`;
                     },
                     body: JSON.stringify({
                         model: 'claude-sonnet-4-20250514',
-                        max_tokens: 300,
+                        max_tokens: 800,
                         messages: [{
                             role: 'user',
                             content: prompt
@@ -9079,70 +9427,151 @@ JSON only, no other text:`;
                 
                 console.log('Parsed result:', result);
                 
-                // Handle different actions
-                if (result.action === 'delete' && result.targetId) {
-                    const targetNode = store.findNode(result.targetId);
-                    if (targetNode && targetNode.id !== store.data.id) {
-                        const label = targetNode.label;
-                        if (store.deleteNode(result.targetId)) {
-                            showToast(`Deleted "${label}"`, 'success');
-                            haptic.success();
+                // Handle new multi-action format
+                const actions = result.actions || [result]; // Support both old and new format
+                const createdNodes = []; // Track created nodes for PREV_N references
+                
+                for (const action of actions) {
+                    if (action.action === 'delete' && action.targetId) {
+                        const targetNode = store.findNode(action.targetId);
+                        if (targetNode && targetNode.id !== store.data.id) {
+                            const label = targetNode.label;
+                            if (store.deleteNode(action.targetId)) {
+                                showToast(`Deleted "${label}"`, 'success');
+                            }
                         }
-                    } else {
-                        showToast(`Couldn't find node to delete`, 'error');
-                        haptic.error();
+                    } else if (action.action === 'edit' && action.targetId) {
+                        const targetNode = store.findNode(action.targetId);
+                        if (targetNode) {
+                            const updates = {};
+                            if (action.label) updates.label = action.label;
+                            if (action.description) updates.description = action.description;
+                            if (action.color && action.color !== 'null') updates.color = action.color;
+                            store.updateNode(action.targetId, updates);
+                            showToast(`Updated "${targetNode.label}"`, 'success');
+                        }
+                    } else if (action.action === 'add' || !action.action) {
+                        // Resolve parentId (including PREV_N references)
+                        let parentId = store.data.id; // Default to root
+                        
+                        console.log('Resolving parentId:', action.parentId);
+                        
+                        if (action.parentId === 'selected' && selectedNode) {
+                            parentId = selectedNode.userData.id;
+                            console.log('Using selected node:', parentId);
+                        } else if (action.parentId === 'root') {
+                            parentId = store.data.id;
+                            console.log('Using root');
+                        } else if (action.parentId && action.parentId.startsWith('PREV_')) {
+                            const prevIndex = parseInt(action.parentId.replace('PREV_', ''));
+                            if (createdNodes[prevIndex]) {
+                                parentId = createdNodes[prevIndex].id;
+                                console.log('Using PREV_' + prevIndex + ':', parentId);
+                            }
+                        } else if (action.parentId && action.parentId !== 'selected') {
+                            // Try to find by ID first
+                            const byId = store.findNode(action.parentId);
+                            if (byId) {
+                                parentId = action.parentId;
+                                console.log('Found by ID:', parentId);
+                            } else {
+                                // Search by label (case-insensitive, partial match)
+                                const allNodes = store.getAllNodes();
+                                const searchTerm = action.parentId.toLowerCase();
+                                
+                                // Try exact match first
+                                let byLabel = allNodes.find(n => 
+                                    n.label.toLowerCase() === searchTerm
+                                );
+                                
+                                // Try partial match if no exact match
+                                if (!byLabel) {
+                                    byLabel = allNodes.find(n => 
+                                        n.label.toLowerCase().includes(searchTerm) ||
+                                        searchTerm.includes(n.label.toLowerCase())
+                                    );
+                                }
+                                
+                                if (byLabel) {
+                                    parentId = byLabel.id;
+                                    console.log('Found by label "' + action.parentId + '":', byLabel.label, parentId);
+                                } else {
+                                    console.log('Could not find parent "' + action.parentId + '", using selected or root');
+                                    parentId = selectedNode?.userData.id || store.data.id;
+                                }
+                            }
+                        } else if (selectedNode) {
+                            parentId = selectedNode.userData.id;
+                            console.log('Defaulting to selected node:', parentId);
+                        }
+                        
+                        // Final validation - make sure parent exists
+                        const parentNode = store.findNode(parentId);
+                        if (!parentNode) {
+                            console.warn('Parent not found, falling back to root');
+                            parentId = store.data.id;
+                        }
+                        
+                        console.log('Final parentId:', parentId, 'Parent label:', store.findNode(parentId)?.label);
+                        
+                        const nodeData = { 
+                            label: action.label,
+                            source: 'ai-voice'
+                        };
+                        
+                        // Add description if provided
+                        if (action.description) {
+                            nodeData.description = action.description;
+                        }
+                        
+                        // Add color if provided
+                        if (action.color && action.color !== 'null' && action.color !== null) {
+                            nodeData.color = action.color;
+                        }
+                        
+                        const newNode = store.addNode(parentId, nodeData);
+                        if (newNode) {
+                            createdNodes.push(newNode);
+                            console.log(`Created node: "${action.label}" (${newNode.id}) under "${store.findNode(parentId)?.label}"`);
+                            
+                            // Make sure parent chain is expanded
+                            let current = parentId;
+                            while (current && current !== store.data.id) {
+                                store.expandedNodes.add(current);
+                                const parent = store.findParent(current);
+                                current = parent?.id;
+                            }
+                        } else {
+                            console.error('Failed to create node:', action.label);
+                        }
                     }
-                } else if (result.action === 'edit' && result.targetId) {
-                    const targetNode = store.findNode(result.targetId);
-                    if (targetNode) {
-                        const updates = {};
-                        if (result.label) updates.label = result.label;
-                        if (result.color && result.color !== 'null') updates.color = result.color;
-                        store.updateNode(result.targetId, updates);
-                        showToast(`Updated "${targetNode.label}"`, 'success');
-                        haptic.success();
-                    } else {
-                        showToast(`Couldn't find node to edit`, 'error');
-                        haptic.error();
-                    }
-                } else {
-                    // Default: add node
-                    let parentId;
-                    if (result.parentId === 'selected') {
-                        parentId = store.selectedNodeId || store.data.id;
-                    } else if (result.parentId === 'root') {
-                        parentId = store.data.id;
-                    } else {
-                        parentId = result.parentId || store.selectedNodeId || store.data.id;
-                    }
+                }
+                
+                // Rebuild scene after all actions
+                buildScene();
+                
+                // Focus on last created node and show celebration
+                if (createdNodes.length > 0) {
+                    const lastNode = createdNodes[createdNodes.length - 1];
                     
-                    const parentNode = store.findNode(parentId);
-                    if (!parentNode) {
-                        parentId = store.selectedNodeId || store.data.id;
-                    }
-                    
-                    const nodeData = { label: result.label };
-                    if (result.color && result.color !== 'null' && result.color !== null) {
-                        nodeData.color = result.color;
-                    }
-                    
-                    store.addNode(parentId, nodeData);
-                    
-                    // Rebuild scene and show celebration
-                    buildScene();
-                    const newNode = store.findNode(parentId);
-                    if (newNode) {
-                        const mesh = nodes.get(parentId);
+                    // Small delay to let physics settle, then focus
+                    setTimeout(() => {
+                        const mesh = nodes.get(lastNode.id);
                         if (mesh) {
+                            selectNode(mesh);
+                            focusOnNode(mesh);
                             const screenPos = mesh.position.clone().project(camera);
                             const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
                             const y = (-screenPos.y * 0.5 + 0.5) * window.innerHeight;
-                            createCelebration(x, y, nodeData.color || newNode.color, 12);
+                            createCelebration(x, y, lastNode.color, 12);
                         }
-                    }
+                    }, 300);
                     
-                    const colorNote = nodeData.color ? ` (${nodeData.color})` : '';
-                    showToast(`Added "${result.label}"${colorNote}`, 'success');
+                    if (createdNodes.length === 1) {
+                        showToast(`Added "${lastNode.label}"`, 'success');
+                    } else {
+                        showToast(`Added ${createdNodes.length} nodes`, 'success');
+                    }
                     haptic.success();
                 }
                 
@@ -9177,6 +9606,11 @@ JSON only, no other text:`;
         }
     });
     
+    // Settings button
+    document.getElementById('btn-settings').addEventListener('click', () => {
+        showApiKeyModal();
+    });
+    
     // Standalone API key modal function with optional callback
     let apiKeyModalCallback = null;
     
@@ -9195,6 +9629,17 @@ JSON only, no other text:`;
             input.value = '';
             status.textContent = 'Enter your Anthropic API key for AI features';
             status.classList.remove('configured');
+        }
+        
+        // Update neural network stats
+        const neuralStats = document.getElementById('neural-stats-settings');
+        if (neuralStats && neuralNet) {
+            const stats = neuralNet.getStats();
+            let statsText = 'The neural network learns from your mind map to suggest related nodes.';
+            if (stats.isReady) {
+                statsText = `Neural network trained with ${stats.cachedEmbeddings} embeddings, ${stats.expansionPatterns} patterns.`;
+            }
+            neuralStats.textContent = statsText;
         }
         
         modal.classList.add('active');
@@ -9238,7 +9683,13 @@ JSON only, no other text:`;
     // Voice mode toggle (speak vs type)
     let voiceInputMode = 'speak'; // 'speak' or 'type'
     
-    document.getElementById('voice-mode-speak').addEventListener('click', () => {
+    // Prevent clicks on toggle from closing modal
+    document.querySelector('.voice-mode-toggle').addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+    
+    document.getElementById('voice-mode-speak').addEventListener('click', (e) => {
+        e.stopPropagation();
         voiceInputMode = 'speak';
         document.getElementById('voice-mode-speak').classList.add('active');
         document.getElementById('voice-mode-type').classList.remove('active');
@@ -9256,7 +9707,9 @@ JSON only, no other text:`;
         }
     });
     
-    document.getElementById('voice-mode-type').addEventListener('click', () => {
+    document.getElementById('voice-mode-type').addEventListener('click', (e) => {
+        e.stopPropagation();
+        console.log('Type mode clicked');
         voiceInputMode = 'type';
         document.getElementById('voice-mode-type').classList.add('active');
         document.getElementById('voice-mode-speak').classList.remove('active');
@@ -9266,31 +9719,55 @@ JSON only, no other text:`;
         document.getElementById('voice-status').textContent = 'Type your request';
         document.getElementById('voice-status').style.display = 'block';
         document.getElementById('voice-transcript').style.display = 'none';
-        document.getElementById('voice-text-wrapper').style.display = 'block';
+        
+        const textWrapper = document.getElementById('voice-text-wrapper');
+        textWrapper.style.display = 'block';
+        console.log('Text wrapper display:', textWrapper.style.display);
+        
         document.getElementById('voice-hint').textContent = 'Press Enter or click Send to submit';
         
         // Stop voice recognition
         if (voiceAI.recognition) {
             try { voiceAI.recognition.stop(); } catch (e) {}
         }
+        voiceAI.isRecording = false;
         
         // Focus text input
-        document.getElementById('voice-text-input').focus();
+        setTimeout(() => {
+            document.getElementById('voice-text-input').focus();
+        }, 100);
     });
     
     // Voice text input submit
-    document.getElementById('voice-text-submit').addEventListener('click', () => {
-        const text = document.getElementById('voice-text-input').value.trim();
+    document.getElementById('voice-text-submit').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const textInput = document.getElementById('voice-text-input');
+        const text = textInput.value.trim();
+        console.log('Submit clicked, text:', text);
         if (text) {
+            console.log('Processing with AI:', text);
             voiceAI.processWithAI(text);
-            document.getElementById('voice-text-input').value = '';
+            textInput.value = '';
+        } else {
+            showToast('Please enter a request', 'info');
         }
+    });
+    
+    // Prevent clicks in text area from closing modal
+    document.getElementById('voice-text-input').addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+    
+    document.getElementById('voice-text-wrapper').addEventListener('click', (e) => {
+        e.stopPropagation();
     });
     
     // Enter key in text input
     document.getElementById('voice-text-input').addEventListener('keydown', (e) => {
+        e.stopPropagation();
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
+            console.log('Enter pressed in text input');
             document.getElementById('voice-text-submit').click();
         }
     });
@@ -10006,8 +10483,8 @@ showKeyboardHints();
                 this.suggestConnections();
             });
             
-            // Reset button
-            document.getElementById('neural-reset-btn')?.addEventListener('click', () => {
+            // Reset button (now in settings modal)
+            document.getElementById('neural-reset-settings-btn')?.addEventListener('click', () => {
                 this.resetNetwork();
             });
             
@@ -10427,6 +10904,10 @@ showKeyboardHints();
                 suggestionsList.innerHTML = html;
                 suggestionsSection.style.display = 'block';
                 
+                // Store parentId on container for click handlers to use
+                const currentParentId = selectedNode.userData.id;
+                suggestionsList.dataset.parentId = currentParentId;
+                
                 // Add click handlers for individual suggestions
                 suggestionsList.querySelectorAll('.neural-suggestion[data-label]').forEach(el => {
                     el.addEventListener('click', () => {
@@ -10435,7 +10916,7 @@ showKeyboardHints();
                         const label = el.dataset.label;
                         const description = el.dataset.description || '';
                         const suggestionType = el.dataset.type; // 'ml' or 'ai'
-                        const parentId = selectedNode.userData.id;
+                        const parentId = suggestionsList.dataset.parentId; // Get from container, not selectedNode
                         const parentNode = store.findNode(parentId);
                         
                         store.addNode(parentId, { 
@@ -10447,10 +10928,16 @@ showKeyboardHints();
                         
                         buildScene();
                         
-                        // Expand the parent node if collapsed
-                        const parentMesh = nodes.get(parentId);
-                        if (parentMesh && !parentMesh.userData.isExpanded) {
-                            expandNode(parentMesh);
+                        // Re-select the parent node to keep panel active
+                        const newParentMesh = nodes.get(parentId);
+                        if (newParentMesh) {
+                            // Update selectedNode reference without triggering full selection animation
+                            selectedNode = newParentMesh;
+                            
+                            // Expand the parent node if collapsed
+                            if (!newParentMesh.userData.isExpanded) {
+                                expandNode(newParentMesh);
+                            }
                         }
                         
                         // Mark as added instead of removing
@@ -10464,6 +10951,12 @@ showKeyboardHints();
                             score.textContent = '✓';
                             score.style.background = '#22c55e';
                             score.style.color = 'white';
+                        } else {
+                            // For AI suggestions without score element, add a checkmark
+                            const textEl = el.querySelector('.neural-suggestion-text');
+                            if (textEl && !textEl.textContent.includes('✓')) {
+                                textEl.textContent = '✓ ' + textEl.textContent;
+                            }
                         }
                         
                         // Update "Add All" button to show remaining count
@@ -10489,7 +10982,7 @@ showKeyboardHints();
                 
                 // Add click handler for "Add All" button
                 document.getElementById('neural-add-all-btn')?.addEventListener('click', () => {
-                    const parentId = selectedNode.userData.id;
+                    const parentId = suggestionsList.dataset.parentId; // Get from container
                     const parentNode = store.findNode(parentId);
                     let added = 0;
                     
@@ -10535,7 +11028,7 @@ showKeyboardHints();
                     // Hide the button
                     document.getElementById('neural-add-all-btn').style.display = 'none';
                     showToast(`Added ${added} nodes`, 'success');
-                    audio.ai();
+                    audio.success();
                 });
                 
             } catch (error) {
