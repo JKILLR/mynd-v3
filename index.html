@@ -2880,15 +2880,13 @@
     }
     
     // Map a color from one palette to another by index
-    function remapColor(color, fromPalette, toPalette, nodeIndex = 0) {
+    function remapColor(color, fromPalette, toPalette) {
         const index = fromPalette.findIndex(c => c.toLowerCase() === color.toLowerCase());
         if (index >= 0 && index < toPalette.length) {
             return toPalette[index];
         }
-        // If not found in palette, assign based on node index to ensure variety
-        // Skip index 0 (root color) for non-root nodes
-        const assignedIndex = ((nodeIndex % (toPalette.length - 1)) + 1);
-        return toPalette[assignedIndex];
+        // If not found in palette, return null to signal we need special handling
+        return null;
     }
     
     // Update all node colors for theme change
@@ -2898,17 +2896,38 @@
         
         if (typeof nodes === 'undefined' || !nodes) return;
         
-        let nodeIndex = 0;
+        // First pass: build a map of old colors to new colors
+        // This ensures nodes with the same old color get the same new color
+        const colorMap = new Map();
+        let unmappedColorIndex = 1; // Start at 1 to skip root color
+        
         nodes.forEach((mesh) => {
-            const oldColor = mesh.userData.color;
+            const oldColor = mesh.userData.color?.toLowerCase();
+            if (!oldColor || colorMap.has(oldColor)) return;
+            
+            // Try to find exact match in palette
+            const mappedColor = remapColor(mesh.userData.color, fromPalette, toPalette);
+            if (mappedColor) {
+                colorMap.set(oldColor, mappedColor);
+            } else {
+                // Assign next available color from new palette (skipping root color at index 0)
+                colorMap.set(oldColor, toPalette[unmappedColorIndex % toPalette.length]);
+                unmappedColorIndex++;
+                // Reset to 1 if we've gone through all colors (skip 0 which is root)
+                if (unmappedColorIndex >= toPalette.length) unmappedColorIndex = 1;
+            }
+        });
+        
+        // Second pass: apply the color mapping
+        nodes.forEach((mesh) => {
             let newColor;
             
             // Root node always gets the first color of the new palette
             if (mesh.userData.id === 'mynd') {
                 newColor = toPalette[0];
             } else {
-                newColor = remapColor(oldColor, fromPalette, toPalette, nodeIndex);
-                nodeIndex++;
+                const oldColor = mesh.userData.color?.toLowerCase();
+                newColor = colorMap.get(oldColor) || toPalette[1];
             }
             
             // Always update colors when switching themes
