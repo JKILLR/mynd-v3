@@ -2986,6 +2986,18 @@
                 display: none;
             }
             
+            /* Hide less essential buttons on mobile */
+            #btn-neural,
+            #btn-autocam,
+            #btn-settings {
+                display: none;
+            }
+            
+            /* Hide dividers on mobile */
+            .side-divider {
+                display: none;
+            }
+            
             #info-panel {
                 bottom: calc(var(--space-4) + 70px);
                 width: calc(100vw - 32px);
@@ -3512,8 +3524,8 @@
             Shortcuts
         </div>
         <div class="menu-item" id="menu-voice-settings">
-            <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-            Voice AI Settings
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Settings
         </div>
         <div class="menu-divider"></div>
         <div class="menu-item" id="menu-new">
@@ -3561,6 +3573,10 @@
         <div class="side-btn" id="btn-add" title="Add Node" role="button" aria-label="Add new node">
             <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             <span class="side-btn-label">Add</span>
+        </div>
+        <div class="side-btn" id="btn-link" title="Add Link" role="button" aria-label="Add link from URL">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            <span class="side-btn-label">Link</span>
         </div>
         <div class="side-btn" id="btn-move" title="Move Mode" role="button" aria-label="Toggle move mode for dragging nodes">
             <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
@@ -3651,9 +3667,6 @@
             <input type="text" id="quick-input" placeholder="What's on your mind? Press Enter to add..." autocomplete="off">
             <button class="quick-btn secondary" id="quick-link" title="Add Link" aria-label="Add link from URL">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            </button>
-            <button class="quick-btn secondary" id="quick-ai" title="AI Suggest">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4v1a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M16 15a4 4 0 0 1 4 4v2H4v-2a4 4 0 0 1 4-4h8z"/><circle cx="12" cy="10" r="2"/></svg>
             </button>
             <button class="quick-btn primary" id="quick-add">
                 Add
@@ -9039,14 +9052,6 @@ Use EXACT node labels from the list above. Only include nodes that clearly fit a
         }
     });
 
-    document.getElementById('quick-ai').addEventListener('click', () => {
-        if (selectedNode) {
-            brainstormNode(selectedNode.userData.id);
-        } else {
-            showToast('Select a node first', 'info');
-        }
-    });
-
     // ═══════════════════════════════════════════════════════════════════
     // SIDE PANEL BUTTONS
     // ═══════════════════════════════════════════════════════════════════
@@ -9057,6 +9062,11 @@ Use EXACT node labels from the list above. Only include nodes that clearly fit a
     document.getElementById('btn-add').addEventListener('click', () => {
         const parentId = selectedNode?.userData.id || currentContextId || store.data.id;
         openModal('add', parentId);
+    });
+    
+    // Link button - opens link modal
+    document.getElementById('btn-link').addEventListener('click', () => {
+        LinkManager.open();
     });
     
     // Move mode toggle
