@@ -84,19 +84,19 @@ const CONFIG = {
         minSize: 0.25
     },
 
-    // Layout - greatly increased spacing for large maps with DNA helix effect
+    // Layout - dramatically increased for spiral galaxy effect
     LAYOUT: {
-        level1Radius: 20.0,
-        level1RadiusExpanded: 28,
-        level2Radius: 16.0,
-        level3Radius: 12.0,
-        spreadAngle: Math.PI * 1.8,
-        descendantSpacingFactor: 0.8,
-        maxDescendantPush: 25,
-        // Helix effect parameters
-        helixAmplitude: 3.0,      // Vertical wave amplitude
-        helixFrequency: 0.8,      // How tight the helix winds
-        verticalSpread: 1.5       // Base vertical spacing multiplier
+        level1Radius: 35.0,
+        level1RadiusExpanded: 50,
+        level2Radius: 28.0,
+        level3Radius: 20.0,
+        spreadAngle: Math.PI * 2.0,
+        descendantSpacingFactor: 1.2,
+        maxDescendantPush: 40,
+        // Helix effect parameters - exaggerated for spiral galaxy look
+        helixAmplitude: 12.0,     // Much larger vertical wave amplitude
+        helixFrequency: 1.5,      // Tighter helix winds for more spirals
+        verticalSpread: 3.0       // Larger vertical spacing multiplier
     },
 
     // Animation - consolidated timing constants
