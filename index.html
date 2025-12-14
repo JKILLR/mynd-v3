@@ -24392,37 +24392,33 @@ Return as JSON:
         const PHI = 1.618033988749895; // Golden ratio
         const PHI_INV = 1 / PHI;       // ≈ 0.618
 
-        // Position calculation - radius follows GOLDEN RATIO decay
+        // Position calculation - branch lengths follow GOLDEN RATIO
         let baseRadius;
         if (level === 0) {
             baseRadius = 0;
-        } else if (level === 1) {
-            // Level 1: Moderate distance from root (slightly reduced)
-            baseRadius = CONFIG.LAYOUT.level1Radius * 0.7;
-            // Gentle expansion for descendants
-            if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 1.2;
-            }
-            if (expandedDepth > 1) {
-                baseRadius += Math.sqrt(expandedDepth - 1) * 1.5;
-            }
         } else {
-            // Level 2+: Golden ratio decay - each level is φ^(-n) of base
-            const baseLength = CONFIG.LAYOUT.level2Radius;
-            // Golden ratio decay: smoother, more natural than hyperbolic
-            // Level 2: base, Level 3: base/φ, Level 4: base/φ², etc.
-            baseRadius = baseLength * Math.pow(PHI_INV, level - 2);
+            // All levels use golden ratio decay from a base length
+            // Level 1 and 2 are equal, then decay by φ for each subsequent level
+            const baseBranchLength = 18; // Shorter base for level 1 & 2
 
-            // Small boost for nodes with many descendants
+            if (level <= 2) {
+                baseRadius = baseBranchLength;
+            } else {
+                // Level 3+: Golden ratio decay from level 2
+                // Level 3: base/φ, Level 4: base/φ², etc.
+                baseRadius = baseBranchLength * Math.pow(PHI_INV, level - 2);
+            }
+
+            // Small boost for expanded nodes with descendants
             if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 0.5;
+                baseRadius += Math.sqrt(visibleDescendants) * 0.4;
             }
             if (expandedDepth > 0) {
-                baseRadius += Math.sqrt(expandedDepth) * 0.6;
+                baseRadius += Math.sqrt(expandedDepth) * 0.5;
             }
 
-            // Minimum radius to prevent nodes stacking
-            baseRadius = Math.max(baseRadius, 6);
+            // Minimum radius
+            baseRadius = Math.max(baseRadius, 5);
         }
 
         if (level === 0) {
@@ -24502,15 +24498,19 @@ Return as JSON:
             // This prevents cramping at deeper levels while maintaining general direction
             let availableSector, childSectorStart;
 
+            // Golden ratio for sector expansion
+            const PHI = 1.618033988749895;
+
             if (level === 0) {
                 // Root: full circle
                 availableSector = Math.PI * 2;
                 childSectorStart = -Math.PI;
             } else {
-                // Deeper levels: expand parent's sector significantly to give children breathing room
-                // Much larger expansion factor to prevent cramping
-                const expansionFactor = 1.5 + (level * 0.6); // Level 1: 2.1x, Level 2: 2.7x, Level 3: 3.3x
-                const expandedSector = Math.min(sectorWidth * expansionFactor, Math.PI * 1.6);
+                // GOLDEN RATIO sector expansion
+                // Each level expands by φ to counteract the natural narrowing
+                // This creates a balanced, natural-looking spread
+                const expansionFactor = Math.pow(PHI, level); // φ^1, φ^2, φ^3...
+                const expandedSector = Math.min(sectorWidth * expansionFactor, Math.PI * 1.8);
 
                 // Center the expanded sector on the parent's sector center
                 const sectorCenter = sectorStart + sectorWidth / 2;
