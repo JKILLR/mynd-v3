@@ -24386,39 +24386,38 @@ Return as JSON:
         if (level === 0) {
             baseRadius = 0;
         } else if (level === 1) {
-            // Level 1: Grow with diminishing returns for depth - INCREASED for large maps
+            // Level 1: Much larger spread for big maps
             baseRadius = CONFIG.LAYOUT.level1Radius;
-            baseRadius += Math.max(0, (total - 4) * 1.2);
+            baseRadius += Math.max(0, (total - 4) * 2.0);
 
-            // Diminishing returns for descendants - sqrt gives nice falloff
+            // Descendants push outward more
             if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 1.2;
+                baseRadius += Math.sqrt(visibleDescendants) * 2.0;
             }
-            // Diminishing returns for depth - log-like falloff
             if (expandedDepth > 1) {
-                baseRadius += Math.sqrt(expandedDepth - 1) * 1.5;
+                baseRadius += Math.sqrt(expandedDepth - 1) * 2.5;
             }
         } else if (level === 2) {
-            // Level 2: Similar diminishing returns - INCREASED for large maps
+            // Level 2: Much larger spread
             baseRadius = CONFIG.LAYOUT.level2Radius;
-            baseRadius += Math.max(0, (total - 2) * 1.0);
+            baseRadius += Math.max(0, (total - 2) * 1.8);
 
             if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 1.0;
+                baseRadius += Math.sqrt(visibleDescendants) * 1.8;
             }
             if (expandedDepth > 0) {
-                baseRadius += Math.sqrt(expandedDepth) * 1.2;
+                baseRadius += Math.sqrt(expandedDepth) * 2.0;
             }
         } else {
-            // Level 3+: Scale based on siblings and descendants - INCREASED for large maps
-            baseRadius = Math.max(4.0, CONFIG.LAYOUT.level3Radius - (level - 3) * 0.1);
-            baseRadius += Math.max(0, (total - 2) * 0.8);
+            // Level 3+: Much larger spread with slower falloff
+            baseRadius = Math.max(8.0, CONFIG.LAYOUT.level3Radius - (level - 3) * 0.05);
+            baseRadius += Math.max(0, (total - 2) * 1.5);
 
             if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 0.8;
+                baseRadius += Math.sqrt(visibleDescendants) * 1.5;
             }
             if (expandedDepth > 0) {
-                baseRadius += Math.sqrt(expandedDepth) * 1.0;
+                baseRadius += Math.sqrt(expandedDepth) * 1.8;
             }
         }
         
@@ -24428,38 +24427,40 @@ Return as JSON:
             data.expandedPosition = [0, 0, 0];
             data.branchAngle = 0;
         } else if (level === 1) {
-            // Spread evenly around center
+            // Spread evenly around center with helix effect
             const angleStep = (Math.PI * 2) / Math.max(total, 1);
             const startAngle = -Math.PI / 2;
             const angle = startAngle + angleStep * index;
-            const verticalOffset = (index % 2 === 0 ? 0.3 : -0.3) + (index % 3 - 1) * 0.2;
-            
+
+            // DNA helix effect for level 1 - sine wave based on angle
+            const helixAmp = CONFIG.LAYOUT.helixAmplitude || 3.0;
+            const helixFreq = CONFIG.LAYOUT.helixFrequency || 0.8;
+            const verticalOffset = Math.sin(angle * helixFreq * 2) * helixAmp;
+
             data.basePosition = [Math.cos(angle) * baseRadius, verticalOffset, Math.sin(angle) * baseRadius];
             data.expandedPosition = [...data.basePosition];
             data.position = [...data.basePosition];
             data.branchAngle = angle;
         } else {
-            // Branch outward from parent - USE PARENT'S BRANCH ANGLE, not just position from origin
-            // This ensures children fan out in the direction the branch is going
-            const baseSpread = Math.PI * 0.5;
-            const siblingSpread = Math.min(total * 0.18, Math.PI * 0.5);
-            
+            // Branch outward from parent with DNA helix effect
+            const baseSpread = Math.PI * 0.6;
+            const siblingSpread = Math.min(total * 0.22, Math.PI * 0.6);
+
             // Extra spread if siblings have many descendants
             let descendantSpread = 0;
             if (siblingWeights) {
                 const totalWeight = siblingWeights.reduce((a, b) => a + b, 0);
                 if (totalWeight > total) {
-                    descendantSpread = Math.min((totalWeight - total) * 0.08, Math.PI * 0.3);
+                    descendantSpread = Math.min((totalWeight - total) * 0.12, Math.PI * 0.4);
                 }
             }
-            
-            const spreadAngle = Math.min(baseSpread + siblingSpread + descendantSpread, Math.PI * 1.3);
+
+            const spreadAngle = Math.min(baseSpread + siblingSpread + descendantSpread, Math.PI * 1.5);
             const halfSpread = spreadAngle / 2;
-            
-            // Use the parent's branch angle (direction from grandparent to parent)
-            // This makes children continue outward in the branch direction
+
+            // Use the parent's branch angle
             const outwardAngle = parentAngle;
-            
+
             let childAngle;
             if (total === 1) {
                 childAngle = outwardAngle;
@@ -24474,13 +24475,27 @@ Return as JSON:
                 const anglePosition = (weightBefore + myWeight / 2) / totalWeight;
                 childAngle = outwardAngle - halfSpread + spreadAngle * anglePosition;
             } else {
-                childAngle = outwardAngle - halfSpread + (spreadAngle / (total - 1)) * index;
+                childAngle = outwardAngle - halfSpread + (spreadAngle / Math.max(total - 1, 1)) * index;
             }
-            
-            // Vertical spread scales with siblings
-            const verticalSpacing = 0.4 + Math.min(total * 0.05, 0.3);
-            const verticalOffset = (index - (total - 1) / 2) * verticalSpacing;
-            
+
+            // DNA HELIX EFFECT: Vertical position follows a sine wave based on:
+            // - The child angle (creates spiral as you go around)
+            // - The level (helix continues outward)
+            // - The index within siblings (spreads siblings vertically)
+            const helixAmp = (CONFIG.LAYOUT.helixAmplitude || 3.0) * (1 + level * 0.3);
+            const helixFreq = CONFIG.LAYOUT.helixFrequency || 0.8;
+            const verticalSpread = CONFIG.LAYOUT.verticalSpread || 1.5;
+
+            // Base helix wave from the branch angle
+            const helixWave = Math.sin(childAngle * helixFreq + level * Math.PI * 0.5) * helixAmp;
+
+            // Spread siblings vertically with larger spacing
+            const siblingSpacing = verticalSpread * (1 + Math.min(total * 0.15, 0.8));
+            const siblingOffset = (index - (total - 1) / 2) * siblingSpacing;
+
+            // Combine parent height + helix wave + sibling offset
+            const verticalOffset = helixWave + siblingOffset;
+
             data.basePosition = [
                 parentPos[0] + Math.cos(childAngle) * baseRadius,
                 parentPos[1] + verticalOffset,
@@ -24766,18 +24781,10 @@ Return as JSON:
         label.visible = true;  // All labels visible by default
         mesh.add(label);
         mesh.userData.labelSprite = label;
-        
-        // Context badge (separate sprite to the right of label) for nodes without descriptions
-        const needsContext = data.level > 0 && (!data.description || data.description.trim() === '');
-        mesh.userData.needsContext = needsContext;
-        if (needsContext) {
-            const badge = createContextBadge();
-            // Position to the right of the label
-            const labelWidth = label.scale.x;
-            badge.position.set(labelWidth / 2 + 0.16, labelOffset, 0);
-            mesh.add(badge);
-            mesh.userData.contextBadge = badge;
-        }
+
+        // Context badge DISABLED - removes pulsing question indicators for cleaner map view and better performance
+        // const needsContext = data.level > 0 && (!data.description || data.description.trim() === '');
+        mesh.userData.needsContext = false;
         
         // Store link data if present
         if (data.link) {

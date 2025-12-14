@@ -84,15 +84,19 @@ const CONFIG = {
         minSize: 0.25
     },
 
-    // Layout - increased spacing to prevent overlap in large maps
+    // Layout - greatly increased spacing for large maps with DNA helix effect
     LAYOUT: {
-        level1Radius: 12.0,
-        level1RadiusExpanded: 16,
-        level2Radius: 10.0,
-        level3Radius: 7.0,
-        spreadAngle: Math.PI * 1.6,
-        descendantSpacingFactor: 0.5,
-        maxDescendantPush: 15
+        level1Radius: 20.0,
+        level1RadiusExpanded: 28,
+        level2Radius: 16.0,
+        level3Radius: 12.0,
+        spreadAngle: Math.PI * 1.8,
+        descendantSpacingFactor: 0.8,
+        maxDescendantPush: 25,
+        // Helix effect parameters
+        helixAmplitude: 3.0,      // Vertical wave amplitude
+        helixFrequency: 0.8,      // How tight the helix winds
+        verticalSpread: 1.5       // Base vertical spacing multiplier
     },
 
     // Animation - consolidated timing constants
