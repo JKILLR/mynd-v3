@@ -22,6 +22,11 @@ const GoalRegistry = {
     // Initialize from storage
     async init() {
         try {
+            // NeuralDB may not be available yet (defined in main script)
+            if (typeof NeuralDB === 'undefined') {
+                console.log('Goal registry: NeuralDB not available yet, using empty state');
+                return;
+            }
             const saved = await NeuralDB.load('goal-registry');
             if (saved) {
                 if (saved.goals) {
@@ -40,6 +45,11 @@ const GoalRegistry = {
     // Save to storage
     async save() {
         try {
+            // NeuralDB may not be available
+            if (typeof NeuralDB === 'undefined') {
+                console.warn('Goal registry: Cannot save, NeuralDB not available');
+                return;
+            }
             await NeuralDB.save('goal-registry', {
                 goals: Array.from(this.goals.entries()),
                 milestones: Array.from(this.milestones.entries()),

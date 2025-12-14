@@ -14412,12 +14412,12 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
         // Track how user responds to AI suggestions to improve understanding
 
         // AI feedback patterns
-        aiFeedbackPatterns: {
+        aiFeedbackPatterns = {
             categoryAcceptance: new Map(), // category -> {accepted, rejected, modified}
             modificationPatterns: [], // What users choose instead
             responseTimeByConfidence: [], // [{ confidence, responseTime, action }]
             trustLevel: 0.5 // 0 = distrust AI, 1 = fully trust AI
-        },
+        };
 
         trackAIFeedback(feedback) {
             if (!feedback || feedback.action === 'ignored') return;
