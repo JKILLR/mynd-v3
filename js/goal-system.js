@@ -459,7 +459,7 @@ const GoalUI = {
 
 const GoalVisualization = {
     beacons: new Map(), // goalId -> { mesh, glow, label, rings }
-    baseDistance: 25, // How far goals float from center (visible but distant)
+    baseDistance: 80, // How far goals float from center (distant beacon)
     goalSize: 2.5, // Much larger than normal nodes (normal is ~0.5)
 
     // Create a distant goal beacon
@@ -628,11 +628,11 @@ const GoalVisualization = {
         const goalPos = beacon.position;
 
         // Calculate a camera position that sees the goal
-        // Position camera above and behind the goal, looking toward both map and goal
+        // Position camera high and far back to see the distant beacon
         const cameraGoalView = new THREE.Vector3(
-            goalPos.x * 0.6, // Between center and goal
-            goalPos.y + 20,   // High up to see both
-            goalPos.z * 0.6 + 15 // Behind and to side
+            goalPos.x * 0.4, // Between center and goal
+            goalPos.y + 60,   // Very high up to see both
+            goalPos.z * 0.4 + 40 // Far behind to see the distance
         );
 
         // Target point between center and goal
