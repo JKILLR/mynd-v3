@@ -14417,7 +14417,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
             modificationPatterns: [], // What users choose instead
             responseTimeByConfidence: [], // [{ confidence, responseTime, action }]
             trustLevel: 0.5 // 0 = distrust AI, 1 = fully trust AI
-        };
+        }
 
         trackAIFeedback(feedback) {
             if (!feedback || feedback.action === 'ignored') return;
@@ -14477,7 +14477,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
             this.scheduleSave();
 
             console.log(`📊 MetaLearner: AI feedback tracked (${action}, trust: ${this.aiFeedbackPatterns.trustLevel.toFixed(2)})`);
-        },
+        }
 
         updateAITrustLevel(action) {
             // Adjust trust based on action
@@ -14491,7 +14491,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
             this.aiFeedbackPatterns.trustLevel = Math.max(0.1, Math.min(0.95,
                 this.aiFeedbackPatterns.trustLevel + delta
             ));
-        },
+        }
 
         // Get insights about AI feedback patterns for prompts
         getAIFeedbackInsights() {
@@ -14525,7 +14525,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 commonModifications: commonMods,
                 totalFeedback: patterns.responseTimeByConfidence.length
             };
-        },
+        }
 
         // Analyze session rhythm
         analyzeSessionRhythm() {
