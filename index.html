@@ -651,14 +651,18 @@
                 backdrop-filter: blur(var(--glass-blur));
                 border: 1px solid var(--glass-border);
                 border-radius: 24px;
-                box-shadow: var(--shadow-md);
+                box-shadow:
+                    var(--shadow-md),
+                    0 0 0 1px rgba(255, 255, 255, 0.1),
+                    0 0 20px rgba(255, 255, 255, 0.07);
                 overflow: hidden;
             }
 
             /* Left: Menu button as circle */
             .mobile-search-menu {
-                width: 48px;
-                height: 48px;
+                width: 40px;
+                height: 40px;
+                margin: 4px;
                 border-radius: 50%;
                 background: var(--bg-tertiary);
                 border: none;
@@ -669,6 +673,9 @@
                 cursor: pointer;
                 transition: all var(--duration-fast);
                 flex-shrink: 0;
+                box-shadow:
+                    0 0 0 1px rgba(255, 255, 255, 0.15),
+                    0 0 12px rgba(255, 255, 255, 0.05);
             }
 
             .mobile-search-menu:active {
@@ -677,8 +684,8 @@
             }
 
             .mobile-search-menu svg {
-                width: 20px;
-                height: 20px;
+                width: 18px;
+                height: 18px;
                 stroke-width: 2;
             }
 
@@ -702,8 +709,9 @@
             /* Right: User avatar as circle */
             .mobile-search-user {
                 position: relative;
-                width: 48px;
-                height: 48px;
+                width: 40px;
+                height: 40px;
+                margin: 4px;
                 border-radius: 50%;
                 background: var(--accent);
                 border: none;
@@ -713,6 +721,9 @@
                 cursor: pointer;
                 transition: all var(--duration-fast);
                 flex-shrink: 0;
+                box-shadow:
+                    0 0 0 1px rgba(255, 255, 255, 0.2),
+                    0 0 12px rgba(255, 255, 255, 0.08);
             }
 
             .mobile-search-user:active {
@@ -749,14 +760,15 @@
                 background: #22c55e;
             }
 
-            /* Floating action buttons - positioned below avatar */
+            /* Floating action buttons - centered below avatar */
             #mobile-floating-actions {
                 display: flex;
                 flex-direction: column;
+                align-items: center;
                 gap: 10px;
                 position: fixed;
-                right: var(--space-4);
-                top: calc(env(safe-area-inset-top, 8px) + 82px);
+                right: calc(var(--space-4) + 2px);
+                top: calc(env(safe-area-inset-top, 8px) + 90px);
                 z-index: var(--z-ui);
             }
 
@@ -767,7 +779,10 @@
                 background: var(--glass-bg);
                 backdrop-filter: blur(var(--glass-blur));
                 border: 1px solid var(--glass-border);
-                box-shadow: var(--shadow-md);
+                box-shadow:
+                    var(--shadow-md),
+                    0 0 0 1px rgba(255, 255, 255, 0.1),
+                    0 0 16px rgba(255, 255, 255, 0.06);
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -7030,15 +7045,15 @@
 
     <!-- Floating Action Buttons (right side, below search bar) -->
     <div id="mobile-floating-actions">
+        <button class="mobile-fab" id="mobile-undo-btn" aria-label="Undo" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
+            </svg>
+        </button>
         <button class="mobile-fab" id="mobile-theme-btn" aria-label="Theme">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="4"/>
                 <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
-            </svg>
-        </button>
-        <button class="mobile-fab" id="mobile-undo-btn" aria-label="Undo" disabled>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
             </svg>
         </button>
     </div>
