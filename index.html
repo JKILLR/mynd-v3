@@ -24320,40 +24320,39 @@ Return as JSON:
         if (level === 0) {
             baseRadius = 0;
         } else if (level === 1) {
-            // Level 1: Grow with diminishing returns for depth
+            // Level 1: Grow with diminishing returns for depth - INCREASED for large maps
             baseRadius = CONFIG.LAYOUT.level1Radius;
-            baseRadius += Math.max(0, (total - 4) * 0.6);
-            
+            baseRadius += Math.max(0, (total - 4) * 1.2);
+
             // Diminishing returns for descendants - sqrt gives nice falloff
             if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 0.6;
+                baseRadius += Math.sqrt(visibleDescendants) * 1.2;
             }
             // Diminishing returns for depth - log-like falloff
             if (expandedDepth > 1) {
-                // depth 2: +0.8, depth 3: +1.27, depth 4: +1.6, depth 5: +1.86
-                baseRadius += Math.sqrt(expandedDepth - 1) * 0.8;
+                baseRadius += Math.sqrt(expandedDepth - 1) * 1.5;
             }
         } else if (level === 2) {
-            // Level 2: Similar diminishing returns
+            // Level 2: Similar diminishing returns - INCREASED for large maps
             baseRadius = CONFIG.LAYOUT.level2Radius;
-            baseRadius += Math.max(0, (total - 2) * 0.5);
-            
+            baseRadius += Math.max(0, (total - 2) * 1.0);
+
             if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 0.5;
+                baseRadius += Math.sqrt(visibleDescendants) * 1.0;
             }
             if (expandedDepth > 0) {
-                baseRadius += Math.sqrt(expandedDepth) * 0.6;
+                baseRadius += Math.sqrt(expandedDepth) * 1.2;
             }
         } else {
-            // Level 3+: Scale based on siblings and descendants with diminishing returns
-            baseRadius = Math.max(2.5, CONFIG.LAYOUT.level3Radius - (level - 3) * 0.15);
-            baseRadius += Math.max(0, (total - 2) * 0.4);
-            
+            // Level 3+: Scale based on siblings and descendants - INCREASED for large maps
+            baseRadius = Math.max(4.0, CONFIG.LAYOUT.level3Radius - (level - 3) * 0.1);
+            baseRadius += Math.max(0, (total - 2) * 0.8);
+
             if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 0.4;
+                baseRadius += Math.sqrt(visibleDescendants) * 0.8;
             }
             if (expandedDepth > 0) {
-                baseRadius += Math.sqrt(expandedDepth) * 0.5;
+                baseRadius += Math.sqrt(expandedDepth) * 1.0;
             }
         }
         
@@ -25447,12 +25446,12 @@ Return as JSON:
 
     function expandAll() {
         const isMobile = window.innerWidth <= 768;
-        
+
         // Start zooming out immediately on mobile
         if (isMobile) {
             zoomToFitMap(25);
         }
-        
+
         // Get all nodes that need expanding, sorted by level (shallowest first)
         const toExpand = [];
         nodes.forEach(mesh => {
@@ -25460,43 +25459,54 @@ Return as JSON:
                 toExpand.push(mesh);
             }
         });
-        
+
         if (toExpand.length === 0) {
             showToast('All nodes already expanded', 'info');
             // Still zoom out to show entire map
             if (!isMobile) zoomToFitMap(15);
             return;
         }
-        
+
         // Sort by level (shallowest first)
         toExpand.sort((a, b) => (a.userData.level || 0) - (b.userData.level || 0));
-        
-        // Slower stagger on mobile to reduce lag
-        const staggerTime = isMobile ? 150 : 60;
-        
-        // Expand with staggered animation
-        toExpand.forEach((mesh, index) => {
-            setTimeout(() => {
-                if (!mesh.userData.isExpanded) {
-                    expandNode(mesh, true);
+
+        // SEQUENTIAL EXPANSION: Much slower stagger for large maps to prevent memory issues
+        // Scale stagger time with map size for smoother performance
+        const baseStagger = isMobile ? 200 : 100;
+        const staggerTime = toExpand.length > 100 ? baseStagger * 2 :
+                           toExpand.length > 50 ? baseStagger * 1.5 : baseStagger;
+
+        // Expand ONE node at a time with proper spacing
+        let expandIndex = 0;
+        function expandNext() {
+            if (expandIndex >= toExpand.length) {
+                // Done - zoom to fit
+                if (autoCameraEnabled) {
+                    setTimeout(() => zoomToFitMap(15), 500);
                 }
-            }, index * staggerTime);
-        });
-        
-        // Zoom out again at the end for desktop or if auto camera is enabled
-        if (!isMobile && autoCameraEnabled) {
-            const totalDuration = toExpand.length * staggerTime;
-            setTimeout(() => {
-                zoomToFitMap(15);
-            }, Math.min(totalDuration + 200, 1500));
+                return;
+            }
+
+            const mesh = toExpand[expandIndex];
+            if (!mesh.userData.isExpanded) {
+                expandNode(mesh, true);
+            }
+            expandIndex++;
+
+            // Schedule next expansion
+            setTimeout(expandNext, staggerTime);
         }
-        
-        showToast('Expanding all nodes...', 'success');
+
+        // Start sequential expansion
+        expandNext();
+
+        const estimatedTime = Math.round((toExpand.length * staggerTime) / 1000);
+        showToast(`Expanding ${toExpand.length} nodes (~${estimatedTime}s)...`, 'success');
     }
 
     function collapseAll() {
         const isMobile = window.innerWidth <= 768;
-        
+
         // Get all expanded nodes, sorted by level (deepest first for proper collapse order)
         // Skip root node (level 0) - keep level 1 nodes visible but collapse their children
         const toCollapse = [];
@@ -25506,36 +25516,45 @@ Return as JSON:
                 toCollapse.push(mesh);
             }
         });
-        
+
         if (toCollapse.length === 0) {
             showToast('Already collapsed', 'info');
             return;
         }
-        
+
         // Sort by level descending (deepest first)
         toCollapse.sort((a, b) => (b.userData.level || 0) - (a.userData.level || 0));
-        
-        // Slower stagger on mobile
-        const staggerTime = isMobile ? 100 : 50;
-        
-        // Collapse with staggered animation
-        toCollapse.forEach((mesh, index) => {
-            setTimeout(() => {
-                if (mesh.userData.isExpanded) {
-                    collapseNode(mesh, true);
+
+        // SEQUENTIAL COLLAPSE: Scale stagger with map size
+        const baseStagger = isMobile ? 80 : 40;
+        const staggerTime = toCollapse.length > 100 ? baseStagger * 2 :
+                           toCollapse.length > 50 ? baseStagger * 1.5 : baseStagger;
+
+        // Collapse ONE node at a time
+        let collapseIndex = 0;
+        function collapseNext() {
+            if (collapseIndex >= toCollapse.length) {
+                // Done - zoom to fit
+                if (autoCameraEnabled) {
+                    setTimeout(() => zoomToFitMap(0), 500);
                 }
-            }, index * staggerTime);
-        });
-        
-        // Zoom to fit after collapse (only if auto camera is enabled)
-        if (autoCameraEnabled) {
-            const totalDuration = toCollapse.length * staggerTime;
-            setTimeout(() => {
-                zoomToFitMap(0);
-            }, Math.min(totalDuration + 500, 2000));
+                return;
+            }
+
+            const mesh = toCollapse[collapseIndex];
+            if (mesh.userData.isExpanded) {
+                collapseNode(mesh, true);
+            }
+            collapseIndex++;
+
+            // Schedule next collapse
+            setTimeout(collapseNext, staggerTime);
         }
-        
-        showToast('Collapsing nodes...', 'success');
+
+        // Start sequential collapse
+        collapseNext();
+
+        showToast(`Collapsing ${toCollapse.length} nodes...`, 'success');
     }
 
     // Label decluttering - hide labels that overlap with others
