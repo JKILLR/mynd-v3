@@ -459,7 +459,7 @@ const GoalUI = {
 
 const GoalVisualization = {
     beacons: new Map(), // goalId -> { mesh, glow, label, rings }
-    baseDistance: 80, // How far goals float from center
+    baseDistance: 25, // How far goals float from center (visible but distant)
     goalSize: 2.5, // Much larger than normal nodes (normal is ~0.5)
 
     // Create a distant goal beacon
@@ -624,16 +624,26 @@ const GoalVisualization = {
         const originalTarget = controls.target.clone();
         const originalPosition = camera.position.clone();
 
-        // Calculate a position that shows both the map and the goal
+        // Calculate where the goal is
         const goalPos = beacon.position;
-        const midpoint = new THREE.Vector3().lerpVectors(
-            originalTarget,
-            goalPos,
-            0.3 // Look 30% toward the goal
+
+        // Calculate a camera position that sees the goal
+        // Position camera above and behind the goal, looking toward both map and goal
+        const cameraGoalView = new THREE.Vector3(
+            goalPos.x * 0.6, // Between center and goal
+            goalPos.y + 20,   // High up to see both
+            goalPos.z * 0.6 + 15 // Behind and to side
         );
 
-        // Animate to show the goal
-        const duration = 2000;
+        // Target point between center and goal
+        const midTarget = new THREE.Vector3().lerpVectors(
+            originalTarget,
+            goalPos,
+            0.5 // Look at point between map and goal
+        );
+
+        // Animate in three phases: zoom out, hold, return
+        const duration = 4000;
         const startTime = Date.now();
 
         const animateReveal = () => {
@@ -643,14 +653,24 @@ const GoalVisualization = {
             // Smooth easing
             const ease = 1 - Math.pow(1 - progress, 3);
 
-            if (progress < 0.5) {
-                // First half: pan toward goal
-                const panProgress = ease * 2;
-                controls.target.lerpVectors(originalTarget, midpoint, panProgress);
+            if (progress < 0.4) {
+                // Phase 1: Zoom out and pan to see goal (40%)
+                const phaseProgress = progress / 0.4;
+                const smoothPhase = 1 - Math.pow(1 - phaseProgress, 2);
+
+                camera.position.lerpVectors(originalPosition, cameraGoalView, smoothPhase);
+                controls.target.lerpVectors(originalTarget, midTarget, smoothPhase);
+            } else if (progress < 0.7) {
+                // Phase 2: Hold view on goal (30%)
+                camera.position.copy(cameraGoalView);
+                controls.target.copy(midTarget);
             } else {
-                // Second half: pan back but keep goal visible
-                const returnProgress = (ease - 0.5) * 2;
-                controls.target.lerpVectors(midpoint, originalTarget, returnProgress);
+                // Phase 3: Return to original view (30%)
+                const phaseProgress = (progress - 0.7) / 0.3;
+                const smoothPhase = phaseProgress * phaseProgress; // Ease in
+
+                camera.position.lerpVectors(cameraGoalView, originalPosition, smoothPhase);
+                controls.target.lerpVectors(midTarget, originalTarget, smoothPhase);
             }
 
             controls.update();
@@ -661,7 +681,7 @@ const GoalVisualization = {
         };
 
         // Start after a brief delay
-        setTimeout(animateReveal, 500);
+        setTimeout(animateReveal, 300);
     },
 
     // Update all beacons (called in animation loop)
