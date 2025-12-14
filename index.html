@@ -31786,7 +31786,7 @@ Respond with JSON only:`;
     // Export actions
     const handleExport = () => {
         userDropdown.close();
-        const data = store.export();
+        const data = store.exportJSON();
         const blob = new Blob([data], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -38157,9 +38157,9 @@ Summary:`
                     
                 case 'export':
                     // Export map as JSON
-                    console.log('Export action - store:', typeof store, store?.export);
-                    if (typeof store !== 'undefined' && store.export) {
-                        const data = store.export();
+                    console.log('Export action - store:', typeof store, store?.exportJSON);
+                    if (typeof store !== 'undefined' && store.exportJSON) {
+                        const data = store.exportJSON();
                         const blob = new Blob([data], { type: 'application/json' });
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
