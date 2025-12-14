@@ -24386,38 +24386,38 @@ Return as JSON:
         if (level === 0) {
             baseRadius = 0;
         } else if (level === 1) {
-            // Level 1: Much larger spread for big maps
+            // Level 1: Dramatically larger spread for spiral galaxy effect
             baseRadius = CONFIG.LAYOUT.level1Radius;
-            baseRadius += Math.max(0, (total - 4) * 2.0);
+            baseRadius += Math.max(0, (total - 4) * 3.0);
 
-            // Descendants push outward more
+            // Descendants push outward significantly more
+            if (isExpanded && visibleDescendants > 0) {
+                baseRadius += Math.sqrt(visibleDescendants) * 3.5;
+            }
+            if (expandedDepth > 1) {
+                baseRadius += Math.sqrt(expandedDepth - 1) * 4.0;
+            }
+        } else if (level === 2) {
+            // Level 2: Large spread
+            baseRadius = CONFIG.LAYOUT.level2Radius;
+            baseRadius += Math.max(0, (total - 2) * 2.5);
+
+            if (isExpanded && visibleDescendants > 0) {
+                baseRadius += Math.sqrt(visibleDescendants) * 2.5;
+            }
+            if (expandedDepth > 0) {
+                baseRadius += Math.sqrt(expandedDepth) * 3.0;
+            }
+        } else {
+            // Level 3+: Good spread with gradual falloff
+            baseRadius = Math.max(12.0, CONFIG.LAYOUT.level3Radius - (level - 3) * 0.03);
+            baseRadius += Math.max(0, (total - 2) * 2.0);
+
             if (isExpanded && visibleDescendants > 0) {
                 baseRadius += Math.sqrt(visibleDescendants) * 2.0;
             }
-            if (expandedDepth > 1) {
-                baseRadius += Math.sqrt(expandedDepth - 1) * 2.5;
-            }
-        } else if (level === 2) {
-            // Level 2: Much larger spread
-            baseRadius = CONFIG.LAYOUT.level2Radius;
-            baseRadius += Math.max(0, (total - 2) * 1.8);
-
-            if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 1.8;
-            }
             if (expandedDepth > 0) {
-                baseRadius += Math.sqrt(expandedDepth) * 2.0;
-            }
-        } else {
-            // Level 3+: Much larger spread with slower falloff
-            baseRadius = Math.max(8.0, CONFIG.LAYOUT.level3Radius - (level - 3) * 0.05);
-            baseRadius += Math.max(0, (total - 2) * 1.5);
-
-            if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 1.5;
-            }
-            if (expandedDepth > 0) {
-                baseRadius += Math.sqrt(expandedDepth) * 1.8;
+                baseRadius += Math.sqrt(expandedDepth) * 2.5;
             }
         }
         
@@ -24427,16 +24427,16 @@ Return as JSON:
             data.expandedPosition = [0, 0, 0];
             data.branchAngle = 0;
         } else if (level === 1) {
-            // Spread evenly around center with helix effect
+            // Spread evenly around center with DRAMATIC spiral galaxy helix effect
             const angleStep = (Math.PI * 2) / Math.max(total, 1);
             const startAngle = -Math.PI / 2;
             const angle = startAngle + angleStep * index;
 
-            // DNA helix effect for level 1 - amplitude INCREASES as more layers expand below
-            const baseHelixAmp = CONFIG.LAYOUT.helixAmplitude || 3.0;
-            const helixFreq = CONFIG.LAYOUT.helixFrequency || 0.8;
-            // More expanded depth = more vertical spread at root level
-            const depthMultiplier = 1 + (expandedDepth * 0.6);
+            // Dramatic helix for level 1 - amplitude INCREASES significantly as map expands
+            const baseHelixAmp = CONFIG.LAYOUT.helixAmplitude || 12.0;
+            const helixFreq = CONFIG.LAYOUT.helixFrequency || 1.5;
+            // Much stronger depth multiplier for dramatic vertical spread
+            const depthMultiplier = 1 + (expandedDepth * 1.2);
             const helixAmp = baseHelixAmp * depthMultiplier;
             const verticalOffset = Math.sin(angle * helixFreq * 2) * helixAmp;
 
