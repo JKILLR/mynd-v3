@@ -24428,25 +24428,27 @@ Return as JSON:
             // Position at center of this node's sector
             const angle = sectorCenter;
 
-            // Helix effect - amplitude decreases with level, increases with expansion depth
+            // Helix effect - ONLY significant for level 1
+            // Deeper levels should flatten out, not compound the vertical offset
             const baseHelixAmp = CONFIG.LAYOUT.helixAmplitude || 12.0;
             const helixFreq = CONFIG.LAYOUT.helixFrequency || 1.5;
 
-            // Level 1 gets full amplitude, deeper levels decay exponentially
-            const levelDecay = level === 1 ? 1.0 : Math.pow(0.5, level - 1);
-            // Expansion below increases amplitude
-            const depthBoost = 1 + (expandedDepth * (level === 1 ? 1.2 : 0.4));
-            const helixAmp = baseHelixAmp * levelDecay * depthBoost;
+            let verticalOffset = 0;
 
-            // Vertical offset from helix wave
-            let verticalOffset = Math.sin(angle * helixFreq * 2) * helixAmp;
-
-            // For deeper levels, add vertical spread for siblings
-            if (level > 1 && total > 1) {
-                const verticalSpread = CONFIG.LAYOUT.verticalSpread || 3.0;
-                const siblingSpacing = verticalSpread * (1 + Math.min(total * 0.1, 0.5));
-                const siblingOffset = (index - (total - 1) / 2) * siblingSpacing;
-                verticalOffset += siblingOffset;
+            if (level === 1) {
+                // Level 1: Full helix - this sets the vertical position of each main branch
+                const depthBoost = 1 + (expandedDepth * 1.2);
+                const helixAmp = baseHelixAmp * depthBoost;
+                verticalOffset = Math.sin(angle * helixFreq * 2) * helixAmp;
+            } else {
+                // Level 2+: Only small sibling vertical spread, NO helix compounding
+                if (total > 1) {
+                    const verticalSpread = CONFIG.LAYOUT.verticalSpread || 3.0;
+                    // Reduce spread at deeper levels
+                    const levelFactor = 1 / (1 + (level - 2) * 0.3);
+                    const siblingSpacing = verticalSpread * levelFactor * (1 + Math.min(total * 0.08, 0.4));
+                    verticalOffset = (index - (total - 1) / 2) * siblingSpacing;
+                }
             }
 
             // For level 1, position from origin. For deeper, position from parent.
@@ -24457,9 +24459,12 @@ Return as JSON:
                     Math.sin(angle) * baseRadius
                 ];
             } else {
+                // Level 2+: Gradually reduce inheritance of parent's Y position
+                // This flattens clusters instead of compounding the tilt
+                const yInheritance = level === 2 ? 0.6 : Math.pow(0.7, level - 2);
                 data.basePosition = [
                     parentPos[0] + Math.cos(angle) * baseRadius,
-                    parentPos[1] + verticalOffset,
+                    parentPos[1] * yInheritance + verticalOffset,
                     parentPos[2] + Math.sin(angle) * baseRadius
                 ];
             }
@@ -24497,10 +24502,10 @@ Return as JSON:
                 availableSector = Math.PI * 2;
                 childSectorStart = -Math.PI;
             } else {
-                // Deeper levels: expand parent's sector to give children breathing room
-                // Expansion factor increases with level to counteract sector narrowing
-                const expansionFactor = 1 + (level * 0.4); // Level 1: 1.4x, Level 2: 1.8x, etc.
-                const expandedSector = Math.min(sectorWidth * expansionFactor, Math.PI * 1.2);
+                // Deeper levels: expand parent's sector significantly to give children breathing room
+                // Much larger expansion factor to prevent cramping
+                const expansionFactor = 1.5 + (level * 0.6); // Level 1: 2.1x, Level 2: 2.7x, Level 3: 3.3x
+                const expandedSector = Math.min(sectorWidth * expansionFactor, Math.PI * 1.6);
 
                 // Center the expanded sector on the parent's sector center
                 const sectorCenter = sectorStart + sectorWidth / 2;
