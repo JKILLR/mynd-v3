@@ -84,15 +84,15 @@ const CONFIG = {
         minSize: 0.25
     },
 
-    // Layout
+    // Layout - increased spacing to prevent overlap in large maps
     LAYOUT: {
-        level1Radius: 6.0,
-        level1RadiusExpanded: 8,
-        level2Radius: 5.5,
-        level3Radius: 4.0,
-        spreadAngle: Math.PI * 1.2,
-        descendantSpacingFactor: 0.25,
-        maxDescendantPush: 7
+        level1Radius: 12.0,
+        level1RadiusExpanded: 16,
+        level2Radius: 10.0,
+        level3Radius: 7.0,
+        spreadAngle: Math.PI * 1.6,
+        descendantSpacingFactor: 0.5,
+        maxDescendantPush: 15
     },
 
     // Animation - consolidated timing constants
