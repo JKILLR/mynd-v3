@@ -24365,175 +24365,159 @@ Return as JSON:
         return maxDepth;
     }
 
-    function calculatePositions(data, parentPos = [0, 0, 0], level = 0, parentAngle = 0, total = 1, index = 0, siblingWeights = null) {
+    // SECTOR-BASED LAYOUT: Each branch owns an angular sector, children stay within parent's sector
+    function calculatePositions(data, parentPos = [0, 0, 0], level = 0, sectorStart = 0, sectorEnd = Math.PI * 2, total = 1, index = 0) {
         data.level = level;
-        
+
         // Size based on level - smaller for deeper nodes
         if (level === 0) data.size = CONFIG.NODE_SIZES.root;
         else if (level === 1) data.size = CONFIG.NODE_SIZES.level1;
         else if (level === 2) data.size = CONFIG.NODE_SIZES.level2;
         else data.size = Math.max(0.25, CONFIG.NODE_SIZES.default - (level - 3) * 0.06);
-        
+
         // Check descendants for spacing
-        const hasChildren = data.children && data.children.length > 0;
-        const childCount = hasChildren ? data.children.length : 0;
         const isExpanded = store.expandedNodes.has(data.id);
         const visibleDescendants = countVisibleDescendants(data);
         const expandedDepth = getExpandedDepth(data);
-        
-        // Position calculation
+
+        // Calculate this node's angle (center of its sector)
+        const sectorWidth = sectorEnd - sectorStart;
+        const sectorCenter = sectorStart + sectorWidth / 2;
+
+        // Store sector bounds for children to inherit
+        data.sectorStart = sectorStart;
+        data.sectorEnd = sectorEnd;
+
+        // Position calculation - radius increases with level
+        // Also increases when sector is narrow (to maintain spacing)
         let baseRadius;
         if (level === 0) {
             baseRadius = 0;
         } else if (level === 1) {
-            // Level 1: Dramatically larger spread for spiral galaxy effect
             baseRadius = CONFIG.LAYOUT.level1Radius;
-            baseRadius += Math.max(0, (total - 4) * 3.0);
-
-            // Descendants push outward significantly more
-            if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 3.5;
-            }
-            if (expandedDepth > 1) {
-                baseRadius += Math.sqrt(expandedDepth - 1) * 4.0;
-            }
-        } else if (level === 2) {
-            // Level 2: Large spread
-            baseRadius = CONFIG.LAYOUT.level2Radius;
-            baseRadius += Math.max(0, (total - 2) * 2.5);
-
+            // Push out based on how many descendants (more descendants = needs more space)
             if (isExpanded && visibleDescendants > 0) {
                 baseRadius += Math.sqrt(visibleDescendants) * 2.5;
             }
-            if (expandedDepth > 0) {
-                baseRadius += Math.sqrt(expandedDepth) * 3.0;
+            if (expandedDepth > 1) {
+                baseRadius += Math.sqrt(expandedDepth - 1) * 3.0;
             }
         } else {
-            // Level 3+: Good spread with gradual falloff
-            baseRadius = Math.max(12.0, CONFIG.LAYOUT.level3Radius - (level - 3) * 0.03);
-            baseRadius += Math.max(0, (total - 2) * 2.0);
+            // Level 2+: Base radius increases with level to spread branches outward
+            const levelRadius = level === 2 ? CONFIG.LAYOUT.level2Radius : CONFIG.LAYOUT.level3Radius;
+            baseRadius = levelRadius + (level - 2) * 8; // Increase radius with each level
 
+            // Compensate for narrow sectors - narrower sector = push further out
+            const sectorNarrowness = (Math.PI * 2) / Math.max(sectorWidth, 0.1);
+            baseRadius += Math.log(sectorNarrowness + 1) * 6;
+
+            // Extra push for nodes with many descendants
             if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 2.0;
+                baseRadius += Math.sqrt(visibleDescendants) * 1.5;
             }
             if (expandedDepth > 0) {
-                baseRadius += Math.sqrt(expandedDepth) * 2.5;
+                baseRadius += Math.sqrt(expandedDepth) * 2.0;
             }
         }
-        
+
         if (level === 0) {
             data.position = [0, 0, 0];
             data.basePosition = [0, 0, 0];
             data.expandedPosition = [0, 0, 0];
             data.branchAngle = 0;
-        } else if (level === 1) {
-            // Spread evenly around center with DRAMATIC spiral galaxy helix effect
-            const angleStep = (Math.PI * 2) / Math.max(total, 1);
-            const startAngle = -Math.PI / 2;
-            const angle = startAngle + angleStep * index;
+        } else {
+            // Position at center of this node's sector
+            const angle = sectorCenter;
 
-            // Dramatic helix for level 1 - amplitude INCREASES significantly as map expands
+            // Helix effect - amplitude decreases with level, increases with expansion depth
             const baseHelixAmp = CONFIG.LAYOUT.helixAmplitude || 12.0;
             const helixFreq = CONFIG.LAYOUT.helixFrequency || 1.5;
-            // Much stronger depth multiplier for dramatic vertical spread
-            const depthMultiplier = 1 + (expandedDepth * 1.2);
-            const helixAmp = baseHelixAmp * depthMultiplier;
-            const verticalOffset = Math.sin(angle * helixFreq * 2) * helixAmp;
 
-            data.basePosition = [Math.cos(angle) * baseRadius, verticalOffset, Math.sin(angle) * baseRadius];
+            // Level 1 gets full amplitude, deeper levels decay exponentially
+            const levelDecay = level === 1 ? 1.0 : Math.pow(0.5, level - 1);
+            // Expansion below increases amplitude
+            const depthBoost = 1 + (expandedDepth * (level === 1 ? 1.2 : 0.4));
+            const helixAmp = baseHelixAmp * levelDecay * depthBoost;
+
+            // Vertical offset from helix wave
+            let verticalOffset = Math.sin(angle * helixFreq * 2) * helixAmp;
+
+            // For deeper levels, add vertical spread for siblings
+            if (level > 1 && total > 1) {
+                const verticalSpread = CONFIG.LAYOUT.verticalSpread || 3.0;
+                const siblingSpacing = verticalSpread * (1 + Math.min(total * 0.1, 0.5));
+                const siblingOffset = (index - (total - 1) / 2) * siblingSpacing;
+                verticalOffset += siblingOffset;
+            }
+
+            // For level 1, position from origin. For deeper, position from parent.
+            if (level === 1) {
+                data.basePosition = [
+                    Math.cos(angle) * baseRadius,
+                    verticalOffset,
+                    Math.sin(angle) * baseRadius
+                ];
+            } else {
+                data.basePosition = [
+                    parentPos[0] + Math.cos(angle) * baseRadius,
+                    parentPos[1] + verticalOffset,
+                    parentPos[2] + Math.sin(angle) * baseRadius
+                ];
+            }
+
             data.expandedPosition = [...data.basePosition];
             data.position = [...data.basePosition];
             data.branchAngle = angle;
-        } else {
-            // Branch outward from parent with DNA helix effect
-            const baseSpread = Math.PI * 0.6;
-            const siblingSpread = Math.min(total * 0.22, Math.PI * 0.6);
-
-            // Extra spread if siblings have many descendants
-            let descendantSpread = 0;
-            if (siblingWeights) {
-                const totalWeight = siblingWeights.reduce((a, b) => a + b, 0);
-                if (totalWeight > total) {
-                    descendantSpread = Math.min((totalWeight - total) * 0.12, Math.PI * 0.4);
-                }
-            }
-
-            const spreadAngle = Math.min(baseSpread + siblingSpread + descendantSpread, Math.PI * 1.5);
-            const halfSpread = spreadAngle / 2;
-
-            // Use the parent's branch angle
-            const outwardAngle = parentAngle;
-
-            let childAngle;
-            if (total === 1) {
-                childAngle = outwardAngle;
-            } else if (siblingWeights && siblingWeights.length === total) {
-                // Distribute angle proportionally to weight
-                const totalWeight = siblingWeights.reduce((a, b) => a + b, 0);
-                let weightBefore = 0;
-                for (let i = 0; i < index; i++) {
-                    weightBefore += siblingWeights[i];
-                }
-                const myWeight = siblingWeights[index];
-                const anglePosition = (weightBefore + myWeight / 2) / totalWeight;
-                childAngle = outwardAngle - halfSpread + spreadAngle * anglePosition;
-            } else {
-                childAngle = outwardAngle - halfSpread + (spreadAngle / Math.max(total - 1, 1)) * index;
-            }
-
-            // DNA HELIX EFFECT: Vertical amplitude behavior:
-            // - DECREASES with level (deeper nodes = less vertical wave)
-            // - INCREASES with expandedDepth (nodes with more expansion below spread more)
-            const baseHelixAmp = CONFIG.LAYOUT.helixAmplitude || 3.0;
-            const helixFreq = CONFIG.LAYOUT.helixFrequency || 0.8;
-            const verticalSpread = CONFIG.LAYOUT.verticalSpread || 1.5;
-
-            // Level decay: amplitude decreases exponentially as we go deeper
-            const levelDecay = Math.pow(0.6, level - 1);
-            // Depth boost: amplitude increases when there's more expansion below
-            const depthBoost = 1 + (expandedDepth * 0.5);
-            const helixAmp = baseHelixAmp * levelDecay * depthBoost;
-
-            // Base helix wave from the branch angle
-            const helixWave = Math.sin(childAngle * helixFreq + level * Math.PI * 0.5) * helixAmp;
-
-            // Spread siblings vertically - also scales with depth boost
-            const siblingSpacing = verticalSpread * (1 + Math.min(total * 0.15, 0.8)) * Math.sqrt(depthBoost);
-            const siblingOffset = (index - (total - 1) / 2) * siblingSpacing;
-
-            // Combine parent height + helix wave + sibling offset
-            const verticalOffset = helixWave + siblingOffset;
-
-            data.basePosition = [
-                parentPos[0] + Math.cos(childAngle) * baseRadius,
-                parentPos[1] + verticalOffset,
-                parentPos[2] + Math.sin(childAngle) * baseRadius
-            ];
-            data.expandedPosition = [...data.basePosition];
-            data.position = [...data.basePosition];
-            data.branchAngle = childAngle;
         }
-        
+
         // If node has a custom position (from move mode), use it instead
         if (data.customPosition && level > 0) {
             data.position = [data.customPosition.x, data.customPosition.y, data.customPosition.z];
             data.basePosition = [...data.position];
             data.expandedPosition = [...data.position];
         }
-        
-        // Recursively process children (using potentially custom position as parent)
-        // Calculate weights for children based on their descendants
+
+        // Recursively process children - DIVIDE THIS NODE'S SECTOR AMONG CHILDREN
+        // Children are confined to parent's angular sector (no crossover!)
         if (data.children) {
+            // Calculate weights for children based on their descendants
             const childWeights = data.children.map(child => {
                 const descendants = countVisibleDescendants(child);
-                return 1 + Math.min(descendants * 0.5, 3); // Weight: 1 base + descendants bonus
+                return 1 + Math.sqrt(descendants) * 0.8; // Weight: 1 base + sqrt of descendants
             });
-            
+
+            const totalWeight = childWeights.reduce((a, b) => a + b, 0);
+
+            // For level 0 (root), children get the full circle divided among them
+            // For deeper levels, children divide the parent's sector
+            let childSectorStart = level === 0 ? -Math.PI : sectorStart;
+            let availableSector = level === 0 ? Math.PI * 2 : sectorWidth;
+
+            // Slight padding between sibling sectors to prevent edge overlap
+            const sectorPadding = level === 0 ? 0 : availableSector * 0.05;
+            availableSector -= sectorPadding * 2;
+            childSectorStart += sectorPadding;
+
             data.children.forEach((child, i) => {
-                calculatePositions(child, data.position, level + 1, data.branchAngle || 0, data.children.length, i, childWeights);
+                // Calculate this child's sector width proportionally to its weight
+                const childSectorWidth = (childWeights[i] / totalWeight) * availableSector;
+                const childSectorEnd = childSectorStart + childSectorWidth;
+
+                calculatePositions(
+                    child,
+                    data.position,
+                    level + 1,
+                    childSectorStart,
+                    childSectorEnd,
+                    data.children.length,
+                    i
+                );
+
+                // Move to next child's sector start
+                childSectorStart = childSectorEnd;
             });
         }
-        
+
         return data;
     }
 
