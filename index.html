@@ -24053,7 +24053,7 @@ Return as JSON:
         controls.dampingFactor = 0.12;
         controls.rotateSpeed = 0.5;
         controls.minDistance = 8;
-        controls.maxDistance = 500;
+        controls.maxDistance = 750;
         controls.enablePan = true;
         controls.panSpeed = 0.8;
         controls.maxPolarAngle = Math.PI * 0.85;
@@ -24488,8 +24488,8 @@ Return as JSON:
             const helixFreq = CONFIG.LAYOUT.helixFrequency || 0.8;
             const verticalSpread = CONFIG.LAYOUT.verticalSpread || 1.5;
 
-            // Level decay: amplitude decreases as we go deeper
-            const levelDecay = 1 / (1 + (level - 1) * 0.35);
+            // Level decay: amplitude decreases exponentially as we go deeper
+            const levelDecay = Math.pow(0.6, level - 1);
             // Depth boost: amplitude increases when there's more expansion below
             const depthBoost = 1 + (expandedDepth * 0.5);
             const helixAmp = baseHelixAmp * levelDecay * depthBoost;
