@@ -8941,7 +8941,18 @@
             learningRate: 0.01,
             minTrainingNodes: 5,
             batchSize: 16,
-            epochs: 50
+            epochs: 50,
+            // Active Learning Settings
+            uncertaintyThreshold: 0.4, // Route to Claude if confidence below this
+            onlineLearningRates: {
+                rejected: 3.0,    // Strong correction multiplier
+                modified: 2.0,    // Moderate correction multiplier
+                accepted: 0.5     // Gentle reinforcement multiplier
+            },
+            // Feedback Loop Settings
+            feedbackBatchThreshold: 5,    // Trigger batch learning after N feedback items
+            feedbackMinInterval: 60000,   // Minimum ms between batch training runs
+            teacherExampleWeight: 1.5     // Weight multiplier for Claude's examples
         },
         
         // Attachment settings
@@ -15383,7 +15394,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                     categoryData.outputs.push(softTarget);
 
                     // Teacher examples get higher weight (Claude is authoritative)
-                    categoryData.sampleWeights.push(1.5);
+                    categoryData.sampleWeights.push(CONFIG.NEURAL_NET.teacherExampleWeight);
                 }
 
                 if (teacherExamples.length > 0) {
@@ -16188,13 +16199,14 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
 
                 // Determine learning rate based on feedback type
                 // Higher for rejections (strong signal), lower for accepts (reinforcement)
+                const lrMultipliers = CONFIG.NEURAL_NET.onlineLearningRates;
                 let onlineLearningRate;
                 if (action === 'rejected') {
-                    onlineLearningRate = CONFIG.NEURAL_NET.learningRate * 3; // Strong correction
+                    onlineLearningRate = CONFIG.NEURAL_NET.learningRate * lrMultipliers.rejected;
                 } else if (action === 'modified') {
-                    onlineLearningRate = CONFIG.NEURAL_NET.learningRate * 2; // Moderate correction
+                    onlineLearningRate = CONFIG.NEURAL_NET.learningRate * lrMultipliers.modified;
                 } else {
-                    onlineLearningRate = CONFIG.NEURAL_NET.learningRate * 0.5; // Gentle reinforcement
+                    onlineLearningRate = CONFIG.NEURAL_NET.learningRate * lrMultipliers.accepted;
                 }
 
                 // Create tensors
@@ -16271,7 +16283,6 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
         // When the local model is uncertain, ask Claude for help
         // Claude's response becomes a teacher example for future training
 
-        UNCERTAINTY_THRESHOLD: 0.4, // Route to Claude if confidence below this
         activeLearningStat: { routed: 0, local: 0 },
 
         async predictCategoryWithActiveLearning(text, store) {
@@ -16286,9 +16297,10 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
 
             const topPrediction = localPredictions[0];
             const confidence = topPrediction.confidence || topPrediction.probability || 0;
+            const uncertaintyThreshold = CONFIG.NEURAL_NET.uncertaintyThreshold;
 
             // Check if we're uncertain
-            if (confidence < this.UNCERTAINTY_THRESHOLD) {
+            if (confidence < uncertaintyThreshold) {
                 console.log(`🎯 Active Learning: Low confidence (${Math.round(confidence * 100)}%), routing to Claude`);
                 this.activeLearningStat.routed++;
 
@@ -21641,7 +21653,12 @@ Return as JSON:
     // ═══════════════════════════════════════════════════════════════════
     const AIFeedback = {
         pending: new Map(),
-        
+
+        // Cache for feedback weights (invalidated when new feedback is stored)
+        _feedbackWeightsCache: null,
+        _feedbackWeightsCacheTime: 0,
+        _feedbackCacheMaxAge: 30000, // Cache valid for 30 seconds
+
         // Log when AI makes a suggestion
         suggest(type, content, context = {}) {
             const id = crypto.randomUUID();
@@ -21745,8 +21762,6 @@ Return as JSON:
         // Check if incremental learning should be triggered
         feedbackSinceLastTrain: 0,
         lastTrainTime: 0,
-        FEEDBACK_THRESHOLD: 5, // Trigger learning after 5 new feedback items
-        MIN_TRAIN_INTERVAL: 60000, // Minimum 60 seconds between training runs
 
         checkAndTriggerLearning(feedback) {
             // Only trigger on meaningful feedback (not ignored)
@@ -21757,9 +21772,11 @@ Return as JSON:
             // Check if we should trigger learning
             const now = Date.now();
             const timeSinceLastTrain = now - this.lastTrainTime;
+            const threshold = CONFIG.NEURAL_NET.feedbackBatchThreshold;
+            const minInterval = CONFIG.NEURAL_NET.feedbackMinInterval;
 
-            if (this.feedbackSinceLastTrain >= this.FEEDBACK_THRESHOLD &&
-                timeSinceLastTrain >= this.MIN_TRAIN_INTERVAL) {
+            if (this.feedbackSinceLastTrain >= threshold &&
+                timeSinceLastTrain >= minInterval) {
 
                 console.log(`🧠 Triggering incremental learning (${this.feedbackSinceLastTrain} new feedback items)`);
 
@@ -21816,7 +21833,10 @@ Return as JSON:
                 responseTime: feedback.responseTime,
                 timestamp: feedback.context.timestamp
             };
-            
+
+            // Invalidate feedback weights cache when new feedback is stored
+            this._feedbackWeightsCache = null;
+
             try {
                 const key = 'mynd_ai_feedback';
                 const stored = JSON.parse(localStorage.getItem(key) || '[]');
@@ -21892,7 +21912,15 @@ Return as JSON:
 
         // Generate training weights from feedback history
         // Returns Map<patternKey, {weight, confidence, samples}>
+        // Uses caching to avoid recomputing on every call
         getFeedbackWeights() {
+            // Check if we have a valid cache
+            const now = Date.now();
+            if (this._feedbackWeightsCache &&
+                (now - this._feedbackWeightsCacheTime) < this._feedbackCacheMaxAge) {
+                return this._feedbackWeightsCache;
+            }
+
             const feedback = this.getFeedback();
             const patternStats = new Map();
 
@@ -21968,7 +21996,11 @@ Return as JSON:
                 }
             }
 
-            console.log(`📊 Generated ${weights.size} feedback weights for training`);
+            // Update cache
+            this._feedbackWeightsCache = weights;
+            this._feedbackWeightsCacheTime = Date.now();
+
+            console.log(`📊 Generated ${weights.size} feedback weights for training (cached)`);
             return weights;
         },
 
