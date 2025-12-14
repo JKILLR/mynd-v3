@@ -24450,13 +24450,13 @@ Return as JSON:
                 const helixAmp = baseHelixAmp * depthBoost;
                 verticalOffset = Math.sin(angle * helixFreq * 2) * helixAmp;
             }
-            // Level 2+: Sibling vertical spread INCREASES at deeper levels
+            // Level 2+: Sibling vertical spread INCREASES SIGNIFICANTLY at deeper levels
             let siblingVerticalOffset = 0;
             if (level > 1 && total > 1) {
                 const verticalSpread = CONFIG.LAYOUT.verticalSpread || 3.0;
-                // INCREASE spread at deeper levels to prevent stacking
-                const levelFactor = 1 + (level - 2) * 0.4; // Level 3: 1.4, Level 4: 1.8, Level 5: 2.2
-                const siblingSpacing = verticalSpread * levelFactor * 0.7;
+                // MUCH LARGER spread at deeper levels to prevent stacking
+                const levelFactor = 1 + (level - 2) * 0.8; // Level 3: 1.8, Level 4: 2.6, Level 5: 3.4
+                const siblingSpacing = verticalSpread * levelFactor * 1.2;
                 siblingVerticalOffset = (index - (total - 1) / 2) * siblingSpacing;
             }
 
