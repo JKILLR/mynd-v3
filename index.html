@@ -24505,12 +24505,15 @@ Return as JSON:
                 availableSector = Math.PI * 2;
                 childSectorStart = -Math.PI;
             } else {
-                // Ensure minimum angular space per child to prevent stacking
-                const minSectorPerChild = Math.PI / 5; // 36 degrees minimum per child
+                // Ensure LARGE minimum angular space per child to prevent stacking
+                // Minimum increases with level to give deepest layers more room
+                const baseMinPerChild = Math.PI / 4; // 45 degrees base
+                const levelBoost = 1 + (level - 1) * 0.3; // Increase with depth
+                const minSectorPerChild = baseMinPerChild * levelBoost;
                 const minNeededSector = data.children.length * minSectorPerChild;
 
                 // GOLDEN RATIO sector expansion - increases with level
-                const expansionFactor = Math.pow(PHI, level * 0.7); // Gentler growth
+                const expansionFactor = Math.pow(PHI, level * 0.8);
                 const expandedSector = sectorWidth * expansionFactor;
 
                 // Use whichever is larger
