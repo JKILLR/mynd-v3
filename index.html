@@ -24214,6 +24214,7 @@ Return as JSON:
         AnimationController.init();
 
         // Expose key functions and objects globally for external modules (like goal-system.js)
+        window.THREE = THREE;
         window.nodes = nodes;
         window.buildScene = buildScene;
         window.selectNode = selectNode;
