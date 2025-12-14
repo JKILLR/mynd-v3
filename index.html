@@ -14156,7 +14156,128 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 }
             }
         }
-        
+
+        // ═══════════════════════════════════════════════════════════════════
+        // SEMANTIC MEMORY BRIDGE: Learn from AI feedback patterns
+        // ═══════════════════════════════════════════════════════════════════
+        // Track how user responds to AI suggestions to improve understanding
+
+        // AI feedback patterns
+        aiFeedbackPatterns: {
+            categoryAcceptance: new Map(), // category -> {accepted, rejected, modified}
+            modificationPatterns: [], // What users choose instead
+            responseTimeByConfidence: [], // [{ confidence, responseTime, action }]
+            trustLevel: 0.5 // 0 = distrust AI, 1 = fully trust AI
+        },
+
+        trackAIFeedback(feedback) {
+            if (!feedback || feedback.action === 'ignored') return;
+
+            const { type, action, content, modification, responseTime } = feedback;
+
+            // Track category-specific patterns
+            if (type === 'category' && content?.predicted) {
+                const cat = content.predicted;
+                if (!this.aiFeedbackPatterns.categoryAcceptance.has(cat)) {
+                    this.aiFeedbackPatterns.categoryAcceptance.set(cat, {
+                        accepted: 0, rejected: 0, modified: 0
+                    });
+                }
+                const stats = this.aiFeedbackPatterns.categoryAcceptance.get(cat);
+                stats[action]++;
+
+                // Track what user chose instead
+                if (action === 'modified' && modification) {
+                    this.aiFeedbackPatterns.modificationPatterns.push({
+                        predicted: content.predicted,
+                        chosen: modification,
+                        confidence: content.confidence || 0,
+                        timestamp: Date.now()
+                    });
+                    // Keep last 100
+                    if (this.aiFeedbackPatterns.modificationPatterns.length > 100) {
+                        this.aiFeedbackPatterns.modificationPatterns.shift();
+                    }
+                }
+            }
+
+            // Track response time by confidence level
+            if (content?.confidence && responseTime) {
+                this.aiFeedbackPatterns.responseTimeByConfidence.push({
+                    confidence: content.confidence,
+                    responseTime,
+                    action
+                });
+                // Keep last 100
+                if (this.aiFeedbackPatterns.responseTimeByConfidence.length > 100) {
+                    this.aiFeedbackPatterns.responseTimeByConfidence.shift();
+                }
+            }
+
+            // Update overall trust level based on feedback
+            this.updateAITrustLevel(action);
+
+            // Update decision style with AI-specific insights
+            if (action === 'accepted') {
+                this.decisionStyle.suggestionsAccepted++;
+            }
+            this.decisionStyle.suggestionsShown++;
+            this.decisionStyle.selectivityRate = 1 -
+                (this.decisionStyle.suggestionsAccepted / Math.max(1, this.decisionStyle.suggestionsShown));
+
+            this.scheduleSave();
+
+            console.log(`📊 MetaLearner: AI feedback tracked (${action}, trust: ${this.aiFeedbackPatterns.trustLevel.toFixed(2)})`);
+        },
+
+        updateAITrustLevel(action) {
+            // Adjust trust based on action
+            const trustDelta = {
+                'accepted': 0.02,   // Trust increases slightly
+                'modified': -0.005, // Trust decreases very slightly (still useful)
+                'rejected': -0.03   // Trust decreases more
+            };
+
+            const delta = trustDelta[action] || 0;
+            this.aiFeedbackPatterns.trustLevel = Math.max(0.1, Math.min(0.95,
+                this.aiFeedbackPatterns.trustLevel + delta
+            ));
+        },
+
+        // Get insights about AI feedback patterns for prompts
+        getAIFeedbackInsights() {
+            const patterns = this.aiFeedbackPatterns;
+
+            // Find categories with low acceptance
+            const problematicCategories = [];
+            for (const [cat, stats] of patterns.categoryAcceptance) {
+                const total = stats.accepted + stats.rejected + stats.modified;
+                if (total >= 3) {
+                    const acceptRate = stats.accepted / total;
+                    if (acceptRate < 0.3) {
+                        problematicCategories.push({ category: cat, acceptRate });
+                    }
+                }
+            }
+
+            // Find common modifications
+            const modFreq = {};
+            for (const mod of patterns.modificationPatterns.slice(-50)) {
+                const key = `${mod.predicted}→${mod.chosen}`;
+                modFreq[key] = (modFreq[key] || 0) + 1;
+            }
+            const commonMods = Object.entries(modFreq)
+                .filter(([_, count]) => count >= 2)
+                .map(([pattern, count]) => ({ pattern, count }));
+
+            return {
+                trustLevel: patterns.trustLevel,
+                problematicCategories,
+                commonModifications: commonMods,
+                totalFeedback: patterns.responseTimeByConfidence.length
+            };
+        },
+
         // Analyze session rhythm
         analyzeSessionRhythm() {
             const timestamps = this.sessionRhythm.actionTimestamps;
@@ -14570,16 +14691,21 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                             model = buildCategoryModel(data.numCategories);
                             xs = tf.tensor2d(data.inputs);
                             ys = tf.tensor2d(data.outputs);
-                            
+
+                            // Create sample weights tensor if feedback weights are provided
+                            const hasSampleWeights = data.sampleWeights && data.sampleWeights.length === data.inputs.length;
+                            const sw = hasSampleWeights ? tf.tensor1d(data.sampleWeights) : null;
+
                             await model.fit(xs, ys, {
                                 epochs: CONFIG.epochs,
                                 batchSize: CONFIG.batchSize,
                                 validationSplit: 0.2,
                                 shuffle: true,
+                                sampleWeight: sw,
                                 callbacks: {
                                     onEpochEnd: (epoch, logs) => {
-                                        self.postMessage({ 
-                                            type: 'progress', 
+                                        self.postMessage({
+                                            type: 'progress',
                                             modelType,
                                             progress: ((epoch + 1) / CONFIG.epochs) * 100,
                                             accuracy: logs.acc,
@@ -14588,25 +14714,31 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                                     }
                                 }
                             });
-                            
+
                             weights = await extractWeights(model);
                             xs.dispose(); ys.dispose(); model.dispose();
+                            if (sw) sw.dispose();
                             
                         } else if (modelType === 'connection' && data.inputs.length > 10) {
                             self.postMessage({ type: 'progress', modelType, progress: 0 });
                             model = buildConnectionModel();
                             xs = tf.tensor2d(data.inputs);
                             ys = tf.tensor2d(data.outputs);
-                            
+
+                            // Create sample weights tensor if feedback weights are provided
+                            const hasSampleWeights = data.sampleWeights && data.sampleWeights.length === data.inputs.length;
+                            const sw = hasSampleWeights ? tf.tensor1d(data.sampleWeights) : null;
+
                             await model.fit(xs, ys, {
                                 epochs: CONFIG.epochs,
                                 batchSize: CONFIG.batchSize,
                                 validationSplit: 0.2,
                                 shuffle: true,
+                                sampleWeight: sw,
                                 callbacks: {
                                     onEpochEnd: (epoch, logs) => {
-                                        self.postMessage({ 
-                                            type: 'progress', 
+                                        self.postMessage({
+                                            type: 'progress',
                                             modelType,
                                             progress: ((epoch + 1) / CONFIG.epochs) * 100,
                                             accuracy: logs.acc,
@@ -14615,25 +14747,31 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                                     }
                                 }
                             });
-                            
+
                             weights = await extractWeights(model);
                             xs.dispose(); ys.dispose(); model.dispose();
+                            if (sw) sw.dispose();
                             
                         } else if (modelType === 'prediction' && data.inputs.length > 5) {
                             self.postMessage({ type: 'progress', modelType, progress: 0 });
                             model = buildPredictionModel();
                             xs = tf.tensor2d(data.inputs);
                             ys = tf.tensor2d(data.outputs);
-                            
+
+                            // Create sample weights tensor if feedback weights are provided
+                            const hasSampleWeights = data.sampleWeights && data.sampleWeights.length === data.inputs.length;
+                            const sw = hasSampleWeights ? tf.tensor1d(data.sampleWeights) : null;
+
                             await model.fit(xs, ys, {
                                 epochs: CONFIG.epochs,
                                 batchSize: Math.min(CONFIG.batchSize, data.inputs.length),
                                 validationSplit: 0.2,
                                 shuffle: true,
+                                sampleWeight: sw,
                                 callbacks: {
                                     onEpochEnd: (epoch, logs) => {
-                                        self.postMessage({ 
-                                            type: 'progress', 
+                                        self.postMessage({
+                                            type: 'progress',
                                             modelType,
                                             progress: ((epoch + 1) / CONFIG.epochs) * 100,
                                             loss: logs.loss
@@ -14641,9 +14779,10 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                                     }
                                 }
                             });
-                            
+
                             weights = await extractWeights(model);
                             xs.dispose(); ys.dispose(); model.dispose();
+                            if (sw) sw.dispose();
                         }
                         
                         self.postMessage({ type: 'complete', modelType, weights });
@@ -15123,7 +15262,8 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
         }
         
         // Prepare training data from the mind map structure
-        async prepareTrainingData(store) {
+        // feedbackWeights: Map<pattern, {weight, confidence}> from AIFeedback
+        async prepareTrainingData(store, feedbackWeights = new Map()) {
             const allNodes = [];
             const categoryLabels = [];
             
@@ -15187,12 +15327,25 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
             
             if (!embeddings) return null;
             
-            // Prepare category training data
+            // Helper to get sample weight from feedback
+            const getSampleWeight = (label) => {
+                if (!feedbackWeights || feedbackWeights.size === 0) return 1.0;
+                const key = label.toLowerCase().trim();
+                const feedback = feedbackWeights.get(key);
+                if (feedback) {
+                    // Blend feedback weight with confidence
+                    return 1.0 + (feedback.weight - 1.0) * feedback.confidence;
+                }
+                return 1.0;
+            };
+
+            // Prepare category training data with sample weights
             const categoryData = {
                 inputs: [],
-                outputs: []
+                outputs: [],
+                sampleWeights: []
             };
-            
+
             allNodes.forEach((node, i) => {
                 if (node.categoryIndex >= 0) {
                     categoryData.inputs.push(embeddings[i]);
@@ -15200,15 +15353,51 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                     const oneHot = new Array(this.categories.length).fill(0);
                     oneHot[node.categoryIndex] = 1;
                     categoryData.outputs.push(oneHot);
+                    // Weight based on feedback for this node's label
+                    categoryData.sampleWeights.push(getSampleWeight(node.label));
                 }
             });
-            
-            // Prepare connection training data
+
+            // === KNOWLEDGE DISTILLATION: Add teacher examples from Claude ===
+            // These are "soft targets" from Claude that help the local model
+            // learn Claude's reasoning patterns
+            if (typeof TeacherKnowledge !== 'undefined') {
+                const teacherExamples = await TeacherKnowledge.getTrainingExamples('category', this);
+
+                for (const ex of teacherExamples) {
+                    // Find category index
+                    const catIndex = this.categories.indexOf(ex.category);
+                    if (catIndex === -1) continue; // Category not in our list
+
+                    // Add teacher example with soft one-hot (uses confidence as temperature)
+                    categoryData.inputs.push(ex.embedding);
+
+                    // Soft target: main category gets confidence, rest gets distributed remainder
+                    const softTarget = new Array(this.categories.length).fill(0);
+                    softTarget[catIndex] = ex.confidence;
+                    // Distribute remaining probability among other categories
+                    const remainder = (1 - ex.confidence) / (this.categories.length - 1);
+                    for (let i = 0; i < softTarget.length; i++) {
+                        if (i !== catIndex) softTarget[i] = remainder;
+                    }
+                    categoryData.outputs.push(softTarget);
+
+                    // Teacher examples get higher weight (Claude is authoritative)
+                    categoryData.sampleWeights.push(1.5);
+                }
+
+                if (teacherExamples.length > 0) {
+                    console.log(`📚 Added ${teacherExamples.length} teacher examples for knowledge distillation`);
+                }
+            }
+
+            // Prepare connection training data with sample weights
             const connectionData = {
                 inputs: [],
-                outputs: []
+                outputs: [],
+                sampleWeights: []
             };
-            
+
             // Positive examples: actual parent-child and sibling pairs
             allNodes.forEach((node, i) => {
                 // Parent-child connections
@@ -15218,11 +15407,14 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                         const combined = [...embeddings[i], ...embeddings[childIndex]];
                         connectionData.inputs.push(combined);
                         connectionData.outputs.push([1, 1, 0, 1]); // connected, parent-child, not sibling, related
+                        // Weight based on both parent and child labels
+                        const weight = (getSampleWeight(node.label) + getSampleWeight(allNodes[childIndex].label)) / 2;
+                        connectionData.sampleWeights.push(weight);
                     }
                 });
-                
+
                 // Sibling connections (same parent)
-                const siblings = allNodes.filter(n => 
+                const siblings = allNodes.filter(n =>
                     n.parentId === node.parentId && n.id !== node.id
                 );
                 siblings.slice(0, 3).forEach(sibling => {
@@ -15231,10 +15423,12 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                         const combined = [...embeddings[i], ...embeddings[siblingIndex]];
                         connectionData.inputs.push(combined);
                         connectionData.outputs.push([1, 0, 1, 1]); // connected, not parent-child, sibling, related
+                        const weight = (getSampleWeight(node.label) + getSampleWeight(sibling.label)) / 2;
+                        connectionData.sampleWeights.push(weight);
                     }
                 });
             });
-            
+
             // Negative examples: random unconnected pairs
             const numNegative = Math.min(connectionData.inputs.length, allNodes.length * 2);
             for (let i = 0; i < numNegative; i++) {
@@ -15243,36 +15437,38 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 if (idx1 !== idx2) {
                     const node1 = allNodes[idx1];
                     const node2 = allNodes[idx2];
-                    
+
                     // Check if they're not actually connected
-                    const isConnected = node1.children.includes(node2.id) || 
+                    const isConnected = node1.children.includes(node2.id) ||
                                        node2.children.includes(node1.id) ||
                                        node1.parentId === node2.parentId;
-                    
+
                     if (!isConnected) {
                         const combined = [...embeddings[idx1], ...embeddings[idx2]];
                         connectionData.inputs.push(combined);
                         // Different categories = probably not related
                         const sameCategory = node1.category === node2.category;
                         connectionData.outputs.push([0, 0, 0, sameCategory ? 0.5 : 0]);
+                        connectionData.sampleWeights.push(1.0); // Neutral weight for negative examples
                     }
                 }
             }
             
-            // Prepare prediction training data (parent -> average child embedding)
+            // Prepare prediction training data (parent -> average child embedding) with sample weights
             const predictionData = {
                 inputs: [],
                 outputs: [],
+                sampleWeights: [],
                 patterns: [] // Store label patterns for pattern matching
             };
-            
+
             // For each parent with children, create training pair
             allNodes.forEach((node, i) => {
                 if (node.children.length > 0) {
                     // Get all child embeddings
                     const childEmbeddings = [];
                     const childLabels = [];
-                    
+
                     node.children.forEach(childId => {
                         const childIndex = allNodes.findIndex(n => n.id === childId);
                         if (childIndex >= 0) {
@@ -15280,11 +15476,11 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                             childLabels.push(allNodes[childIndex].label);
                         }
                     });
-                    
+
                     if (childEmbeddings.length > 0) {
                         // Input: parent embedding
                         predictionData.inputs.push(embeddings[i]);
-                        
+
                         // Output: centroid (average) of child embeddings
                         const centroid = new Array(CONFIG.NEURAL_NET.embeddingDim).fill(0);
                         childEmbeddings.forEach(childEmb => {
@@ -15293,7 +15489,13 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                             });
                         });
                         predictionData.outputs.push(centroid);
-                        
+
+                        // Sample weight based on parent and average child weights
+                        const childWeights = childLabels.map(l => getSampleWeight(l));
+                        const avgChildWeight = childWeights.reduce((a, b) => a + b, 0) / childWeights.length;
+                        const weight = (getSampleWeight(node.label) + avgChildWeight) / 2;
+                        predictionData.sampleWeights.push(weight);
+
                         // Store pattern for label-based suggestions
                         predictionData.patterns.push({
                             parentLabel: node.label.toLowerCase(),
@@ -15635,14 +15837,20 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 console.log('Neural network not ready or already training');
                 return false;
             }
-            
+
             this.isTraining = true;
             this.trainingProgress = 0;
             this.emit('onTrainingStart');
-            
+
             try {
+                // Load feedback weights to incorporate user preferences into training
+                console.log('🧠 Loading feedback weights...');
+                const feedbackWeights = typeof AIFeedback !== 'undefined'
+                    ? AIFeedback.getFeedbackWeights()
+                    : new Map();
+
                 console.log('🧠 Preparing training data...');
-                const data = await this.prepareTrainingData(store);
+                const data = await this.prepareTrainingData(store, feedbackWeights);
                 
                 if (!data) {
                     this.isTraining = false;
@@ -15729,20 +15937,23 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                                     // Send training data based on model type
                                     let trainingData;
                                     if (mt === 'category' || modelType === 'category') {
-                                        trainingData = { 
-                                            inputs: categoryData.inputs, 
+                                        trainingData = {
+                                            inputs: categoryData.inputs,
                                             outputs: categoryData.outputs,
-                                            numCategories: this.categories.length 
+                                            sampleWeights: categoryData.sampleWeights,
+                                            numCategories: this.categories.length
                                         };
                                     } else if (mt === 'connection' || modelType === 'connection') {
-                                        trainingData = { 
-                                            inputs: connectionData.inputs, 
-                                            outputs: connectionData.outputs 
+                                        trainingData = {
+                                            inputs: connectionData.inputs,
+                                            outputs: connectionData.outputs,
+                                            sampleWeights: connectionData.sampleWeights
                                         };
                                     } else {
-                                        trainingData = { 
-                                            inputs: predictionData.inputs, 
-                                            outputs: predictionData.outputs 
+                                        trainingData = {
+                                            inputs: predictionData.inputs,
+                                            outputs: predictionData.outputs,
+                                            sampleWeights: predictionData.sampleWeights
                                         };
                                     }
                                     
@@ -15931,7 +16142,99 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 return false;
             }
         }
-        
+
+        // Online learning: immediate single-sample update from user feedback
+        // This is fast (~50ms) and runs after each accept/modify/reject
+        async learnFromFeedback(feedback) {
+            // Only learn from category feedback for now
+            if (feedback.type !== 'category') return false;
+
+            // Need a trained category model
+            if (!this.categoryModel || !this.encoder || this.categories.length < 2) {
+                return false;
+            }
+
+            // Don't do online learning while batch training
+            if (this.isTraining) return false;
+
+            // Need both predicted and chosen categories
+            const predicted = feedback.content?.predicted;
+            const chosen = feedback.modification || predicted;
+            const action = feedback.action;
+
+            if (!predicted || !chosen) return false;
+
+            // Find category indices
+            const chosenIndex = this.categories.indexOf(chosen);
+            if (chosenIndex === -1) {
+                // Category not in our list - can't learn from this
+                return false;
+            }
+
+            try {
+                // Get the node text from context
+                const nodeText = feedback.context?.nodeLabel || feedback.context?.nodeText;
+                if (!nodeText) return false;
+
+                console.log(`⚡ Online learning: ${action} (predicted: ${predicted}, chosen: ${chosen})`);
+
+                // Get embedding for this text
+                const embedding = await this.getEmbedding(nodeText);
+                if (!embedding) return false;
+
+                // Create one-hot target for the chosen category
+                const target = new Array(this.categories.length).fill(0);
+                target[chosenIndex] = 1;
+
+                // Determine learning rate based on feedback type
+                // Higher for rejections (strong signal), lower for accepts (reinforcement)
+                let onlineLearningRate;
+                if (action === 'rejected') {
+                    onlineLearningRate = CONFIG.NEURAL_NET.learningRate * 3; // Strong correction
+                } else if (action === 'modified') {
+                    onlineLearningRate = CONFIG.NEURAL_NET.learningRate * 2; // Moderate correction
+                } else {
+                    onlineLearningRate = CONFIG.NEURAL_NET.learningRate * 0.5; // Gentle reinforcement
+                }
+
+                // Create tensors
+                const xs = tf.tensor2d([embedding]);
+                const ys = tf.tensor2d([target]);
+
+                // Do a single training step with adjusted learning rate
+                // We temporarily update the optimizer's learning rate
+                const originalLR = this.categoryModel.optimizer.learningRate;
+
+                // TensorFlow.js doesn't allow changing LR directly, so we do 1 epoch
+                // with sample weight to simulate LR adjustment
+                const sampleWeight = tf.tensor1d([onlineLearningRate / CONFIG.NEURAL_NET.learningRate]);
+
+                await this.categoryModel.fit(xs, ys, {
+                    epochs: 1,
+                    batchSize: 1,
+                    shuffle: false,
+                    verbose: 0,
+                    sampleWeight: sampleWeight
+                });
+
+                // Cleanup
+                xs.dispose();
+                ys.dispose();
+                sampleWeight.dispose();
+
+                console.log(`✓ Online learning complete (${action})`);
+
+                // Emit event for UI feedback
+                this.emit('onOnlineLearning', { action, predicted, chosen });
+
+                return true;
+
+            } catch (error) {
+                console.error('Online learning error:', error);
+                return false;
+            }
+        }
+
         // Predict the best category for new text
         async predictCategory(text) {
             if (!this.categoryModel || !this.encoder) return null;
@@ -15961,7 +16264,116 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 return null;
             }
         }
-        
+
+        // ═══════════════════════════════════════════════════════════════════
+        // ACTIVE LEARNING: Route uncertain predictions to Claude
+        // ═══════════════════════════════════════════════════════════════════
+        // When the local model is uncertain, ask Claude for help
+        // Claude's response becomes a teacher example for future training
+
+        UNCERTAINTY_THRESHOLD: 0.4, // Route to Claude if confidence below this
+        activeLearningStat: { routed: 0, local: 0 },
+
+        async predictCategoryWithActiveLearning(text, store) {
+            // First, get local model's prediction
+            const localPredictions = await this.predictCategory(text);
+
+            // If no local predictions, try Claude directly
+            if (!localPredictions || localPredictions.length === 0) {
+                console.log('🎯 Active Learning: No local predictions, routing to Claude');
+                return await this.routeToClaudeForCategory(text, store, null);
+            }
+
+            const topPrediction = localPredictions[0];
+            const confidence = topPrediction.confidence || topPrediction.probability || 0;
+
+            // Check if we're uncertain
+            if (confidence < this.UNCERTAINTY_THRESHOLD) {
+                console.log(`🎯 Active Learning: Low confidence (${Math.round(confidence * 100)}%), routing to Claude`);
+                this.activeLearningStat.routed++;
+
+                // Route to Claude for a better prediction
+                const claudeResult = await this.routeToClaudeForCategory(text, store, localPredictions);
+
+                if (claudeResult) {
+                    return claudeResult;
+                }
+
+                // Fall back to local predictions if Claude fails
+                console.log('🎯 Active Learning: Claude unavailable, using local predictions');
+            } else {
+                this.activeLearningStat.local++;
+            }
+
+            // High confidence or Claude unavailable - return local predictions
+            // Map to consistent format
+            return localPredictions.map(p => ({
+                category: p.category,
+                confidence: p.confidence || p.probability,
+                source: 'local'
+            }));
+        }
+
+        async routeToClaudeForCategory(text, store, localPredictions) {
+            try {
+                // Use enhanceWithClaude which already captures teacher knowledge
+                const claudeResult = await this.enhanceWithClaude(text, store);
+
+                if (claudeResult && claudeResult.category) {
+                    // Build predictions array with Claude's result at top
+                    const predictions = [{
+                        category: claudeResult.category,
+                        confidence: claudeResult.confidence || 0.85,
+                        source: 'claude',
+                        reasoning: claudeResult.reasoning
+                    }];
+
+                    // Add related concepts as alternatives
+                    if (claudeResult.relatedConcepts) {
+                        claudeResult.relatedConcepts.forEach((concept, i) => {
+                            predictions.push({
+                                category: concept,
+                                confidence: 0.5 - (i * 0.1),
+                                source: 'claude-related'
+                            });
+                        });
+                    }
+
+                    // Merge with local predictions (lower priority)
+                    if (localPredictions) {
+                        localPredictions.forEach(p => {
+                            if (!predictions.find(pred => pred.category === p.category)) {
+                                predictions.push({
+                                    category: p.category,
+                                    confidence: (p.confidence || p.probability) * 0.7, // Discount local
+                                    source: 'local'
+                                });
+                            }
+                        });
+                    }
+
+                    console.log(`🎯 Active Learning: Claude suggests "${claudeResult.category}" (${Math.round((claudeResult.confidence || 0.85) * 100)}%)`);
+                    return predictions;
+                }
+
+                return null;
+
+            } catch (error) {
+                console.error('Active learning routing error:', error);
+                return null;
+            }
+        }
+
+        // Get active learning statistics
+        getActiveLearningStats() {
+            const total = this.activeLearningStat.routed + this.activeLearningStat.local;
+            return {
+                ...this.activeLearningStat,
+                total,
+                routingRate: total > 0 ? this.activeLearningStat.routed / total : 0
+            };
+        }
+
         // Find semantically similar nodes to a given text
         async findSimilarNodes(text, store, maxResults = 5) {
             if (!this.encoder) return [];
@@ -16446,13 +16858,26 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 if (result.success && result.suggestions) {
                     // Enforce max 4 suggestions
                     const suggestions = result.suggestions.slice(0, 4);
+
+                    // Capture Claude's child predictions as teacher knowledge
+                    if (typeof TeacherKnowledge !== 'undefined' && suggestions.length > 0) {
+                        TeacherKnowledge.capture('children', nodeText, {
+                            parentLabel: node.label,
+                            children: suggestions.map(s => ({
+                                label: s.label || s,
+                                confidence: s.confidence || 0.8
+                            })),
+                            context: pathStr
+                        });
+                    }
+
                     return {
                         mlSuggestions,
                         aiSuggestions: suggestions,
                         combined: true
                     };
                 }
-                
+
                 return { mlSuggestions, aiSuggestions: [], combined: false };
                 
             } catch (error) {
@@ -16531,15 +16956,26 @@ Return as JSON:
                 
                 const data = await response.json();
                 const text_response = data.content[0].text;
-                
+
                 // Parse JSON from response
                 const jsonMatch = text_response.match(/\{[\s\S]*\}/);
                 if (jsonMatch) {
-                    return JSON.parse(jsonMatch[0]);
+                    const result = JSON.parse(jsonMatch[0]);
+
+                    // Capture Claude's prediction as teacher knowledge for distillation
+                    if (typeof TeacherKnowledge !== 'undefined' && result.category) {
+                        TeacherKnowledge.capture('category', text, {
+                            category: result.category,
+                            confidence: result.confidence || 0.8,
+                            reasoning: result.reasoning
+                        });
+                    }
+
+                    return result;
                 }
-                
+
                 return null;
-                
+
             } catch (error) {
                 console.error('Claude enhancement error:', error);
                 return null;
@@ -21097,7 +21533,109 @@ Return as JSON:
     
     // Global neural network instance
     const neuralNet = new PersonalNeuralNet();
-    
+
+    // ═══════════════════════════════════════════════════════════════════
+    // TEACHER KNOWLEDGE - Knowledge distillation from Claude
+    // ═══════════════════════════════════════════════════════════════════
+    // Captures Claude's predictions as "soft targets" for training the local model
+    // This allows the local neural network to learn from Claude's reasoning
+    const TeacherKnowledge = {
+        STORAGE_KEY: 'mynd_teacher_knowledge',
+        MAX_EXAMPLES: 500, // Keep last 500 teacher examples
+
+        // Store a teacher example (Claude's prediction)
+        capture(type, input, prediction) {
+            const example = {
+                type,           // 'category', 'children', 'connection'
+                input,          // The input text/context
+                prediction,     // Claude's prediction with confidence
+                timestamp: Date.now()
+            };
+
+            try {
+                const stored = this.getAll();
+                stored.push(example);
+
+                // Keep only the most recent examples
+                while (stored.length > this.MAX_EXAMPLES) stored.shift();
+
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(stored));
+                console.log(`📚 Teacher knowledge captured: ${type}`);
+
+                return true;
+            } catch (e) {
+                console.warn('Failed to store teacher knowledge:', e);
+                return false;
+            }
+        },
+
+        // Get all teacher examples
+        getAll() {
+            try {
+                return JSON.parse(localStorage.getItem(this.STORAGE_KEY) || '[]');
+            } catch (e) {
+                return [];
+            }
+        },
+
+        // Get teacher examples by type
+        getByType(type) {
+            return this.getAll().filter(ex => ex.type === type);
+        },
+
+        // Get teacher examples for training (with embeddings if available)
+        async getTrainingExamples(type, neuralNet) {
+            const examples = this.getByType(type);
+            if (examples.length === 0) return [];
+
+            const trainingExamples = [];
+
+            for (const ex of examples) {
+                if (type === 'category' && ex.prediction?.category) {
+                    // Get embedding for the input text
+                    const embedding = await neuralNet.getEmbedding(ex.input);
+                    if (embedding) {
+                        trainingExamples.push({
+                            embedding,
+                            category: ex.prediction.category,
+                            confidence: ex.prediction.confidence || 0.8,
+                            isTeacher: true // Mark as teacher example
+                        });
+                    }
+                }
+            }
+
+            return trainingExamples;
+        },
+
+        // Clear old examples
+        prune(maxAge = 7 * 24 * 60 * 60 * 1000) { // Default: 7 days
+            const cutoff = Date.now() - maxAge;
+            const stored = this.getAll();
+            const fresh = stored.filter(ex => ex.timestamp > cutoff);
+
+            if (fresh.length < stored.length) {
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(fresh));
+                console.log(`📚 Pruned ${stored.length - fresh.length} old teacher examples`);
+            }
+        },
+
+        // Get stats
+        getStats() {
+            const all = this.getAll();
+            const byType = {};
+            for (const ex of all) {
+                byType[ex.type] = (byType[ex.type] || 0) + 1;
+            }
+            return {
+                total: all.length,
+                byType,
+                oldestTimestamp: all[0]?.timestamp,
+                newestTimestamp: all[all.length - 1]?.timestamp
+            };
+        }
+    };
+
     // ═══════════════════════════════════════════════════════════════════
     // AI FEEDBACK TRACKING - Learns from user responses to suggestions
     // ═══════════════════════════════════════════════════════════════════
@@ -21131,20 +21669,141 @@ Return as JSON:
         resolve(suggestionId, action, modification = null) {
             const suggestion = this.pending.get(suggestionId);
             if (!suggestion) return;
-            
+
             const feedback = {
                 ...suggestion,
                 action, // 'accepted', 'modified', 'rejected', 'ignored'
                 modification,
                 responseTime: Date.now() - suggestion.context.timestamp
             };
-            
+
             this.pending.delete(suggestionId);
             this.store(feedback);
-            
+
             // Log for debugging
-            console.log(`📊 AI Feedback: ${feedback.type} → ${action}`, 
+            console.log(`📊 AI Feedback: ${feedback.type} → ${action}`,
                 action === 'modified' ? `(chose: ${modification})` : '');
+
+            // Trigger IMMEDIATE online learning (fast, single-sample update)
+            if (action !== 'ignored') {
+                this.triggerOnlineLearning(feedback);
+            }
+
+            // === SEMANTIC MEMORY BRIDGE ===
+            // Notify MetaLearner about AI feedback patterns
+            if (typeof metaLearner !== 'undefined' && action !== 'ignored') {
+                metaLearner.trackAIFeedback(feedback);
+            }
+
+            // Create semantic memory for significant feedback
+            if (typeof semanticMemory !== 'undefined' && action !== 'ignored') {
+                this.createFeedbackMemory(feedback);
+            }
+
+            // Trigger BATCH learning if enough feedback has accumulated
+            this.checkAndTriggerLearning(feedback);
+        },
+
+        // Create a semantic memory from feedback
+        createFeedbackMemory(feedback) {
+            const { type, action, content, modification, context } = feedback;
+
+            // Build memory context string
+            let memoryContext = '';
+            if (type === 'category') {
+                if (action === 'accepted') {
+                    memoryContext = `User accepted AI suggestion to categorize "${context?.nodeLabel || 'content'}" as "${content?.predicted}"`;
+                } else if (action === 'modified') {
+                    memoryContext = `User changed category from "${content?.predicted}" to "${modification}" for "${context?.nodeLabel || 'content'}"`;
+                } else if (action === 'rejected') {
+                    memoryContext = `User rejected AI category suggestion "${content?.predicted}" for "${context?.nodeLabel || 'content'}"`;
+                }
+            }
+
+            if (memoryContext) {
+                const eventType = action === 'accepted' ? 'suggestion_accepted' : 'suggestion_rejected';
+                semanticMemory.addMemory(eventType, memoryContext, {
+                    feedbackType: type,
+                    action,
+                    predicted: content?.predicted,
+                    chosen: modification || content?.predicted,
+                    confidence: content?.confidence
+                }).catch(err => console.warn('Failed to create feedback memory:', err));
+            }
+        },
+
+        // Trigger immediate online learning (non-blocking)
+        triggerOnlineLearning(feedback) {
+            if (typeof neuralNet === 'undefined' || !neuralNet.isReady) return;
+
+            // Call asynchronously so it doesn't block UI
+            neuralNet.learnFromFeedback(feedback).catch(err => {
+                console.warn('Online learning failed:', err);
+            });
+        },
+
+        // Check if incremental learning should be triggered
+        feedbackSinceLastTrain: 0,
+        lastTrainTime: 0,
+        FEEDBACK_THRESHOLD: 5, // Trigger learning after 5 new feedback items
+        MIN_TRAIN_INTERVAL: 60000, // Minimum 60 seconds between training runs
+
+        checkAndTriggerLearning(feedback) {
+            // Only trigger on meaningful feedback (not ignored)
+            if (feedback.action === 'ignored') return;
+
+            this.feedbackSinceLastTrain++;
+
+            // Check if we should trigger learning
+            const now = Date.now();
+            const timeSinceLastTrain = now - this.lastTrainTime;
+
+            if (this.feedbackSinceLastTrain >= this.FEEDBACK_THRESHOLD &&
+                timeSinceLastTrain >= this.MIN_TRAIN_INTERVAL) {
+
+                console.log(`🧠 Triggering incremental learning (${this.feedbackSinceLastTrain} new feedback items)`);
+
+                // Reset counters
+                this.feedbackSinceLastTrain = 0;
+                this.lastTrainTime = now;
+
+                // Trigger learning asynchronously (non-blocking)
+                this.triggerIncrementalLearning();
+            }
+        },
+
+        async triggerIncrementalLearning() {
+            // Get reference to neural network and store
+            if (typeof neuralNet === 'undefined' || !neuralNet.isReady) {
+                console.log('🧠 Neural network not ready, skipping incremental learning');
+                return;
+            }
+
+            if (neuralNet.isTraining) {
+                console.log('🧠 Training already in progress, skipping');
+                return;
+            }
+
+            try {
+                // Get the current store from app
+                const store = window.app?.store;
+                if (!store) {
+                    console.log('🧠 Store not available, skipping incremental learning');
+                    return;
+                }
+
+                // Perform incremental training with feedback weights
+                console.log('🧠 Starting incremental learning from feedback...');
+                const result = await neuralNet.train(store);
+
+                if (result) {
+                    console.log('✓ Incremental learning complete');
+                } else {
+                    console.log('⚠ Incremental learning skipped (not enough data)');
+                }
+            } catch (error) {
+                console.error('❌ Incremental learning failed:', error);
+            }
         },
         
         // Store feedback locally
@@ -21209,7 +21868,7 @@ Return as JSON:
                 console.log('📊 AI Feedback: No data yet');
                 return;
             }
-            
+
             console.log('📊 AI Feedback Stats (Category Predictions):');
             console.log(`   Total: ${stats.total}`);
             console.log(`   Accepted: ${stats.accepted} (${Math.round(stats.accepted/stats.total*100)}%)`);
@@ -21218,8 +21877,106 @@ Return as JSON:
             console.log(`   Ignored: ${stats.ignored} (${Math.round(stats.ignored/stats.total*100)}%)`);
             console.log(`   Acceptance Rate: ${Math.round(stats.acceptanceRate*100)}%`);
             console.log(`   Avg Response Time: ${Math.round(stats.avgResponseTime/1000)}s`);
-            
+
             return stats;
+        },
+
+        // Get all stored feedback for training
+        getFeedback() {
+            try {
+                return JSON.parse(localStorage.getItem('mynd_ai_feedback') || '[]');
+            } catch (e) {
+                return [];
+            }
+        },
+
+        // Generate training weights from feedback history
+        // Returns Map<patternKey, {weight, confidence, samples}>
+        getFeedbackWeights() {
+            const feedback = this.getFeedback();
+            const patternStats = new Map();
+
+            // Aggregate feedback by pattern (predicted content)
+            for (const item of feedback) {
+                if (!item.predicted) continue;
+
+                const key = item.predicted.toLowerCase().trim();
+                if (!patternStats.has(key)) {
+                    patternStats.set(key, {
+                        accepted: 0,
+                        modified: 0,
+                        rejected: 0,
+                        ignored: 0,
+                        total: 0,
+                        chosen: [] // What user actually chose when modified
+                    });
+                }
+
+                const stats = patternStats.get(key);
+                stats[item.action]++;
+                stats.total++;
+
+                // Track what user chose instead
+                if (item.action === 'modified' && item.chosen && item.chosen !== item.predicted) {
+                    stats.chosen.push(item.chosen);
+                }
+            }
+
+            // Convert stats to training weights
+            const weights = new Map();
+
+            for (const [pattern, stats] of patternStats) {
+                if (stats.total < 2) continue; // Need at least 2 samples for confidence
+
+                // Calculate acceptance score: accepted=1.0, modified=0.5, rejected=-0.5, ignored=0
+                const positiveSignal = stats.accepted + (stats.modified * 0.5);
+                const negativeSignal = stats.rejected * 0.5;
+                const acceptanceRate = (positiveSignal - negativeSignal) / stats.total;
+
+                // Weight ranges from 0.2 (heavily rejected) to 2.0 (heavily accepted)
+                // Neutral (50% acceptance) = 1.0
+                const weight = Math.max(0.2, Math.min(2.0, 1.0 + acceptanceRate));
+
+                // Confidence based on sample size (more samples = higher confidence)
+                const confidence = Math.min(1.0, stats.total / 10);
+
+                weights.set(pattern, {
+                    weight,
+                    confidence,
+                    samples: stats.total,
+                    acceptanceRate: (stats.accepted + stats.modified) / stats.total,
+                    rejectionRate: stats.rejected / stats.total
+                });
+
+                // Also boost patterns that users chose instead
+                for (const chosen of stats.chosen) {
+                    const chosenKey = chosen.toLowerCase().trim();
+                    if (!weights.has(chosenKey)) {
+                        weights.set(chosenKey, {
+                            weight: 1.5, // User-chosen alternatives get boosted
+                            confidence: 0.7,
+                            samples: 1,
+                            acceptanceRate: 1.0,
+                            rejectionRate: 0,
+                            userChosen: true
+                        });
+                    } else {
+                        const existing = weights.get(chosenKey);
+                        existing.weight = Math.min(2.0, existing.weight + 0.2);
+                        existing.userChosen = true;
+                    }
+                }
+            }
+
+            console.log(`📊 Generated ${weights.size} feedback weights for training`);
+            return weights;
+        },
+
+        // Get feedback-based boost for a specific pattern
+        getPatternBoost(pattern) {
+            const weights = this.getFeedbackWeights();
+            const key = pattern.toLowerCase().trim();
+            return weights.get(key) || { weight: 1.0, confidence: 0, samples: 0 };
         }
     };
     
@@ -34945,11 +35702,14 @@ Consider these learned patterns when generating suggestions.`;
         }
         
         const nodeText = description ? `${label}. ${description}` : label;
-        
-        // Get predictions
-        const predictions = await neuralNet.predictCategory(nodeText);
-        
-        if (predictions && predictions.length > 0 && predictions[0].probability > 0.5) {
+
+        // Get predictions with active learning (routes to Claude if uncertain)
+        const predictions = await neuralNet.predictCategoryWithActiveLearning(nodeText, store);
+
+        // Check confidence (handle both property names)
+        const topConf = predictions?.[0]?.confidence || predictions?.[0]?.probability || 0;
+
+        if (predictions && predictions.length > 0 && topConf > 0.5) {
             // High confidence - place under predicted category
             const categoryLabel = predictions[0].category;
             
@@ -36070,36 +36830,46 @@ Summary:`
             this.currentSuggestionId = null;
             this.predictedCategory = null;
             
-            // Use neural network + Claude to categorize
+            // Use neural network + Claude to categorize (with active learning)
             const contentText = `${metadata.title}. ${metadata.description}. ${metadata.type} from ${metadata.domain}`;
-            
+
             try {
-                // Get neural network predictions
-                const predictions = await neuralNet.predictCategory(contentText);
-                
+                // Get predictions with active learning (routes to Claude if uncertain)
+                const predictions = await neuralNet.predictCategoryWithActiveLearning(contentText, store);
+
                 if (predictions && predictions.length > 0) {
                     // Show top prediction
                     const top = predictions[0];
+                    const confidence = top.confidence || top.probability || 0;
                     this.selectedCategory = top.category;
                     this.predictedCategory = top.category; // Store original prediction
-                    
-                    // Track this suggestion for feedback
+
+                    // Track this suggestion for feedback (include source for debugging)
                     this.currentSuggestionId = AIFeedback.suggest('category', {
                         predicted: top.category,
-                        confidence: top.probability,
-                        alternatives: predictions.slice(1, 4).map(p => p.category)
+                        confidence: confidence,
+                        alternatives: predictions.slice(1, 4).map(p => p.category),
+                        source: top.source || 'local' // Track if Claude was used
+                    }, {
+                        nodeLabel: metadata.title,
+                        nodeText: contentText
                     });
-                    
-                    document.getElementById('link-category-name').textContent = top.category;
-                    document.getElementById('link-category-confidence').textContent = `${Math.round(top.probability * 100)}%`;
-                    
+
+                    // Show source indicator if from Claude
+                    const sourceIndicator = top.source === 'claude' ? ' 🤖' : '';
+                    document.getElementById('link-category-name').textContent = top.category + sourceIndicator;
+                    document.getElementById('link-category-confidence').textContent = `${Math.round(confidence * 100)}%`;
+
                     // Show alternatives
                     const alts = predictions.slice(1, 4);
-                    document.getElementById('link-category-alt').innerHTML = alts.map(p => `
+                    document.getElementById('link-category-alt').innerHTML = alts.map(p => {
+                        const altConf = p.confidence || p.probability || 0;
+                        return `
                         <div class="link-category-alt-item" data-category="${p.category}">
-                            ${p.category} (${Math.round(p.probability * 100)}%)
+                            ${p.category} (${Math.round(altConf * 100)}%)
                         </div>
-                    `).join('');
+                    `;
+                    }).join('');
                     
                     // Handle alt selection
                     document.querySelectorAll('.link-category-alt-item').forEach(el => {
