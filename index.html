@@ -24513,14 +24513,14 @@ Return as JSON:
                 const sectorCenter = sectorStart + sectorWidth / 2;
                 childSectorStart = sectorCenter - availableSector / 2;
             } else {
-                // Level 2+: Gentle expansion, capped relative to parent's sector
-                const minSectorPerChild = Math.PI / 12; // 15 degrees minimum per child
+                // Level 2+: Need enough horizontal spread so siblings don't stack
+                const minSectorPerChild = Math.PI / 8; // 22.5 degrees minimum per child
                 const minNeededSector = data.children.length * minSectorPerChild;
-                const expandedSector = sectorWidth * 1.15; // 15% expansion
+                const expandedSector = sectorWidth * 1.3; // 30% expansion
 
                 availableSector = Math.max(expandedSector, minNeededSector);
-                // Cap at 120% of parent's sector to limit cousin overlap
-                availableSector = Math.min(availableSector, sectorWidth * 1.2);
+                // Cap at 150% of parent's sector to limit cousin overlap
+                availableSector = Math.min(availableSector, sectorWidth * 1.5);
 
                 const sectorCenter = sectorStart + sectorWidth / 2;
                 childSectorStart = sectorCenter - availableSector / 2;
