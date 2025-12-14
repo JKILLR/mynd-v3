@@ -24432,9 +24432,12 @@ Return as JSON:
             const startAngle = -Math.PI / 2;
             const angle = startAngle + angleStep * index;
 
-            // DNA helix effect for level 1 - sine wave based on angle
-            const helixAmp = CONFIG.LAYOUT.helixAmplitude || 3.0;
+            // DNA helix effect for level 1 - amplitude INCREASES as more layers expand below
+            const baseHelixAmp = CONFIG.LAYOUT.helixAmplitude || 3.0;
             const helixFreq = CONFIG.LAYOUT.helixFrequency || 0.8;
+            // More expanded depth = more vertical spread at root level
+            const depthMultiplier = 1 + (expandedDepth * 0.6);
+            const helixAmp = baseHelixAmp * depthMultiplier;
             const verticalOffset = Math.sin(angle * helixFreq * 2) * helixAmp;
 
             data.basePosition = [Math.cos(angle) * baseRadius, verticalOffset, Math.sin(angle) * baseRadius];
@@ -24478,19 +24481,24 @@ Return as JSON:
                 childAngle = outwardAngle - halfSpread + (spreadAngle / Math.max(total - 1, 1)) * index;
             }
 
-            // DNA HELIX EFFECT: Vertical position follows a sine wave based on:
-            // - The child angle (creates spiral as you go around)
-            // - The level (helix continues outward)
-            // - The index within siblings (spreads siblings vertically)
-            const helixAmp = (CONFIG.LAYOUT.helixAmplitude || 3.0) * (1 + level * 0.3);
+            // DNA HELIX EFFECT: Vertical amplitude behavior:
+            // - DECREASES with level (deeper nodes = less vertical wave)
+            // - INCREASES with expandedDepth (nodes with more expansion below spread more)
+            const baseHelixAmp = CONFIG.LAYOUT.helixAmplitude || 3.0;
             const helixFreq = CONFIG.LAYOUT.helixFrequency || 0.8;
             const verticalSpread = CONFIG.LAYOUT.verticalSpread || 1.5;
+
+            // Level decay: amplitude decreases as we go deeper
+            const levelDecay = 1 / (1 + (level - 1) * 0.35);
+            // Depth boost: amplitude increases when there's more expansion below
+            const depthBoost = 1 + (expandedDepth * 0.5);
+            const helixAmp = baseHelixAmp * levelDecay * depthBoost;
 
             // Base helix wave from the branch angle
             const helixWave = Math.sin(childAngle * helixFreq + level * Math.PI * 0.5) * helixAmp;
 
-            // Spread siblings vertically with larger spacing
-            const siblingSpacing = verticalSpread * (1 + Math.min(total * 0.15, 0.8));
+            // Spread siblings vertically - also scales with depth boost
+            const siblingSpacing = verticalSpread * (1 + Math.min(total * 0.15, 0.8)) * Math.sqrt(depthBoost);
             const siblingOffset = (index - (total - 1) / 2) * siblingSpacing;
 
             // Combine parent height + helix wave + sibling offset
