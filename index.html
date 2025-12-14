@@ -801,14 +801,14 @@
                 stroke-width: 2;
             }
 
-            /* Light theme overrides - dark shadow instead of white glow */
+            /* Light theme overrides - shadows at bottom of elements */
             [data-theme="sandstone"] .mobile-search-bar,
             [data-theme="coral"] .mobile-search-bar,
             [data-theme="ember"] .mobile-search-bar,
             [data-theme="frost"] .mobile-search-bar {
                 background: rgba(255, 255, 255, 0.85);
                 border-color: rgba(0, 0, 0, 0.06);
-                box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
             }
 
             [data-theme="sandstone"] .mobile-search-menu,
@@ -824,7 +824,7 @@
             [data-theme="frost"] .mobile-fab {
                 background: rgba(255, 255, 255, 0.85);
                 border-color: rgba(0, 0, 0, 0.06);
-                box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+                box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
             }
 
             [data-theme="sandstone"] #mobile-bottom-sheet,
@@ -833,7 +833,7 @@
             [data-theme="frost"] #mobile-bottom-sheet {
                 background: rgba(255, 255, 255, 0.88);
                 border-color: rgba(0, 0, 0, 0.06);
-                box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.08);
+                box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.12);
             }
 
             /* Hide desktop header elements on mobile */
@@ -5003,22 +5003,21 @@
                 transform: translateX(-50%);
                 right: auto;
                 transition: bottom 0.3s var(--ease-out), opacity var(--duration-normal) var(--ease-out), transform var(--duration-normal) var(--ease-out);
-                z-index: 320; /* Above sheet but below modals */
+                z-index: 290; /* Below sheet so sheet can slide over it */
             }
-            
+
             #info-panel.active {
                 transform: translateX(-50%) translateY(0);
             }
-            
+
             /* Adjust info panel based on sheet state */
             body.sheet-minimized #info-panel {
                 bottom: 80px; /* Above minimized sheet */
             }
-            
+
+            /* Info panel stays in place - sheet slides over it */
             body.sheet-expanded #info-panel {
-                bottom: calc(85vh + 10px); /* Above expanded sheet */
-                opacity: 0;
-                pointer-events: none;
+                /* Keep same position, sheet covers it */
             }
             
             #keyboard-hints {
@@ -6163,10 +6162,15 @@
             }
             
             #mobile-bottom-sheet.minimized .sheet-quick-actions,
-            #mobile-bottom-sheet.minimized .sheet-mini-toolbar,
-            #mobile-bottom-sheet.minimized .sheet-map-toggle {
+            #mobile-bottom-sheet.minimized .sheet-mini-toolbar {
                 opacity: 0;
                 pointer-events: none;
+            }
+
+            /* Keep gear toggle visible when minimized */
+            #mobile-bottom-sheet.minimized .sheet-map-toggle {
+                opacity: 1;
+                pointer-events: auto;
             }
             
             /* Drag Handle - Waze style */
