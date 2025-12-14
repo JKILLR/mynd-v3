@@ -15988,7 +15988,99 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 return false;
             }
         }
-        
+
+        // Online learning: immediate single-sample update from user feedback
+        // This is fast (~50ms) and runs after each accept/modify/reject
+        async learnFromFeedback(feedback) {
+            // Only learn from category feedback for now
+            if (feedback.type !== 'category') return false;
+
+            // Need a trained category model
+            if (!this.categoryModel || !this.encoder || this.categories.length < 2) {
+                return false;
+            }
+
+            // Don't do online learning while batch training
+            if (this.isTraining) return false;
+
+            // Need both predicted and chosen categories
+            const predicted = feedback.content?.predicted;
+            const chosen = feedback.modification || predicted;
+            const action = feedback.action;
+
+            if (!predicted || !chosen) return false;
+
+            // Find category indices
+            const chosenIndex = this.categories.indexOf(chosen);
+            if (chosenIndex === -1) {
+                // Category not in our list - can't learn from this
+                return false;
+            }
+
+            try {
+                // Get the node text from context
+                const nodeText = feedback.context?.nodeLabel || feedback.context?.nodeText;
+                if (!nodeText) return false;
+
+                console.log(`⚡ Online learning: ${action} (predicted: ${predicted}, chosen: ${chosen})`);
+
+                // Get embedding for this text
+                const embedding = await this.getEmbedding(nodeText);
+                if (!embedding) return false;
+
+                // Create one-hot target for the chosen category
+                const target = new Array(this.categories.length).fill(0);
+                target[chosenIndex] = 1;
+
+                // Determine learning rate based on feedback type
+                // Higher for rejections (strong signal), lower for accepts (reinforcement)
+                let onlineLearningRate;
+                if (action === 'rejected') {
+                    onlineLearningRate = CONFIG.NEURAL_NET.learningRate * 3; // Strong correction
+                } else if (action === 'modified') {
+                    onlineLearningRate = CONFIG.NEURAL_NET.learningRate * 2; // Moderate correction
+                } else {
+                    onlineLearningRate = CONFIG.NEURAL_NET.learningRate * 0.5; // Gentle reinforcement
+                }
+
+                // Create tensors
+                const xs = tf.tensor2d([embedding]);
+                const ys = tf.tensor2d([target]);
+
+                // Do a single training step with adjusted learning rate
+                // We temporarily update the optimizer's learning rate
+                const originalLR = this.categoryModel.optimizer.learningRate;
+
+                // TensorFlow.js doesn't allow changing LR directly, so we do 1 epoch
+                // with sample weight to simulate LR adjustment
+                const sampleWeight = tf.tensor1d([onlineLearningRate / CONFIG.NEURAL_NET.learningRate]);
+
+                await this.categoryModel.fit(xs, ys, {
+                    epochs: 1,
+                    batchSize: 1,
+                    shuffle: false,
+                    verbose: 0,
+                    sampleWeight: sampleWeight
+                });
+
+                // Cleanup
+                xs.dispose();
+                ys.dispose();
+                sampleWeight.dispose();
+
+                console.log(`✓ Online learning complete (${action})`);
+
+                // Emit event for UI feedback
+                this.emit('onOnlineLearning', { action, predicted, chosen });
+
+                return true;
+
+            } catch (error) {
+                console.error('Online learning error:', error);
+                return false;
+            }
+        }
+
         // Predict the best category for new text
         async predictCategory(text) {
             if (!this.categoryModel || !this.encoder) return null;
@@ -21203,8 +21295,23 @@ Return as JSON:
             console.log(`📊 AI Feedback: ${feedback.type} → ${action}`,
                 action === 'modified' ? `(chose: ${modification})` : '');
 
-            // Trigger incremental learning if enough feedback has accumulated
+            // Trigger IMMEDIATE online learning (fast, single-sample update)
+            if (action !== 'ignored') {
+                this.triggerOnlineLearning(feedback);
+            }
+
+            // Trigger BATCH learning if enough feedback has accumulated
             this.checkAndTriggerLearning(feedback);
+        },
+
+        // Trigger immediate online learning (non-blocking)
+        triggerOnlineLearning(feedback) {
+            if (typeof neuralNet === 'undefined' || !neuralNet.isReady) return;
+
+            // Call asynchronously so it doesn't block UI
+            neuralNet.learnFromFeedback(feedback).catch(err => {
+                console.warn('Online learning failed:', err);
+            });
         },
 
         // Check if incremental learning should be triggered
