@@ -24417,6 +24417,14 @@ Return as JSON:
                 baseRadius += Math.sqrt(expandedDepth) * 0.5;
             }
 
+            // RADIAL VARIATION for siblings - spread them at different distances
+            // This prevents stacking when sectors are narrow
+            if (total > 1 && level > 1) {
+                const radialSpread = 4; // Amount to vary radius among siblings
+                const radialOffset = (index - (total - 1) / 2) * (radialSpread / Math.max(total - 1, 1));
+                baseRadius += radialOffset;
+            }
+
             // Minimum radius
             baseRadius = Math.max(baseRadius, 5);
         }
