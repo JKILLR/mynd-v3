@@ -15236,7 +15236,40 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                     categoryData.sampleWeights.push(getSampleWeight(node.label));
                 }
             });
-            
+
+            // === KNOWLEDGE DISTILLATION: Add teacher examples from Claude ===
+            // These are "soft targets" from Claude that help the local model
+            // learn Claude's reasoning patterns
+            if (typeof TeacherKnowledge !== 'undefined') {
+                const teacherExamples = await TeacherKnowledge.getTrainingExamples('category', this);
+
+                for (const ex of teacherExamples) {
+                    // Find category index
+                    const catIndex = this.categories.indexOf(ex.category);
+                    if (catIndex === -1) continue; // Category not in our list
+
+                    // Add teacher example with soft one-hot (uses confidence as temperature)
+                    categoryData.inputs.push(ex.embedding);
+
+                    // Soft target: main category gets confidence, rest gets distributed remainder
+                    const softTarget = new Array(this.categories.length).fill(0);
+                    softTarget[catIndex] = ex.confidence;
+                    // Distribute remaining probability among other categories
+                    const remainder = (1 - ex.confidence) / (this.categories.length - 1);
+                    for (let i = 0; i < softTarget.length; i++) {
+                        if (i !== catIndex) softTarget[i] = remainder;
+                    }
+                    categoryData.outputs.push(softTarget);
+
+                    // Teacher examples get higher weight (Claude is authoritative)
+                    categoryData.sampleWeights.push(1.5);
+                }
+
+                if (teacherExamples.length > 0) {
+                    console.log(`📚 Added ${teacherExamples.length} teacher examples for knowledge distillation`);
+                }
+            }
+
             // Prepare connection training data with sample weights
             const connectionData = {
                 inputs: [],
@@ -16595,13 +16628,26 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 if (result.success && result.suggestions) {
                     // Enforce max 4 suggestions
                     const suggestions = result.suggestions.slice(0, 4);
+
+                    // Capture Claude's child predictions as teacher knowledge
+                    if (typeof TeacherKnowledge !== 'undefined' && suggestions.length > 0) {
+                        TeacherKnowledge.capture('children', nodeText, {
+                            parentLabel: node.label,
+                            children: suggestions.map(s => ({
+                                label: s.label || s,
+                                confidence: s.confidence || 0.8
+                            })),
+                            context: pathStr
+                        });
+                    }
+
                     return {
                         mlSuggestions,
                         aiSuggestions: suggestions,
                         combined: true
                     };
                 }
-                
+
                 return { mlSuggestions, aiSuggestions: [], combined: false };
                 
             } catch (error) {
@@ -16680,15 +16726,26 @@ Return as JSON:
                 
                 const data = await response.json();
                 const text_response = data.content[0].text;
-                
+
                 // Parse JSON from response
                 const jsonMatch = text_response.match(/\{[\s\S]*\}/);
                 if (jsonMatch) {
-                    return JSON.parse(jsonMatch[0]);
+                    const result = JSON.parse(jsonMatch[0]);
+
+                    // Capture Claude's prediction as teacher knowledge for distillation
+                    if (typeof TeacherKnowledge !== 'undefined' && result.category) {
+                        TeacherKnowledge.capture('category', text, {
+                            category: result.category,
+                            confidence: result.confidence || 0.8,
+                            reasoning: result.reasoning
+                        });
+                    }
+
+                    return result;
                 }
-                
+
                 return null;
-                
+
             } catch (error) {
                 console.error('Claude enhancement error:', error);
                 return null;
@@ -21246,7 +21303,109 @@ Return as JSON:
     
     // Global neural network instance
     const neuralNet = new PersonalNeuralNet();
-    
+
+    // ═══════════════════════════════════════════════════════════════════
+    // TEACHER KNOWLEDGE - Knowledge distillation from Claude
+    // ═══════════════════════════════════════════════════════════════════
+    // Captures Claude's predictions as "soft targets" for training the local model
+    // This allows the local neural network to learn from Claude's reasoning
+    const TeacherKnowledge = {
+        STORAGE_KEY: 'mynd_teacher_knowledge',
+        MAX_EXAMPLES: 500, // Keep last 500 teacher examples
+
+        // Store a teacher example (Claude's prediction)
+        capture(type, input, prediction) {
+            const example = {
+                type,           // 'category', 'children', 'connection'
+                input,          // The input text/context
+                prediction,     // Claude's prediction with confidence
+                timestamp: Date.now()
+            };
+
+            try {
+                const stored = this.getAll();
+                stored.push(example);
+
+                // Keep only the most recent examples
+                while (stored.length > this.MAX_EXAMPLES) stored.shift();
+
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(stored));
+                console.log(`📚 Teacher knowledge captured: ${type}`);
+
+                return true;
+            } catch (e) {
+                console.warn('Failed to store teacher knowledge:', e);
+                return false;
+            }
+        },
+
+        // Get all teacher examples
+        getAll() {
+            try {
+                return JSON.parse(localStorage.getItem(this.STORAGE_KEY) || '[]');
+            } catch (e) {
+                return [];
+            }
+        },
+
+        // Get teacher examples by type
+        getByType(type) {
+            return this.getAll().filter(ex => ex.type === type);
+        },
+
+        // Get teacher examples for training (with embeddings if available)
+        async getTrainingExamples(type, neuralNet) {
+            const examples = this.getByType(type);
+            if (examples.length === 0) return [];
+
+            const trainingExamples = [];
+
+            for (const ex of examples) {
+                if (type === 'category' && ex.prediction?.category) {
+                    // Get embedding for the input text
+                    const embedding = await neuralNet.getEmbedding(ex.input);
+                    if (embedding) {
+                        trainingExamples.push({
+                            embedding,
+                            category: ex.prediction.category,
+                            confidence: ex.prediction.confidence || 0.8,
+                            isTeacher: true // Mark as teacher example
+                        });
+                    }
+                }
+            }
+
+            return trainingExamples;
+        },
+
+        // Clear old examples
+        prune(maxAge = 7 * 24 * 60 * 60 * 1000) { // Default: 7 days
+            const cutoff = Date.now() - maxAge;
+            const stored = this.getAll();
+            const fresh = stored.filter(ex => ex.timestamp > cutoff);
+
+            if (fresh.length < stored.length) {
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(fresh));
+                console.log(`📚 Pruned ${stored.length - fresh.length} old teacher examples`);
+            }
+        },
+
+        // Get stats
+        getStats() {
+            const all = this.getAll();
+            const byType = {};
+            for (const ex of all) {
+                byType[ex.type] = (byType[ex.type] || 0) + 1;
+            }
+            return {
+                total: all.length,
+                byType,
+                oldestTimestamp: all[0]?.timestamp,
+                newestTimestamp: all[all.length - 1]?.timestamp
+            };
+        }
+    };
+
     // ═══════════════════════════════════════════════════════════════════
     // AI FEEDBACK TRACKING - Learns from user responses to suggestions
     // ═══════════════════════════════════════════════════════════════════
