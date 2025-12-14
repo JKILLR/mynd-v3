@@ -751,14 +751,14 @@ const GoalWizard = {
             GoalUI.celebrate('goal');
 
             // Add goal node to mind map
-            if (typeof store !== 'undefined' && store.addNode) {
+            if (typeof window.store !== 'undefined' && window.store.addNode) {
                 const priorityColors = {
                     high: '#8B5CF6',    // Purple
                     medium: '#A78BFA',  // Lighter purple
                     low: '#C4B5FD'      // Even lighter purple
                 };
 
-                const goalNode = store.addNode(store.data.id, {
+                const goalNode = window.store.addNode(window.store.data.id, {
                     label: goal.label,
                     description: goal.description || goal.whyItMatters || '',
                     color: priorityColors[goal.priority] || '#8B5CF6',
@@ -767,17 +767,17 @@ const GoalWizard = {
                     source: 'goal-wizard'
                 });
 
-                if (goalNode && typeof buildScene === 'function') {
-                    buildScene();
+                if (goalNode && typeof window.buildScene === 'function') {
+                    window.buildScene();
 
                     // Focus on the new goal node
                     setTimeout(() => {
-                        if (typeof nodes !== 'undefined') {
-                            const mesh = nodes.get(goalNode.id);
-                            if (mesh && typeof selectNode === 'function') {
-                                selectNode(mesh);
-                                if (typeof focusOnNode === 'function') {
-                                    focusOnNode(mesh);
+                        if (typeof window.nodes !== 'undefined') {
+                            const mesh = window.nodes.get(goalNode.id);
+                            if (mesh && typeof window.selectNode === 'function') {
+                                window.selectNode(mesh);
+                                if (typeof window.focusOnNode === 'function') {
+                                    window.focusOnNode(mesh);
                                 }
                             }
                         }

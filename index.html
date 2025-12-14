@@ -23110,6 +23110,9 @@ Return as JSON:
     
     const store = new Store();
 
+    // Expose store globally for external modules (like goal-system.js)
+    window.store = store;
+
     // ═══════════════════════════════════════════════════════════════════
     // CONNECTION MANAGER - Batched Connection Updates for Performance
     // ═══════════════════════════════════════════════════════════════════
@@ -24209,7 +24212,13 @@ Return as JSON:
         
         // Initialize animation controller for performance throttling
         AnimationController.init();
-        
+
+        // Expose key functions globally for external modules (like goal-system.js)
+        window.nodes = nodes;
+        window.buildScene = buildScene;
+        window.selectNode = selectNode;
+        window.focusOnNode = focusOnNode;
+
         // Start animation loop
         animate();
     }
