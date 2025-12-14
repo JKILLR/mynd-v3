@@ -16521,7 +16521,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
         // When the local model is uncertain, ask Claude for help
         // Claude's response becomes a teacher example for future training
 
-        activeLearningStat: { routed: 0, local: 0 },
+        activeLearningStat = { routed: 0, local: 0 }
 
         async predictCategoryWithActiveLearning(text, store) {
             // First, get local model's prediction
