@@ -24417,6 +24417,14 @@ Return as JSON:
                 baseRadius += Math.sqrt(expandedDepth) * 0.3;
             }
 
+            // Radial variation for siblings - spread them at different distances
+            // This prevents stacking when sectors are narrow
+            if (total > 1) {
+                const radialSpread = 3; // Amount to vary radius among siblings
+                const radialOffset = (index - (total - 1) / 2) * (radialSpread / Math.max(total - 1, 1));
+                baseRadius += radialOffset;
+            }
+
             // Minimum radius
             baseRadius = Math.max(baseRadius, 4);
         }
@@ -24514,13 +24522,13 @@ Return as JSON:
                 childSectorStart = sectorCenter - availableSector / 2;
             } else {
                 // Level 2+: Need enough horizontal spread so siblings don't stack
-                const minSectorPerChild = Math.PI / 8; // 22.5 degrees minimum per child
+                const minSectorPerChild = Math.PI / 6; // 30 degrees minimum per child
                 const minNeededSector = data.children.length * minSectorPerChild;
-                const expandedSector = sectorWidth * 1.3; // 30% expansion
+                const expandedSector = sectorWidth * 1.5; // 50% expansion
 
                 availableSector = Math.max(expandedSector, minNeededSector);
-                // Cap at 150% of parent's sector to limit cousin overlap
-                availableSector = Math.min(availableSector, sectorWidth * 1.5);
+                // Higher cap to allow proper sibling spread
+                availableSector = Math.min(availableSector, sectorWidth * 2.0);
 
                 const sectorCenter = sectorStart + sectorWidth / 2;
                 childSectorStart = sectorCenter - availableSector / 2;
