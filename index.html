@@ -16143,7 +16143,116 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 return null;
             }
         }
-        
+
+        // ═══════════════════════════════════════════════════════════════════
+        // ACTIVE LEARNING: Route uncertain predictions to Claude
+        // ═══════════════════════════════════════════════════════════════════
+        // When the local model is uncertain, ask Claude for help
+        // Claude's response becomes a teacher example for future training
+
+        UNCERTAINTY_THRESHOLD: 0.4, // Route to Claude if confidence below this
+        activeLearningStat: { routed: 0, local: 0 },
+
+        async predictCategoryWithActiveLearning(text, store) {
+            // First, get local model's prediction
+            const localPredictions = await this.predictCategory(text);
+
+            // If no local predictions, try Claude directly
+            if (!localPredictions || localPredictions.length === 0) {
+                console.log('🎯 Active Learning: No local predictions, routing to Claude');
+                return await this.routeToClaudeForCategory(text, store, null);
+            }
+
+            const topPrediction = localPredictions[0];
+            const confidence = topPrediction.confidence || topPrediction.probability || 0;
+
+            // Check if we're uncertain
+            if (confidence < this.UNCERTAINTY_THRESHOLD) {
+                console.log(`🎯 Active Learning: Low confidence (${Math.round(confidence * 100)}%), routing to Claude`);
+                this.activeLearningStat.routed++;
+
+                // Route to Claude for a better prediction
+                const claudeResult = await this.routeToClaudeForCategory(text, store, localPredictions);
+
+                if (claudeResult) {
+                    return claudeResult;
+                }
+
+                // Fall back to local predictions if Claude fails
+                console.log('🎯 Active Learning: Claude unavailable, using local predictions');
+            } else {
+                this.activeLearningStat.local++;
+            }
+
+            // High confidence or Claude unavailable - return local predictions
+            // Map to consistent format
+            return localPredictions.map(p => ({
+                category: p.category,
+                confidence: p.confidence || p.probability,
+                source: 'local'
+            }));
+        }
+
+        async routeToClaudeForCategory(text, store, localPredictions) {
+            try {
+                // Use enhanceWithClaude which already captures teacher knowledge
+                const claudeResult = await this.enhanceWithClaude(text, store);
+
+                if (claudeResult && claudeResult.category) {
+                    // Build predictions array with Claude's result at top
+                    const predictions = [{
+                        category: claudeResult.category,
+                        confidence: claudeResult.confidence || 0.85,
+                        source: 'claude',
+                        reasoning: claudeResult.reasoning
+                    }];
+
+                    // Add related concepts as alternatives
+                    if (claudeResult.relatedConcepts) {
+                        claudeResult.relatedConcepts.forEach((concept, i) => {
+                            predictions.push({
+                                category: concept,
+                                confidence: 0.5 - (i * 0.1),
+                                source: 'claude-related'
+                            });
+                        });
+                    }
+
+                    // Merge with local predictions (lower priority)
+                    if (localPredictions) {
+                        localPredictions.forEach(p => {
+                            if (!predictions.find(pred => pred.category === p.category)) {
+                                predictions.push({
+                                    category: p.category,
+                                    confidence: (p.confidence || p.probability) * 0.7, // Discount local
+                                    source: 'local'
+                                });
+                            }
+                        });
+                    }
+
+                    console.log(`🎯 Active Learning: Claude suggests "${claudeResult.category}" (${Math.round((claudeResult.confidence || 0.85) * 100)}%)`);
+                    return predictions;
+                }
+
+                return null;
+
+            } catch (error) {
+                console.error('Active learning routing error:', error);
+                return null;
+            }
+        }
+
+        // Get active learning statistics
+        getActiveLearningStats() {
+            const total = this.activeLearningStat.routed + this.activeLearningStat.local;
+            return {
+                ...this.activeLearningStat,
+                total,
+                routingRate: total > 0 ? this.activeLearningStat.routed / total : 0
+            };
+        }
+
         // Find semantically similar nodes to a given text
         async findSimilarNodes(text, store, maxResults = 5) {
             if (!this.encoder) return [];
@@ -35433,11 +35542,14 @@ Consider these learned patterns when generating suggestions.`;
         }
         
         const nodeText = description ? `${label}. ${description}` : label;
-        
-        // Get predictions
-        const predictions = await neuralNet.predictCategory(nodeText);
-        
-        if (predictions && predictions.length > 0 && predictions[0].probability > 0.5) {
+
+        // Get predictions with active learning (routes to Claude if uncertain)
+        const predictions = await neuralNet.predictCategoryWithActiveLearning(nodeText, store);
+
+        // Check confidence (handle both property names)
+        const topConf = predictions?.[0]?.confidence || predictions?.[0]?.probability || 0;
+
+        if (predictions && predictions.length > 0 && topConf > 0.5) {
             // High confidence - place under predicted category
             const categoryLabel = predictions[0].category;
             
@@ -36558,36 +36670,46 @@ Summary:`
             this.currentSuggestionId = null;
             this.predictedCategory = null;
             
-            // Use neural network + Claude to categorize
+            // Use neural network + Claude to categorize (with active learning)
             const contentText = `${metadata.title}. ${metadata.description}. ${metadata.type} from ${metadata.domain}`;
-            
+
             try {
-                // Get neural network predictions
-                const predictions = await neuralNet.predictCategory(contentText);
-                
+                // Get predictions with active learning (routes to Claude if uncertain)
+                const predictions = await neuralNet.predictCategoryWithActiveLearning(contentText, store);
+
                 if (predictions && predictions.length > 0) {
                     // Show top prediction
                     const top = predictions[0];
+                    const confidence = top.confidence || top.probability || 0;
                     this.selectedCategory = top.category;
                     this.predictedCategory = top.category; // Store original prediction
-                    
-                    // Track this suggestion for feedback
+
+                    // Track this suggestion for feedback (include source for debugging)
                     this.currentSuggestionId = AIFeedback.suggest('category', {
                         predicted: top.category,
-                        confidence: top.probability,
-                        alternatives: predictions.slice(1, 4).map(p => p.category)
+                        confidence: confidence,
+                        alternatives: predictions.slice(1, 4).map(p => p.category),
+                        source: top.source || 'local' // Track if Claude was used
+                    }, {
+                        nodeLabel: metadata.title,
+                        nodeText: contentText
                     });
-                    
-                    document.getElementById('link-category-name').textContent = top.category;
-                    document.getElementById('link-category-confidence').textContent = `${Math.round(top.probability * 100)}%`;
-                    
+
+                    // Show source indicator if from Claude
+                    const sourceIndicator = top.source === 'claude' ? ' 🤖' : '';
+                    document.getElementById('link-category-name').textContent = top.category + sourceIndicator;
+                    document.getElementById('link-category-confidence').textContent = `${Math.round(confidence * 100)}%`;
+
                     // Show alternatives
                     const alts = predictions.slice(1, 4);
-                    document.getElementById('link-category-alt').innerHTML = alts.map(p => `
+                    document.getElementById('link-category-alt').innerHTML = alts.map(p => {
+                        const altConf = p.confidence || p.probability || 0;
+                        return `
                         <div class="link-category-alt-item" data-category="${p.category}">
-                            ${p.category} (${Math.round(p.probability * 100)}%)
+                            ${p.category} (${Math.round(altConf * 100)}%)
                         </div>
-                    `).join('');
+                    `;
+                    }).join('');
                     
                     // Handle alt selection
                     document.querySelectorAll('.link-category-alt-item').forEach(el => {
