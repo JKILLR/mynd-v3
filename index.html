@@ -14156,7 +14156,128 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 }
             }
         }
-        
+
+        // ═══════════════════════════════════════════════════════════════════
+        // SEMANTIC MEMORY BRIDGE: Learn from AI feedback patterns
+        // ═══════════════════════════════════════════════════════════════════
+        // Track how user responds to AI suggestions to improve understanding
+
+        // AI feedback patterns
+        aiFeedbackPatterns: {
+            categoryAcceptance: new Map(), // category -> {accepted, rejected, modified}
+            modificationPatterns: [], // What users choose instead
+            responseTimeByConfidence: [], // [{ confidence, responseTime, action }]
+            trustLevel: 0.5 // 0 = distrust AI, 1 = fully trust AI
+        },
+
+        trackAIFeedback(feedback) {
+            if (!feedback || feedback.action === 'ignored') return;
+
+            const { type, action, content, modification, responseTime } = feedback;
+
+            // Track category-specific patterns
+            if (type === 'category' && content?.predicted) {
+                const cat = content.predicted;
+                if (!this.aiFeedbackPatterns.categoryAcceptance.has(cat)) {
+                    this.aiFeedbackPatterns.categoryAcceptance.set(cat, {
+                        accepted: 0, rejected: 0, modified: 0
+                    });
+                }
+                const stats = this.aiFeedbackPatterns.categoryAcceptance.get(cat);
+                stats[action]++;
+
+                // Track what user chose instead
+                if (action === 'modified' && modification) {
+                    this.aiFeedbackPatterns.modificationPatterns.push({
+                        predicted: content.predicted,
+                        chosen: modification,
+                        confidence: content.confidence || 0,
+                        timestamp: Date.now()
+                    });
+                    // Keep last 100
+                    if (this.aiFeedbackPatterns.modificationPatterns.length > 100) {
+                        this.aiFeedbackPatterns.modificationPatterns.shift();
+                    }
+                }
+            }
+
+            // Track response time by confidence level
+            if (content?.confidence && responseTime) {
+                this.aiFeedbackPatterns.responseTimeByConfidence.push({
+                    confidence: content.confidence,
+                    responseTime,
+                    action
+                });
+                // Keep last 100
+                if (this.aiFeedbackPatterns.responseTimeByConfidence.length > 100) {
+                    this.aiFeedbackPatterns.responseTimeByConfidence.shift();
+                }
+            }
+
+            // Update overall trust level based on feedback
+            this.updateAITrustLevel(action);
+
+            // Update decision style with AI-specific insights
+            if (action === 'accepted') {
+                this.decisionStyle.suggestionsAccepted++;
+            }
+            this.decisionStyle.suggestionsShown++;
+            this.decisionStyle.selectivityRate = 1 -
+                (this.decisionStyle.suggestionsAccepted / Math.max(1, this.decisionStyle.suggestionsShown));
+
+            this.scheduleSave();
+
+            console.log(`📊 MetaLearner: AI feedback tracked (${action}, trust: ${this.aiFeedbackPatterns.trustLevel.toFixed(2)})`);
+        },
+
+        updateAITrustLevel(action) {
+            // Adjust trust based on action
+            const trustDelta = {
+                'accepted': 0.02,   // Trust increases slightly
+                'modified': -0.005, // Trust decreases very slightly (still useful)
+                'rejected': -0.03   // Trust decreases more
+            };
+
+            const delta = trustDelta[action] || 0;
+            this.aiFeedbackPatterns.trustLevel = Math.max(0.1, Math.min(0.95,
+                this.aiFeedbackPatterns.trustLevel + delta
+            ));
+        },
+
+        // Get insights about AI feedback patterns for prompts
+        getAIFeedbackInsights() {
+            const patterns = this.aiFeedbackPatterns;
+
+            // Find categories with low acceptance
+            const problematicCategories = [];
+            for (const [cat, stats] of patterns.categoryAcceptance) {
+                const total = stats.accepted + stats.rejected + stats.modified;
+                if (total >= 3) {
+                    const acceptRate = stats.accepted / total;
+                    if (acceptRate < 0.3) {
+                        problematicCategories.push({ category: cat, acceptRate });
+                    }
+                }
+            }
+
+            // Find common modifications
+            const modFreq = {};
+            for (const mod of patterns.modificationPatterns.slice(-50)) {
+                const key = `${mod.predicted}→${mod.chosen}`;
+                modFreq[key] = (modFreq[key] || 0) + 1;
+            }
+            const commonMods = Object.entries(modFreq)
+                .filter(([_, count]) => count >= 2)
+                .map(([pattern, count]) => ({ pattern, count }));
+
+            return {
+                trustLevel: patterns.trustLevel,
+                problematicCategories,
+                commonModifications: commonMods,
+                totalFeedback: patterns.responseTimeByConfidence.length
+            };
+        },
+
         // Analyze session rhythm
         analyzeSessionRhythm() {
             const timestamps = this.sessionRhythm.actionTimestamps;
@@ -21568,8 +21689,47 @@ Return as JSON:
                 this.triggerOnlineLearning(feedback);
             }
 
+            // === SEMANTIC MEMORY BRIDGE ===
+            // Notify MetaLearner about AI feedback patterns
+            if (typeof metaLearner !== 'undefined' && action !== 'ignored') {
+                metaLearner.trackAIFeedback(feedback);
+            }
+
+            // Create semantic memory for significant feedback
+            if (typeof semanticMemory !== 'undefined' && action !== 'ignored') {
+                this.createFeedbackMemory(feedback);
+            }
+
             // Trigger BATCH learning if enough feedback has accumulated
             this.checkAndTriggerLearning(feedback);
+        },
+
+        // Create a semantic memory from feedback
+        createFeedbackMemory(feedback) {
+            const { type, action, content, modification, context } = feedback;
+
+            // Build memory context string
+            let memoryContext = '';
+            if (type === 'category') {
+                if (action === 'accepted') {
+                    memoryContext = `User accepted AI suggestion to categorize "${context?.nodeLabel || 'content'}" as "${content?.predicted}"`;
+                } else if (action === 'modified') {
+                    memoryContext = `User changed category from "${content?.predicted}" to "${modification}" for "${context?.nodeLabel || 'content'}"`;
+                } else if (action === 'rejected') {
+                    memoryContext = `User rejected AI category suggestion "${content?.predicted}" for "${context?.nodeLabel || 'content'}"`;
+                }
+            }
+
+            if (memoryContext) {
+                const eventType = action === 'accepted' ? 'suggestion_accepted' : 'suggestion_rejected';
+                semanticMemory.addMemory(eventType, memoryContext, {
+                    feedbackType: type,
+                    action,
+                    predicted: content?.predicted,
+                    chosen: modification || content?.predicted,
+                    confidence: content?.confidence
+                }).catch(err => console.warn('Failed to create feedback memory:', err));
+            }
         },
 
         // Trigger immediate online learning (non-blocking)
