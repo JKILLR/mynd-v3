@@ -24432,9 +24432,12 @@ Return as JSON:
             const startAngle = -Math.PI / 2;
             const angle = startAngle + angleStep * index;
 
-            // DNA helix effect for level 1 - sine wave based on angle
-            const helixAmp = CONFIG.LAYOUT.helixAmplitude || 3.0;
+            // DNA helix effect for level 1 - amplitude INCREASES as more layers expand below
+            const baseHelixAmp = CONFIG.LAYOUT.helixAmplitude || 3.0;
             const helixFreq = CONFIG.LAYOUT.helixFrequency || 0.8;
+            // More expanded depth = more vertical spread at root level
+            const depthMultiplier = 1 + (expandedDepth * 0.6);
+            const helixAmp = baseHelixAmp * depthMultiplier;
             const verticalOffset = Math.sin(angle * helixFreq * 2) * helixAmp;
 
             data.basePosition = [Math.cos(angle) * baseRadius, verticalOffset, Math.sin(angle) * baseRadius];
@@ -24478,19 +24481,24 @@ Return as JSON:
                 childAngle = outwardAngle - halfSpread + (spreadAngle / Math.max(total - 1, 1)) * index;
             }
 
-            // DNA HELIX EFFECT: Vertical position follows a sine wave based on:
-            // - The child angle (creates spiral as you go around)
-            // - The level (helix continues outward)
-            // - The index within siblings (spreads siblings vertically)
-            const helixAmp = (CONFIG.LAYOUT.helixAmplitude || 3.0) * (1 + level * 0.3);
+            // DNA HELIX EFFECT: Vertical amplitude behavior:
+            // - DECREASES with level (deeper nodes = less vertical wave)
+            // - INCREASES with expandedDepth (nodes with more expansion below spread more)
+            const baseHelixAmp = CONFIG.LAYOUT.helixAmplitude || 3.0;
             const helixFreq = CONFIG.LAYOUT.helixFrequency || 0.8;
             const verticalSpread = CONFIG.LAYOUT.verticalSpread || 1.5;
+
+            // Level decay: amplitude decreases as we go deeper
+            const levelDecay = 1 / (1 + (level - 1) * 0.35);
+            // Depth boost: amplitude increases when there's more expansion below
+            const depthBoost = 1 + (expandedDepth * 0.5);
+            const helixAmp = baseHelixAmp * levelDecay * depthBoost;
 
             // Base helix wave from the branch angle
             const helixWave = Math.sin(childAngle * helixFreq + level * Math.PI * 0.5) * helixAmp;
 
-            // Spread siblings vertically with larger spacing
-            const siblingSpacing = verticalSpread * (1 + Math.min(total * 0.15, 0.8));
+            // Spread siblings vertically - also scales with depth boost
+            const siblingSpacing = verticalSpread * (1 + Math.min(total * 0.15, 0.8)) * Math.sqrt(depthBoost);
             const siblingOffset = (index - (total - 1) / 2) * siblingSpacing;
 
             // Combine parent height + helix wave + sibling offset
@@ -25523,12 +25531,10 @@ Return as JSON:
         // Pause neural training during heavy operation
         neuralTrainingPaused = true;
 
-        // Start zooming out immediately on mobile
-        if (isMobile) {
-            zoomToFitMap(25);
-        }
+        // Start zooming out immediately
+        zoomToFitMap(isMobile ? 25 : 15);
 
-        // Get all nodes that need expanding, sorted by level (shallowest first)
+        // Get all nodes that need expanding
         const toExpand = [];
         nodes.forEach(mesh => {
             if (mesh.userData.children?.length && !mesh.userData.isExpanded) {
@@ -25538,48 +25544,105 @@ Return as JSON:
 
         if (toExpand.length === 0) {
             showToast('All nodes already expanded', 'info');
-            // Still zoom out to show entire map
-            if (!isMobile) zoomToFitMap(15);
-            neuralTrainingPaused = false;  // Resume training
+            neuralTrainingPaused = false;
             return;
         }
 
         // Sort by level (shallowest first)
         toExpand.sort((a, b) => (a.userData.level || 0) - (b.userData.level || 0));
 
-        // SEQUENTIAL EXPANSION: Much slower stagger for large maps to prevent memory issues
-        // Scale stagger time with map size for smoother performance
-        const baseStagger = isMobile ? 200 : 100;
-        const staggerTime = toExpand.length > 100 ? baseStagger * 2 :
-                           toExpand.length > 50 ? baseStagger * 1.5 : baseStagger;
+        // OPTIMIZED EXPANSION: Mark all as expanded first, then ONE rebuild
+        // This avoids rebuilding the entire scene for each node!
 
-        // Expand ONE node at a time with proper spacing
-        let expandIndex = 0;
-        function expandNext() {
-            if (expandIndex >= toExpand.length) {
-                // Done - zoom to fit and resume training
+        // Store old positions before any changes
+        const oldPositions = new Map();
+        nodes.forEach((m, id) => {
+            if (m.visible) {
+                oldPositions.set(id, m.position.clone());
+            }
+        });
+
+        // Mark ALL nodes as expanded (no rebuild yet)
+        toExpand.forEach(mesh => {
+            mesh.userData.isExpanded = true;
+            store.expandedNodes.add(mesh.userData.id);
+        });
+
+        // ONE rebuild to calculate all new positions
+        buildScene();
+
+        // Collect all newly visible nodes (children that just appeared)
+        const newlyVisible = [];
+        nodes.forEach((mesh, id) => {
+            if (mesh.visible && !oldPositions.has(id)) {
+                newlyVisible.push(mesh);
+                // Start hidden for animation
+                mesh.visible = false;
+                if (mesh.userData.outlineMesh) mesh.userData.outlineMesh.visible = false;
+                if (mesh.userData.labelSprite) mesh.userData.labelSprite.visible = false;
+            }
+        });
+
+        // Restore old positions for smooth transition
+        oldPositions.forEach((oldPos, id) => {
+            const m = nodes.get(id);
+            if (m && m.visible) {
+                m.position.copy(oldPos);
+                if (m.userData.outlineMesh) m.userData.outlineMesh.position.copy(oldPos);
+            }
+        });
+
+        // Sort new nodes by level for reveal order
+        newlyVisible.sort((a, b) => (a.userData.level || 0) - (b.userData.level || 0));
+
+        // Reveal nodes ONE AT A TIME with staggered animation
+        const baseDelay = isMobile ? 30 : 15;
+        const staggerTime = newlyVisible.length > 500 ? baseDelay * 0.5 :
+                           newlyVisible.length > 200 ? baseDelay * 0.75 : baseDelay;
+
+        let revealIndex = 0;
+        function revealNext() {
+            if (revealIndex >= newlyVisible.length) {
+                // Done - final zoom and resume training
                 neuralTrainingPaused = false;
                 if (autoCameraEnabled) {
-                    setTimeout(() => zoomToFitMap(15), 500);
+                    setTimeout(() => zoomToFitMap(10), 300);
                 }
+                audio.expand();
                 return;
             }
 
-            const mesh = toExpand[expandIndex];
-            if (!mesh.userData.isExpanded) {
-                expandNode(mesh, true);
-            }
-            expandIndex++;
+            const mesh = newlyVisible[revealIndex];
 
-            // Schedule next expansion
-            setTimeout(expandNext, staggerTime);
+            // Find parent position for spawn point
+            const parentId = mesh.userData.parent;
+            const parentMesh = parentId ? nodes.get(parentId) : null;
+            const spawnPos = parentMesh ? parentMesh.position.clone() : new THREE.Vector3(0, 0, 0);
+
+            // Start from parent position, small scale
+            mesh.position.copy(spawnPos);
+            if (mesh.userData.outlineMesh) mesh.userData.outlineMesh.position.copy(spawnPos);
+
+            const importance = mesh.userData.importance || 1;
+            mesh.scale.set(0.3 * importance, 0.3 * importance, 0.3 * importance);
+            mesh.material.opacity = 0.5;
+
+            // Make visible
+            mesh.visible = true;
+            if (mesh.userData.outlineMesh) mesh.userData.outlineMesh.visible = true;
+            if (mesh.userData.labelSprite) mesh.userData.labelSprite.visible = true;
+
+            revealIndex++;
+
+            // Schedule next reveal
+            setTimeout(revealNext, staggerTime);
         }
 
-        // Start sequential expansion
-        expandNext();
+        // Start revealing
+        revealNext();
 
-        const estimatedTime = Math.round((toExpand.length * staggerTime) / 1000);
-        showToast(`Expanding ${toExpand.length} nodes (~${estimatedTime}s)...`, 'success');
+        const estimatedTime = Math.round((newlyVisible.length * staggerTime) / 1000);
+        showToast(`Expanding ${newlyVisible.length} nodes (~${estimatedTime}s)...`, 'success');
     }
 
     function collapseAll() {
@@ -25588,56 +25651,82 @@ Return as JSON:
         // Pause neural training during heavy operation
         neuralTrainingPaused = true;
 
-        // Get all expanded nodes, sorted by level (deepest first for proper collapse order)
-        // Skip root node (level 0) - keep level 1 nodes visible but collapse their children
+        // Collect all nodes that will be hidden (level 2+)
+        const toHide = [];
+        nodes.forEach(mesh => {
+            if (mesh.visible && (mesh.userData.level || 0) >= 2) {
+                toHide.push(mesh);
+            }
+        });
+
+        // Collect all expanded nodes that need to be marked collapsed
         const toCollapse = [];
         nodes.forEach(mesh => {
-            // Only collapse nodes that are expanded AND have level >= 1 (not the root)
             if (mesh.userData.isExpanded && (mesh.userData.level || 0) >= 1) {
                 toCollapse.push(mesh);
             }
         });
 
-        if (toCollapse.length === 0) {
+        if (toHide.length === 0 && toCollapse.length === 0) {
             showToast('Already collapsed', 'info');
-            neuralTrainingPaused = false;  // Resume training
+            neuralTrainingPaused = false;
             return;
         }
 
-        // Sort by level descending (deepest first)
-        toCollapse.sort((a, b) => (b.userData.level || 0) - (a.userData.level || 0));
+        // Sort nodes to hide by level descending (deepest first)
+        toHide.sort((a, b) => (b.userData.level || 0) - (a.userData.level || 0));
 
-        // SEQUENTIAL COLLAPSE: Scale stagger with map size
-        const baseStagger = isMobile ? 80 : 40;
-        const staggerTime = toCollapse.length > 100 ? baseStagger * 2 :
-                           toCollapse.length > 50 ? baseStagger * 1.5 : baseStagger;
+        // OPTIMIZED COLLAPSE: Hide nodes one at a time, then ONE rebuild
+        const baseDelay = isMobile ? 20 : 10;
+        const staggerTime = toHide.length > 500 ? baseDelay * 0.5 :
+                           toHide.length > 200 ? baseDelay * 0.75 : baseDelay;
 
-        // Collapse ONE node at a time
-        let collapseIndex = 0;
-        function collapseNext() {
-            if (collapseIndex >= toCollapse.length) {
-                // Done - zoom to fit and resume training
+        let hideIndex = 0;
+        function hideNext() {
+            if (hideIndex >= toHide.length) {
+                // All nodes hidden - now mark as collapsed and rebuild once
+                toCollapse.forEach(mesh => {
+                    mesh.userData.isExpanded = false;
+                    store.expandedNodes.delete(mesh.userData.id);
+                });
+
+                // ONE rebuild
+                buildScene();
+
+                // Done
                 neuralTrainingPaused = false;
                 if (autoCameraEnabled) {
-                    setTimeout(() => zoomToFitMap(0), 500);
+                    setTimeout(() => zoomToFitMap(0), 300);
                 }
+                audio.collapse();
                 return;
             }
 
-            const mesh = toCollapse[collapseIndex];
-            if (mesh.userData.isExpanded) {
-                collapseNode(mesh, true);
-            }
-            collapseIndex++;
+            const mesh = toHide[hideIndex];
 
-            // Schedule next collapse
-            setTimeout(collapseNext, staggerTime);
+            // Animate shrink/fade
+            const importance = mesh.userData.importance || 1;
+            mesh.scale.set(0.2 * importance, 0.2 * importance, 0.2 * importance);
+            mesh.material.opacity = 0.2;
+
+            // Hide after brief delay
+            setTimeout(() => {
+                mesh.visible = false;
+                if (mesh.userData.outlineMesh) mesh.userData.outlineMesh.visible = false;
+                if (mesh.userData.labelSprite) mesh.userData.labelSprite.visible = false;
+            }, 50);
+
+            hideIndex++;
+
+            // Schedule next hide
+            setTimeout(hideNext, staggerTime);
         }
 
-        // Start sequential collapse
-        collapseNext();
+        // Start hiding
+        hideNext();
 
-        showToast(`Collapsing ${toCollapse.length} nodes...`, 'success');
+        const estimatedTime = Math.round((toHide.length * staggerTime) / 1000);
+        showToast(`Collapsing ${toHide.length} nodes (~${estimatedTime}s)...`, 'success');
     }
 
     // Label decluttering - hide labels that overlap with others
