@@ -24396,29 +24396,29 @@ Return as JSON:
         let baseRadius;
         if (level === 0) {
             baseRadius = 0;
-        } else {
-            // All levels use golden ratio decay from a base length
-            // Level 1 and 2 are equal, then decay by φ for each subsequent level
-            const baseBranchLength = 18; // Shorter base for level 1 & 2
-
-            if (level <= 2) {
-                baseRadius = baseBranchLength;
-            } else {
-                // Level 3+: Golden ratio decay from level 2
-                // Level 3: base/φ, Level 4: base/φ², etc.
-                baseRadius = baseBranchLength * Math.pow(PHI_INV, level - 2);
+        } else if (level === 1) {
+            // Level 1: SHORTER branches from root
+            const baseBranchLength = 12;
+            baseRadius = baseBranchLength;
+            // Very small boost for expanded nodes
+            if (isExpanded && visibleDescendants > 0) {
+                baseRadius += Math.sqrt(visibleDescendants) * 0.2;
             }
+        } else {
+            // Level 2+: Golden ratio decay
+            const baseBranchLength = 15; // Level 2 base
+            baseRadius = baseBranchLength * Math.pow(PHI_INV, level - 2);
 
             // Small boost for expanded nodes with descendants
             if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 0.4;
+                baseRadius += Math.sqrt(visibleDescendants) * 0.3;
             }
             if (expandedDepth > 0) {
-                baseRadius += Math.sqrt(expandedDepth) * 0.5;
+                baseRadius += Math.sqrt(expandedDepth) * 0.3;
             }
 
             // Minimum radius
-            baseRadius = Math.max(baseRadius, 5);
+            baseRadius = Math.max(baseRadius, 4);
         }
 
         if (level === 0) {
@@ -24430,26 +24430,25 @@ Return as JSON:
             // Position at center of this node's sector
             const angle = sectorCenter;
 
-            // Helix effect - ONLY for level 1 branches
-            const baseHelixAmp = CONFIG.LAYOUT.helixAmplitude || 12.0;
-            const helixFreq = CONFIG.LAYOUT.helixFrequency || 1.5;
-
             let verticalOffset = 0;
 
             if (level === 1) {
-                // Level 1: Helix positions main branches vertically around root
-                const depthBoost = 1 + (expandedDepth * 0.8);
-                const helixAmp = baseHelixAmp * depthBoost;
-                verticalOffset = Math.sin(angle * helixFreq * 2) * helixAmp;
+                // Level 1: PROPER SPIRAL - single smooth oscillation around root
+                // sin(angle) gives ONE wave as you go around the circle = spiral
+                const baseHelixAmp = CONFIG.LAYOUT.helixAmplitude || 12.0;
+                // Gentler depth boost
+                const depthBoost = 1 + (expandedDepth * 0.3);
+                const helixAmp = baseHelixAmp * depthBoost * 0.5; // Reduced amplitude
+                verticalOffset = Math.sin(angle) * helixAmp;
             }
-            // Level 2+: NO additional vertical offset - spread horizontally from parent
-            // Sibling vertical spread is minimal and uses golden ratio decay
+
+            // Level 2+: Small sibling vertical spread
             let siblingVerticalOffset = 0;
             if (level > 1 && total > 1) {
                 const verticalSpread = CONFIG.LAYOUT.verticalSpread || 3.0;
                 // Golden ratio decay for sibling spacing
                 const levelFactor = Math.pow(PHI_INV, level - 2);
-                const siblingSpacing = verticalSpread * levelFactor * 0.5;
+                const siblingSpacing = verticalSpread * levelFactor * 0.4;
                 siblingVerticalOffset = (index - (total - 1) / 2) * siblingSpacing;
             }
 
@@ -24506,16 +24505,23 @@ Return as JSON:
                 availableSector = Math.PI * 2;
                 childSectorStart = -Math.PI;
             } else {
-                // GOLDEN RATIO sector expansion
-                // Each level expands by φ to counteract the natural narrowing
-                // This creates a balanced, natural-looking spread
-                const expansionFactor = Math.pow(PHI, level); // φ^1, φ^2, φ^3...
-                const expandedSector = Math.min(sectorWidth * expansionFactor, Math.PI * 1.8);
+                // Calculate minimum sector needed based on number of children
+                // Each child needs at least some angular space
+                const minSectorPerChild = Math.PI / 6; // 30 degrees minimum per child
+                const minNeededSector = data.children.length * minSectorPerChild;
 
-                // Center the expanded sector on the parent's sector center
+                // Golden ratio expansion from parent's sector
+                const expansionFactor = PHI; // Just φ, not φ^level
+                const expandedSector = sectorWidth * expansionFactor;
+
+                // Use whichever is larger: expanded sector or minimum needed
+                availableSector = Math.max(expandedSector, minNeededSector);
+                // Cap to prevent wrapping more than 270 degrees
+                availableSector = Math.min(availableSector, Math.PI * 1.5);
+
+                // Center the available sector on the parent's sector center
                 const sectorCenter = sectorStart + sectorWidth / 2;
-                childSectorStart = sectorCenter - expandedSector / 2;
-                availableSector = expandedSector;
+                childSectorStart = sectorCenter - availableSector / 2;
             }
 
             data.children.forEach((child, i) => {
