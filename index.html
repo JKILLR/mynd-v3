@@ -576,6 +576,20 @@
             transform: none;
         }
 
+        /* Goal button special styling */
+        .icon-btn.goal-btn {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.9), rgba(167, 139, 250, 0.9));
+            border-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
+        }
+
+        .icon-btn.goal-btn:hover {
+            background: linear-gradient(135deg, rgba(124, 79, 224, 0.95), rgba(155, 122, 240, 0.95));
+            box-shadow: 0 6px 24px rgba(139, 92, 246, 0.5);
+            color: white;
+        }
+
         /* ═══════════════════════════════════════════════════════════
            MOBILE HEADER
            New simplified header for mobile devices
@@ -784,6 +798,18 @@
             .mobile-fab:active {
                 transform: scale(0.95);
                 background: var(--bg-elevated);
+            }
+
+            /* Goal FAB button - special styling */
+            .mobile-fab.goal-fab {
+                background: linear-gradient(135deg, rgba(139, 92, 246, 0.9), rgba(167, 139, 250, 0.9));
+                border-color: rgba(255, 255, 255, 0.2);
+                color: white;
+                box-shadow: 0 4px 20px rgba(139, 92, 246, 0.4);
+            }
+
+            .mobile-fab.goal-fab:active {
+                background: linear-gradient(135deg, rgba(124, 79, 224, 0.95), rgba(155, 122, 240, 0.95));
             }
 
             .mobile-fab:disabled {
@@ -3736,6 +3762,304 @@
         .modal-btn.submit:hover {
             transform: translateY(-2px);
             box-shadow: var(--shadow-glow);
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           GOAL WIZARD - Manifestation Creation Flow
+           ═══════════════════════════════════════════════════════════ */
+        #goal-wizard {
+            position: fixed;
+            inset: 0;
+            z-index: calc(var(--z-modal) + 10);
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(20px);
+            display: none;
+            place-items: center;
+        }
+
+        #goal-wizard.active {
+            display: grid;
+            animation: fadeIn var(--duration-fast);
+        }
+
+        .goal-wizard-content {
+            width: min(520px, calc(100vw - 32px));
+            max-height: calc(100vh - 60px);
+            overflow-y: auto;
+            background: var(--bg-secondary);
+            border: 1px solid var(--glass-border);
+            border-radius: 28px;
+            padding: var(--space-7);
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5), 0 0 60px var(--accent-glow);
+            animation: wizardIn 0.4s var(--ease-spring);
+        }
+
+        @keyframes wizardIn {
+            from { opacity: 0; transform: scale(0.9) translateY(30px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .goal-wizard-header {
+            text-align: center;
+            margin-bottom: var(--space-6);
+        }
+
+        .goal-wizard-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto var(--space-4);
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+            border-radius: 20px;
+            display: grid;
+            place-items: center;
+            font-size: 32px;
+            box-shadow: 0 8px 32px var(--accent-glow);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 8px 32px var(--accent-glow); }
+            50% { transform: scale(1.05); box-shadow: 0 12px 48px var(--accent-glow); }
+        }
+
+        .goal-wizard-title {
+            font-family: var(--font-display);
+            font-size: 26px;
+            font-weight: 600;
+            margin-bottom: var(--space-2);
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .goal-wizard-subtitle {
+            font-size: 15px;
+            color: var(--text-muted);
+        }
+
+        /* Progress Steps */
+        .goal-wizard-progress {
+            display: flex;
+            justify-content: center;
+            gap: var(--space-2);
+            margin-bottom: var(--space-6);
+        }
+
+        .goal-wizard-step {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--bg-tertiary);
+            transition: all var(--duration-normal);
+        }
+
+        .goal-wizard-step.active {
+            background: var(--accent);
+            box-shadow: 0 0 12px var(--accent-glow);
+            transform: scale(1.2);
+        }
+
+        .goal-wizard-step.completed {
+            background: var(--success);
+        }
+
+        /* Form Steps */
+        .goal-wizard-steps {
+            position: relative;
+            min-height: 200px;
+        }
+
+        .goal-wizard-step-content {
+            display: none;
+            animation: stepIn var(--duration-normal) var(--ease-out);
+        }
+
+        .goal-wizard-step-content.active {
+            display: block;
+        }
+
+        @keyframes stepIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .goal-wizard-question {
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: var(--space-4);
+            color: var(--text-primary);
+        }
+
+        .goal-wizard-hint {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: var(--space-4);
+            font-style: italic;
+        }
+
+        .goal-wizard-input {
+            width: 100%;
+            padding: var(--space-5);
+            background: var(--bg-tertiary);
+            border: 2px solid var(--glass-border);
+            border-radius: 16px;
+            font-size: 16px;
+            outline: none;
+            transition: all var(--duration-fast);
+            color: var(--text-primary);
+        }
+
+        .goal-wizard-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 24px var(--accent-glow);
+        }
+
+        .goal-wizard-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        textarea.goal-wizard-input {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        /* Priority Selector */
+        .goal-priority-selector {
+            display: flex;
+            gap: var(--space-3);
+            margin-top: var(--space-4);
+        }
+
+        .goal-priority-option {
+            flex: 1;
+            padding: var(--space-4);
+            background: var(--bg-tertiary);
+            border: 2px solid var(--glass-border);
+            border-radius: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all var(--duration-fast);
+        }
+
+        .goal-priority-option:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+        }
+
+        .goal-priority-option.selected {
+            border-color: var(--accent);
+            background: rgba(var(--accent-rgb), 0.1);
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+
+        .goal-priority-label {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: var(--space-1);
+        }
+
+        .goal-priority-desc {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Summary Step */
+        .goal-summary {
+            background: var(--bg-tertiary);
+            border-radius: 16px;
+            padding: var(--space-5);
+        }
+
+        .goal-summary-item {
+            margin-bottom: var(--space-4);
+        }
+
+        .goal-summary-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .goal-summary-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: var(--space-1);
+        }
+
+        .goal-summary-value {
+            font-size: 15px;
+            color: var(--text-primary);
+        }
+
+        /* Actions */
+        .goal-wizard-actions {
+            display: flex;
+            gap: var(--space-3);
+            margin-top: var(--space-6);
+        }
+
+        .goal-wizard-btn {
+            flex: 1;
+            padding: var(--space-4) var(--space-5);
+            border-radius: 14px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--duration-fast);
+            border: none;
+        }
+
+        .goal-wizard-btn.secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+        }
+
+        .goal-wizard-btn.secondary:hover {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+        }
+
+        .goal-wizard-btn.primary {
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+            color: white;
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+
+        .goal-wizard-btn.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px var(--accent-glow);
+        }
+
+        .goal-wizard-btn.primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Close Button */
+        .goal-wizard-close {
+            position: absolute;
+            top: var(--space-4);
+            right: var(--space-4);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--bg-tertiary);
+            border: none;
+            color: var(--text-muted);
+            font-size: 20px;
+            cursor: pointer;
+            display: grid;
+            place-items: center;
+            transition: all var(--duration-fast);
+        }
+
+        .goal-wizard-close:hover {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            transform: rotate(90deg);
         }
 
         /* ═══════════════════════════════════════════════════════════
@@ -7079,6 +7403,13 @@
                 <path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
             </svg>
         </button>
+        <button class="mobile-fab goal-fab" id="mobile-goal-btn" aria-label="Create Goal">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <circle cx="12" cy="12" r="6"/>
+                <circle cx="12" cy="12" r="2"/>
+            </svg>
+        </button>
         <button class="mobile-fab" id="mobile-theme-btn" aria-label="Theme">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="4"/>
@@ -7110,6 +7441,9 @@
         </button>
         <button class="icon-btn" id="menu-btn" title="Menu" aria-label="Open menu">
             <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <button class="icon-btn goal-btn" id="goal-btn" title="Create Goal" aria-label="Create a new goal">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
         </button>
         <button class="icon-btn" id="undo-btn" title="Undo" aria-label="Undo last action" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
@@ -7939,7 +8273,102 @@
             </div>
         </div>
     </div>
-    
+
+    <!-- Goal Creation Wizard -->
+    <div id="goal-wizard">
+        <div class="goal-wizard-content">
+            <button class="goal-wizard-close" id="goal-wizard-close">×</button>
+
+            <div class="goal-wizard-header">
+                <div class="goal-wizard-icon">✨</div>
+                <h2 class="goal-wizard-title">Create Your Vision</h2>
+                <p class="goal-wizard-subtitle">Let's turn your dream into reality</p>
+            </div>
+
+            <!-- Progress Indicator -->
+            <div class="goal-wizard-progress">
+                <div class="goal-wizard-step active" data-step="1"></div>
+                <div class="goal-wizard-step" data-step="2"></div>
+                <div class="goal-wizard-step" data-step="3"></div>
+                <div class="goal-wizard-step" data-step="4"></div>
+            </div>
+
+            <!-- Step Contents -->
+            <div class="goal-wizard-steps">
+                <!-- Step 1: The Dream -->
+                <div class="goal-wizard-step-content active" data-step="1">
+                    <p class="goal-wizard-question">What do you want to manifest?</p>
+                    <p class="goal-wizard-hint">Dream big. Describe your ideal outcome.</p>
+                    <input type="text" class="goal-wizard-input" id="goal-desire"
+                           placeholder="I want to..." autofocus>
+                </div>
+
+                <!-- Step 2: The Why -->
+                <div class="goal-wizard-step-content" data-step="2">
+                    <p class="goal-wizard-question">Why does this matter to you?</p>
+                    <p class="goal-wizard-hint">Connect to your deeper motivation. This fuels your journey.</p>
+                    <textarea class="goal-wizard-input" id="goal-why"
+                              placeholder="This matters because..."></textarea>
+                </div>
+
+                <!-- Step 3: Success Criteria -->
+                <div class="goal-wizard-step-content" data-step="3">
+                    <p class="goal-wizard-question">How will you know you've achieved it?</p>
+                    <p class="goal-wizard-hint">Be specific. What does success look like?</p>
+                    <textarea class="goal-wizard-input" id="goal-success"
+                              placeholder="I'll know I've succeeded when..."></textarea>
+
+                    <p class="goal-wizard-question" style="margin-top: var(--space-5);">Priority</p>
+                    <div class="goal-priority-selector">
+                        <div class="goal-priority-option" data-priority="high">
+                            <div class="goal-priority-label">🔥 High</div>
+                            <div class="goal-priority-desc">Top focus</div>
+                        </div>
+                        <div class="goal-priority-option selected" data-priority="medium">
+                            <div class="goal-priority-label">⭐ Medium</div>
+                            <div class="goal-priority-desc">Important</div>
+                        </div>
+                        <div class="goal-priority-option" data-priority="low">
+                            <div class="goal-priority-label">🌱 Low</div>
+                            <div class="goal-priority-desc">Someday</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 4: Summary -->
+                <div class="goal-wizard-step-content" data-step="4">
+                    <p class="goal-wizard-question">Your Vision</p>
+                    <p class="goal-wizard-hint">Review your goal before manifesting it.</p>
+
+                    <div class="goal-summary">
+                        <div class="goal-summary-item">
+                            <div class="goal-summary-label">Dream</div>
+                            <div class="goal-summary-value" id="summary-desire">-</div>
+                        </div>
+                        <div class="goal-summary-item">
+                            <div class="goal-summary-label">Why It Matters</div>
+                            <div class="goal-summary-value" id="summary-why">-</div>
+                        </div>
+                        <div class="goal-summary-item">
+                            <div class="goal-summary-label">Success Looks Like</div>
+                            <div class="goal-summary-value" id="summary-success">-</div>
+                        </div>
+                        <div class="goal-summary-item">
+                            <div class="goal-summary-label">Priority</div>
+                            <div class="goal-summary-value" id="summary-priority">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="goal-wizard-actions">
+                <button class="goal-wizard-btn secondary" id="goal-wizard-back" style="display: none;">Back</button>
+                <button class="goal-wizard-btn primary" id="goal-wizard-next">Next</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Neural Network Panel -->
     <div id="neural-panel">
         <div class="neural-header">
@@ -32510,7 +32939,20 @@ Guidelines:
             showToast(`Undid: ${result.actionName}`, 'info');
         }
     });
-    
+
+    // Goal buttons - open goal wizard
+    document.getElementById('mobile-goal-btn')?.addEventListener('click', () => {
+        if (typeof GoalWizard !== 'undefined') {
+            GoalWizard.open();
+        }
+    });
+
+    document.getElementById('goal-btn')?.addEventListener('click', () => {
+        if (typeof GoalWizard !== 'undefined') {
+            GoalWizard.open();
+        }
+    });
+
     // Mobile zoom slider (minimal scrollbar style)
     const mobileZoomSlider = document.getElementById('mobile-zoom-slider');
     const mobileZoomThumb = document.getElementById('mobile-zoom-thumb');

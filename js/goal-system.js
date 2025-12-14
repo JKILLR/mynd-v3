@@ -441,6 +441,331 @@ const GoalUI = {
     }
 };
 
+// ═══════════════════════════════════════════════════════════════════
+// GOAL WIZARD - Multi-step goal creation flow
+// ═══════════════════════════════════════════════════════════════════
+
+const GoalWizard = {
+    currentStep: 1,
+    totalSteps: 4,
+    data: {
+        desire: '',
+        why: '',
+        success: '',
+        priority: 'medium'
+    },
+
+    // DOM elements (cached after init)
+    elements: null,
+
+    // Initialize wizard
+    init() {
+        this.elements = {
+            wizard: document.getElementById('goal-wizard'),
+            close: document.getElementById('goal-wizard-close'),
+            back: document.getElementById('goal-wizard-back'),
+            next: document.getElementById('goal-wizard-next'),
+            steps: document.querySelectorAll('.goal-wizard-step'),
+            stepContents: document.querySelectorAll('.goal-wizard-step-content'),
+            priorityOptions: document.querySelectorAll('.goal-priority-option'),
+            // Inputs
+            desire: document.getElementById('goal-desire'),
+            why: document.getElementById('goal-why'),
+            success: document.getElementById('goal-success'),
+            // Summary
+            summaryDesire: document.getElementById('summary-desire'),
+            summaryWhy: document.getElementById('summary-why'),
+            summarySuccess: document.getElementById('summary-success'),
+            summaryPriority: document.getElementById('summary-priority')
+        };
+
+        if (!this.elements.wizard) {
+            console.warn('Goal wizard elements not found');
+            return;
+        }
+
+        this.bindEvents();
+        console.log('✓ Goal wizard initialized');
+    },
+
+    // Bind event listeners
+    bindEvents() {
+        // Close button
+        this.elements.close?.addEventListener('click', () => this.close());
+
+        // Click outside to close
+        this.elements.wizard?.addEventListener('click', (e) => {
+            if (e.target === this.elements.wizard) {
+                this.close();
+            }
+        });
+
+        // Back button
+        this.elements.back?.addEventListener('click', () => this.prevStep());
+
+        // Next button
+        this.elements.next?.addEventListener('click', () => this.nextStep());
+
+        // Priority selection
+        this.elements.priorityOptions?.forEach(option => {
+            option.addEventListener('click', () => {
+                this.elements.priorityOptions.forEach(o => o.classList.remove('selected'));
+                option.classList.add('selected');
+                this.data.priority = option.dataset.priority;
+            });
+        });
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (!this.elements.wizard?.classList.contains('active')) return;
+
+            if (e.key === 'Escape') {
+                this.close();
+            } else if (e.key === 'Enter' && !e.shiftKey) {
+                // Only trigger next on Enter if not in textarea
+                if (e.target.tagName !== 'TEXTAREA') {
+                    e.preventDefault();
+                    this.nextStep();
+                }
+            }
+        });
+    },
+
+    // Open wizard
+    open() {
+        this.reset();
+        this.elements.wizard?.classList.add('active');
+        document.body.style.overflow = 'hidden';
+
+        // Focus first input after animation
+        setTimeout(() => {
+            this.elements.desire?.focus();
+        }, 300);
+
+        console.log('✨ Goal wizard opened');
+    },
+
+    // Close wizard
+    close() {
+        this.elements.wizard?.classList.remove('active');
+        document.body.style.overflow = '';
+        console.log('Goal wizard closed');
+    },
+
+    // Reset wizard state
+    reset() {
+        this.currentStep = 1;
+        this.data = {
+            desire: '',
+            why: '',
+            success: '',
+            priority: 'medium'
+        };
+
+        // Clear inputs
+        if (this.elements.desire) this.elements.desire.value = '';
+        if (this.elements.why) this.elements.why.value = '';
+        if (this.elements.success) this.elements.success.value = '';
+
+        // Reset priority selection
+        this.elements.priorityOptions?.forEach(o => {
+            o.classList.remove('selected');
+            if (o.dataset.priority === 'medium') {
+                o.classList.add('selected');
+            }
+        });
+
+        // Update UI
+        this.updateStepUI();
+    },
+
+    // Go to next step
+    nextStep() {
+        // Validate current step
+        if (!this.validateStep()) return;
+
+        // Save current step data
+        this.saveStepData();
+
+        if (this.currentStep < this.totalSteps) {
+            this.currentStep++;
+            this.updateStepUI();
+
+            // Focus appropriate input
+            setTimeout(() => {
+                if (this.currentStep === 2) this.elements.why?.focus();
+                else if (this.currentStep === 3) this.elements.success?.focus();
+            }, 100);
+        } else {
+            // Final step - create the goal
+            this.createGoal();
+        }
+    },
+
+    // Go to previous step
+    prevStep() {
+        if (this.currentStep > 1) {
+            this.currentStep--;
+            this.updateStepUI();
+        }
+    },
+
+    // Validate current step
+    validateStep() {
+        switch (this.currentStep) {
+            case 1:
+                const desire = this.elements.desire?.value.trim();
+                if (!desire) {
+                    this.elements.desire?.focus();
+                    this.shakeInput(this.elements.desire);
+                    return false;
+                }
+                return true;
+            case 2:
+                // Why is optional but encouraged
+                return true;
+            case 3:
+                // Success criteria optional
+                return true;
+            case 4:
+                return true;
+            default:
+                return true;
+        }
+    },
+
+    // Shake input for validation feedback
+    shakeInput(element) {
+        if (!element) return;
+        element.style.animation = 'none';
+        element.offsetHeight; // Trigger reflow
+        element.style.animation = 'shake 0.5s ease-in-out';
+    },
+
+    // Save data from current step
+    saveStepData() {
+        switch (this.currentStep) {
+            case 1:
+                this.data.desire = this.elements.desire?.value.trim() || '';
+                break;
+            case 2:
+                this.data.why = this.elements.why?.value.trim() || '';
+                break;
+            case 3:
+                this.data.success = this.elements.success?.value.trim() || '';
+                // Priority already saved via click handler
+                break;
+        }
+
+        // Update summary if going to step 4
+        if (this.currentStep === 3) {
+            this.updateSummary();
+        }
+    },
+
+    // Update summary display
+    updateSummary() {
+        const priorityLabels = {
+            high: '🔥 High Priority',
+            medium: '⭐ Medium Priority',
+            low: '🌱 Someday'
+        };
+
+        if (this.elements.summaryDesire) {
+            this.elements.summaryDesire.textContent = this.data.desire || '-';
+        }
+        if (this.elements.summaryWhy) {
+            this.elements.summaryWhy.textContent = this.data.why || 'Not specified';
+        }
+        if (this.elements.summarySuccess) {
+            this.elements.summarySuccess.textContent = this.data.success || 'Not specified';
+        }
+        if (this.elements.summaryPriority) {
+            this.elements.summaryPriority.textContent = priorityLabels[this.data.priority] || 'Medium';
+        }
+    },
+
+    // Update step UI (progress dots, visible content, buttons)
+    updateStepUI() {
+        // Update progress dots
+        this.elements.steps?.forEach((step, i) => {
+            const stepNum = i + 1;
+            step.classList.remove('active', 'completed');
+            if (stepNum === this.currentStep) {
+                step.classList.add('active');
+            } else if (stepNum < this.currentStep) {
+                step.classList.add('completed');
+            }
+        });
+
+        // Update visible content
+        this.elements.stepContents?.forEach(content => {
+            content.classList.remove('active');
+            if (parseInt(content.dataset.step) === this.currentStep) {
+                content.classList.add('active');
+            }
+        });
+
+        // Update buttons
+        if (this.elements.back) {
+            this.elements.back.style.display = this.currentStep > 1 ? 'block' : 'none';
+        }
+        if (this.elements.next) {
+            this.elements.next.textContent = this.currentStep === this.totalSteps ? 'Create Goal ✨' : 'Next';
+        }
+    },
+
+    // Create the goal
+    async createGoal() {
+        console.log('Creating goal with data:', this.data);
+
+        try {
+            // Create goal via GoalRegistry
+            const goal = GoalRegistry.createGoal({
+                label: this.data.desire,
+                description: this.data.success,
+                desiredState: this.data.desire,
+                whyItMatters: this.data.why,
+                priority: this.data.priority
+            });
+
+            // Close wizard
+            this.close();
+
+            // Show success feedback
+            if (typeof showToast === 'function') {
+                showToast(`Goal created: "${goal.label}"`, 'success');
+            }
+
+            // Celebrate!
+            GoalUI.celebrate('goal');
+
+            // TODO: Add goal node to mind map
+            // This will be implemented when we wire up to the main app
+            console.log('✨ Goal created:', goal);
+
+            return goal;
+
+        } catch (error) {
+            console.error('Failed to create goal:', error);
+            if (typeof showToast === 'function') {
+                showToast('Failed to create goal', 'error');
+            }
+        }
+    }
+};
+
+// Add shake animation for validation
+const shakeStyle = document.createElement('style');
+shakeStyle.textContent = `
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        20%, 60% { transform: translateX(-5px); }
+        40%, 80% { transform: translateX(5px); }
+    }
+`;
+document.head.appendChild(shakeStyle);
+
 // Initialize goal system when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     // Defer initialization to not block main app
@@ -448,6 +773,7 @@ document.addEventListener('DOMContentLoaded', () => {
         GoalRegistry.init().then(() => {
             console.log('✓ Goal system initialized');
         });
+        GoalWizard.init();
     }, 2000);
 });
 
