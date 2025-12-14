@@ -24436,9 +24436,9 @@ Return as JSON:
                 // Level 1: PROPER SPIRAL - single smooth oscillation around root
                 // sin(angle) gives ONE wave as you go around the circle = spiral
                 const baseHelixAmp = CONFIG.LAYOUT.helixAmplitude || 12.0;
-                // Gentler depth boost
-                const depthBoost = 1 + (expandedDepth * 0.3);
-                const helixAmp = baseHelixAmp * depthBoost * 0.5; // Reduced amplitude
+                // Stronger depth boost - Y spread INCREASES as layers expand
+                const depthBoost = 1 + (expandedDepth * 0.6);
+                const helixAmp = baseHelixAmp * depthBoost * 0.6;
                 verticalOffset = Math.sin(angle) * helixAmp;
             }
 
@@ -24497,27 +24497,24 @@ Return as JSON:
             // This prevents cramping at deeper levels while maintaining general direction
             let availableSector, childSectorStart;
 
-            // Golden ratio for sector expansion
-            const PHI = 1.618033988749895;
-
             if (level === 0) {
                 // Root: full circle
                 availableSector = Math.PI * 2;
                 childSectorStart = -Math.PI;
             } else {
                 // Calculate minimum sector needed based on number of children
-                // Each child needs at least some angular space
-                const minSectorPerChild = Math.PI / 6; // 30 degrees minimum per child
+                // Reduced minimum to prevent over-expansion
+                const minSectorPerChild = Math.PI / 10; // 18 degrees minimum per child
                 const minNeededSector = data.children.length * minSectorPerChild;
 
-                // Golden ratio expansion from parent's sector
-                const expansionFactor = PHI; // Just φ, not φ^level
+                // Gentle expansion from parent's sector (less than φ to prevent overlap)
+                const expansionFactor = 1.25;
                 const expandedSector = sectorWidth * expansionFactor;
 
                 // Use whichever is larger: expanded sector or minimum needed
                 availableSector = Math.max(expandedSector, minNeededSector);
-                // Cap to prevent wrapping more than 270 degrees
-                availableSector = Math.min(availableSector, Math.PI * 1.5);
+                // Tighter cap to prevent horizontal overlap
+                availableSector = Math.min(availableSector, Math.PI * 1.0);
 
                 // Center the available sector on the parent's sector center
                 const sectorCenter = sectorStart + sectorWidth / 2;
