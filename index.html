@@ -24388,35 +24388,41 @@ Return as JSON:
         data.sectorStart = sectorStart;
         data.sectorEnd = sectorEnd;
 
-        // Position calculation - radius DECREASES hyperbolically with level
+        // GOLDEN RATIO based positioning
+        const PHI = 1.618033988749895; // Golden ratio
+        const PHI_INV = 1 / PHI;       // ≈ 0.618
+
+        // Position calculation - radius follows GOLDEN RATIO decay
         let baseRadius;
         if (level === 0) {
             baseRadius = 0;
         } else if (level === 1) {
-            baseRadius = CONFIG.LAYOUT.level1Radius;
-            // Push out based on how many descendants (more descendants = needs more space)
+            // Level 1: Moderate distance from root (slightly reduced)
+            baseRadius = CONFIG.LAYOUT.level1Radius * 0.7;
+            // Gentle expansion for descendants
             if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 2.0;
+                baseRadius += Math.sqrt(visibleDescendants) * 1.2;
             }
             if (expandedDepth > 1) {
-                baseRadius += Math.sqrt(expandedDepth - 1) * 2.5;
+                baseRadius += Math.sqrt(expandedDepth - 1) * 1.5;
             }
         } else {
-            // Level 2+: Base radius DECREASES hyperbolically with level
-            const initialRadius = level === 2 ? CONFIG.LAYOUT.level2Radius : CONFIG.LAYOUT.level3Radius;
-            // Hyperbolic decay: radius = initial / (1 + k * (level - 2))
-            baseRadius = initialRadius / (1 + (level - 2) * 0.2);
+            // Level 2+: Golden ratio decay - each level is φ^(-n) of base
+            const baseLength = CONFIG.LAYOUT.level2Radius;
+            // Golden ratio decay: smoother, more natural than hyperbolic
+            // Level 2: base, Level 3: base/φ, Level 4: base/φ², etc.
+            baseRadius = baseLength * Math.pow(PHI_INV, level - 2);
 
             // Small boost for nodes with many descendants
             if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 0.8;
+                baseRadius += Math.sqrt(visibleDescendants) * 0.5;
             }
             if (expandedDepth > 0) {
-                baseRadius += Math.sqrt(expandedDepth) * 1.0;
+                baseRadius += Math.sqrt(expandedDepth) * 0.6;
             }
 
             // Minimum radius to prevent nodes stacking
-            baseRadius = Math.max(baseRadius, 8);
+            baseRadius = Math.max(baseRadius, 6);
         }
 
         if (level === 0) {
@@ -24428,30 +24434,30 @@ Return as JSON:
             // Position at center of this node's sector
             const angle = sectorCenter;
 
-            // Helix effect - ONLY significant for level 1
-            // Deeper levels should flatten out, not compound the vertical offset
+            // Helix effect - ONLY for level 1 branches
             const baseHelixAmp = CONFIG.LAYOUT.helixAmplitude || 12.0;
             const helixFreq = CONFIG.LAYOUT.helixFrequency || 1.5;
 
             let verticalOffset = 0;
 
             if (level === 1) {
-                // Level 1: Full helix - this sets the vertical position of each main branch
-                const depthBoost = 1 + (expandedDepth * 1.2);
+                // Level 1: Helix positions main branches vertically around root
+                const depthBoost = 1 + (expandedDepth * 0.8);
                 const helixAmp = baseHelixAmp * depthBoost;
                 verticalOffset = Math.sin(angle * helixFreq * 2) * helixAmp;
-            } else {
-                // Level 2+: Only small sibling vertical spread, NO helix compounding
-                if (total > 1) {
-                    const verticalSpread = CONFIG.LAYOUT.verticalSpread || 3.0;
-                    // Reduce spread at deeper levels
-                    const levelFactor = 1 / (1 + (level - 2) * 0.3);
-                    const siblingSpacing = verticalSpread * levelFactor * (1 + Math.min(total * 0.08, 0.4));
-                    verticalOffset = (index - (total - 1) / 2) * siblingSpacing;
-                }
+            }
+            // Level 2+: NO additional vertical offset - spread horizontally from parent
+            // Sibling vertical spread is minimal and uses golden ratio decay
+            let siblingVerticalOffset = 0;
+            if (level > 1 && total > 1) {
+                const verticalSpread = CONFIG.LAYOUT.verticalSpread || 3.0;
+                // Golden ratio decay for sibling spacing
+                const levelFactor = Math.pow(PHI_INV, level - 2);
+                const siblingSpacing = verticalSpread * levelFactor * 0.5;
+                siblingVerticalOffset = (index - (total - 1) / 2) * siblingSpacing;
             }
 
-            // For level 1, position from origin. For deeper, position from parent.
+            // Position nodes
             if (level === 1) {
                 data.basePosition = [
                     Math.cos(angle) * baseRadius,
@@ -24459,12 +24465,11 @@ Return as JSON:
                     Math.sin(angle) * baseRadius
                 ];
             } else {
-                // Level 2+: Gradually reduce inheritance of parent's Y position
-                // This flattens clusters instead of compounding the tilt
-                const yInheritance = level === 2 ? 0.6 : Math.pow(0.7, level - 2);
+                // Level 2+: Extend from parent position in XZ plane
+                // Inherit parent Y fully, only add small sibling vertical spread
                 data.basePosition = [
                     parentPos[0] + Math.cos(angle) * baseRadius,
-                    parentPos[1] * yInheritance + verticalOffset,
+                    parentPos[1] + siblingVerticalOffset,
                     parentPos[2] + Math.sin(angle) * baseRadius
                 ];
             }
