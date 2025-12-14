@@ -4172,7 +4172,50 @@
         .neural-status-value.not-ready {
             color: #f59e0b;
         }
-        
+
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 36px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--bg-elevated);
+            transition: 0.2s;
+            border-radius: 20px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: var(--text-muted);
+            transition: 0.2s;
+            border-radius: 50%;
+        }
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: var(--accent);
+        }
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(16px);
+            background-color: white;
+        }
+
         .neural-progress {
             width: 100%;
             height: 6px;
@@ -8387,6 +8430,19 @@
         </div>
         
         <div class="neural-status">
+            <div class="neural-status-row" style="padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--bg-tertiary);">
+                <span style="display: flex; align-items: center; gap: 6px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                        <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+                        <line x1="12" y1="2" x2="12" y2="12"/>
+                    </svg>
+                    Auto-Training
+                </span>
+                <label class="toggle-switch" style="margin: 0;">
+                    <input type="checkbox" id="neural-training-toggle" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
             <div class="neural-status-row">
                 <span>Status</span>
                 <span class="neural-status-value" id="neural-status-text">Initializing...</span>
@@ -9780,9 +9836,9 @@
                     // Rebuild the scene
                     buildScene();
                     
-                    // Re-train neural net on updated map
+                    // Re-train neural net on updated map (if training enabled)
                     setTimeout(() => {
-                        if (typeof neuralNet !== 'undefined') {
+                        if (typeof neuralNet !== 'undefined' && isNeuralTrainingAllowed()) {
                             neuralNet.train(store).catch(err => console.warn('Neural net training failed:', err));
                         }
                     }, 300);
@@ -23953,6 +24009,14 @@ Return as JSON:
     let cameraArcAnimation = null;
     let autoCameraEnabled = true;
 
+    // Neural network training control
+    let neuralTrainingEnabled = true;  // User toggle
+    let neuralTrainingPaused = false;  // Auto-pause during heavy operations
+
+    function isNeuralTrainingAllowed() {
+        return neuralTrainingEnabled && !neuralTrainingPaused;
+    }
+
     function initScene() {
         // Scene
         scene = new THREE.Scene();
@@ -24180,7 +24244,7 @@ Return as JSON:
                     });
                 }
                 
-                if (neuralNet.isReady) {
+                if (neuralNet.isReady && isNeuralTrainingAllowed()) {
                     neuralNet.train(store).then(() => {
                         console.log('Neural net auto-trained successfully');
                         // Update UI to reflect trained status
@@ -24190,8 +24254,10 @@ Return as JSON:
                     }).catch(err => {
                         console.warn('Neural net auto-training failed:', err);
                     });
-                } else {
+                } else if (!neuralNet.isReady) {
                     console.warn('Neural network not ready, skipping auto-train');
+                } else {
+                    console.log('Neural training disabled, skipping auto-train');
                 }
             }
         }, 500);
@@ -25447,6 +25513,9 @@ Return as JSON:
     function expandAll() {
         const isMobile = window.innerWidth <= 768;
 
+        // Pause neural training during heavy operation
+        neuralTrainingPaused = true;
+
         // Start zooming out immediately on mobile
         if (isMobile) {
             zoomToFitMap(25);
@@ -25464,6 +25533,7 @@ Return as JSON:
             showToast('All nodes already expanded', 'info');
             // Still zoom out to show entire map
             if (!isMobile) zoomToFitMap(15);
+            neuralTrainingPaused = false;  // Resume training
             return;
         }
 
@@ -25480,7 +25550,8 @@ Return as JSON:
         let expandIndex = 0;
         function expandNext() {
             if (expandIndex >= toExpand.length) {
-                // Done - zoom to fit
+                // Done - zoom to fit and resume training
+                neuralTrainingPaused = false;
                 if (autoCameraEnabled) {
                     setTimeout(() => zoomToFitMap(15), 500);
                 }
@@ -25507,6 +25578,9 @@ Return as JSON:
     function collapseAll() {
         const isMobile = window.innerWidth <= 768;
 
+        // Pause neural training during heavy operation
+        neuralTrainingPaused = true;
+
         // Get all expanded nodes, sorted by level (deepest first for proper collapse order)
         // Skip root node (level 0) - keep level 1 nodes visible but collapse their children
         const toCollapse = [];
@@ -25519,6 +25593,7 @@ Return as JSON:
 
         if (toCollapse.length === 0) {
             showToast('Already collapsed', 'info');
+            neuralTrainingPaused = false;  // Resume training
             return;
         }
 
@@ -25534,7 +25609,8 @@ Return as JSON:
         let collapseIndex = 0;
         function collapseNext() {
             if (collapseIndex >= toCollapse.length) {
-                // Done - zoom to fit
+                // Done - zoom to fit and resume training
+                neuralTrainingPaused = false;
                 if (autoCameraEnabled) {
                     setTimeout(() => zoomToFitMap(0), 500);
                 }
@@ -31741,9 +31817,9 @@ Respond with JSON only:`;
                 resetCamera();
                 showToast(`Loaded "${mapData.name}"`, 'success');
                 
-                // Re-train neural net on new map
+                // Re-train neural net on new map (if training enabled)
                 setTimeout(() => {
-                    if (typeof neuralNet !== 'undefined') {
+                    if (typeof neuralNet !== 'undefined' && isNeuralTrainingAllowed()) {
                         neuralNet.train(store).catch(err => console.warn('Neural net training failed:', err));
                     }
                 }, 300);
@@ -31751,7 +31827,7 @@ Respond with JSON only:`;
                 showToast('Failed to load map', 'error');
             }
         },
-        
+
         async createNewMap() {
             const name = prompt('Name for new map:', 'New Mind Map');
             if (!name) return;
@@ -32992,9 +33068,9 @@ Guidelines:
                         }
                     } else {
                         showToast('Map loaded!', 'success');
-                        // Train neural net on loaded map if no neural data was included
+                        // Train neural net on loaded map if no neural data was included (if training enabled)
                         setTimeout(() => {
-                            if (typeof neuralNet !== 'undefined') {
+                            if (typeof neuralNet !== 'undefined' && isNeuralTrainingAllowed()) {
                                 neuralNet.train(store).catch(err => console.warn('Neural net training failed:', err));
                             }
                         }, 300);
@@ -33455,13 +33531,15 @@ Replace placeholder labels with real content from user's answers. MUST have exac
         buildScene();
         completeOnboarding();
         
-        // Auto-train neural network on newly created map
-        if (neuralNet.isReady) {
+        // Auto-train neural network on newly created map (if training enabled)
+        if (neuralNet.isReady && isNeuralTrainingAllowed()) {
             console.log('🧠 Auto-training neural network on new map...');
             setTimeout(() => {
-                neuralNet.train(store).then(() => {
-                    console.log('✓ Neural network trained on initial map');
-                });
+                if (isNeuralTrainingAllowed()) {
+                    neuralNet.train(store).then(() => {
+                        console.log('✓ Neural network trained on initial map');
+                    });
+                }
             }, 3000); // Delay to let the scene fully build
         }
     }
@@ -33819,10 +33897,10 @@ Replace placeholder labels with real content from user's answers. MUST have exac
                     resetCamera();
                     completeOnboarding();
                     showToast(`Loaded "${mapData.name}"`, 'success');
-                    
-                    // Train neural net
+
+                    // Train neural net (if training enabled)
                     setTimeout(() => {
-                        if (typeof neuralNet !== 'undefined') {
+                        if (typeof neuralNet !== 'undefined' && isNeuralTrainingAllowed()) {
                             neuralNet.train(store).catch(err => console.warn('Neural net training failed:', err));
                         }
                     }, 300);
@@ -34012,7 +34090,14 @@ showKeyboardHints();
             document.getElementById('neural-close')?.addEventListener('click', () => {
                 this.close();
             });
-            
+
+            // Training toggle
+            document.getElementById('neural-training-toggle')?.addEventListener('change', (e) => {
+                neuralTrainingEnabled = e.target.checked;
+                showToast(neuralTrainingEnabled ? 'Neural training enabled' : 'Neural training disabled', 'info');
+                console.log(`Neural training ${neuralTrainingEnabled ? 'enabled' : 'disabled'}`);
+            });
+
             // Train button (now in settings modal)
             document.getElementById('neural-train-settings-btn')?.addEventListener('click', () => {
                 this.trainNetwork();
@@ -34528,10 +34613,12 @@ showKeyboardHints();
                 };
                 countNodes(store.data);
                 
-                if (nodeCount >= CONFIG.NEURAL_NET.minTrainingNodes) {
+                if (nodeCount >= CONFIG.NEURAL_NET.minTrainingNodes && isNeuralTrainingAllowed()) {
                     console.log('🧠 Auto-training on first load...');
                     setTimeout(() => {
-                        neuralNet.train(store);
+                        if (isNeuralTrainingAllowed()) {
+                            neuralNet.train(store);
+                        }
                     }, 2000); // Delay to let UI settle
                 }
             }
@@ -36212,8 +36299,8 @@ Consider these learned patterns when generating suggestions.`;
         };
         countNodes(store.data);
         
-        // Auto-train if significant new nodes
-        if (nodeCount - nodeCountAtLastTrain >= AUTO_TRAIN_THRESHOLD) {
+        // Auto-train if significant new nodes (and training enabled)
+        if (nodeCount - nodeCountAtLastTrain >= AUTO_TRAIN_THRESHOLD && isNeuralTrainingAllowed()) {
             console.log('🧠 Auto-training neural network (new nodes detected)');
             neuralNet.train(store).then(() => {
                 nodeCountAtLastTrain = nodeCount;
