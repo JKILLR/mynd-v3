@@ -24396,37 +24396,29 @@ Return as JSON:
         let baseRadius;
         if (level === 0) {
             baseRadius = 0;
-        } else if (level === 1) {
-            // Level 1: SHORTER branches from root
-            const baseBranchLength = 12;
-            baseRadius = baseBranchLength;
-            // Very small boost for expanded nodes
-            if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 0.2;
-            }
         } else {
-            // Level 2+: Golden ratio decay
-            const baseBranchLength = 15; // Level 2 base
-            baseRadius = baseBranchLength * Math.pow(PHI_INV, level - 2);
+            // All levels use golden ratio decay from a base length
+            // Level 1 and 2 are equal, then decay by φ for each subsequent level
+            const baseBranchLength = 18; // Shorter base for level 1 & 2
+
+            if (level <= 2) {
+                baseRadius = baseBranchLength;
+            } else {
+                // Level 3+: Golden ratio decay from level 2
+                // Level 3: base/φ, Level 4: base/φ², etc.
+                baseRadius = baseBranchLength * Math.pow(PHI_INV, level - 2);
+            }
 
             // Small boost for expanded nodes with descendants
             if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 0.3;
+                baseRadius += Math.sqrt(visibleDescendants) * 0.4;
             }
             if (expandedDepth > 0) {
-                baseRadius += Math.sqrt(expandedDepth) * 0.3;
-            }
-
-            // Radial variation for siblings - spread them at different distances
-            // This prevents stacking when sectors are narrow
-            if (total > 1) {
-                const radialSpread = 3; // Amount to vary radius among siblings
-                const radialOffset = (index - (total - 1) / 2) * (radialSpread / Math.max(total - 1, 1));
-                baseRadius += radialOffset;
+                baseRadius += Math.sqrt(expandedDepth) * 0.5;
             }
 
             // Minimum radius
-            baseRadius = Math.max(baseRadius, 4);
+            baseRadius = Math.max(baseRadius, 5);
         }
 
         if (level === 0) {
@@ -24438,25 +24430,25 @@ Return as JSON:
             // Position at center of this node's sector
             const angle = sectorCenter;
 
+            // Helix effect - ONLY for level 1 branches
+            const baseHelixAmp = CONFIG.LAYOUT.helixAmplitude || 12.0;
+            const helixFreq = CONFIG.LAYOUT.helixFrequency || 1.5;
+
             let verticalOffset = 0;
 
             if (level === 1) {
-                // Level 1: PROPER SPIRAL - single smooth oscillation around root
-                // sin(angle) gives ONE wave as you go around the circle = spiral
-                const baseHelixAmp = CONFIG.LAYOUT.helixAmplitude || 12.0;
-                // Stronger depth boost - Y spread INCREASES as layers expand
-                const depthBoost = 1 + (expandedDepth * 0.6);
-                const helixAmp = baseHelixAmp * depthBoost * 0.6;
-                verticalOffset = Math.sin(angle) * helixAmp;
+                // Level 1: Helix positions main branches vertically around root
+                const depthBoost = 1 + (expandedDepth * 0.8);
+                const helixAmp = baseHelixAmp * depthBoost;
+                verticalOffset = Math.sin(angle * helixFreq * 2) * helixAmp;
             }
-
-            // Level 2+: Small sibling vertical spread
+            // Level 2+: Sibling vertical spread INCREASES at deeper levels
             let siblingVerticalOffset = 0;
             if (level > 1 && total > 1) {
                 const verticalSpread = CONFIG.LAYOUT.verticalSpread || 3.0;
-                // Golden ratio decay for sibling spacing
-                const levelFactor = Math.pow(PHI_INV, level - 2);
-                const siblingSpacing = verticalSpread * levelFactor * 0.4;
+                // INCREASE spread at deeper levels to prevent stacking
+                const levelFactor = 1 + (level - 2) * 0.4; // Level 3: 1.4, Level 4: 1.8, Level 5: 2.2
+                const siblingSpacing = verticalSpread * levelFactor * 0.7;
                 siblingVerticalOffset = (index - (total - 1) / 2) * siblingSpacing;
             }
 
@@ -24505,31 +24497,31 @@ Return as JSON:
             // This prevents cramping at deeper levels while maintaining general direction
             let availableSector, childSectorStart;
 
+            // Golden ratio for sector expansion
+            const PHI = 1.618033988749895;
+
             if (level === 0) {
                 // Root: full circle
                 availableSector = Math.PI * 2;
                 childSectorStart = -Math.PI;
-            } else if (level === 1) {
-                // Level 1: Moderate expansion for first-level branches
-                const minSectorPerChild = Math.PI / 10; // 18 degrees minimum per child
-                const minNeededSector = data.children.length * minSectorPerChild;
-                const expandedSector = sectorWidth * 1.2; // 20% expansion
-
-                availableSector = Math.max(expandedSector, minNeededSector);
-                availableSector = Math.min(availableSector, Math.PI * 0.9); // Cap at 162°
-
-                const sectorCenter = sectorStart + sectorWidth / 2;
-                childSectorStart = sectorCenter - availableSector / 2;
             } else {
-                // Level 2+: Need enough horizontal spread so siblings don't stack
-                const minSectorPerChild = Math.PI / 6; // 30 degrees minimum per child
+                // Ensure LARGE minimum angular space per child to prevent stacking
+                // Minimum increases with level to give deepest layers more room
+                const baseMinPerChild = Math.PI / 4; // 45 degrees base
+                const levelBoost = 1 + (level - 1) * 0.3; // Increase with depth
+                const minSectorPerChild = baseMinPerChild * levelBoost;
                 const minNeededSector = data.children.length * minSectorPerChild;
-                const expandedSector = sectorWidth * 1.5; // 50% expansion
 
+                // GOLDEN RATIO sector expansion - increases with level
+                const expansionFactor = Math.pow(PHI, level * 0.8);
+                const expandedSector = sectorWidth * expansionFactor;
+
+                // Use whichever is larger
                 availableSector = Math.max(expandedSector, minNeededSector);
-                // Higher cap to allow proper sibling spread
-                availableSector = Math.min(availableSector, sectorWidth * 2.0);
+                // Cap at full circle to prevent wraparound
+                availableSector = Math.min(availableSector, Math.PI * 2);
 
+                // Center the expanded sector on the parent's sector center
                 const sectorCenter = sectorStart + sectorWidth / 2;
                 childSectorStart = sectorCenter - availableSector / 2;
             }
