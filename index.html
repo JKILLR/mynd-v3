@@ -587,107 +587,80 @@
         #mobile-zoom-slider {
             display: none; /* Hidden on desktop */
         }
-        
+
+        #mobile-floating-actions {
+            display: none; /* Hidden on desktop */
+        }
+
         @media (max-width: 768px) {
+            /* Mobile Header - column layout with brand above search bar */
             #mobile-header {
                 display: flex;
+                flex-direction: column;
                 position: fixed;
-                top: var(--space-4);
-                left: var(--space-4);
-                right: var(--space-4);
+                top: 0;
+                left: 0;
+                right: 0;
                 z-index: var(--z-ui);
-                align-items: center;
-                justify-content: space-between;
-                pointer-events: none; /* Allow click-through between elements */
+                padding: env(safe-area-inset-top, 8px) var(--space-4) 0;
+                pointer-events: none;
             }
-            
+
             #mobile-header > * {
-                pointer-events: auto; /* Re-enable clicks on children */
+                pointer-events: auto;
             }
-            
-            /* Left: Circular menu button - BIGGER */
-            .mobile-header-menu {
-                width: 48px;
-                height: 48px;
-                border-radius: 50%;
-                background: var(--glass-bg);
-                backdrop-filter: blur(var(--glass-blur));
-                border: 1px solid var(--glass-border);
-                box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+
+            /* Top: Small centered brand */
+            .mobile-header-brand {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                color: var(--text-secondary);
+                gap: 4px;
+                padding: 6px 0 8px;
                 cursor: pointer;
-                transition: all var(--duration-fast);
-                flex-shrink: 0;
             }
-            
-            .mobile-header-menu:active {
-                transform: scale(0.95);
-                background: var(--bg-elevated);
-            }
-            
-            .mobile-header-menu svg {
-                width: 22px;
-                height: 22px;
-                stroke-width: 2;
-            }
-            
-            /* Center: Minimal floating brand - CENTERED & SMALLER */
-            .mobile-header-brand {
-                position: absolute;
-                left: 50%;
-                transform: translateX(-50%);
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                cursor: pointer;
-                /* No background - floating */
-            }
-            
+
             .mobile-brand-logo {
-                width: 24px;
-                height: 24px;
+                width: 14px;
+                height: 14px;
                 background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
-                border-radius: 6px;
+                border-radius: 3px;
                 display: grid;
                 place-items: center;
                 font-family: var(--font-display);
                 font-weight: 700;
-                font-size: 12px;
+                font-size: 8px;
                 color: white;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
             }
-            
+
             .mobile-brand-text {
                 font-family: var(--font-display);
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 700;
-                letter-spacing: 1px;
+                letter-spacing: 1.5px;
                 color: var(--text-primary);
-                opacity: 0.8;
+                opacity: 0.9;
             }
-            
-            /* Right: Control pill bar - BIGGER */
-            .mobile-header-pill {
+
+            /* Search bar - unified pill */
+            .mobile-search-bar {
                 display: flex;
                 align-items: center;
-                gap: 2px;
-                padding: 5px;
+                height: 48px;
                 background: var(--glass-bg);
                 backdrop-filter: blur(var(--glass-blur));
                 border: 1px solid var(--glass-border);
-                border-radius: 26px;
-                box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
-                flex-shrink: 0;
+                border-radius: 24px;
+                box-shadow: var(--shadow-md);
+                overflow: hidden;
             }
-            
-            .mobile-pill-btn {
-                width: 40px;
-                height: 40px;
+
+            /* Left: Menu button as circle */
+            .mobile-search-menu {
+                width: 48px;
+                height: 48px;
                 border-radius: 50%;
-                background: transparent;
+                background: var(--bg-tertiary);
                 border: none;
                 display: flex;
                 align-items: center;
@@ -695,28 +668,42 @@
                 color: var(--text-secondary);
                 cursor: pointer;
                 transition: all var(--duration-fast);
+                flex-shrink: 0;
             }
-            
-            .mobile-pill-btn:active {
-                background: var(--bg-tertiary);
+
+            .mobile-search-menu:active {
+                transform: scale(0.95);
+                background: var(--bg-elevated);
             }
-            
-            .mobile-pill-btn:disabled {
-                opacity: 0.3;
-                cursor: not-allowed;
-            }
-            
-            .mobile-pill-btn svg {
+
+            .mobile-search-menu svg {
                 width: 20px;
                 height: 20px;
                 stroke-width: 2;
             }
-            
-            /* User avatar button - solid colored circle - BIGGER */
-            .mobile-pill-user {
+
+            /* Center: Search input */
+            .mobile-search-input {
+                flex: 1;
+                height: 100%;
+                background: transparent;
+                border: none;
+                outline: none;
+                font-family: var(--font-body);
+                font-size: 15px;
+                color: var(--text-primary);
+                padding: 0 12px;
+            }
+
+            .mobile-search-input::placeholder {
+                color: var(--text-muted);
+            }
+
+            /* Right: User avatar as circle */
+            .mobile-search-user {
                 position: relative;
-                width: 40px;
-                height: 40px;
+                width: 48px;
+                height: 48px;
                 border-radius: 50%;
                 background: var(--accent);
                 border: none;
@@ -725,13 +712,13 @@
                 justify-content: center;
                 cursor: pointer;
                 transition: all var(--duration-fast);
-                margin-left: 2px;
+                flex-shrink: 0;
             }
-            
-            .mobile-pill-user:active {
+
+            .mobile-search-user:active {
                 transform: scale(0.95);
             }
-            
+
             .mobile-user-avatar {
                 width: 100%;
                 height: 100%;
@@ -740,26 +727,73 @@
                 justify-content: center;
                 color: white;
             }
-            
+
             .mobile-user-avatar svg {
                 width: 20px;
                 height: 20px;
                 stroke-width: 2;
             }
-            
+
             .mobile-sync-indicator {
                 position: absolute;
-                bottom: 4px;
-                right: 4px;
-                width: 8px;
-                height: 8px;
+                bottom: 2px;
+                right: 2px;
+                width: 10px;
+                height: 10px;
                 border-radius: 50%;
                 background: var(--text-muted);
                 border: 2px solid var(--bg-primary);
             }
-            
+
             .mobile-sync-indicator.synced {
                 background: #22c55e;
+            }
+
+            /* Floating action buttons - positioned below avatar */
+            #mobile-floating-actions {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                position: fixed;
+                right: var(--space-4);
+                top: calc(env(safe-area-inset-top, 8px) + 82px);
+                z-index: var(--z-ui);
+            }
+
+            .mobile-fab {
+                width: 44px;
+                height: 44px;
+                border-radius: 50%;
+                background: var(--glass-bg);
+                backdrop-filter: blur(var(--glass-blur));
+                border: 1px solid var(--glass-border);
+                box-shadow: var(--shadow-md);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: var(--text-secondary);
+                cursor: pointer;
+                transition: all var(--duration-fast);
+            }
+
+            .mobile-fab:active {
+                transform: scale(0.95);
+                background: var(--bg-elevated);
+            }
+
+            .mobile-fab:disabled {
+                opacity: 0.3;
+                cursor: not-allowed;
+            }
+
+            .mobile-fab:disabled:active {
+                transform: none;
+            }
+
+            .mobile-fab svg {
+                width: 20px;
+                height: 20px;
+                stroke-width: 2;
             }
             
             /* Hide desktop header elements on mobile */
@@ -773,34 +807,34 @@
             
             /* Reposition dropdowns for mobile header */
             #menu-dropdown {
-                top: 64px;
+                top: calc(env(safe-area-inset-top, 8px) + 86px);
                 left: var(--space-4);
                 right: auto;
                 min-width: 150px;
                 max-width: 170px;
                 z-index: 350; /* Above sheet (z-modal is 300) */
             }
-            
+
             #menu-dropdown .menu-item {
                 padding: var(--space-2) var(--space-3);
                 font-size: 15px;
                 gap: var(--space-2);
             }
-            
+
             #menu-dropdown .menu-item svg {
                 width: 18px;
                 height: 18px;
             }
-            
+
             #theme-picker {
-                top: 64px;
+                top: calc(env(safe-area-inset-top, 8px) + 86px);
                 right: var(--space-4);
                 z-index: 350; /* Above sheet (z-modal is 300) */
             }
-            
+
             #user-dropdown {
                 position: fixed;
-                top: 64px;
+                top: calc(env(safe-area-inset-top, 8px) + 86px);
                 right: var(--space-4);
                 width: calc(100vw - 32px);
                 max-width: 300px;
@@ -812,7 +846,7 @@
                 display: block;
                 position: fixed;
                 right: 0;
-                top: 80px;
+                top: calc(env(safe-area-inset-top, 8px) + 190px);
                 bottom: 180px;
                 width: 24px;
                 z-index: 100;
@@ -6961,35 +6995,28 @@
     
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
-        <!-- Left: Settings/Menu toggle -->
-        <button class="mobile-header-menu" id="mobile-menu-btn" aria-label="Menu">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="3" y1="12" x2="21" y2="12"/>
-                <line x1="3" y1="6" x2="21" y2="6"/>
-                <line x1="3" y1="18" x2="21" y2="18"/>
-            </svg>
-        </button>
-        
-        <!-- Center: Minimal MYND branding -->
+        <!-- Top: Small centered MYND branding -->
         <div class="mobile-header-brand" id="mobile-brand-btn">
             <div class="mobile-brand-logo">M</div>
             <span class="mobile-brand-text">MYND</span>
         </div>
-        
-        <!-- Right: Control pill -->
-        <div class="mobile-header-pill">
-            <button class="mobile-pill-btn" id="mobile-theme-btn" aria-label="Theme">
+
+        <!-- Search bar pill with integrated controls -->
+        <div class="mobile-search-bar">
+            <!-- Left: Menu button (circle) -->
+            <button class="mobile-search-menu" id="mobile-menu-btn" aria-label="Menu">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="4"/>
-                    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+                    <line x1="4" y1="6" x2="20" y2="6"/>
+                    <line x1="4" y1="12" x2="20" y2="12"/>
+                    <line x1="4" y1="18" x2="20" y2="18"/>
                 </svg>
             </button>
-            <button class="mobile-pill-btn" id="mobile-undo-btn" aria-label="Undo" disabled>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
-                </svg>
-            </button>
-            <button class="mobile-pill-user" id="mobile-user-btn" aria-label="Account">
+
+            <!-- Center: Search input -->
+            <input type="text" class="mobile-search-input" id="mobile-search-input" placeholder="Search Nodes..." autocomplete="off" />
+
+            <!-- Right: User avatar (circle) -->
+            <button class="mobile-search-user" id="mobile-user-btn" aria-label="Account">
                 <div class="mobile-user-avatar" id="mobile-user-avatar">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
@@ -6999,6 +7026,21 @@
                 <div class="mobile-sync-indicator" id="mobile-sync-indicator"></div>
             </button>
         </div>
+    </div>
+
+    <!-- Floating Action Buttons (right side, below search bar) -->
+    <div id="mobile-floating-actions">
+        <button class="mobile-fab" id="mobile-theme-btn" aria-label="Theme">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="4"/>
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+            </svg>
+        </button>
+        <button class="mobile-fab" id="mobile-undo-btn" aria-label="Undo" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
+            </svg>
+        </button>
     </div>
     
     <!-- Mobile Zoom Slider (minimal scrollbar style) -->
@@ -31796,7 +31838,22 @@ Guidelines:
         menuDropdown.classList.toggle('active');
         themePicker.classList.remove('active');
     });
-    
+
+    // Mobile search input - opens spotlight search
+    const mobileSearchInput = document.getElementById('mobile-search-input');
+    mobileSearchInput?.addEventListener('focus', () => {
+        // Open spotlight and transfer focus
+        if (!spotlightOpen) {
+            toggleSpotlight();
+        }
+        // Sync any typed value to spotlight
+        if (mobileSearchInput.value) {
+            spotlightInput.value = mobileSearchInput.value;
+            updateSpotlightResults(mobileSearchInput.value);
+        }
+        mobileSearchInput.blur();
+    });
+
     // Mobile theme button - same as desktop theme
     document.getElementById('mobile-theme-btn')?.addEventListener('click', () => {
         themePicker.classList.toggle('active');
