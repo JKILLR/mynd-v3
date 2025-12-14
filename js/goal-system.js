@@ -740,9 +740,42 @@ const GoalWizard = {
             // Celebrate!
             GoalUI.celebrate('goal');
 
-            // TODO: Add goal node to mind map
-            // This will be implemented when we wire up to the main app
-            console.log('✨ Goal created:', goal);
+            // Add goal node to mind map
+            if (typeof store !== 'undefined' && store.addNode) {
+                const priorityColors = {
+                    high: '#8B5CF6',    // Purple
+                    medium: '#A78BFA',  // Lighter purple
+                    low: '#C4B5FD'      // Even lighter purple
+                };
+
+                const goalNode = store.addNode(store.data.id, {
+                    label: goal.label,
+                    description: goal.description || goal.whyItMatters || '',
+                    color: priorityColors[goal.priority] || '#8B5CF6',
+                    type: 'goal',
+                    goalId: goal.id,
+                    source: 'goal-wizard'
+                });
+
+                if (goalNode && typeof buildScene === 'function') {
+                    buildScene();
+
+                    // Focus on the new goal node
+                    setTimeout(() => {
+                        if (typeof nodes !== 'undefined') {
+                            const mesh = nodes.get(goalNode.id);
+                            if (mesh && typeof selectNode === 'function') {
+                                selectNode(mesh);
+                                if (typeof focusOnNode === 'function') {
+                                    focusOnNode(mesh);
+                                }
+                            }
+                        }
+                    }, 100);
+                }
+
+                console.log('✨ Goal node added to mind map:', goalNode);
+            }
 
             return goal;
 

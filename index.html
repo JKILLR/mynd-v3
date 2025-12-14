@@ -24638,7 +24638,48 @@ Return as JSON:
         outline.scale.set(importanceScale, importanceScale, importanceScale);
         scene.add(outline);
         mesh.userData.outlineMesh = outline;
-        
+
+        // Goal node glow effect - pulsing aura for goal/destination nodes
+        if (data.type === 'goal') {
+            mesh.userData.isGoal = true;
+
+            // Increase emissive intensity for goal nodes
+            mesh.material.emissiveIntensity = 0.6;
+
+            // Create outer glow ring
+            const glowGeometry = new THREE.RingGeometry(data.size * 1.4, data.size * 1.8, 32);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: 0x8B5CF6, // Purple glow
+                transparent: true,
+                opacity: 0.4,
+                side: THREE.DoubleSide
+            });
+            const glowRing = new THREE.Mesh(glowGeometry, glowMaterial);
+            glowRing.rotation.x = Math.PI / 2; // Face camera
+            glowRing.position.copy(mesh.position);
+            glowRing.scale.set(importanceScale, importanceScale, importanceScale);
+            scene.add(glowRing);
+            mesh.userData.glowRing = glowRing;
+
+            // Create inner target ring
+            const targetGeometry = new THREE.RingGeometry(data.size * 1.1, data.size * 1.2, 32);
+            const targetMaterial = new THREE.MeshBasicMaterial({
+                color: 0xA78BFA, // Lighter purple
+                transparent: true,
+                opacity: 0.6,
+                side: THREE.DoubleSide
+            });
+            const targetRing = new THREE.Mesh(targetGeometry, targetMaterial);
+            targetRing.rotation.x = Math.PI / 2;
+            targetRing.position.copy(mesh.position);
+            targetRing.scale.set(importanceScale, importanceScale, importanceScale);
+            scene.add(targetRing);
+            mesh.userData.targetRing = targetRing;
+
+            // Store glow animation phase
+            mesh.userData.glowPhase = Math.random() * Math.PI * 2;
+        }
+
         // Label - with link indicator if this node has a link
         const hasLink = !!data.link;
         const label = createLabelSprite(data.label, data.color, hasLink);
@@ -24675,6 +24716,12 @@ Return as JSON:
             label.visible = false;
             if (mesh.userData.contextBadge) {
                 mesh.userData.contextBadge.visible = false;
+            }
+            if (mesh.userData.glowRing) {
+                mesh.userData.glowRing.visible = false;
+            }
+            if (mesh.userData.targetRing) {
+                mesh.userData.targetRing.visible = false;
             }
             mesh.userData.collapsed = true;
         }
@@ -24752,6 +24799,17 @@ Return as JSON:
                 scene.remove(mesh.userData.outlineMesh);
                 mesh.userData.outlineMesh.geometry.dispose();
                 mesh.userData.outlineMesh.material.dispose();
+            }
+            // Clean up goal node glow effects
+            if (mesh.userData.glowRing) {
+                scene.remove(mesh.userData.glowRing);
+                mesh.userData.glowRing.geometry.dispose();
+                mesh.userData.glowRing.material.dispose();
+            }
+            if (mesh.userData.targetRing) {
+                scene.remove(mesh.userData.targetRing);
+                mesh.userData.targetRing.geometry.dispose();
+                mesh.userData.targetRing.material.dispose();
             }
             if (mesh.userData.labelSprite) {
                 mesh.userData.labelSprite.material.map?.dispose();
@@ -24922,6 +24980,8 @@ Return as JSON:
                     const parentPos = newMesh.position.clone();
                     childMesh.position.copy(parentPos);
                     if (childMesh.userData.outlineMesh) childMesh.userData.outlineMesh.position.copy(parentPos);
+                    if (childMesh.userData.glowRing) childMesh.userData.glowRing.position.copy(parentPos);
+                    if (childMesh.userData.targetRing) childMesh.userData.targetRing.position.copy(parentPos);
                     const importance = childMesh.userData.importance || 1;
                     childMesh.scale.set(0.5 * importance, 0.5 * importance, 0.5 * importance);
                     childMesh.material.opacity = 0.3;
@@ -25024,9 +25084,11 @@ Return as JSON:
                     // Only hide if this collapse wasn't cancelled
                     if (childMesh.userData.collapseId !== thisCollapseId) return;
                     if (!childMesh.userData.collapsed) return;
-                    
+
                     childMesh.visible = false;
                     if (childMesh.userData.outlineMesh) childMesh.userData.outlineMesh.visible = false;
+                    if (childMesh.userData.glowRing) childMesh.userData.glowRing.visible = false;
+                    if (childMesh.userData.targetRing) childMesh.userData.targetRing.visible = false;
                 }, itemDelay + hideDelay);
             } else {
                 childMesh.visible = false;
@@ -25034,6 +25096,8 @@ Return as JSON:
                 if (childMesh.userData.labelSprite) childMesh.userData.labelSprite.visible = false;
                 if (childMesh.userData.contextBadge) childMesh.userData.contextBadge.visible = false;
                 if (childMesh.userData.connectionLine) childMesh.userData.connectionLine.visible = false;
+                if (childMesh.userData.glowRing) childMesh.userData.glowRing.visible = false;
+                if (childMesh.userData.targetRing) childMesh.userData.targetRing.visible = false;
             }
         });
         
@@ -25673,7 +25737,40 @@ Return as JSON:
                     badge.scale.set(badgeScale, badgeScale, 1);
                 }
             }
-            
+
+            // Goal node glow animation - pulsing rings
+            if (mesh.userData.isGoal) {
+                const glowPhase = mesh.userData.glowPhase || 0;
+                const pulse = Math.sin(time * 2 + glowPhase);
+
+                // Animate glow ring
+                if (mesh.userData.glowRing) {
+                    const glowRing = mesh.userData.glowRing;
+                    glowRing.position.copy(mesh.position);
+                    glowRing.material.opacity = 0.3 + pulse * 0.15;
+                    const glowScale = mesh.scale.x * (1.0 + pulse * 0.1);
+                    glowRing.scale.set(glowScale, glowScale, glowScale);
+                    // Make ring face camera
+                    glowRing.lookAt(camera.position);
+                }
+
+                // Animate target ring
+                if (mesh.userData.targetRing) {
+                    const targetRing = mesh.userData.targetRing;
+                    targetRing.position.copy(mesh.position);
+                    targetRing.material.opacity = 0.5 + pulse * 0.2;
+                    const targetScale = mesh.scale.x * (1.0 - pulse * 0.05);
+                    targetRing.scale.set(targetScale, targetScale, targetScale);
+                    // Make ring face camera
+                    targetRing.lookAt(camera.position);
+                }
+
+                // Boost emissive when not selected
+                if (!mesh.userData.selected) {
+                    mesh.material.emissiveIntensity = 0.5 + pulse * 0.15;
+                }
+            }
+
             // Selection glow - more prominent pulsing effect
             if (mesh.userData.selected) {
                 // Stronger pulse with higher intensity range
@@ -26733,10 +26830,12 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                             if (childMesh.userData.labelSprite) childMesh.userData.labelSprite.visible = true;
                             if (childMesh.userData.contextBadge) childMesh.userData.contextBadge.visible = true;
                             if (childMesh.userData.connectionLine) childMesh.userData.connectionLine.visible = true;
+                            if (childMesh.userData.glowRing) childMesh.userData.glowRing.visible = true;
+                            if (childMesh.userData.targetRing) childMesh.userData.targetRing.visible = true;
                             childMesh.userData.collapsed = false;
                         }
                     });
-                    
+
                     // Celebration
                     const screenPos = mesh.position.clone().project(camera);
                     const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
