@@ -24502,21 +24502,28 @@ Return as JSON:
                 availableSector = Math.PI * 2;
                 childSectorStart = -Math.PI;
             } else if (level === 1) {
-                // Level 1: Can expand slightly beyond inherited sector
-                const minSectorPerChild = Math.PI / 12; // 15 degrees minimum per child
+                // Level 1: Moderate expansion for first-level branches
+                const minSectorPerChild = Math.PI / 10; // 18 degrees minimum per child
                 const minNeededSector = data.children.length * minSectorPerChild;
-                const expandedSector = sectorWidth * 1.15; // Gentle 15% expansion
+                const expandedSector = sectorWidth * 1.2; // 20% expansion
 
                 availableSector = Math.max(expandedSector, minNeededSector);
-                availableSector = Math.min(availableSector, Math.PI * 0.8); // Cap at 144°
+                availableSector = Math.min(availableSector, Math.PI * 0.9); // Cap at 162°
 
                 const sectorCenter = sectorStart + sectorWidth / 2;
                 childSectorStart = sectorCenter - availableSector / 2;
             } else {
-                // Level 2+: STRICT - children must stay within parent's sector
-                // No expansion beyond parent boundaries to prevent cousin overlap
-                availableSector = sectorWidth; // Use exactly parent's sector, no expansion
-                childSectorStart = sectorStart;
+                // Level 2+: Gentle expansion, capped relative to parent's sector
+                const minSectorPerChild = Math.PI / 12; // 15 degrees minimum per child
+                const minNeededSector = data.children.length * minSectorPerChild;
+                const expandedSector = sectorWidth * 1.15; // 15% expansion
+
+                availableSector = Math.max(expandedSector, minNeededSector);
+                // Cap at 120% of parent's sector to limit cousin overlap
+                availableSector = Math.min(availableSector, sectorWidth * 1.2);
+
+                const sectorCenter = sectorStart + sectorWidth / 2;
+                childSectorStart = sectorCenter - availableSector / 2;
             }
 
             data.children.forEach((child, i) => {
