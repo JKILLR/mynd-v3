@@ -14570,16 +14570,21 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                             model = buildCategoryModel(data.numCategories);
                             xs = tf.tensor2d(data.inputs);
                             ys = tf.tensor2d(data.outputs);
-                            
+
+                            // Create sample weights tensor if feedback weights are provided
+                            const hasSampleWeights = data.sampleWeights && data.sampleWeights.length === data.inputs.length;
+                            const sw = hasSampleWeights ? tf.tensor1d(data.sampleWeights) : null;
+
                             await model.fit(xs, ys, {
                                 epochs: CONFIG.epochs,
                                 batchSize: CONFIG.batchSize,
                                 validationSplit: 0.2,
                                 shuffle: true,
+                                sampleWeight: sw,
                                 callbacks: {
                                     onEpochEnd: (epoch, logs) => {
-                                        self.postMessage({ 
-                                            type: 'progress', 
+                                        self.postMessage({
+                                            type: 'progress',
                                             modelType,
                                             progress: ((epoch + 1) / CONFIG.epochs) * 100,
                                             accuracy: logs.acc,
@@ -14588,25 +14593,31 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                                     }
                                 }
                             });
-                            
+
                             weights = await extractWeights(model);
                             xs.dispose(); ys.dispose(); model.dispose();
+                            if (sw) sw.dispose();
                             
                         } else if (modelType === 'connection' && data.inputs.length > 10) {
                             self.postMessage({ type: 'progress', modelType, progress: 0 });
                             model = buildConnectionModel();
                             xs = tf.tensor2d(data.inputs);
                             ys = tf.tensor2d(data.outputs);
-                            
+
+                            // Create sample weights tensor if feedback weights are provided
+                            const hasSampleWeights = data.sampleWeights && data.sampleWeights.length === data.inputs.length;
+                            const sw = hasSampleWeights ? tf.tensor1d(data.sampleWeights) : null;
+
                             await model.fit(xs, ys, {
                                 epochs: CONFIG.epochs,
                                 batchSize: CONFIG.batchSize,
                                 validationSplit: 0.2,
                                 shuffle: true,
+                                sampleWeight: sw,
                                 callbacks: {
                                     onEpochEnd: (epoch, logs) => {
-                                        self.postMessage({ 
-                                            type: 'progress', 
+                                        self.postMessage({
+                                            type: 'progress',
                                             modelType,
                                             progress: ((epoch + 1) / CONFIG.epochs) * 100,
                                             accuracy: logs.acc,
@@ -14615,25 +14626,31 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                                     }
                                 }
                             });
-                            
+
                             weights = await extractWeights(model);
                             xs.dispose(); ys.dispose(); model.dispose();
+                            if (sw) sw.dispose();
                             
                         } else if (modelType === 'prediction' && data.inputs.length > 5) {
                             self.postMessage({ type: 'progress', modelType, progress: 0 });
                             model = buildPredictionModel();
                             xs = tf.tensor2d(data.inputs);
                             ys = tf.tensor2d(data.outputs);
-                            
+
+                            // Create sample weights tensor if feedback weights are provided
+                            const hasSampleWeights = data.sampleWeights && data.sampleWeights.length === data.inputs.length;
+                            const sw = hasSampleWeights ? tf.tensor1d(data.sampleWeights) : null;
+
                             await model.fit(xs, ys, {
                                 epochs: CONFIG.epochs,
                                 batchSize: Math.min(CONFIG.batchSize, data.inputs.length),
                                 validationSplit: 0.2,
                                 shuffle: true,
+                                sampleWeight: sw,
                                 callbacks: {
                                     onEpochEnd: (epoch, logs) => {
-                                        self.postMessage({ 
-                                            type: 'progress', 
+                                        self.postMessage({
+                                            type: 'progress',
                                             modelType,
                                             progress: ((epoch + 1) / CONFIG.epochs) * 100,
                                             loss: logs.loss
@@ -14641,9 +14658,10 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                                     }
                                 }
                             });
-                            
+
                             weights = await extractWeights(model);
                             xs.dispose(); ys.dispose(); model.dispose();
+                            if (sw) sw.dispose();
                         }
                         
                         self.postMessage({ type: 'complete', modelType, weights });
@@ -15123,7 +15141,8 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
         }
         
         // Prepare training data from the mind map structure
-        async prepareTrainingData(store) {
+        // feedbackWeights: Map<pattern, {weight, confidence}> from AIFeedback
+        async prepareTrainingData(store, feedbackWeights = new Map()) {
             const allNodes = [];
             const categoryLabels = [];
             
@@ -15187,12 +15206,25 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
             
             if (!embeddings) return null;
             
-            // Prepare category training data
+            // Helper to get sample weight from feedback
+            const getSampleWeight = (label) => {
+                if (!feedbackWeights || feedbackWeights.size === 0) return 1.0;
+                const key = label.toLowerCase().trim();
+                const feedback = feedbackWeights.get(key);
+                if (feedback) {
+                    // Blend feedback weight with confidence
+                    return 1.0 + (feedback.weight - 1.0) * feedback.confidence;
+                }
+                return 1.0;
+            };
+
+            // Prepare category training data with sample weights
             const categoryData = {
                 inputs: [],
-                outputs: []
+                outputs: [],
+                sampleWeights: []
             };
-            
+
             allNodes.forEach((node, i) => {
                 if (node.categoryIndex >= 0) {
                     categoryData.inputs.push(embeddings[i]);
@@ -15200,15 +15232,18 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                     const oneHot = new Array(this.categories.length).fill(0);
                     oneHot[node.categoryIndex] = 1;
                     categoryData.outputs.push(oneHot);
+                    // Weight based on feedback for this node's label
+                    categoryData.sampleWeights.push(getSampleWeight(node.label));
                 }
             });
             
-            // Prepare connection training data
+            // Prepare connection training data with sample weights
             const connectionData = {
                 inputs: [],
-                outputs: []
+                outputs: [],
+                sampleWeights: []
             };
-            
+
             // Positive examples: actual parent-child and sibling pairs
             allNodes.forEach((node, i) => {
                 // Parent-child connections
@@ -15218,11 +15253,14 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                         const combined = [...embeddings[i], ...embeddings[childIndex]];
                         connectionData.inputs.push(combined);
                         connectionData.outputs.push([1, 1, 0, 1]); // connected, parent-child, not sibling, related
+                        // Weight based on both parent and child labels
+                        const weight = (getSampleWeight(node.label) + getSampleWeight(allNodes[childIndex].label)) / 2;
+                        connectionData.sampleWeights.push(weight);
                     }
                 });
-                
+
                 // Sibling connections (same parent)
-                const siblings = allNodes.filter(n => 
+                const siblings = allNodes.filter(n =>
                     n.parentId === node.parentId && n.id !== node.id
                 );
                 siblings.slice(0, 3).forEach(sibling => {
@@ -15231,10 +15269,12 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                         const combined = [...embeddings[i], ...embeddings[siblingIndex]];
                         connectionData.inputs.push(combined);
                         connectionData.outputs.push([1, 0, 1, 1]); // connected, not parent-child, sibling, related
+                        const weight = (getSampleWeight(node.label) + getSampleWeight(sibling.label)) / 2;
+                        connectionData.sampleWeights.push(weight);
                     }
                 });
             });
-            
+
             // Negative examples: random unconnected pairs
             const numNegative = Math.min(connectionData.inputs.length, allNodes.length * 2);
             for (let i = 0; i < numNegative; i++) {
@@ -15243,36 +15283,38 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 if (idx1 !== idx2) {
                     const node1 = allNodes[idx1];
                     const node2 = allNodes[idx2];
-                    
+
                     // Check if they're not actually connected
-                    const isConnected = node1.children.includes(node2.id) || 
+                    const isConnected = node1.children.includes(node2.id) ||
                                        node2.children.includes(node1.id) ||
                                        node1.parentId === node2.parentId;
-                    
+
                     if (!isConnected) {
                         const combined = [...embeddings[idx1], ...embeddings[idx2]];
                         connectionData.inputs.push(combined);
                         // Different categories = probably not related
                         const sameCategory = node1.category === node2.category;
                         connectionData.outputs.push([0, 0, 0, sameCategory ? 0.5 : 0]);
+                        connectionData.sampleWeights.push(1.0); // Neutral weight for negative examples
                     }
                 }
             }
             
-            // Prepare prediction training data (parent -> average child embedding)
+            // Prepare prediction training data (parent -> average child embedding) with sample weights
             const predictionData = {
                 inputs: [],
                 outputs: [],
+                sampleWeights: [],
                 patterns: [] // Store label patterns for pattern matching
             };
-            
+
             // For each parent with children, create training pair
             allNodes.forEach((node, i) => {
                 if (node.children.length > 0) {
                     // Get all child embeddings
                     const childEmbeddings = [];
                     const childLabels = [];
-                    
+
                     node.children.forEach(childId => {
                         const childIndex = allNodes.findIndex(n => n.id === childId);
                         if (childIndex >= 0) {
@@ -15280,11 +15322,11 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                             childLabels.push(allNodes[childIndex].label);
                         }
                     });
-                    
+
                     if (childEmbeddings.length > 0) {
                         // Input: parent embedding
                         predictionData.inputs.push(embeddings[i]);
-                        
+
                         // Output: centroid (average) of child embeddings
                         const centroid = new Array(CONFIG.NEURAL_NET.embeddingDim).fill(0);
                         childEmbeddings.forEach(childEmb => {
@@ -15293,7 +15335,13 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                             });
                         });
                         predictionData.outputs.push(centroid);
-                        
+
+                        // Sample weight based on parent and average child weights
+                        const childWeights = childLabels.map(l => getSampleWeight(l));
+                        const avgChildWeight = childWeights.reduce((a, b) => a + b, 0) / childWeights.length;
+                        const weight = (getSampleWeight(node.label) + avgChildWeight) / 2;
+                        predictionData.sampleWeights.push(weight);
+
                         // Store pattern for label-based suggestions
                         predictionData.patterns.push({
                             parentLabel: node.label.toLowerCase(),
@@ -15635,14 +15683,20 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 console.log('Neural network not ready or already training');
                 return false;
             }
-            
+
             this.isTraining = true;
             this.trainingProgress = 0;
             this.emit('onTrainingStart');
-            
+
             try {
+                // Load feedback weights to incorporate user preferences into training
+                console.log('🧠 Loading feedback weights...');
+                const feedbackWeights = typeof AIFeedback !== 'undefined'
+                    ? AIFeedback.getFeedbackWeights()
+                    : new Map();
+
                 console.log('🧠 Preparing training data...');
-                const data = await this.prepareTrainingData(store);
+                const data = await this.prepareTrainingData(store, feedbackWeights);
                 
                 if (!data) {
                     this.isTraining = false;
@@ -15729,20 +15783,23 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                                     // Send training data based on model type
                                     let trainingData;
                                     if (mt === 'category' || modelType === 'category') {
-                                        trainingData = { 
-                                            inputs: categoryData.inputs, 
+                                        trainingData = {
+                                            inputs: categoryData.inputs,
                                             outputs: categoryData.outputs,
-                                            numCategories: this.categories.length 
+                                            sampleWeights: categoryData.sampleWeights,
+                                            numCategories: this.categories.length
                                         };
                                     } else if (mt === 'connection' || modelType === 'connection') {
-                                        trainingData = { 
-                                            inputs: connectionData.inputs, 
-                                            outputs: connectionData.outputs 
+                                        trainingData = {
+                                            inputs: connectionData.inputs,
+                                            outputs: connectionData.outputs,
+                                            sampleWeights: connectionData.sampleWeights
                                         };
                                     } else {
-                                        trainingData = { 
-                                            inputs: predictionData.inputs, 
-                                            outputs: predictionData.outputs 
+                                        trainingData = {
+                                            inputs: predictionData.inputs,
+                                            outputs: predictionData.outputs,
+                                            sampleWeights: predictionData.sampleWeights
                                         };
                                     }
                                     
@@ -21131,20 +21188,87 @@ Return as JSON:
         resolve(suggestionId, action, modification = null) {
             const suggestion = this.pending.get(suggestionId);
             if (!suggestion) return;
-            
+
             const feedback = {
                 ...suggestion,
                 action, // 'accepted', 'modified', 'rejected', 'ignored'
                 modification,
                 responseTime: Date.now() - suggestion.context.timestamp
             };
-            
+
             this.pending.delete(suggestionId);
             this.store(feedback);
-            
+
             // Log for debugging
-            console.log(`📊 AI Feedback: ${feedback.type} → ${action}`, 
+            console.log(`📊 AI Feedback: ${feedback.type} → ${action}`,
                 action === 'modified' ? `(chose: ${modification})` : '');
+
+            // Trigger incremental learning if enough feedback has accumulated
+            this.checkAndTriggerLearning(feedback);
+        },
+
+        // Check if incremental learning should be triggered
+        feedbackSinceLastTrain: 0,
+        lastTrainTime: 0,
+        FEEDBACK_THRESHOLD: 5, // Trigger learning after 5 new feedback items
+        MIN_TRAIN_INTERVAL: 60000, // Minimum 60 seconds between training runs
+
+        checkAndTriggerLearning(feedback) {
+            // Only trigger on meaningful feedback (not ignored)
+            if (feedback.action === 'ignored') return;
+
+            this.feedbackSinceLastTrain++;
+
+            // Check if we should trigger learning
+            const now = Date.now();
+            const timeSinceLastTrain = now - this.lastTrainTime;
+
+            if (this.feedbackSinceLastTrain >= this.FEEDBACK_THRESHOLD &&
+                timeSinceLastTrain >= this.MIN_TRAIN_INTERVAL) {
+
+                console.log(`🧠 Triggering incremental learning (${this.feedbackSinceLastTrain} new feedback items)`);
+
+                // Reset counters
+                this.feedbackSinceLastTrain = 0;
+                this.lastTrainTime = now;
+
+                // Trigger learning asynchronously (non-blocking)
+                this.triggerIncrementalLearning();
+            }
+        },
+
+        async triggerIncrementalLearning() {
+            // Get reference to neural network and store
+            if (typeof neuralNet === 'undefined' || !neuralNet.isReady) {
+                console.log('🧠 Neural network not ready, skipping incremental learning');
+                return;
+            }
+
+            if (neuralNet.isTraining) {
+                console.log('🧠 Training already in progress, skipping');
+                return;
+            }
+
+            try {
+                // Get the current store from app
+                const store = window.app?.store;
+                if (!store) {
+                    console.log('🧠 Store not available, skipping incremental learning');
+                    return;
+                }
+
+                // Perform incremental training with feedback weights
+                console.log('🧠 Starting incremental learning from feedback...');
+                const result = await neuralNet.train(store);
+
+                if (result) {
+                    console.log('✓ Incremental learning complete');
+                } else {
+                    console.log('⚠ Incremental learning skipped (not enough data)');
+                }
+            } catch (error) {
+                console.error('❌ Incremental learning failed:', error);
+            }
         },
         
         // Store feedback locally
@@ -21209,7 +21333,7 @@ Return as JSON:
                 console.log('📊 AI Feedback: No data yet');
                 return;
             }
-            
+
             console.log('📊 AI Feedback Stats (Category Predictions):');
             console.log(`   Total: ${stats.total}`);
             console.log(`   Accepted: ${stats.accepted} (${Math.round(stats.accepted/stats.total*100)}%)`);
@@ -21218,8 +21342,106 @@ Return as JSON:
             console.log(`   Ignored: ${stats.ignored} (${Math.round(stats.ignored/stats.total*100)}%)`);
             console.log(`   Acceptance Rate: ${Math.round(stats.acceptanceRate*100)}%`);
             console.log(`   Avg Response Time: ${Math.round(stats.avgResponseTime/1000)}s`);
-            
+
             return stats;
+        },
+
+        // Get all stored feedback for training
+        getFeedback() {
+            try {
+                return JSON.parse(localStorage.getItem('mynd_ai_feedback') || '[]');
+            } catch (e) {
+                return [];
+            }
+        },
+
+        // Generate training weights from feedback history
+        // Returns Map<patternKey, {weight, confidence, samples}>
+        getFeedbackWeights() {
+            const feedback = this.getFeedback();
+            const patternStats = new Map();
+
+            // Aggregate feedback by pattern (predicted content)
+            for (const item of feedback) {
+                if (!item.predicted) continue;
+
+                const key = item.predicted.toLowerCase().trim();
+                if (!patternStats.has(key)) {
+                    patternStats.set(key, {
+                        accepted: 0,
+                        modified: 0,
+                        rejected: 0,
+                        ignored: 0,
+                        total: 0,
+                        chosen: [] // What user actually chose when modified
+                    });
+                }
+
+                const stats = patternStats.get(key);
+                stats[item.action]++;
+                stats.total++;
+
+                // Track what user chose instead
+                if (item.action === 'modified' && item.chosen && item.chosen !== item.predicted) {
+                    stats.chosen.push(item.chosen);
+                }
+            }
+
+            // Convert stats to training weights
+            const weights = new Map();
+
+            for (const [pattern, stats] of patternStats) {
+                if (stats.total < 2) continue; // Need at least 2 samples for confidence
+
+                // Calculate acceptance score: accepted=1.0, modified=0.5, rejected=-0.5, ignored=0
+                const positiveSignal = stats.accepted + (stats.modified * 0.5);
+                const negativeSignal = stats.rejected * 0.5;
+                const acceptanceRate = (positiveSignal - negativeSignal) / stats.total;
+
+                // Weight ranges from 0.2 (heavily rejected) to 2.0 (heavily accepted)
+                // Neutral (50% acceptance) = 1.0
+                const weight = Math.max(0.2, Math.min(2.0, 1.0 + acceptanceRate));
+
+                // Confidence based on sample size (more samples = higher confidence)
+                const confidence = Math.min(1.0, stats.total / 10);
+
+                weights.set(pattern, {
+                    weight,
+                    confidence,
+                    samples: stats.total,
+                    acceptanceRate: (stats.accepted + stats.modified) / stats.total,
+                    rejectionRate: stats.rejected / stats.total
+                });
+
+                // Also boost patterns that users chose instead
+                for (const chosen of stats.chosen) {
+                    const chosenKey = chosen.toLowerCase().trim();
+                    if (!weights.has(chosenKey)) {
+                        weights.set(chosenKey, {
+                            weight: 1.5, // User-chosen alternatives get boosted
+                            confidence: 0.7,
+                            samples: 1,
+                            acceptanceRate: 1.0,
+                            rejectionRate: 0,
+                            userChosen: true
+                        });
+                    } else {
+                        const existing = weights.get(chosenKey);
+                        existing.weight = Math.min(2.0, existing.weight + 0.2);
+                        existing.userChosen = true;
+                    }
+                }
+            }
+
+            console.log(`📊 Generated ${weights.size} feedback weights for training`);
+            return weights;
+        },
+
+        // Get feedback-based boost for a specific pattern
+        getPatternBoost(pattern) {
+            const weights = this.getFeedbackWeights();
+            const key = pattern.toLowerCase().trim();
+            return weights.get(key) || { weight: 1.0, confidence: 0, samples: 0 };
         }
     };
     
