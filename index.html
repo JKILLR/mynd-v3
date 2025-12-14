@@ -24213,11 +24213,14 @@ Return as JSON:
         // Initialize animation controller for performance throttling
         AnimationController.init();
 
-        // Expose key functions globally for external modules (like goal-system.js)
+        // Expose key functions and objects globally for external modules (like goal-system.js)
         window.nodes = nodes;
         window.buildScene = buildScene;
         window.selectNode = selectNode;
         window.focusOnNode = focusOnNode;
+        window.scene = scene;
+        window.camera = camera;
+        window.controls = controls;
 
         // Start animation loop
         animate();
@@ -25799,10 +25802,15 @@ Return as JSON:
         
         // Batch process all connection updates
         ConnectionManager.processBatch();
-        
+
         // Smart label decluttering - checks camera movement and runs only when needed
         LabelSystem.checkCameraMovement(camera, controls);
         LabelSystem.update(camera, nodes);
+
+        // Update goal beacons (distant goal visualization)
+        if (typeof GoalVisualization !== 'undefined' && GoalVisualization.update) {
+            GoalVisualization.update(time);
+        }
         
         // Smooth camera animation (runs even during interaction if animation is active)
         if (cameraArcAnimation) {

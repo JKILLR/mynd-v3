@@ -452,6 +452,287 @@ const GoalUI = {
 };
 
 // ═══════════════════════════════════════════════════════════════════
+// GOAL VISUALIZATION - Distant beacon rendering
+// ═══════════════════════════════════════════════════════════════════
+// Goals appear as large, glowing beacons FAR from the current mind map
+// They are NOT connected to the tree - they represent "New Reality"
+
+const GoalVisualization = {
+    beacons: new Map(), // goalId -> { mesh, glow, label, rings }
+    baseDistance: 80, // How far goals float from center
+    goalSize: 2.5, // Much larger than normal nodes (normal is ~0.5)
+
+    // Create a distant goal beacon
+    createGoalBeacon(goal) {
+        if (typeof THREE === 'undefined') {
+            console.warn('THREE.js not available for goal visualization');
+            return null;
+        }
+
+        const scene = window.scene;
+        const camera = window.camera;
+        const controls = window.controls;
+
+        if (!scene) {
+            console.warn('Scene not available for goal visualization');
+            return null;
+        }
+
+        // Calculate position - far from center, spread out if multiple goals
+        const existingGoals = this.beacons.size;
+        const angle = (existingGoals * Math.PI / 3) + Math.PI / 6; // Spread goals around
+        const distance = this.baseDistance + (existingGoals * 15); // Stagger distance
+
+        const position = new THREE.Vector3(
+            Math.cos(angle) * distance,
+            5 + (existingGoals * 3), // Slightly elevated, staggered
+            Math.sin(angle) * distance
+        );
+
+        // Priority affects size and intensity
+        const priorityMultiplier = {
+            high: 1.3,
+            medium: 1.0,
+            low: 0.8
+        };
+        const sizeMult = priorityMultiplier[goal.priority] || 1.0;
+        const size = this.goalSize * sizeMult;
+
+        // Create main sphere - much larger than normal nodes
+        const geometry = new THREE.SphereGeometry(size, 64, 64);
+        const material = new THREE.MeshStandardMaterial({
+            color: 0x8B5CF6, // Purple
+            emissive: 0x8B5CF6,
+            emissiveIntensity: 0.8,
+            roughness: 0.2,
+            metalness: 0.3,
+            transparent: true,
+            opacity: 0.95
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.copy(position);
+        mesh.userData = {
+            isGoalBeacon: true,
+            goalId: goal.id,
+            goal: goal
+        };
+        scene.add(mesh);
+
+        // Create outer glow sphere
+        const glowGeometry = new THREE.SphereGeometry(size * 1.5, 32, 32);
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: 0xA78BFA,
+            transparent: true,
+            opacity: 0.15,
+            side: THREE.BackSide
+        });
+        const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
+        glowMesh.position.copy(position);
+        scene.add(glowMesh);
+
+        // Create pulsing rings (like a target/beacon)
+        const rings = [];
+        for (let i = 0; i < 3; i++) {
+            const ringGeometry = new THREE.RingGeometry(
+                size * (1.8 + i * 0.6),
+                size * (2.0 + i * 0.6),
+                64
+            );
+            const ringMaterial = new THREE.MeshBasicMaterial({
+                color: 0x8B5CF6,
+                transparent: true,
+                opacity: 0.4 - (i * 0.1),
+                side: THREE.DoubleSide
+            });
+            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+            ring.position.copy(position);
+            ring.userData.phaseOffset = i * (Math.PI * 2 / 3);
+            scene.add(ring);
+            rings.push(ring);
+        }
+
+        // Create label
+        const label = this.createGoalLabel(goal.label, size);
+        label.position.set(position.x, position.y - size - 1, position.z);
+        scene.add(label);
+
+        // Store beacon data
+        const beacon = {
+            mesh,
+            glow: glowMesh,
+            label,
+            rings,
+            goal,
+            position: position.clone(),
+            createdAt: Date.now()
+        };
+        this.beacons.set(goal.id, beacon);
+
+        // Animate camera to show the new goal
+        this.revealGoal(beacon, camera, controls);
+
+        console.log(`🎯 Goal beacon created at distance ${distance}:`, goal.label);
+        return beacon;
+    },
+
+    // Create a label sprite for the goal
+    createGoalLabel(text, size) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const fontSize = 48;
+        const padding = 20;
+
+        ctx.font = `bold ${fontSize}px Inter, system-ui, sans-serif`;
+        const textWidth = ctx.measureText(text).width;
+        const width = textWidth + padding * 2;
+        const height = fontSize + padding * 2;
+
+        canvas.width = width * 2;
+        canvas.height = height * 2;
+        ctx.scale(2, 2);
+
+        // Background
+        ctx.fillStyle = 'rgba(139, 92, 246, 0.9)';
+        ctx.roundRect(0, 0, width, height, 12);
+        ctx.fill();
+
+        // Text
+        ctx.font = `bold ${fontSize}px Inter, system-ui, sans-serif`;
+        ctx.fillStyle = 'white';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, width / 2, height / 2);
+
+        // Create sprite
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
+        const spriteMaterial = new THREE.SpriteMaterial({
+            map: texture,
+            transparent: true
+        });
+        const sprite = new THREE.Sprite(spriteMaterial);
+        sprite.scale.set(width / 80 * size, height / 80 * size, 1);
+
+        return sprite;
+    },
+
+    // Animate camera to reveal the distant goal
+    revealGoal(beacon, camera, controls) {
+        if (!camera || !controls) return;
+
+        // Store original position
+        const originalTarget = controls.target.clone();
+        const originalPosition = camera.position.clone();
+
+        // Calculate a position that shows both the map and the goal
+        const goalPos = beacon.position;
+        const midpoint = new THREE.Vector3().lerpVectors(
+            originalTarget,
+            goalPos,
+            0.3 // Look 30% toward the goal
+        );
+
+        // Animate to show the goal
+        const duration = 2000;
+        const startTime = Date.now();
+
+        const animateReveal = () => {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+
+            // Smooth easing
+            const ease = 1 - Math.pow(1 - progress, 3);
+
+            if (progress < 0.5) {
+                // First half: pan toward goal
+                const panProgress = ease * 2;
+                controls.target.lerpVectors(originalTarget, midpoint, panProgress);
+            } else {
+                // Second half: pan back but keep goal visible
+                const returnProgress = (ease - 0.5) * 2;
+                controls.target.lerpVectors(midpoint, originalTarget, returnProgress);
+            }
+
+            controls.update();
+
+            if (progress < 1) {
+                requestAnimationFrame(animateReveal);
+            }
+        };
+
+        // Start after a brief delay
+        setTimeout(animateReveal, 500);
+    },
+
+    // Update all beacons (called in animation loop)
+    update(time) {
+        this.beacons.forEach((beacon) => {
+            // Pulse the glow
+            const pulse = Math.sin(time * 2) * 0.5 + 0.5;
+            beacon.glow.material.opacity = 0.1 + pulse * 0.1;
+            beacon.glow.scale.setScalar(1 + pulse * 0.1);
+
+            // Rotate and pulse the rings
+            beacon.rings.forEach((ring, i) => {
+                ring.rotation.x = Math.sin(time + ring.userData.phaseOffset) * 0.3;
+                ring.rotation.y = time * 0.5 + ring.userData.phaseOffset;
+                ring.material.opacity = (0.3 - i * 0.08) + Math.sin(time * 2 + ring.userData.phaseOffset) * 0.1;
+
+                // Rings expand outward slowly
+                const expandPulse = Math.sin(time * 0.5 + ring.userData.phaseOffset) * 0.1 + 1;
+                ring.scale.setScalar(expandPulse);
+            });
+
+            // Subtle float for the main sphere
+            beacon.mesh.position.y = beacon.position.y + Math.sin(time * 0.8) * 0.3;
+            beacon.glow.position.y = beacon.mesh.position.y;
+            beacon.rings.forEach(ring => {
+                ring.position.y = beacon.mesh.position.y;
+            });
+            beacon.label.position.y = beacon.mesh.position.y - beacon.mesh.geometry.parameters.radius - 1;
+        });
+    },
+
+    // Remove a goal beacon
+    removeBeacon(goalId) {
+        const beacon = this.beacons.get(goalId);
+        if (!beacon) return;
+
+        const scene = window.scene;
+        if (scene) {
+            scene.remove(beacon.mesh);
+            scene.remove(beacon.glow);
+            scene.remove(beacon.label);
+            beacon.rings.forEach(ring => scene.remove(ring));
+        }
+
+        // Dispose geometries and materials
+        beacon.mesh.geometry.dispose();
+        beacon.mesh.material.dispose();
+        beacon.glow.geometry.dispose();
+        beacon.glow.material.dispose();
+        beacon.label.material.map.dispose();
+        beacon.label.material.dispose();
+        beacon.rings.forEach(ring => {
+            ring.geometry.dispose();
+            ring.material.dispose();
+        });
+
+        this.beacons.delete(goalId);
+    },
+
+    // Restore beacons from saved goals
+    restoreBeacons() {
+        const activeGoals = GoalRegistry.getActiveGoals();
+        activeGoals.forEach(goal => {
+            if (!this.beacons.has(goal.id)) {
+                this.createGoalBeacon(goal);
+            }
+        });
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════
 // GOAL WIZARD - Multi-step goal creation flow
 // ═══════════════════════════════════════════════════════════════════
 
@@ -750,42 +1031,8 @@ const GoalWizard = {
             // Celebrate!
             GoalUI.celebrate('goal');
 
-            // Add goal node to mind map
-            if (typeof window.store !== 'undefined' && window.store.addNode) {
-                const priorityColors = {
-                    high: '#8B5CF6',    // Purple
-                    medium: '#A78BFA',  // Lighter purple
-                    low: '#C4B5FD'      // Even lighter purple
-                };
-
-                const goalNode = window.store.addNode(window.store.data.id, {
-                    label: goal.label,
-                    description: goal.description || goal.whyItMatters || '',
-                    color: priorityColors[goal.priority] || '#8B5CF6',
-                    type: 'goal',
-                    goalId: goal.id,
-                    source: 'goal-wizard'
-                });
-
-                if (goalNode && typeof window.buildScene === 'function') {
-                    window.buildScene();
-
-                    // Focus on the new goal node
-                    setTimeout(() => {
-                        if (typeof window.nodes !== 'undefined') {
-                            const mesh = window.nodes.get(goalNode.id);
-                            if (mesh && typeof window.selectNode === 'function') {
-                                window.selectNode(mesh);
-                                if (typeof window.focusOnNode === 'function') {
-                                    window.focusOnNode(mesh);
-                                }
-                            }
-                        }
-                    }, 100);
-                }
-
-                console.log('✨ Goal node added to mind map:', goalNode);
-            }
+            // Create distant goal beacon (NOT a regular node)
+            GoalVisualization.createGoalBeacon(goal);
 
             return goal;
 
