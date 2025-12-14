@@ -24388,8 +24388,7 @@ Return as JSON:
         data.sectorStart = sectorStart;
         data.sectorEnd = sectorEnd;
 
-        // Position calculation - radius increases with level
-        // Also increases when sector is narrow (to maintain spacing)
+        // Position calculation - radius DECREASES hyperbolically with level
         let baseRadius;
         if (level === 0) {
             baseRadius = 0;
@@ -24397,27 +24396,27 @@ Return as JSON:
             baseRadius = CONFIG.LAYOUT.level1Radius;
             // Push out based on how many descendants (more descendants = needs more space)
             if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 2.5;
+                baseRadius += Math.sqrt(visibleDescendants) * 2.0;
             }
             if (expandedDepth > 1) {
-                baseRadius += Math.sqrt(expandedDepth - 1) * 3.0;
+                baseRadius += Math.sqrt(expandedDepth - 1) * 2.5;
             }
         } else {
-            // Level 2+: Base radius increases with level to spread branches outward
-            const levelRadius = level === 2 ? CONFIG.LAYOUT.level2Radius : CONFIG.LAYOUT.level3Radius;
-            baseRadius = levelRadius + (level - 2) * 8; // Increase radius with each level
+            // Level 2+: Base radius DECREASES hyperbolically with level
+            const initialRadius = level === 2 ? CONFIG.LAYOUT.level2Radius : CONFIG.LAYOUT.level3Radius;
+            // Hyperbolic decay: radius = initial / (1 + k * (level - 2))
+            baseRadius = initialRadius / (1 + (level - 2) * 0.2);
 
-            // Compensate for narrow sectors - narrower sector = push further out
-            const sectorNarrowness = (Math.PI * 2) / Math.max(sectorWidth, 0.1);
-            baseRadius += Math.log(sectorNarrowness + 1) * 6;
-
-            // Extra push for nodes with many descendants
+            // Small boost for nodes with many descendants
             if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 1.5;
+                baseRadius += Math.sqrt(visibleDescendants) * 0.8;
             }
             if (expandedDepth > 0) {
-                baseRadius += Math.sqrt(expandedDepth) * 2.0;
+                baseRadius += Math.sqrt(expandedDepth) * 1.0;
             }
+
+            // Minimum radius to prevent nodes stacking
+            baseRadius = Math.max(baseRadius, 8);
         }
 
         if (level === 0) {
@@ -24489,14 +24488,25 @@ Return as JSON:
             const totalWeight = childWeights.reduce((a, b) => a + b, 0);
 
             // For level 0 (root), children get the full circle divided among them
-            // For deeper levels, children divide the parent's sector
-            let childSectorStart = level === 0 ? -Math.PI : sectorStart;
-            let availableSector = level === 0 ? Math.PI * 2 : sectorWidth;
+            // For deeper levels, EXPAND the sector to give children more room
+            // This prevents cramping at deeper levels while maintaining general direction
+            let availableSector, childSectorStart;
 
-            // Slight padding between sibling sectors to prevent edge overlap
-            const sectorPadding = level === 0 ? 0 : availableSector * 0.05;
-            availableSector -= sectorPadding * 2;
-            childSectorStart += sectorPadding;
+            if (level === 0) {
+                // Root: full circle
+                availableSector = Math.PI * 2;
+                childSectorStart = -Math.PI;
+            } else {
+                // Deeper levels: expand parent's sector to give children breathing room
+                // Expansion factor increases with level to counteract sector narrowing
+                const expansionFactor = 1 + (level * 0.4); // Level 1: 1.4x, Level 2: 1.8x, etc.
+                const expandedSector = Math.min(sectorWidth * expansionFactor, Math.PI * 1.2);
+
+                // Center the expanded sector on the parent's sector center
+                const sectorCenter = sectorStart + sectorWidth / 2;
+                childSectorStart = sectorCenter - expandedSector / 2;
+                availableSector = expandedSector;
+            }
 
             data.children.forEach((child, i) => {
                 // Calculate this child's sector width proportionally to its weight
