@@ -24501,24 +24501,22 @@ Return as JSON:
                 // Root: full circle
                 availableSector = Math.PI * 2;
                 childSectorStart = -Math.PI;
-            } else {
-                // Calculate minimum sector needed based on number of children
-                // Reduced minimum to prevent over-expansion
-                const minSectorPerChild = Math.PI / 10; // 18 degrees minimum per child
+            } else if (level === 1) {
+                // Level 1: Can expand slightly beyond inherited sector
+                const minSectorPerChild = Math.PI / 12; // 15 degrees minimum per child
                 const minNeededSector = data.children.length * minSectorPerChild;
+                const expandedSector = sectorWidth * 1.15; // Gentle 15% expansion
 
-                // Gentle expansion from parent's sector (less than φ to prevent overlap)
-                const expansionFactor = 1.25;
-                const expandedSector = sectorWidth * expansionFactor;
-
-                // Use whichever is larger: expanded sector or minimum needed
                 availableSector = Math.max(expandedSector, minNeededSector);
-                // Tighter cap to prevent horizontal overlap
-                availableSector = Math.min(availableSector, Math.PI * 1.0);
+                availableSector = Math.min(availableSector, Math.PI * 0.8); // Cap at 144°
 
-                // Center the available sector on the parent's sector center
                 const sectorCenter = sectorStart + sectorWidth / 2;
                 childSectorStart = sectorCenter - availableSector / 2;
+            } else {
+                // Level 2+: STRICT - children must stay within parent's sector
+                // No expansion beyond parent boundaries to prevent cousin overlap
+                availableSector = sectorWidth; // Use exactly parent's sector, no expansion
+                childSectorStart = sectorStart;
             }
 
             data.children.forEach((child, i) => {
