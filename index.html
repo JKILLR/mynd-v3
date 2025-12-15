@@ -24445,9 +24445,8 @@ Return as JSON:
 
             if (level === 1) {
                 // Level 1: Equal vertical spacing based on index (not angle)
-                // This creates consistent spiral arm spacing
-                const depthBoost = 1 + (expandedDepth * 0.4); // Reduced boost
-                const helixAmp = baseHelixAmp * depthBoost * 0.6; // Reduced amplitude
+                // Use FIXED amplitude so all level 1 nodes spread equally above/below horizon
+                const helixAmp = baseHelixAmp * 0.8; // Fixed amplitude for symmetry
 
                 // Evenly distribute from -helixAmp to +helixAmp based on index
                 if (total > 1) {
