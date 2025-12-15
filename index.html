@@ -28574,7 +28574,7 @@ Respond with a JSON object:
         } else {
             // All levels use golden ratio decay from a base length
             // Level 1 and 2 are equal, then decay by φ for each subsequent level
-            const baseBranchLength = 18; // Shorter base for level 1 & 2
+            const baseBranchLength = 11; // Reduced by 40% for tighter map
 
             if (level <= 2) {
                 baseRadius = baseBranchLength;
@@ -28584,24 +28584,24 @@ Respond with a JSON object:
                 baseRadius = baseBranchLength * Math.pow(PHI_INV, level - 2);
             }
 
-            // Small boost for expanded nodes with descendants
+            // Small boost for expanded nodes with descendants (reduced by 40%)
             if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 0.4;
+                baseRadius += Math.sqrt(visibleDescendants) * 0.25;
             }
             if (expandedDepth > 0) {
-                baseRadius += Math.sqrt(expandedDepth) * 0.5;
+                baseRadius += Math.sqrt(expandedDepth) * 0.3;
             }
 
             // RADIAL VARIATION for siblings - spread them at different distances
             // This prevents stacking when sectors are narrow
             if (total > 1 && level > 1) {
-                const radialSpread = 4; // Amount to vary radius among siblings
+                const radialSpread = 2.5; // Reduced by 40% for tighter spacing
                 const radialOffset = (index - (total - 1) / 2) * (radialSpread / Math.max(total - 1, 1));
                 baseRadius += radialOffset;
             }
 
-            // Minimum radius
-            baseRadius = Math.max(baseRadius, 5);
+            // Minimum radius (reduced by 40%)
+            baseRadius = Math.max(baseRadius, 3);
         }
 
         if (level === 0) {
@@ -28625,7 +28625,7 @@ Respond with a JSON object:
             let siblingVerticalOffset = 0;
             if (level > 1 && total > 1) {
                 // Large vertical spread for level 2, exponential decay after
-                const baseVerticalSpread = 15.0;
+                const baseVerticalSpread = 9.0; // Reduced by 40%
                 // Exponential decay: halves each level after level 2
                 const levelFactor = Math.pow(0.5, level - 2); // 1, 0.5, 0.25, 0.125...
                 const siblingSpacing = baseVerticalSpread * levelFactor;
@@ -28642,8 +28642,8 @@ Respond with a JSON object:
                 const goldenAngle = 2 * Math.PI / (PHI * PHI); // ≈ 137.5° in radians
 
                 // Sphere dimensions
-                const sphereHeight = baseHelixAmp * 10.0; // Total height of sphere
-                const sphereRadius = baseRadius * 4.0; // Max horizontal radius at equator
+                const sphereHeight = baseHelixAmp * 6.0; // Reduced by 40% for tighter map
+                const sphereRadius = baseRadius * 2.4; // Reduced by 40% for tighter map
 
                 // Y position: evenly spaced from top (+1) to bottom (-1) with epsilon offset
                 // Epsilon prevents clustering at poles
@@ -29789,38 +29789,35 @@ Respond with a JSON object:
     // Focus camera on a specific node without full selection animation
     function focusOnNode(mesh) {
         if (!mesh) return;
-        
+
         const nodePos = mesh.userData.spring?.target?.clone() || mesh.position.clone();
-        
+
         // Smoothly move camera target to node
         cameraTargetGoal.copy(nodePos);
-        
+
         // Calculate ideal camera position - maintain current viewing angle but center on node
         const currentOffset = new THREE.Vector3().subVectors(camera.position, controls.target);
-        const currentRadius = currentOffset.length();
-        
-        // Deeper nodes need closer camera
-        const nodeLevel = mesh.userData.level || 0;
-        const depthZoomBonus = Math.min(nodeLevel * 2, 6);
-        const idealRadius = Math.max(10, 20 - depthZoomBonus);
-        
+
+        // Fixed zoom distance for consistent node size on screen regardless of depth
+        const consistentZoomDistance = 12;
+
         // Animate camera to look at node
         const startTarget = controls.target.clone();
         const startPos = camera.position.clone();
         const endTarget = nodePos.clone();
-        const endPos = nodePos.clone().add(currentOffset.normalize().multiplyScalar(Math.min(currentRadius, idealRadius)));
-        
+        const endPos = nodePos.clone().add(currentOffset.normalize().multiplyScalar(consistentZoomDistance));
+
         const duration = 400;
         const startTime = Date.now();
-        
+
         function animate() {
             const elapsed = Date.now() - startTime;
             const progress = Math.min(elapsed / duration, 1);
             const ease = easeOutCubic(progress);
-            
+
             controls.target.lerpVectors(startTarget, endTarget, ease);
             camera.position.lerpVectors(startPos, endPos, ease);
-            
+
             if (progress < 1) requestAnimationFrame(animate);
         }
         animate();
