@@ -28574,7 +28574,7 @@ Respond with a JSON object:
         } else {
             // All levels use golden ratio decay from a base length
             // Level 1 and 2 are equal, then decay by φ for each subsequent level
-            const baseBranchLength = 11; // Reduced by 40% for tighter map
+            const baseBranchLength = 5.5; // Reduced by 70% total for ultra-tight map
 
             if (level <= 2) {
                 baseRadius = baseBranchLength;
@@ -28584,24 +28584,24 @@ Respond with a JSON object:
                 baseRadius = baseBranchLength * Math.pow(PHI_INV, level - 2);
             }
 
-            // Small boost for expanded nodes with descendants (reduced by 40%)
+            // Small boost for expanded nodes with descendants (reduced by 70%)
             if (isExpanded && visibleDescendants > 0) {
-                baseRadius += Math.sqrt(visibleDescendants) * 0.25;
+                baseRadius += Math.sqrt(visibleDescendants) * 0.12;
             }
             if (expandedDepth > 0) {
-                baseRadius += Math.sqrt(expandedDepth) * 0.3;
+                baseRadius += Math.sqrt(expandedDepth) * 0.15;
             }
 
             // RADIAL VARIATION for siblings - spread them at different distances
             // This prevents stacking when sectors are narrow
             if (total > 1 && level > 1) {
-                const radialSpread = 2.5; // Reduced by 40% for tighter spacing
+                const radialSpread = 1.25; // Reduced by 70% total for ultra-tight spacing
                 const radialOffset = (index - (total - 1) / 2) * (radialSpread / Math.max(total - 1, 1));
                 baseRadius += radialOffset;
             }
 
-            // Minimum radius (reduced by 40%)
-            baseRadius = Math.max(baseRadius, 3);
+            // Minimum radius (reduced by 70%)
+            baseRadius = Math.max(baseRadius, 1.5);
         }
 
         if (level === 0) {
@@ -28625,7 +28625,7 @@ Respond with a JSON object:
             let siblingVerticalOffset = 0;
             if (level > 1 && total > 1) {
                 // Large vertical spread for level 2, exponential decay after
-                const baseVerticalSpread = 9.0; // Reduced by 40%
+                const baseVerticalSpread = 4.5; // Reduced by 70% total
                 // Exponential decay: halves each level after level 2
                 const levelFactor = Math.pow(0.5, level - 2); // 1, 0.5, 0.25, 0.125...
                 const siblingSpacing = baseVerticalSpread * levelFactor;
@@ -28642,8 +28642,8 @@ Respond with a JSON object:
                 const goldenAngle = 2 * Math.PI / (PHI * PHI); // ≈ 137.5° in radians
 
                 // Sphere dimensions
-                const sphereHeight = baseHelixAmp * 6.0; // Reduced by 40% for tighter map
-                const sphereRadius = baseRadius * 2.4; // Reduced by 40% for tighter map
+                const sphereHeight = baseHelixAmp * 3.0; // Reduced by 70% total for ultra-tight map
+                const sphereRadius = baseRadius * 1.2; // Reduced by 70% total for ultra-tight map
 
                 // Y position: evenly spaced from top (+1) to bottom (-1) with epsilon offset
                 // Epsilon prevents clustering at poles
@@ -29761,8 +29761,8 @@ Respond with a JSON object:
         });
         
         const isMobile = window.innerWidth <= 768;
-        // Zoom out enough to see all nodes plus some padding - more on mobile
-        const targetDist = Math.max(maxDist * (isMobile ? 3 : 2.5) + extraZoom, isMobile ? 50 : 30);
+        // Zoom out enough to see all nodes plus some padding - reduced by 50% for tighter view
+        const targetDist = Math.max(maxDist * (isMobile ? 1.5 : 1.25) + extraZoom, isMobile ? 25 : 15);
         const targetPos = new THREE.Vector3(0, targetDist * 0.4, targetDist);
         const startPos = camera.position.clone();
         const duration = isMobile ? 1500 : 800; // Slower on mobile
@@ -29799,7 +29799,8 @@ Respond with a JSON object:
         const currentOffset = new THREE.Vector3().subVectors(camera.position, controls.target);
 
         // Fixed zoom distance for consistent node size on screen regardless of depth
-        const consistentZoomDistance = 12;
+        // Reduced to 4.8 (60% closer than before)
+        const consistentZoomDistance = 4.8;
 
         // Animate camera to look at node
         const startTarget = controls.target.clone();
