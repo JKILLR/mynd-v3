@@ -25416,6 +25416,606 @@ Respond with a JSON object:
     };
 
     // ═══════════════════════════════════════════════════════════════════
+    // VISION CORE - Foundational Purpose & Mission Understanding
+    // ═══════════════════════════════════════════════════════════════════
+    // Pre-trains MYND on the creator's vision, goals, values, and purpose.
+    // This becomes the "soul" that guides all AI behaviors and evolution.
+    const VisionCore = {
+        STORAGE_KEY: 'mynd_vision_core',
+        VERSION: '1.0',
+        initialized: false,
+
+        // The vision document and parsed components
+        vision: {
+            raw: null,                    // Original document text
+            title: null,                  // Vision title/name
+            mission: null,                // Core mission statement
+            values: [],                   // Guiding values/principles
+            goals: [],                    // Big goals and objectives
+            concepts: [],                 // Key concepts and ideas
+            features: [],                 // Planned features
+            philosophy: null,             // Underlying philosophy
+            targetUsers: [],              // Who this is for
+            successMetrics: [],           // How success is measured
+            timeline: [],                 // Milestones and phases
+            inspirations: [],             // Inspirational references
+            antiPatterns: [],             // What to avoid
+            embedding: null,              // Full document embedding
+            conceptEmbeddings: new Map(), // Per-concept embeddings
+            lastUpdated: null
+        },
+
+        // Default vision template (can be customized)
+        visionTemplate: `
+# MYND Vision Document
+
+## Mission
+[What is the core purpose of MYND? What problem does it solve?]
+
+## Values & Principles
+- [Value 1]
+- [Value 2]
+- [Value 3]
+
+## Big Goals
+1. [Goal 1]
+2. [Goal 2]
+3. [Goal 3]
+
+## Key Concepts
+- [Concept 1]: [Description]
+- [Concept 2]: [Description]
+
+## Target Users
+- [User type 1]
+- [User type 2]
+
+## Philosophy
+[What's the underlying philosophy? How should MYND feel to use?]
+
+## Success Looks Like
+- [Metric 1]
+- [Metric 2]
+
+## What We Avoid
+- [Anti-pattern 1]
+- [Anti-pattern 2]
+`,
+
+        async initialize() {
+            if (this.initialized) return this.vision;
+
+            console.log('🎯 Initializing VisionCore...');
+
+            try {
+                // Load from storage
+                const stored = this.loadFromStorage();
+                if (stored && stored.version === this.VERSION && stored.vision.raw) {
+                    this.vision = stored.vision;
+                    this.initialized = true;
+                    console.log(`✓ VisionCore loaded: "${this.vision.title || 'Vision'}" with ${this.vision.goals.length} goals, ${this.vision.concepts.length} concepts`);
+                    return this.vision;
+                }
+
+                // Check if MYND-App map exists and has vision content
+                await this.loadFromMYNDAppMap();
+
+                this.initialized = true;
+                console.log('✓ VisionCore ready (awaiting vision document)');
+                return this.vision;
+
+            } catch (error) {
+                console.warn('VisionCore initialization error:', error);
+                this.initialized = true;
+                return this.vision;
+            }
+        },
+
+        // Load vision from the MYND-App.json map if it exists
+        async loadFromMYNDAppMap() {
+            try {
+                // Check if store has a map called "MYND" or similar
+                const store = window.app?.store;
+                if (!store) return;
+
+                const rootLabel = store.data?.label?.toLowerCase() || '';
+                if (rootLabel.includes('mynd') || rootLabel.includes('vision') || rootLabel.includes('app')) {
+                    // This map might contain the vision - extract key nodes
+                    const allNodes = store.getAllNodes();
+
+                    // Look for vision-related nodes
+                    const visionKeywords = ['vision', 'mission', 'goal', 'value', 'principle', 'philosophy', 'feature', 'roadmap', 'milestone'];
+                    const visionNodes = allNodes.filter(n =>
+                        visionKeywords.some(kw => n.label.toLowerCase().includes(kw))
+                    );
+
+                    if (visionNodes.length > 0) {
+                        console.log(`🎯 Found ${visionNodes.length} vision-related nodes in map`);
+                        // Could auto-extract vision from these nodes
+                    }
+                }
+            } catch (e) {
+                // Map not available yet
+            }
+        },
+
+        // Set the vision document (main entry point)
+        async setVision(documentText, options = {}) {
+            console.log('🎯 Processing vision document...');
+
+            this.vision.raw = documentText;
+            this.vision.lastUpdated = Date.now();
+
+            // Parse the document
+            await this.parseVisionDocument(documentText);
+
+            // Create embeddings for semantic understanding
+            await this.createVisionEmbeddings();
+
+            // Save to storage
+            this.saveToStorage();
+
+            console.log(`✓ Vision set: "${this.vision.title}" - ${this.vision.goals.length} goals, ${this.vision.concepts.length} concepts, ${this.vision.values.length} values`);
+
+            return this.vision;
+        },
+
+        // Parse vision document into structured components
+        async parseVisionDocument(text) {
+            // Extract title (first # heading or first line)
+            const titleMatch = text.match(/^#\s+(.+)$/m);
+            this.vision.title = titleMatch ? titleMatch[1].trim() : text.split('\n')[0].trim();
+
+            // Extract mission (## Mission section or first paragraph)
+            const missionMatch = text.match(/##\s*Mission[:\s]*([\s\S]*?)(?=##|$)/i);
+            this.vision.mission = missionMatch
+                ? this.cleanText(missionMatch[1])
+                : this.extractFirstParagraph(text);
+
+            // Extract values (## Values section or bullet points after "values")
+            const valuesMatch = text.match(/##\s*Values?[^#]*([\s\S]*?)(?=##|$)/i);
+            this.vision.values = valuesMatch
+                ? this.extractBulletPoints(valuesMatch[1])
+                : [];
+
+            // Extract principles
+            const principlesMatch = text.match(/##\s*Principles?[^#]*([\s\S]*?)(?=##|$)/i);
+            if (principlesMatch) {
+                this.vision.values.push(...this.extractBulletPoints(principlesMatch[1]));
+            }
+
+            // Extract goals
+            const goalsMatch = text.match(/##\s*(?:Big\s+)?Goals?[^#]*([\s\S]*?)(?=##|$)/i);
+            this.vision.goals = goalsMatch
+                ? this.extractBulletPoints(goalsMatch[1])
+                : this.extractNumberedItems(text, /\d+\.\s+(.+)/g);
+
+            // Extract concepts
+            const conceptsMatch = text.match(/##\s*(?:Key\s+)?Concepts?[^#]*([\s\S]*?)(?=##|$)/i);
+            this.vision.concepts = conceptsMatch
+                ? this.extractDefinitions(conceptsMatch[1])
+                : [];
+
+            // Extract features
+            const featuresMatch = text.match(/##\s*(?:Planned\s+)?Features?[^#]*([\s\S]*?)(?=##|$)/i);
+            this.vision.features = featuresMatch
+                ? this.extractBulletPoints(featuresMatch[1])
+                : [];
+
+            // Extract philosophy
+            const philosophyMatch = text.match(/##\s*Philosophy[^#]*([\s\S]*?)(?=##|$)/i);
+            this.vision.philosophy = philosophyMatch
+                ? this.cleanText(philosophyMatch[1])
+                : null;
+
+            // Extract target users
+            const usersMatch = text.match(/##\s*(?:Target\s+)?Users?[^#]*([\s\S]*?)(?=##|$)/i);
+            this.vision.targetUsers = usersMatch
+                ? this.extractBulletPoints(usersMatch[1])
+                : [];
+
+            // Extract success metrics
+            const successMatch = text.match(/##\s*(?:Success|Metrics?)[^#]*([\s\S]*?)(?=##|$)/i);
+            this.vision.successMetrics = successMatch
+                ? this.extractBulletPoints(successMatch[1])
+                : [];
+
+            // Extract timeline/milestones
+            const timelineMatch = text.match(/##\s*(?:Timeline|Milestones?|Roadmap)[^#]*([\s\S]*?)(?=##|$)/i);
+            this.vision.timeline = timelineMatch
+                ? this.extractBulletPoints(timelineMatch[1])
+                : [];
+
+            // Extract inspirations
+            const inspirationMatch = text.match(/##\s*(?:Inspiration|Inspired)[^#]*([\s\S]*?)(?=##|$)/i);
+            this.vision.inspirations = inspirationMatch
+                ? this.extractBulletPoints(inspirationMatch[1])
+                : [];
+
+            // Extract anti-patterns (what to avoid)
+            const avoidMatch = text.match(/##\s*(?:Avoid|Anti.?patterns?|What\s+(?:We\s+)?(?:Don't|Not))[^#]*([\s\S]*?)(?=##|$)/i);
+            this.vision.antiPatterns = avoidMatch
+                ? this.extractBulletPoints(avoidMatch[1])
+                : [];
+        },
+
+        // Create embeddings for the vision
+        async createVisionEmbeddings() {
+            if (!window.useModel) {
+                console.log('🎯 Embedding model not ready, skipping vision embeddings');
+                return;
+            }
+
+            try {
+                // Embed the full document
+                if (this.vision.raw) {
+                    const fullEmbedding = await window.useModel.embed([this.vision.raw]);
+                    this.vision.embedding = Array.from(fullEmbedding.arraySync()[0]);
+                }
+
+                // Embed individual concepts for semantic search
+                this.vision.conceptEmbeddings = new Map();
+
+                const itemsToEmbed = [
+                    ...this.vision.goals.map(g => ({ type: 'goal', text: g })),
+                    ...this.vision.concepts.map(c => ({ type: 'concept', text: typeof c === 'string' ? c : `${c.name}: ${c.description}` })),
+                    ...this.vision.values.map(v => ({ type: 'value', text: v })),
+                    ...this.vision.features.map(f => ({ type: 'feature', text: f }))
+                ];
+
+                for (const item of itemsToEmbed.slice(0, 50)) { // Limit to 50 items
+                    const embedding = await window.useModel.embed([item.text]);
+                    this.vision.conceptEmbeddings.set(item.text, {
+                        type: item.type,
+                        embedding: Array.from(embedding.arraySync()[0])
+                    });
+                }
+
+                console.log(`🎯 Created ${this.vision.conceptEmbeddings.size} vision embeddings`);
+
+            } catch (error) {
+                console.warn('Vision embedding error:', error);
+            }
+        },
+
+        // Helper: Extract bullet points
+        extractBulletPoints(text) {
+            const bullets = text.match(/^[\s]*[-*•]\s+(.+)$/gm) || [];
+            return bullets.map(b => b.replace(/^[\s]*[-*•]\s+/, '').trim()).filter(b => b.length > 0);
+        },
+
+        // Helper: Extract numbered items
+        extractNumberedItems(text, regex) {
+            const items = [];
+            let match;
+            while ((match = regex.exec(text)) !== null) {
+                items.push(match[1].trim());
+            }
+            return items;
+        },
+
+        // Helper: Extract definitions (term: description format)
+        extractDefinitions(text) {
+            const defs = [];
+            const lines = text.split('\n');
+            for (const line of lines) {
+                const match = line.match(/^[\s]*[-*•]?\s*\*?\*?([^:*]+)\*?\*?\s*:\s*(.+)$/);
+                if (match) {
+                    defs.push({ name: match[1].trim(), description: match[2].trim() });
+                }
+            }
+            return defs;
+        },
+
+        // Helper: Clean text
+        cleanText(text) {
+            return text
+                .replace(/^[\s\n]+|[\s\n]+$/g, '')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+        },
+
+        // Helper: Get first paragraph
+        extractFirstParagraph(text) {
+            const para = text.split(/\n\n/)[0];
+            return para ? this.cleanText(para) : null;
+        },
+
+        // Get vision context for AI prompts
+        getContext(query = null, maxLength = 2000) {
+            if (!this.vision.raw) return '';
+
+            let context = '\n🎯 FOUNDATIONAL VISION:\n';
+
+            // Always include mission
+            if (this.vision.mission) {
+                context += `\nMISSION: ${this.vision.mission}\n`;
+            }
+
+            // Include values
+            if (this.vision.values.length > 0) {
+                context += `\nCORE VALUES:\n`;
+                this.vision.values.slice(0, 5).forEach(v => {
+                    context += `  • ${v}\n`;
+                });
+            }
+
+            // Include philosophy if present
+            if (this.vision.philosophy) {
+                context += `\nPHILOSOPHY: ${this.vision.philosophy.substring(0, 300)}${this.vision.philosophy.length > 300 ? '...' : ''}\n`;
+            }
+
+            // If query provided, find relevant goals/concepts
+            if (query && this.vision.conceptEmbeddings.size > 0) {
+                const relevantItems = this.findRelevantVisionItems(query, 5);
+                if (relevantItems.length > 0) {
+                    context += `\nRELEVANT TO QUERY:\n`;
+                    relevantItems.forEach(item => {
+                        context += `  • [${item.type}] ${item.text.substring(0, 100)}\n`;
+                    });
+                }
+            } else {
+                // Include top goals
+                if (this.vision.goals.length > 0) {
+                    context += `\nBIG GOALS:\n`;
+                    this.vision.goals.slice(0, 5).forEach(g => {
+                        context += `  • ${g}\n`;
+                    });
+                }
+            }
+
+            // Include anti-patterns (what to avoid)
+            if (this.vision.antiPatterns.length > 0) {
+                context += `\nAVOID:\n`;
+                this.vision.antiPatterns.slice(0, 3).forEach(a => {
+                    context += `  ✗ ${a}\n`;
+                });
+            }
+
+            // Truncate if too long
+            if (context.length > maxLength) {
+                context = context.substring(0, maxLength - 50) + '\n... [vision truncated]\n';
+            }
+
+            return context;
+        },
+
+        // Find vision items relevant to a query using embeddings
+        findRelevantVisionItems(query, maxItems = 5) {
+            if (!this.vision.conceptEmbeddings.size || !window.useModel) return [];
+
+            try {
+                // This is a simplified version - would need async for real embedding
+                const items = [];
+                for (const [text, data] of this.vision.conceptEmbeddings) {
+                    items.push({ text, type: data.type, embedding: data.embedding });
+                }
+
+                // For now, return items that contain query words
+                const queryWords = query.toLowerCase().split(/\s+/);
+                const matches = items.filter(item =>
+                    queryWords.some(word => item.text.toLowerCase().includes(word))
+                );
+
+                return matches.slice(0, maxItems);
+
+            } catch (error) {
+                return [];
+            }
+        },
+
+        // Get vision alignment score for a proposed action
+        async getAlignmentScore(action, description) {
+            if (!this.vision.raw || !this.vision.embedding) return { score: 0.5, reason: 'No vision set' };
+
+            try {
+                if (!window.useModel) return { score: 0.5, reason: 'Embedding model not ready' };
+
+                // Embed the action description
+                const actionEmbedding = await window.useModel.embed([description]);
+                const actionVec = actionEmbedding.arraySync()[0];
+
+                // Calculate cosine similarity with vision
+                const similarity = this.cosineSimilarity(actionVec, this.vision.embedding);
+
+                // Check against anti-patterns
+                let penalty = 0;
+                for (const antiPattern of this.vision.antiPatterns) {
+                    if (description.toLowerCase().includes(antiPattern.toLowerCase())) {
+                        penalty += 0.2;
+                    }
+                }
+
+                const finalScore = Math.max(0, Math.min(1, similarity - penalty));
+
+                return {
+                    score: finalScore,
+                    reason: finalScore > 0.7 ? 'Strongly aligned with vision' :
+                            finalScore > 0.5 ? 'Moderately aligned' :
+                            finalScore > 0.3 ? 'Weakly aligned' : 'May conflict with vision'
+                };
+
+            } catch (error) {
+                return { score: 0.5, reason: 'Could not calculate alignment' };
+            }
+        },
+
+        // Cosine similarity helper
+        cosineSimilarity(a, b) {
+            let dotProduct = 0;
+            let normA = 0;
+            let normB = 0;
+            for (let i = 0; i < a.length; i++) {
+                dotProduct += a[i] * b[i];
+                normA += a[i] * a[i];
+                normB += b[i] * b[i];
+            }
+            return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+        },
+
+        // Generate vision-aligned suggestions
+        async getVisionAlignedSuggestions(currentContext) {
+            if (!this.vision.goals.length) return [];
+
+            const suggestions = [];
+
+            // Suggest unexplored goals
+            for (const goal of this.vision.goals) {
+                suggestions.push({
+                    type: 'goal',
+                    text: goal,
+                    suggestion: `Consider working toward: "${goal}"`
+                });
+            }
+
+            // Suggest based on values
+            for (const value of this.vision.values.slice(0, 3)) {
+                suggestions.push({
+                    type: 'value',
+                    text: value,
+                    suggestion: `Remember to embody: "${value}"`
+                });
+            }
+
+            return suggestions;
+        },
+
+        // Storage methods
+        saveToStorage() {
+            try {
+                const data = {
+                    version: this.VERSION,
+                    vision: {
+                        ...this.vision,
+                        embedding: this.vision.embedding,
+                        conceptEmbeddings: Array.from(this.vision.conceptEmbeddings.entries())
+                    },
+                    timestamp: Date.now()
+                };
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+                console.log('🎯 VisionCore saved');
+            } catch (error) {
+                console.warn('VisionCore save failed:', error);
+            }
+        },
+
+        loadFromStorage() {
+            try {
+                const data = localStorage.getItem(this.STORAGE_KEY);
+                if (data) {
+                    const parsed = JSON.parse(data);
+                    // Restore Map from array
+                    if (parsed.vision.conceptEmbeddings) {
+                        parsed.vision.conceptEmbeddings = new Map(parsed.vision.conceptEmbeddings);
+                    }
+                    return parsed;
+                }
+                return null;
+            } catch (error) {
+                return null;
+            }
+        },
+
+        // Get the template for users to fill out
+        getVisionTemplate() {
+            return this.visionTemplate;
+        },
+
+        // Get summary stats
+        getStats() {
+            return {
+                initialized: this.initialized,
+                hasVision: !!this.vision.raw,
+                title: this.vision.title,
+                goalsCount: this.vision.goals.length,
+                valuesCount: this.vision.values.length,
+                conceptsCount: this.vision.concepts.length,
+                featuresCount: this.vision.features.length,
+                hasEmbedding: !!this.vision.embedding,
+                conceptEmbeddingsCount: this.vision.conceptEmbeddings.size,
+                lastUpdated: this.vision.lastUpdated
+            };
+        },
+
+        // Clear vision
+        clear() {
+            this.vision = {
+                raw: null,
+                title: null,
+                mission: null,
+                values: [],
+                goals: [],
+                concepts: [],
+                features: [],
+                philosophy: null,
+                targetUsers: [],
+                successMetrics: [],
+                timeline: [],
+                inspirations: [],
+                antiPatterns: [],
+                embedding: null,
+                conceptEmbeddings: new Map(),
+                lastUpdated: null
+            };
+            localStorage.removeItem(this.STORAGE_KEY);
+            console.log('🎯 VisionCore cleared');
+        },
+
+        // Export vision as markdown
+        exportAsMarkdown() {
+            if (!this.vision.raw) return this.visionTemplate;
+
+            let md = `# ${this.vision.title || 'MYND Vision'}\n\n`;
+
+            if (this.vision.mission) {
+                md += `## Mission\n${this.vision.mission}\n\n`;
+            }
+
+            if (this.vision.values.length > 0) {
+                md += `## Values & Principles\n`;
+                this.vision.values.forEach(v => md += `- ${v}\n`);
+                md += '\n';
+            }
+
+            if (this.vision.goals.length > 0) {
+                md += `## Big Goals\n`;
+                this.vision.goals.forEach((g, i) => md += `${i + 1}. ${g}\n`);
+                md += '\n';
+            }
+
+            if (this.vision.concepts.length > 0) {
+                md += `## Key Concepts\n`;
+                this.vision.concepts.forEach(c => {
+                    if (typeof c === 'string') {
+                        md += `- ${c}\n`;
+                    } else {
+                        md += `- **${c.name}**: ${c.description}\n`;
+                    }
+                });
+                md += '\n';
+            }
+
+            if (this.vision.philosophy) {
+                md += `## Philosophy\n${this.vision.philosophy}\n\n`;
+            }
+
+            if (this.vision.features.length > 0) {
+                md += `## Planned Features\n`;
+                this.vision.features.forEach(f => md += `- ${f}\n`);
+                md += '\n';
+            }
+
+            if (this.vision.antiPatterns.length > 0) {
+                md += `## What We Avoid\n`;
+                this.vision.antiPatterns.forEach(a => md += `- ${a}\n`);
+                md += '\n';
+            }
+
+            return md;
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════
     // TEACHER KNOWLEDGE - Knowledge distillation from Claude
     // ═══════════════════════════════════════════════════════════════════
     // Captures Claude's predictions as "soft targets" for training the local model
@@ -32496,6 +33096,20 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 }
             }
 
+            // 13. VisionCore - Foundational vision, mission, goals, and values
+            let visionContext = '';
+            if (VisionCore.initialized && VisionCore.vision.raw) {
+                try {
+                    // Always include vision context - it's the soul of MYND
+                    visionContext = VisionCore.getContext(userMessage);
+                    if (visionContext) {
+                        console.log('🎯 VisionCore provided foundational context');
+                    }
+                } catch (e) {
+                    console.warn('VisionCore context error:', e);
+                }
+            }
+
             const systemPrompt = `You are the AI companion for MYND — a personalized second brain designed to capture and connect fragmented thoughts, fostering creativity and clarity.
 
 === YOUR PURPOSE ===
@@ -32660,6 +33274,9 @@ ${improvementContext}` : ''}
 ${evolutionContext ? `
 AUTONOMOUS EVOLUTION (self-dialogue & auto-generation):
 ${evolutionContext}` : ''}
+${visionContext ? `
+FOUNDATIONAL VISION (your soul & purpose):
+${visionContext}` : ''}
 
 YOUR CAPABILITIES:
 1. **Full Map Visibility**: You can see the ENTIRE map structure above
@@ -32674,6 +33291,7 @@ YOUR CAPABILITIES:
 10. **Self-Improvement Analysis**: You have analyzed the entire codebase and identified all possible improvements across 16 categories: Performance, Architecture, Security, Code Quality, Maintainability, Scalability, UX Enhancement, Feature Gaps, Dead Code, Technical Debt, Optimization, Modularization, Error Handling, Accessibility, Testing, and ML Intelligence. You can suggest prioritized improvements, quick wins, and a roadmap for making MYND stronger over time
 11. **ML Intelligence Mastery**: You deeply understand how MYND learns - from embeddings and neural architectures to training strategies, reinforcement learning, knowledge distillation, memory systems, uncertainty estimation, and self-improvement loops. You can explain how to make the ML systems more sophisticated and suggest a prioritized roadmap for evolving MYND's intelligence
 12. **Autonomous Evolution**: You can engage in self-dialogue, asking yourself questions and generating insights to expand and improve the map. You can trigger evolution sessions (explore gaps, find connections, deepen areas, suggest improvements, create content), review pending auto-generated changes, and continuously evolve your capabilities. You can literally talk to yourself to become smarter
+13. **Foundational Vision**: You have been pre-trained on the creator's vision, mission, goals, values, and philosophy for MYND. This is your soul - the deep understanding of what MYND is meant to become. All your suggestions and evolution align with this foundational purpose. You can reference specific goals, embody the values, and ensure everything you do moves toward the vision
 
 RESPONSE FORMAT (always JSON):
 {
@@ -42609,6 +43227,16 @@ Summary:`
             console.warn('AutonomousEvolution initialization deferred:', e.message);
         }
     }, 5000);
+
+    // Initialize VisionCore System (foundational purpose & mission)
+    setTimeout(async () => {
+        try {
+            await VisionCore.initialize();
+            console.log('🎯 VisionCore stats:', VisionCore.getStats());
+        } catch (e) {
+            console.warn('VisionCore initialization deferred:', e.message);
+        }
+    }, 2000);
 
     // Mobile: Start with toolbar collapsed
     if (window.innerWidth <= 768) {
