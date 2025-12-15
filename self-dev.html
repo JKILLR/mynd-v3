@@ -28,20 +28,20 @@
             --font-display: 'Space Grotesk', sans-serif;
             --font-body: 'Inter', sans-serif;
             --font-mono: 'JetBrains Mono', monospace;
-            
-            --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; 
+
+            --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
             --space-5: 20px; --space-6: 24px; --space-7: 32px; --space-8: 40px;
-            
+
             --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
             --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
             --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
-            
+
             --duration-instant: 100ms;
             --duration-fast: 200ms;
             --duration-normal: 350ms;
             --duration-slow: 500ms;
             --duration-slower: 800ms;
-            
+
             --z-bg: 0;
             --z-canvas: 1;
             --z-ui: 100;
@@ -50,7 +50,7 @@
             --z-spotlight: 250;
             --z-modal: 300;
             --z-toast: 400;
-            
+
             /* Default to Sandstone theme */
             --bg-deep: #F9F7F0;
             --bg-primary: #FAF9F6;
@@ -60,11 +60,15 @@
             --text-primary: #2C2C2C;
             --text-secondary: #5A5A52;
             --text-muted: #8A8A7E;
+            --text-tertiary: #A0A096;
             --accent: #C4978A;
             --accent-light: #D4A89A;
             --accent-glow: rgba(196, 151, 138, 0.3);
+            --accent-rgb: 196, 151, 138;
             --glass-bg: rgba(250, 249, 246, 0.92);
+            --glass-bg-light: rgba(250, 249, 246, 0.6);
             --glass-border: rgba(0, 0, 0, 0.06);
+            --glass-hover: rgba(0, 0, 0, 0.04);
             --glass-blur: 20px;
             --nebula-1: rgba(0, 0, 0, 0);
             --nebula-2: rgba(0, 0, 0, 0);
@@ -72,8 +76,10 @@
             --shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
             --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
             --shadow-lg: 0 8px 32px rgba(0,0,0,0.08);
+            --shadow-modal: 0 12px 48px rgba(0,0,0,0.12);
             --shadow-glow: 0 0 24px var(--accent-glow);
-            
+            --success: #16a34a;
+
             /* AI/Brainstorm button colors */
             --purple: #8B5CF6;
             --pink: #EC4899;
@@ -5054,15 +5060,11 @@
             margin: 0 auto var(--space-6);
             animation: spin 1s linear infinite;
         }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
+
         .spin {
             animation: spin 1s linear infinite;
         }
-        
+
         .processing-title {
             font-size: 20px;
             font-weight: 600;
@@ -5149,11 +5151,7 @@
             animation: spin 1s linear infinite;
             margin: 0 auto var(--space-4);
         }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
+
         .loader-text {
             font-family: var(--font-display);
             font-size: 18px;
@@ -5739,12 +5737,7 @@
         .link-transcript-status .spinner {
             animation: spin 1s linear infinite;
         }
-        
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-        
+
         .link-category {
             padding: 0 20px 20px;
         }
@@ -45110,8 +45103,5 @@ Summary:`
     setTimeout(handleShareTarget, 100);
 
     </script>
-    <!-- External modules -->
-    <script src="js/goal-system.js"></script>
-    <script src="js/demo-map.js"></script>
 </body>
 </html>
