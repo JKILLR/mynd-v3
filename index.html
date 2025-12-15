@@ -28227,7 +28227,7 @@ Respond with a JSON object:
         controls.enableDamping = true;
         controls.dampingFactor = 0.12;
         controls.rotateSpeed = 0.5;
-        controls.minDistance = 8;
+        controls.minDistance = 2; // Allow very close zoom for inspection
         controls.maxDistance = 1125; // 50% more than 750
         controls.enablePan = true;
         controls.panSpeed = 0.8;
@@ -29599,18 +29599,13 @@ Respond with a JSON object:
         // Subtract angle offset so we're viewing from an angle, not straight through the root
         const endTheta = nodeDist2D > 0.5 ? nodeAngle - Math.PI * 0.35 : currentTheta;
         
-        // Zoom out more if node has children - scale based on child count
-        // Zoom IN more if node is deeper (smaller) - so we can actually see it
+        // Use consistent close zoom for all nodes regardless of depth
         const isMobile = window.innerWidth <= 768;
-        const nodeLevel = mesh.userData.level || 0;
-        const baseRadius = isMobile ? 22 : 18;
-        
-        // Depth zoom: deeper nodes need closer camera (subtract from radius)
-        // Level 0 = no bonus, Level 1 = -2, Level 2 = -4, Level 3+ = -6
-        const depthZoomBonus = Math.min(nodeLevel * 2, 6);
-        
-        const childZoomBonus = hasChildren ? Math.min(childCount * 4, 20) : 0; // up to 20 extra for many children
-        const endRadius = Math.max(10, baseRadius + childZoomBonus - depthZoomBonus, nodeDist2D + 14 + childZoomBonus - depthZoomBonus);
+        const baseRadius = isMobile ? 6 : 4; // Very close base zoom
+
+        // Only add a small bonus if node has many children to show them
+        const childZoomBonus = hasChildren ? Math.min(childCount * 1.5, 8) : 0;
+        const endRadius = Math.max(3, baseRadius + childZoomBonus);
         const endPhi = Math.PI * 0.35; // consistent downward viewing angle
         
         // Calculate shortest angle difference for arc boost
@@ -29799,8 +29794,8 @@ Respond with a JSON object:
         const currentOffset = new THREE.Vector3().subVectors(camera.position, controls.target);
 
         // Fixed zoom distance for consistent node size on screen regardless of depth
-        // Reduced to 4.8 (60% closer than before)
-        const consistentZoomDistance = 4.8;
+        // Set to 2 for very close zoom on all nodes
+        const consistentZoomDistance = 2;
 
         // Animate camera to look at node
         const startTarget = controls.target.clone();
