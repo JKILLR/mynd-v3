@@ -24437,10 +24437,17 @@ Return as JSON:
             let verticalOffset = 0;
 
             if (level === 1) {
-                // Level 1: Helix positions main branches vertically around root
+                // Level 1: Equal vertical spacing based on index (not angle)
+                // This creates consistent spiral arm spacing
                 const depthBoost = 1 + (expandedDepth * 0.8);
                 const helixAmp = baseHelixAmp * depthBoost;
-                verticalOffset = Math.sin(angle * helixFreq * 2) * helixAmp;
+
+                // Evenly distribute from -helixAmp to +helixAmp based on index
+                if (total > 1) {
+                    verticalOffset = ((index / (total - 1)) - 0.5) * helixAmp * 2;
+                } else {
+                    verticalOffset = 0;
+                }
             }
             // Level 2+: NO additional vertical offset - spread horizontally from parent
             // Sibling vertical spread is minimal and uses golden ratio decay
