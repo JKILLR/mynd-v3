@@ -29697,7 +29697,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         controls.enableDamping = true;
         controls.dampingFactor = 0.12;
         controls.rotateSpeed = 0.5;
-        controls.minDistance = 8;
+        controls.minDistance = 2; // Allow very close zoom for inspection
         controls.maxDistance = 1125; // 50% more than 750
         controls.enablePan = true;
         controls.panSpeed = 0.8;
@@ -30536,9 +30536,12 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         const label = createLabelSprite(data.label, data.color, hasLink);
         const labelOffset = data.level === 0 ? -data.size - 0.6 : -data.size - 0.35;
         label.position.set(0, labelOffset, 0);
-        label.visible = true;  // All labels visible by default
+        // Self-dev mode: labels hidden by default, shown on hover/selection
+        // Root node (level 0) always visible
+        label.visible = data.level === 0;
         mesh.add(label);
         mesh.userData.labelSprite = label;
+        mesh.userData.labelHovered = false;
 
         // Context badge DISABLED - removes pulsing question indicators for cleaner map view and better performance
         // const needsContext = data.level > 0 && (!data.description || data.description.trim() === '');
@@ -30993,6 +30996,10 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         // Deselect previous
         if (selectedNode && selectedNode !== mesh) {
             selectedNode.userData.selected = false;
+            // Hide label of deselected node (unless root)
+            if (selectedNode.userData.labelSprite && selectedNode.userData.level !== 0) {
+                selectedNode.userData.labelSprite.visible = false;
+            }
         }
         
         // Check for link node double-click - open URL
@@ -31033,7 +31040,12 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         selectedNode = mesh;
         mesh.userData.selected = true;
         store.selectedNodeId = mesh.userData.id;
-        
+
+        // Show label of selected node
+        if (mesh.userData.labelSprite) {
+            mesh.userData.labelSprite.visible = true;
+        }
+
         // Skip camera animation if auto-camera is disabled
         if (!autoCameraEnabled) {
             audio.select();
@@ -31069,18 +31081,13 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         // Subtract angle offset so we're viewing from an angle, not straight through the root
         const endTheta = nodeDist2D > 0.5 ? nodeAngle - Math.PI * 0.35 : currentTheta;
         
-        // Zoom out more if node has children - scale based on child count
-        // Zoom IN more if node is deeper (smaller) - so we can actually see it
+        // Use consistent close zoom for all nodes regardless of depth
         const isMobile = window.innerWidth <= 768;
-        const nodeLevel = mesh.userData.level || 0;
-        const baseRadius = isMobile ? 22 : 18;
-        
-        // Depth zoom: deeper nodes need closer camera (subtract from radius)
-        // Level 0 = no bonus, Level 1 = -2, Level 2 = -4, Level 3+ = -6
-        const depthZoomBonus = Math.min(nodeLevel * 2, 6);
-        
-        const childZoomBonus = hasChildren ? Math.min(childCount * 4, 20) : 0; // up to 20 extra for many children
-        const endRadius = Math.max(10, baseRadius + childZoomBonus - depthZoomBonus, nodeDist2D + 14 + childZoomBonus - depthZoomBonus);
+        const baseRadius = isMobile ? 6 : 4; // Very close base zoom
+
+        // Only add a small bonus if node has many children to show them
+        const childZoomBonus = hasChildren ? Math.min(childCount * 1.5, 8) : 0;
+        const endRadius = Math.max(3, baseRadius + childZoomBonus);
         const endPhi = Math.PI * 0.35; // consistent downward viewing angle
         
         // Calculate shortest angle difference for arc boost
@@ -31269,8 +31276,8 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         const currentOffset = new THREE.Vector3().subVectors(camera.position, controls.target);
 
         // Fixed zoom distance for consistent node size on screen regardless of depth
-        // Reduced to 4.8 (60% closer than before)
-        const consistentZoomDistance = 4.8;
+        // Set to 2 for very close zoom on all nodes
+        const consistentZoomDistance = 2;
 
         // Animate camera to look at node
         const startTarget = controls.target.clone();
@@ -31398,10 +31405,10 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
             mesh.scale.set(0.3 * importance, 0.3 * importance, 0.3 * importance);
             mesh.material.opacity = 0.5;
 
-            // Make visible
+            // Make visible (labels stay hidden until hover in self-dev mode)
             mesh.visible = true;
             if (mesh.userData.outlineMesh) mesh.userData.outlineMesh.visible = true;
-            if (mesh.userData.labelSprite) mesh.userData.labelSprite.visible = true;
+            // Labels hidden by default - shown on hover
 
             revealIndex++;
 
@@ -32135,18 +32142,26 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
             raycaster.setFromCamera(mouse, camera);
             const meshes = Array.from(nodes.values()).filter(m => m.visible);
             const intersects = raycaster.intersectObjects(meshes, true);
-            
-            // Clear previous hover states
+
+            // Clear previous hover states and hide labels (except selected/root)
             nodes.forEach(mesh => {
                 if (mesh.userData.badgeHovered) {
                     mesh.userData.badgeHovered = false;
                 }
+                // Hide label if was hovered but no longer
+                if (mesh.userData.labelHovered && mesh.userData.labelSprite) {
+                    mesh.userData.labelHovered = false;
+                    // Keep label visible if selected or root node
+                    if (!mesh.userData.selected && mesh.userData.level !== 0) {
+                        mesh.userData.labelSprite.visible = false;
+                    }
+                }
             });
-            
+
             if (intersects.length > 0) {
                 let hitObject = intersects[0].object;
                 let parentMesh = null;
-                
+
                 // Check if we hit a context badge sprite
                 if (hitObject.isSprite && hitObject.userData?.isContextBadge && hitObject.parent && hitObject.parent.userData?.id) {
                     parentMesh = hitObject.parent;
@@ -32155,10 +32170,19 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                 } else if (hitObject.isSprite && hitObject.parent && hitObject.parent.userData?.id) {
                     // Hit the label - check if node has a context badge
                     parentMesh = hitObject.parent;
+                } else if (hitObject.userData?.id) {
+                    // Hit the node sphere directly
+                    parentMesh = hitObject;
                 }
-                
+
+                // Show label on hover
+                if (parentMesh && parentMesh.userData.labelSprite) {
+                    parentMesh.userData.labelHovered = true;
+                    parentMesh.userData.labelSprite.visible = true;
+                }
+
                 if (!parentMesh?.userData.badgeHovered) {
-                    renderer.domElement.style.cursor = moveMode ? 'grab' : 'default';
+                    renderer.domElement.style.cursor = moveMode ? 'grab' : 'pointer';
                 }
             } else {
                 renderer.domElement.style.cursor = moveMode ? 'grab' : 'default';
@@ -32809,7 +32833,7 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                         if (childMesh) {
                             childMesh.visible = true;
                             if (childMesh.userData.outlineMesh) childMesh.userData.outlineMesh.visible = true;
-                            if (childMesh.userData.labelSprite) childMesh.userData.labelSprite.visible = true;
+                            // Labels stay hidden until hover (self-dev mode)
                             if (childMesh.userData.contextBadge) childMesh.userData.contextBadge.visible = true;
                             if (childMesh.userData.connectionLine) childMesh.userData.connectionLine.visible = true;
                             if (childMesh.userData.glowRing) childMesh.userData.glowRing.visible = true;
