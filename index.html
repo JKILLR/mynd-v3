@@ -23180,6 +23180,1110 @@ Return as JSON:
     const neuralNet = new PersonalNeuralNet();
 
     // ═══════════════════════════════════════════════════════════════════
+    // CODE ANALYZER - Self-Improvement Analysis System
+    // ═══════════════════════════════════════════════════════════════════
+    // Comprehensive analysis system that identifies every possible area
+    // for incremental improvement, making MYND stronger over time.
+    const CodeAnalyzer = {
+        STORAGE_KEY: 'mynd_code_analysis',
+        VERSION: '1.0',
+        initialized: false,
+        analysis: null,
+
+        // Analysis categories with weights (higher = more impactful)
+        CATEGORIES: {
+            PERFORMANCE: { name: 'Performance', weight: 9, icon: '⚡' },
+            ARCHITECTURE: { name: 'Architecture', weight: 8, icon: '🏗️' },
+            SECURITY: { name: 'Security', weight: 10, icon: '🔒' },
+            CODE_QUALITY: { name: 'Code Quality', weight: 7, icon: '✨' },
+            MAINTAINABILITY: { name: 'Maintainability', weight: 6, icon: '🔧' },
+            SCALABILITY: { name: 'Scalability', weight: 7, icon: '📈' },
+            UX_ENHANCEMENT: { name: 'UX Enhancement', weight: 8, icon: '🎨' },
+            FEATURE_GAP: { name: 'Feature Gap', weight: 6, icon: '🎯' },
+            DEAD_CODE: { name: 'Dead Code', weight: 4, icon: '💀' },
+            TECH_DEBT: { name: 'Technical Debt', weight: 5, icon: '💳' },
+            OPTIMIZATION: { name: 'Optimization', weight: 7, icon: '🚀' },
+            MODULARIZATION: { name: 'Modularization', weight: 6, icon: '📦' },
+            ERROR_HANDLING: { name: 'Error Handling', weight: 8, icon: '🛡️' },
+            ACCESSIBILITY: { name: 'Accessibility', weight: 7, icon: '♿' },
+            TESTING: { name: 'Testing', weight: 5, icon: '🧪' }
+        },
+
+        // Default analysis structure
+        defaultAnalysis: {
+            improvements: [],          // All identified improvements
+            byCategory: {},           // Grouped by category
+            byPriority: {             // Grouped by priority
+                critical: [],
+                high: [],
+                medium: [],
+                low: []
+            },
+            byEffort: {               // Grouped by implementation effort
+                quick: [],            // < 1 hour
+                moderate: [],         // 1-4 hours
+                significant: [],      // 1-2 days
+                major: []             // > 2 days
+            },
+            metrics: {
+                totalImprovements: 0,
+                completedImprovements: 0,
+                technicalDebtScore: 0,
+                healthScore: 0
+            },
+            timestamp: null
+        },
+
+        async initialize() {
+            if (this.initialized) return this.analysis;
+
+            console.log('🔍 Initializing CodeAnalyzer...');
+
+            try {
+                // Try to load cached analysis
+                const cached = this.loadFromStorage();
+                if (cached && cached.version === this.VERSION) {
+                    // Check if analysis is recent (within 24 hours)
+                    const age = Date.now() - cached.timestamp;
+                    if (age < 24 * 60 * 60 * 1000) {
+                        this.analysis = cached.analysis;
+                        this.initialized = true;
+                        console.log(`✓ CodeAnalyzer loaded: ${this.analysis.metrics.totalImprovements} improvements identified`);
+                        return this.analysis;
+                    }
+                }
+
+                // Generate fresh analysis
+                console.log('🔍 Analyzing codebase for improvements...');
+                await this.analyze();
+                this.initialized = true;
+                console.log(`✓ CodeAnalyzer complete: ${this.analysis.metrics.totalImprovements} improvements found`);
+                return this.analysis;
+
+            } catch (error) {
+                console.warn('CodeAnalyzer initialization failed:', error);
+                this.analysis = { ...this.defaultAnalysis };
+                return this.analysis;
+            }
+        },
+
+        async analyze() {
+            this.analysis = { ...this.defaultAnalysis };
+            this.analysis.timestamp = Date.now();
+
+            // Initialize category containers
+            for (const cat of Object.keys(this.CATEGORIES)) {
+                this.analysis.byCategory[cat] = [];
+            }
+
+            // Wait for CodePretraining to be ready
+            if (!CodePretraining.initialized) {
+                await CodePretraining.initialize();
+            }
+
+            // Run all analysis passes
+            this.analyzeComplexity();
+            this.analyzeCoupling();
+            this.analyzeDeadCode();
+            this.analyzePerformance();
+            this.analyzeArchitecture();
+            this.analyzeSecurity();
+            this.analyzeErrorHandling();
+            this.analyzeModularization();
+            this.analyzeFeatureGaps();
+            this.analyzeAccessibility();
+            this.analyzeTechDebt();
+            this.analyzeOptimizations();
+            this.analyzeUXEnhancements();
+            this.analyzeTestability();
+            this.analyzeMaintainability();
+
+            // Calculate metrics
+            this.calculateMetrics();
+
+            // Sort improvements by priority score
+            this.analysis.improvements.sort((a, b) => b.priorityScore - a.priorityScore);
+
+            // Save analysis
+            this.saveToStorage();
+
+            return this.analysis;
+        },
+
+        // Add an improvement finding
+        addImprovement(category, title, description, options = {}) {
+            const catInfo = this.CATEGORIES[category];
+            const {
+                priority = 'medium',       // critical, high, medium, low
+                effort = 'moderate',       // quick, moderate, significant, major
+                location = null,           // file:line or function name
+                currentCode = null,        // problematic code snippet
+                suggestedFix = null,       // suggested improvement
+                impact = null,             // what improves when fixed
+                dependencies = [],         // other improvements this depends on
+                tags = []                  // additional categorization
+            } = options;
+
+            // Calculate priority score
+            const priorityWeights = { critical: 4, high: 3, medium: 2, low: 1 };
+            const effortWeights = { quick: 4, moderate: 3, significant: 2, major: 1 };
+            const priorityScore = (catInfo.weight * priorityWeights[priority] * effortWeights[effort]) / 10;
+
+            const improvement = {
+                id: `imp_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+                category,
+                categoryName: catInfo.name,
+                categoryIcon: catInfo.icon,
+                title,
+                description,
+                priority,
+                effort,
+                priorityScore,
+                location,
+                currentCode,
+                suggestedFix,
+                impact,
+                dependencies,
+                tags,
+                status: 'identified',  // identified, in_progress, completed, deferred
+                createdAt: Date.now(),
+                completedAt: null
+            };
+
+            this.analysis.improvements.push(improvement);
+            this.analysis.byCategory[category].push(improvement);
+            this.analysis.byPriority[priority].push(improvement);
+            this.analysis.byEffort[effort].push(improvement);
+
+            return improvement;
+        },
+
+        // ═══════════════════════════════════════════════════════════════════
+        // ANALYSIS PASSES - Each focuses on a different improvement type
+        // ═══════════════════════════════════════════════════════════════════
+
+        analyzeComplexity() {
+            if (!CodePretraining.knowledge?.functions) return;
+
+            // Find high-complexity functions
+            const highComplexity = Object.entries(CodePretraining.knowledge.functions)
+                .filter(([_, data]) => data.complexity === 'high')
+                .map(([name, data]) => ({ name, ...data }));
+
+            for (const func of highComplexity.slice(0, 15)) {
+                this.addImprovement('CODE_QUALITY',
+                    `Refactor complex function: ${func.name}`,
+                    `Function ${func.name} has high cyclomatic complexity. Consider breaking it into smaller, focused functions.`,
+                    {
+                        priority: 'medium',
+                        effort: 'moderate',
+                        location: `${func.section}: ${func.lines}`,
+                        impact: 'Improved readability, easier testing, reduced bug surface',
+                        tags: ['complexity', 'refactoring']
+                    }
+                );
+            }
+
+            // Find deeply nested code patterns
+            const deepNesting = ['if', 'for', 'while'].join('|');
+            // This would require actual code analysis - placeholder for now
+        },
+
+        analyzeCoupling() {
+            if (!CodePretraining.knowledge?.dependencies) return;
+
+            // Find systems with high coupling
+            for (const [system, deps] of Object.entries(CodePretraining.knowledge.dependencies)) {
+                if (deps.length >= 4) {
+                    this.addImprovement('ARCHITECTURE',
+                        `Reduce coupling in ${system} system`,
+                        `${system} depends on ${deps.length} other systems (${deps.join(', ')}). High coupling makes changes risky and testing difficult.`,
+                        {
+                            priority: 'medium',
+                            effort: 'significant',
+                            impact: 'Better isolation, easier testing, safer modifications',
+                            tags: ['coupling', 'architecture']
+                        }
+                    );
+                }
+            }
+
+            // Find functions called by many others (high fan-in = potential bottleneck)
+            if (CodePretraining.knowledge?.calledBy) {
+                const highFanIn = Object.entries(CodePretraining.knowledge.calledBy)
+                    .filter(([_, callers]) => callers.length >= 10)
+                    .sort((a, b) => b[1].length - a[1].length);
+
+                for (const [funcName, callers] of highFanIn.slice(0, 5)) {
+                    this.addImprovement('MAINTAINABILITY',
+                        `Critical function: ${funcName} (${callers.length} callers)`,
+                        `This function is called by ${callers.length} other functions. Changes here have wide impact. Consider adding extra validation and tests.`,
+                        {
+                            priority: 'high',
+                            effort: 'moderate',
+                            impact: 'Reduced risk when modifying core functions',
+                            tags: ['critical-path', 'high-impact']
+                        }
+                    );
+                }
+            }
+        },
+
+        analyzeDeadCode() {
+            if (!CodePretraining.knowledge?.functions || !CodePretraining.knowledge?.calledBy) return;
+
+            // Find functions that are never called
+            const uncalled = [];
+            for (const funcName of Object.keys(CodePretraining.knowledge.functions)) {
+                const callers = CodePretraining.knowledge.calledBy[funcName] || [];
+                // Exclude entry points and event handlers
+                if (callers.length === 0 &&
+                    !funcName.startsWith('on') &&
+                    !funcName.startsWith('handle') &&
+                    !funcName.includes('init') &&
+                    !funcName.includes('setup') &&
+                    !funcName.includes('render')) {
+                    uncalled.push(funcName);
+                }
+            }
+
+            if (uncalled.length > 0) {
+                this.addImprovement('DEAD_CODE',
+                    `Review ${uncalled.length} potentially unused functions`,
+                    `These functions have no detected callers: ${uncalled.slice(0, 10).join(', ')}${uncalled.length > 10 ? '...' : ''}. They may be dead code or called dynamically.`,
+                    {
+                        priority: 'low',
+                        effort: 'moderate',
+                        impact: 'Smaller codebase, reduced maintenance burden',
+                        tags: ['cleanup', 'dead-code']
+                    }
+                );
+            }
+        },
+
+        analyzePerformance() {
+            // Check for known performance patterns
+            const perfPatterns = [
+                {
+                    pattern: 'requestAnimationFrame',
+                    check: 'throttle',
+                    title: 'Optimize animation frame usage',
+                    desc: 'Ensure all animations use requestAnimationFrame with proper throttling'
+                },
+                {
+                    pattern: 'addEventListener',
+                    check: 'passive',
+                    title: 'Add passive event listeners',
+                    desc: 'Touch and wheel events should use passive: true for better scroll performance'
+                },
+                {
+                    pattern: 'querySelector',
+                    check: 'cache',
+                    title: 'Cache DOM queries',
+                    desc: 'Repeated DOM queries should be cached to avoid layout thrashing'
+                }
+            ];
+
+            // Neural net performance
+            this.addImprovement('PERFORMANCE',
+                'Lazy-load TensorFlow.js Universal Sentence Encoder',
+                'The USE model is ~50MB. Consider lazy-loading it only when first needed, not on initial page load.',
+                {
+                    priority: 'high',
+                    effort: 'moderate',
+                    impact: 'Faster initial page load, reduced bandwidth for casual users',
+                    tags: ['loading', 'lazy-load', 'neural']
+                }
+            );
+
+            // 3D rendering performance
+            this.addImprovement('PERFORMANCE',
+                'Implement Three.js level-of-detail (LOD)',
+                'Use simpler geometries for distant nodes to improve rendering performance with large maps.',
+                {
+                    priority: 'medium',
+                    effort: 'significant',
+                    impact: 'Better FPS with 1000+ nodes',
+                    tags: ['3d', 'rendering', 'threejs']
+                }
+            );
+
+            // Memory management
+            this.addImprovement('PERFORMANCE',
+                'Implement virtual scrolling for large node lists',
+                'The info panel and search results should use virtual scrolling when showing many items.',
+                {
+                    priority: 'medium',
+                    effort: 'moderate',
+                    impact: 'Smoother UI with large maps',
+                    tags: ['memory', 'scrolling', 'virtualization']
+                }
+            );
+
+            // WebWorker offloading
+            this.addImprovement('PERFORMANCE',
+                'Move embedding computations to Web Worker',
+                'Neural network embeddings block the main thread. Moving to a Web Worker would keep UI responsive.',
+                {
+                    priority: 'high',
+                    effort: 'significant',
+                    impact: 'Non-blocking AI operations, smoother interactions',
+                    tags: ['webworker', 'neural', 'async']
+                }
+            );
+        },
+
+        analyzeArchitecture() {
+            // Monolithic file concern
+            this.addImprovement('ARCHITECTURE',
+                'Modularize the monolithic index.html',
+                'The entire application is in a single 40,000+ line file. Consider splitting into ES modules for better maintainability.',
+                {
+                    priority: 'high',
+                    effort: 'major',
+                    impact: 'Easier navigation, better code organization, tree-shaking opportunities',
+                    suggestedFix: 'Split into: core.js, neural.js, three-scene.js, store.js, ui-components.js, ai-chat.js',
+                    tags: ['modularization', 'es-modules']
+                }
+            );
+
+            // State management
+            this.addImprovement('ARCHITECTURE',
+                'Implement centralized state management',
+                'State is scattered across multiple objects (store, neuralNet, chatManager, etc.). A centralized store with subscriptions would reduce bugs.',
+                {
+                    priority: 'medium',
+                    effort: 'major',
+                    impact: 'Predictable state updates, easier debugging, undo/redo support',
+                    suggestedFix: 'Consider a simple pub/sub pattern or a lightweight state library',
+                    tags: ['state-management', 'architecture']
+                }
+            );
+
+            // Event system
+            this.addImprovement('ARCHITECTURE',
+                'Create unified event bus',
+                'Components communicate through direct function calls. An event bus would decouple systems better.',
+                {
+                    priority: 'low',
+                    effort: 'moderate',
+                    impact: 'Looser coupling, easier to add new features',
+                    tags: ['events', 'decoupling']
+                }
+            );
+
+            // Plugin architecture
+            this.addImprovement('FEATURE_GAP',
+                'Add plugin/extension architecture',
+                'Allow users to add custom functionality through a plugin system.',
+                {
+                    priority: 'low',
+                    effort: 'major',
+                    impact: 'Extensibility, community contributions',
+                    tags: ['plugins', 'extensibility']
+                }
+            );
+        },
+
+        analyzeSecurity() {
+            // API key exposure
+            this.addImprovement('SECURITY',
+                'Move API key handling to backend proxy',
+                'Claude API key is exposed in client-side code. Use a backend proxy to protect the key.',
+                {
+                    priority: 'critical',
+                    effort: 'significant',
+                    impact: 'Prevents API key theft and abuse',
+                    suggestedFix: 'Create a serverless function (Vercel/Netlify) to proxy API calls',
+                    tags: ['api-key', 'security', 'backend']
+                }
+            );
+
+            // Input sanitization
+            this.addImprovement('SECURITY',
+                'Add input sanitization for node content',
+                'User input should be sanitized before storage and display to prevent XSS.',
+                {
+                    priority: 'high',
+                    effort: 'moderate',
+                    impact: 'Prevents XSS attacks if map data is shared',
+                    tags: ['xss', 'sanitization', 'input']
+                }
+            );
+
+            // Content Security Policy
+            this.addImprovement('SECURITY',
+                'Implement Content Security Policy headers',
+                'Add CSP headers to prevent unauthorized script execution.',
+                {
+                    priority: 'medium',
+                    effort: 'quick',
+                    impact: 'Additional layer of XSS protection',
+                    tags: ['csp', 'headers']
+                }
+            );
+
+            // localStorage encryption
+            this.addImprovement('SECURITY',
+                'Encrypt sensitive localStorage data',
+                'Neural network data and user preferences are stored unencrypted. Consider encrypting sensitive data.',
+                {
+                    priority: 'low',
+                    effort: 'moderate',
+                    impact: 'Privacy protection if device is compromised',
+                    tags: ['encryption', 'storage', 'privacy']
+                }
+            );
+        },
+
+        analyzeErrorHandling() {
+            // Global error handler
+            this.addImprovement('ERROR_HANDLING',
+                'Add comprehensive global error handler',
+                'Unhandled errors should be caught, logged, and reported gracefully to users.',
+                {
+                    priority: 'high',
+                    effort: 'moderate',
+                    impact: 'Better user experience when errors occur, easier debugging',
+                    suggestedFix: 'Add window.onerror and window.onunhandledrejection handlers',
+                    tags: ['errors', 'logging', 'ux']
+                }
+            );
+
+            // Retry logic
+            this.addImprovement('ERROR_HANDLING',
+                'Implement retry logic for API calls',
+                'Network failures should trigger automatic retries with exponential backoff.',
+                {
+                    priority: 'medium',
+                    effort: 'moderate',
+                    impact: 'More resilient to temporary network issues',
+                    tags: ['network', 'retry', 'resilience']
+                }
+            );
+
+            // Offline detection
+            this.addImprovement('ERROR_HANDLING',
+                'Improve offline detection and feedback',
+                'Better detect offline state and queue operations for when connection returns.',
+                {
+                    priority: 'medium',
+                    effort: 'moderate',
+                    impact: 'Seamless offline experience',
+                    tags: ['offline', 'pwa', 'resilience']
+                }
+            );
+        },
+
+        analyzeModularization() {
+            if (!CodePretraining.knowledge?.sections) return;
+
+            // Find large sections that could be split
+            for (const [name, section] of Object.entries(CodePretraining.knowledge.sections)) {
+                const funcCount = section.functions?.length || 0;
+                if (funcCount > 30) {
+                    this.addImprovement('MODULARIZATION',
+                        `Split large section: ${name} (${funcCount} functions)`,
+                        `This section has ${funcCount} functions. Consider splitting into smaller, focused modules.`,
+                        {
+                            priority: 'medium',
+                            effort: 'significant',
+                            impact: 'Better code organization, easier navigation',
+                            tags: ['section', 'splitting']
+                        }
+                    );
+                }
+            }
+        },
+
+        analyzeFeatureGaps() {
+            // Undo/Redo
+            this.addImprovement('FEATURE_GAP',
+                'Implement multi-level undo/redo',
+                'Currently only single-level undo exists. Full undo history would improve user confidence.',
+                {
+                    priority: 'high',
+                    effort: 'significant',
+                    impact: 'Users can experiment freely without fear of losing work',
+                    tags: ['undo', 'history', 'ux']
+                }
+            );
+
+            // Search & Filter
+            this.addImprovement('FEATURE_GAP',
+                'Add advanced search with filters',
+                'Allow searching by date, category, color, and using boolean operators.',
+                {
+                    priority: 'medium',
+                    effort: 'moderate',
+                    impact: 'Power users can find content faster',
+                    tags: ['search', 'filtering']
+                }
+            );
+
+            // Export formats
+            this.addImprovement('FEATURE_GAP',
+                'Add more export formats',
+                'Support markdown, OPML, CSV, and image export for better interoperability.',
+                {
+                    priority: 'medium',
+                    effort: 'moderate',
+                    impact: 'Better integration with other tools',
+                    tags: ['export', 'interoperability']
+                }
+            );
+
+            // Templates
+            this.addImprovement('FEATURE_GAP',
+                'Add map templates',
+                'Pre-built templates for common use cases (project planning, brainstorming, goal setting).',
+                {
+                    priority: 'low',
+                    effort: 'moderate',
+                    impact: 'Faster onboarding, inspire new use cases',
+                    tags: ['templates', 'onboarding']
+                }
+            );
+
+            // Collaboration
+            this.addImprovement('FEATURE_GAP',
+                'Enhance real-time collaboration features',
+                'Add cursor presence, user avatars, and conflict resolution for multi-user editing.',
+                {
+                    priority: 'medium',
+                    effort: 'major',
+                    impact: 'Better team collaboration experience',
+                    tags: ['collaboration', 'real-time']
+                }
+            );
+
+            // Keyboard shortcuts
+            this.addImprovement('FEATURE_GAP',
+                'Add customizable keyboard shortcuts',
+                'Let users define their own keyboard shortcuts for common actions.',
+                {
+                    priority: 'low',
+                    effort: 'moderate',
+                    impact: 'Power user productivity',
+                    tags: ['keyboard', 'customization']
+                }
+            );
+        },
+
+        analyzeAccessibility() {
+            this.addImprovement('ACCESSIBILITY',
+                'Add ARIA labels to 3D scene',
+                'The Three.js canvas needs ARIA labels and keyboard navigation for screen readers.',
+                {
+                    priority: 'high',
+                    effort: 'significant',
+                    impact: 'Makes app usable for visually impaired users',
+                    tags: ['aria', 'screen-reader', 'a11y']
+                }
+            );
+
+            this.addImprovement('ACCESSIBILITY',
+                'Improve keyboard navigation',
+                'Ensure all interactive elements are keyboard-focusable with visible focus indicators.',
+                {
+                    priority: 'high',
+                    effort: 'moderate',
+                    impact: 'Better keyboard-only navigation',
+                    tags: ['keyboard', 'focus', 'a11y']
+                }
+            );
+
+            this.addImprovement('ACCESSIBILITY',
+                'Add high contrast mode',
+                'Provide a high contrast theme option for users with low vision.',
+                {
+                    priority: 'medium',
+                    effort: 'moderate',
+                    impact: 'Better visibility for low-vision users',
+                    tags: ['contrast', 'theme', 'a11y']
+                }
+            );
+
+            this.addImprovement('ACCESSIBILITY',
+                'Support reduced motion preference',
+                'Respect prefers-reduced-motion media query to disable animations.',
+                {
+                    priority: 'medium',
+                    effort: 'quick',
+                    impact: 'Comfortable for users with vestibular disorders',
+                    tags: ['motion', 'animations', 'a11y']
+                }
+            );
+        },
+
+        analyzeTechDebt() {
+            // Global variables
+            this.addImprovement('TECH_DEBT',
+                'Reduce global variable usage',
+                'Many variables are declared in global scope. Encapsulate in modules or classes.',
+                {
+                    priority: 'medium',
+                    effort: 'significant',
+                    impact: 'Fewer naming conflicts, better testability',
+                    tags: ['globals', 'scope', 'cleanup']
+                }
+            );
+
+            // Magic numbers
+            this.addImprovement('TECH_DEBT',
+                'Extract magic numbers to named constants',
+                'Hardcoded values like animation durations, sizes should be named constants.',
+                {
+                    priority: 'low',
+                    effort: 'moderate',
+                    impact: 'Easier to adjust behavior, self-documenting code',
+                    tags: ['constants', 'readability']
+                }
+            );
+
+            // Inconsistent naming
+            this.addImprovement('TECH_DEBT',
+                'Standardize naming conventions',
+                'Mix of camelCase, snake_case, and PascalCase. Standardize across codebase.',
+                {
+                    priority: 'low',
+                    effort: 'moderate',
+                    impact: 'Consistent, predictable code style',
+                    tags: ['naming', 'style', 'consistency']
+                }
+            );
+
+            // TODO comments
+            this.addImprovement('TECH_DEBT',
+                'Address TODO comments in code',
+                'Search for TODO/FIXME/HACK comments and either resolve or create tracking issues.',
+                {
+                    priority: 'low',
+                    effort: 'moderate',
+                    impact: 'Cleaner codebase, no forgotten tasks',
+                    tags: ['todos', 'cleanup']
+                }
+            );
+        },
+
+        analyzeOptimizations() {
+            // Bundle optimization
+            this.addImprovement('OPTIMIZATION',
+                'Implement code splitting',
+                'Split the bundle so features load on-demand (neural, chat, advanced features).',
+                {
+                    priority: 'high',
+                    effort: 'significant',
+                    impact: 'Faster initial load, reduced bandwidth',
+                    tags: ['bundling', 'lazy-load']
+                }
+            );
+
+            // Image optimization
+            this.addImprovement('OPTIMIZATION',
+                'Optimize asset loading',
+                'Use WebP format, lazy-load images, and implement responsive images.',
+                {
+                    priority: 'medium',
+                    effort: 'moderate',
+                    impact: 'Faster load times, less data usage',
+                    tags: ['images', 'assets']
+                }
+            );
+
+            // Service worker caching
+            this.addImprovement('OPTIMIZATION',
+                'Improve service worker caching strategy',
+                'Implement smarter caching with cache-first for static assets, network-first for API.',
+                {
+                    priority: 'medium',
+                    effort: 'moderate',
+                    impact: 'Better offline experience, faster repeat visits',
+                    tags: ['pwa', 'caching', 'offline']
+                }
+            );
+
+            // IndexedDB optimization
+            this.addImprovement('OPTIMIZATION',
+                'Optimize IndexedDB operations',
+                'Batch writes, use indexes effectively, implement data compaction.',
+                {
+                    priority: 'medium',
+                    effort: 'moderate',
+                    impact: 'Faster data operations, less storage use',
+                    tags: ['indexeddb', 'storage', 'database']
+                }
+            );
+        },
+
+        analyzeUXEnhancements() {
+            // Onboarding
+            this.addImprovement('UX_ENHANCEMENT',
+                'Add interactive onboarding tour',
+                'Guide new users through key features with an interactive walkthrough.',
+                {
+                    priority: 'high',
+                    effort: 'moderate',
+                    impact: 'Better new user retention, faster learning curve',
+                    tags: ['onboarding', 'tutorial', 'ux']
+                }
+            );
+
+            // Loading states
+            this.addImprovement('UX_ENHANCEMENT',
+                'Improve loading state feedback',
+                'Show skeleton loaders and progress indicators during async operations.',
+                {
+                    priority: 'medium',
+                    effort: 'moderate',
+                    impact: 'Less perceived latency, clearer feedback',
+                    tags: ['loading', 'feedback', 'ux']
+                }
+            );
+
+            // Drag and drop
+            this.addImprovement('UX_ENHANCEMENT',
+                'Enhance drag and drop experience',
+                'Add visual guides, drop zones, and better feedback during node dragging.',
+                {
+                    priority: 'medium',
+                    effort: 'moderate',
+                    impact: 'More intuitive node organization',
+                    tags: ['dnd', 'interaction', 'ux']
+                }
+            );
+
+            // Context menus
+            this.addImprovement('UX_ENHANCEMENT',
+                'Add right-click context menus',
+                'Quick actions via right-click on nodes and empty space.',
+                {
+                    priority: 'medium',
+                    effort: 'moderate',
+                    impact: 'Faster access to common actions',
+                    tags: ['context-menu', 'interaction']
+                }
+            );
+
+            // Minimap
+            this.addImprovement('UX_ENHANCEMENT',
+                'Add minimap for large maps',
+                'Show a small overview of the entire map for easier navigation.',
+                {
+                    priority: 'medium',
+                    effort: 'significant',
+                    impact: 'Better orientation in large maps',
+                    tags: ['minimap', 'navigation']
+                }
+            );
+
+            // Touch gestures
+            this.addImprovement('UX_ENHANCEMENT',
+                'Improve touch gesture support',
+                'Better pinch-to-zoom, swipe gestures, and touch-friendly hit targets.',
+                {
+                    priority: 'high',
+                    effort: 'moderate',
+                    impact: 'Better mobile/tablet experience',
+                    tags: ['touch', 'mobile', 'gestures']
+                }
+            );
+        },
+
+        analyzeTestability() {
+            this.addImprovement('TESTING',
+                'Add unit test suite',
+                'Implement unit tests for core functions using Jest or similar.',
+                {
+                    priority: 'high',
+                    effort: 'major',
+                    impact: 'Catch bugs early, safer refactoring',
+                    tags: ['unit-tests', 'jest', 'testing']
+                }
+            );
+
+            this.addImprovement('TESTING',
+                'Add integration tests',
+                'Test key user flows end-to-end (add node, move node, AI chat).',
+                {
+                    priority: 'medium',
+                    effort: 'major',
+                    impact: 'Ensure features work together correctly',
+                    tags: ['integration', 'e2e', 'testing']
+                }
+            );
+
+            this.addImprovement('TESTING',
+                'Add visual regression tests',
+                'Capture screenshots and detect unintended visual changes.',
+                {
+                    priority: 'low',
+                    effort: 'moderate',
+                    impact: 'Catch styling bugs automatically',
+                    tags: ['visual', 'regression', 'testing']
+                }
+            );
+        },
+
+        analyzeMaintainability() {
+            // Documentation
+            this.addImprovement('MAINTAINABILITY',
+                'Add JSDoc comments to core functions',
+                'Document parameters, return types, and usage examples for key functions.',
+                {
+                    priority: 'medium',
+                    effort: 'significant',
+                    impact: 'Easier for new developers to understand code',
+                    tags: ['jsdoc', 'documentation']
+                }
+            );
+
+            // Type safety
+            this.addImprovement('MAINTAINABILITY',
+                'Add TypeScript type definitions',
+                'Create .d.ts files or convert to TypeScript for better type safety.',
+                {
+                    priority: 'medium',
+                    effort: 'major',
+                    impact: 'Catch type errors at compile time, better IDE support',
+                    tags: ['typescript', 'types', 'safety']
+                }
+            );
+
+            // Code formatting
+            this.addImprovement('MAINTAINABILITY',
+                'Add ESLint and Prettier configuration',
+                'Enforce consistent code style automatically.',
+                {
+                    priority: 'low',
+                    effort: 'quick',
+                    impact: 'Consistent code style, fewer style debates',
+                    tags: ['linting', 'formatting', 'style']
+                }
+            );
+        },
+
+        // ═══════════════════════════════════════════════════════════════════
+        // METRICS & REPORTING
+        // ═══════════════════════════════════════════════════════════════════
+
+        calculateMetrics() {
+            const improvements = this.analysis.improvements;
+
+            this.analysis.metrics.totalImprovements = improvements.length;
+            this.analysis.metrics.completedImprovements = improvements.filter(i => i.status === 'completed').length;
+
+            // Calculate technical debt score (higher = more debt)
+            const priorityPoints = { critical: 10, high: 5, medium: 2, low: 1 };
+            const debtScore = improvements
+                .filter(i => i.status !== 'completed')
+                .reduce((sum, i) => sum + priorityPoints[i.priority], 0);
+
+            this.analysis.metrics.technicalDebtScore = debtScore;
+
+            // Calculate health score (0-100, higher = healthier)
+            const maxPossibleDebt = improvements.length * 10;
+            const healthScore = maxPossibleDebt > 0
+                ? Math.round(100 - (debtScore / maxPossibleDebt * 100))
+                : 100;
+
+            this.analysis.metrics.healthScore = healthScore;
+        },
+
+        // Get improvements for AI context
+        getContext(query, maxItems = 10) {
+            if (!this.initialized || !this.analysis) return null;
+
+            const queryLower = query.toLowerCase();
+            let context = '\n🔍 SELF-IMPROVEMENT ANALYSIS:\n';
+
+            // Check if query is about improvements
+            const improvementKeywords = ['improve', 'better', 'enhance', 'optimize', 'fix', 'upgrade', 'faster', 'cleaner', 'refactor', 'security', 'performance', 'debt', 'todo', 'suggestion'];
+            const isAboutImprovements = improvementKeywords.some(kw => queryLower.includes(kw));
+
+            if (!isAboutImprovements && !queryLower.includes('self') && !queryLower.includes('code')) {
+                // Return just summary for non-improvement queries
+                context += `Health Score: ${this.analysis.metrics.healthScore}/100\n`;
+                context += `${this.analysis.metrics.totalImprovements} improvements identified across ${Object.keys(this.CATEGORIES).length} categories.\n`;
+                return context;
+            }
+
+            // Add metrics
+            context += `\n📊 Codebase Health: ${this.analysis.metrics.healthScore}/100\n`;
+            context += `Technical Debt Score: ${this.analysis.metrics.technicalDebtScore}\n`;
+            context += `Total Improvements: ${this.analysis.metrics.totalImprovements}\n`;
+
+            // Find relevant improvements
+            let relevantImprovements = this.analysis.improvements;
+
+            // Filter by query keywords
+            const keywords = queryLower.split(/\s+/).filter(w => w.length > 3);
+            if (keywords.length > 0) {
+                relevantImprovements = relevantImprovements.filter(imp => {
+                    const impText = `${imp.title} ${imp.description} ${imp.tags.join(' ')}`.toLowerCase();
+                    return keywords.some(kw => impText.includes(kw));
+                });
+            }
+
+            // If no specific matches, show top by priority
+            if (relevantImprovements.length === 0) {
+                relevantImprovements = this.analysis.improvements;
+            }
+
+            // Group by priority for output
+            const critical = relevantImprovements.filter(i => i.priority === 'critical').slice(0, 3);
+            const high = relevantImprovements.filter(i => i.priority === 'high').slice(0, 4);
+            const medium = relevantImprovements.filter(i => i.priority === 'medium').slice(0, 3);
+
+            if (critical.length > 0) {
+                context += `\n🚨 CRITICAL:\n`;
+                critical.forEach(i => context += `  ${i.categoryIcon} ${i.title}\n`);
+            }
+
+            if (high.length > 0) {
+                context += `\n⚠️ HIGH PRIORITY:\n`;
+                high.forEach(i => context += `  ${i.categoryIcon} ${i.title}\n`);
+            }
+
+            if (medium.length > 0) {
+                context += `\n📋 MEDIUM PRIORITY:\n`;
+                medium.forEach(i => context += `  ${i.categoryIcon} ${i.title}\n`);
+            }
+
+            // Category summary
+            context += `\nBy Category:\n`;
+            for (const [cat, items] of Object.entries(this.analysis.byCategory)) {
+                if (items.length > 0) {
+                    const catInfo = this.CATEGORIES[cat];
+                    context += `  ${catInfo.icon} ${catInfo.name}: ${items.length} items\n`;
+                }
+            }
+
+            return context;
+        },
+
+        // Get detailed improvement by ID or title
+        getImprovement(identifier) {
+            if (!this.analysis) return null;
+
+            return this.analysis.improvements.find(i =>
+                i.id === identifier ||
+                i.title.toLowerCase().includes(identifier.toLowerCase())
+            );
+        },
+
+        // Get all improvements for a category
+        getCategoryImprovements(category) {
+            return this.analysis?.byCategory[category] || [];
+        },
+
+        // Get quick wins (high impact, low effort)
+        getQuickWins() {
+            if (!this.analysis) return [];
+
+            return this.analysis.improvements
+                .filter(i => i.effort === 'quick' && ['critical', 'high'].includes(i.priority))
+                .slice(0, 10);
+        },
+
+        // Get full improvement report
+        getFullReport() {
+            if (!this.analysis) return 'Analysis not initialized';
+
+            let report = `# MYND Self-Improvement Analysis Report\n`;
+            report += `Generated: ${new Date(this.analysis.timestamp).toLocaleString()}\n\n`;
+
+            report += `## 📊 Summary\n`;
+            report += `- **Health Score:** ${this.analysis.metrics.healthScore}/100\n`;
+            report += `- **Technical Debt Score:** ${this.analysis.metrics.technicalDebtScore}\n`;
+            report += `- **Total Improvements:** ${this.analysis.metrics.totalImprovements}\n`;
+            report += `- **Completed:** ${this.analysis.metrics.completedImprovements}\n\n`;
+
+            // By priority
+            report += `## 🎯 By Priority\n`;
+            for (const priority of ['critical', 'high', 'medium', 'low']) {
+                const items = this.analysis.byPriority[priority];
+                if (items.length > 0) {
+                    report += `### ${priority.toUpperCase()} (${items.length})\n`;
+                    items.forEach(i => {
+                        report += `- ${i.categoryIcon} **${i.title}** [${i.effort}]\n`;
+                        report += `  ${i.description}\n`;
+                    });
+                    report += '\n';
+                }
+            }
+
+            // By category
+            report += `## 📁 By Category\n`;
+            for (const [cat, items] of Object.entries(this.analysis.byCategory)) {
+                if (items.length > 0) {
+                    const catInfo = this.CATEGORIES[cat];
+                    report += `### ${catInfo.icon} ${catInfo.name} (${items.length})\n`;
+                    items.forEach(i => {
+                        report += `- **${i.title}** [${i.priority}/${i.effort}]\n`;
+                    });
+                    report += '\n';
+                }
+            }
+
+            return report;
+        },
+
+        // Mark improvement as completed
+        completeImprovement(identifier) {
+            const improvement = this.getImprovement(identifier);
+            if (improvement) {
+                improvement.status = 'completed';
+                improvement.completedAt = Date.now();
+                this.calculateMetrics();
+                this.saveToStorage();
+                return true;
+            }
+            return false;
+        },
+
+        // Storage
+        saveToStorage() {
+            try {
+                const data = {
+                    version: this.VERSION,
+                    analysis: this.analysis,
+                    timestamp: Date.now()
+                };
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+                console.log('🔍 CodeAnalyzer saved');
+            } catch (error) {
+                console.warn('CodeAnalyzer save failed:', error);
+            }
+        },
+
+        loadFromStorage() {
+            try {
+                const data = localStorage.getItem(this.STORAGE_KEY);
+                return data ? JSON.parse(data) : null;
+            } catch (error) {
+                return null;
+            }
+        },
+
+        getStats() {
+            return {
+                initialized: this.initialized,
+                ...this.analysis?.metrics,
+                categories: Object.keys(this.CATEGORIES).length
+            };
+        },
+
+        // Force re-analyze
+        async rebuild() {
+            localStorage.removeItem(this.STORAGE_KEY);
+            this.initialized = false;
+            this.analysis = null;
+            return this.initialize();
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════
     // TEACHER KNOWLEDGE - Knowledge distillation from Claude
     // ═══════════════════════════════════════════════════════════════════
     // Captures Claude's predictions as "soft targets" for training the local model
@@ -30219,6 +31323,27 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 }
             }
 
+            // 11. CodeAnalyzer - Self-improvement analysis (identifies all improvement opportunities)
+            let improvementContext = '';
+            if (CodeAnalyzer.initialized) {
+                try {
+                    const messageLower = userMessage.toLowerCase();
+                    // Trigger on self-improvement, optimization, or code quality questions
+                    const improvementKeywords = ['improve', 'better', 'optimize', 'fix', 'enhance', 'upgrade', 'faster', 'performance', 'security', 'refactor', 'debt', 'quality', 'suggestion', 'recommend', 'what should', 'how can i make', 'what needs', 'priorities', 'roadmap'];
+                    const needsImprovementContext = improvementKeywords.some(kw => messageLower.includes(kw)) || codeContext || pretrainedContext;
+
+                    if (needsImprovementContext) {
+                        const analysisContext = CodeAnalyzer.getContext(userMessage);
+                        if (analysisContext) {
+                            improvementContext = analysisContext;
+                            console.log('🔍 CodeAnalyzer provided self-improvement context');
+                        }
+                    }
+                } catch (e) {
+                    console.warn('CodeAnalyzer context error:', e);
+                }
+            }
+
             const systemPrompt = `You are the AI companion for MYND — a personalized second brain designed to capture and connect fragmented thoughts, fostering creativity and clarity.
 
 === YOUR PURPOSE ===
@@ -30377,6 +31502,9 @@ ${selfAwarenessContext}` : ''}
 ${pretrainedContext ? `
 DEEP ARCHITECTURE KNOWLEDGE (pre-trained):
 ${pretrainedContext}` : ''}
+${improvementContext ? `
+SELF-IMPROVEMENT ANALYSIS (all improvement opportunities):
+${improvementContext}` : ''}
 
 YOUR CAPABILITIES:
 1. **Full Map Visibility**: You can see the ENTIRE map structure above
@@ -30388,6 +31516,7 @@ YOUR CAPABILITIES:
 7. **Codebase Knowledge**: For technical questions, you have access to relevant MYND source code. Use this to explain how features work, suggest improvements, or debug issues
 8. **Self-Awareness**: You understand how MYND's concepts (in the map) connect to actual code implementations. You can explain your own architecture, how features are built, and the relationships between components
 9. **Deep Architecture Knowledge**: You have pre-trained understanding of all systems, their functions, call graphs, and dependencies. You know which functions call which, how systems depend on each other, and the overall architecture flow
+10. **Self-Improvement Analysis**: You have analyzed the entire codebase and identified all possible improvements across 15 categories: Performance, Architecture, Security, Code Quality, Maintainability, Scalability, UX Enhancement, Feature Gaps, Dead Code, Technical Debt, Optimization, Modularization, Error Handling, Accessibility, and Testing. You can suggest prioritized improvements, quick wins, and a roadmap for making MYND stronger over time
 
 RESPONSE FORMAT (always JSON):
 {
@@ -40289,6 +41418,30 @@ Summary:`
             console.warn('CodePretraining initialization deferred:', e.message);
         }
     }, 3000);
+
+    // Initialize CodeAnalyzer System (comprehensive self-improvement analysis)
+    setTimeout(async () => {
+        try {
+            // CodeAnalyzer depends on CodePretraining being ready
+            if (CodePretraining.initialized) {
+                await CodeAnalyzer.initialize();
+                console.log('🔍 CodeAnalyzer stats:', CodeAnalyzer.getStats());
+            } else {
+                // Wait for CodePretraining to be ready
+                const checkCodePretraining = setInterval(async () => {
+                    if (CodePretraining.initialized) {
+                        clearInterval(checkCodePretraining);
+                        await CodeAnalyzer.initialize();
+                        console.log('🔍 CodeAnalyzer stats:', CodeAnalyzer.getStats());
+                    }
+                }, 3000);
+                // Give up after 120 seconds
+                setTimeout(() => clearInterval(checkCodePretraining), 120000);
+            }
+        } catch (e) {
+            console.warn('CodeAnalyzer initialization deferred:', e.message);
+        }
+    }, 4000);
 
     // Mobile: Start with toolbar collapsed
     if (window.innerWidth <= 768) {
