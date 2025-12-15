@@ -7405,7 +7405,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.20</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.21</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -24452,10 +24452,11 @@ Return as JSON:
             // Level 2+: Siblings spread equally UP and DOWN from parent center
             let siblingVerticalOffset = 0;
             if (level > 1 && total > 1) {
-                const verticalSpread = CONFIG.LAYOUT.verticalSpread || 3.0;
-                // Decay the SPREAD amount with depth, but center on parent Y
-                const levelFactor = Math.pow(0.6, level - 2); // 1, 0.6, 0.36, 0.216...
-                const siblingSpacing = verticalSpread * levelFactor;
+                // Much larger vertical spread for level 2, decaying for deeper levels
+                const baseVerticalSpread = 15.0; // Significantly increased from 3.0
+                // Gentler decay: 0.7 per level instead of 0.6
+                const levelFactor = Math.pow(0.7, level - 2); // 1, 0.7, 0.49, 0.34...
+                const siblingSpacing = baseVerticalSpread * levelFactor;
                 // This spreads equally above and below parent's Y position
                 siblingVerticalOffset = (index - (total - 1) / 2) * siblingSpacing;
             }
