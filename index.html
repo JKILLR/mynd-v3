@@ -7405,7 +7405,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.14</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.15</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -24449,7 +24449,7 @@ Return as JSON:
             if (level === 1) {
                 // Level 1: EQUAL vertical spacing between all siblings
                 // MUCH larger vertical separation - branches get longer as nodes move from horizon
-                const helixAmp = baseHelixAmp * 10.0; // Very large for dramatic vertical spread
+                const helixAmp = baseHelixAmp * 5.0; // Reduced by 50%
 
                 // Evenly distribute from -helixAmp to +helixAmp based on index
                 if (total > 1) {
