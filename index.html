@@ -7405,7 +7405,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.13</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.14</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -24502,7 +24502,11 @@ Return as JSON:
         // Children are confined to parent's angular sector (no crossover!)
         if (data.children) {
             // Calculate weights for children based on their descendants
+            // Level 0 (root) children get EQUAL weights for even angular distribution
             const childWeights = data.children.map(child => {
+                if (level === 0) {
+                    return 1; // Equal weight for level 1 siblings - even angular spread
+                }
                 const descendants = countVisibleDescendants(child);
                 return 1 + Math.sqrt(descendants) * 0.8; // Weight: 1 base + sqrt of descendants
             });
@@ -24518,7 +24522,7 @@ Return as JSON:
             const PHI = 1.618033988749895;
 
             if (level === 0) {
-                // Root: full circle for level 1 children
+                // Root: full circle for level 1 children with EQUAL angular spacing
                 availableSector = Math.PI * 2;
                 childSectorStart = -Math.PI;
             } else if (level === 1) {
