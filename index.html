@@ -22660,6 +22660,522 @@ Return as JSON:
     // Global CodeKnowledge instance
     const codeKnowledge = new CodeKnowledge();
 
+    // ═══════════════════════════════════════════════════════════════════
+    // CODE PRETRAINING SYSTEM - Deep Codebase Understanding
+    // ═══════════════════════════════════════════════════════════════════
+    // Pre-analyzes the entire codebase to build comprehensive understanding
+    // without requiring user interactions. Runs once on first load.
+    const CodePretraining = {
+        STORAGE_KEY: 'mynd_code_pretrained',
+        VERSION: '1.0',
+        initialized: false,
+        knowledge: null,
+
+        // Pre-trained knowledge structure
+        defaultKnowledge: {
+            // High-level system descriptions
+            systems: {},
+            // Function registry with purposes
+            functions: {},
+            // Call graph (who calls whom)
+            callGraph: {},
+            // Reverse call graph (who is called by whom)
+            calledBy: {},
+            // System dependencies
+            dependencies: {},
+            // Global variables and their purposes
+            globals: {},
+            // Section summaries
+            sections: {},
+            // Architecture overview
+            architecture: null
+        },
+
+        async initialize() {
+            if (this.initialized) return this.knowledge;
+
+            console.log('🎓 Initializing CodePretraining...');
+
+            try {
+                // Try to load cached knowledge
+                const cached = this.loadFromStorage();
+                if (cached && cached.version === this.VERSION) {
+                    this.knowledge = cached.knowledge;
+                    this.initialized = true;
+                    console.log(`✓ Pre-trained knowledge loaded: ${Object.keys(this.knowledge.functions).length} functions mapped`);
+                    return this.knowledge;
+                }
+
+                // Generate fresh pre-training
+                console.log('🎓 Pre-training on codebase (first run)...');
+                await this.pretrain();
+                this.initialized = true;
+                console.log(`✓ Pre-training complete: ${Object.keys(this.knowledge.functions).length} functions, ${Object.keys(this.knowledge.systems).length} systems`);
+                return this.knowledge;
+
+            } catch (error) {
+                console.warn('CodePretraining initialization failed:', error);
+                this.knowledge = { ...this.defaultKnowledge };
+                return this.knowledge;
+            }
+        },
+
+        async pretrain() {
+            this.knowledge = { ...this.defaultKnowledge };
+
+            // Use CodeRAG chunks as the basis
+            if (!codeRAG.initialized || codeRAG.chunks.length === 0) {
+                console.warn('CodePretraining: CodeRAG not ready');
+                return;
+            }
+
+            // 1. Analyze all sections
+            this.analyzeSections();
+
+            // 2. Build function registry
+            this.buildFunctionRegistry();
+
+            // 3. Build call graph
+            this.buildCallGraph();
+
+            // 4. Identify systems and their purposes
+            this.identifySystems();
+
+            // 5. Map dependencies
+            this.mapDependencies();
+
+            // 6. Generate architecture overview
+            this.generateArchitectureOverview();
+
+            // Save
+            this.saveToStorage();
+        },
+
+        analyzeSections() {
+            const sectionChunks = codeRAG.chunks.filter(c => c.type === 'section');
+
+            for (const chunk of sectionChunks) {
+                this.knowledge.sections[chunk.name] = {
+                    name: chunk.name,
+                    lines: `${chunk.startLine}-${chunk.endLine}`,
+                    summary: this.generateSectionSummary(chunk),
+                    functions: []
+                };
+            }
+        },
+
+        generateSectionSummary(chunk) {
+            // Generate a smart summary based on section name and content
+            const name = chunk.name.toLowerCase();
+            const summaries = {
+                'neural intelligence': 'On-device machine learning system using TensorFlow.js Universal Sentence Encoder for semantic understanding, pattern learning, and intelligent suggestions',
+                'semantic memory': 'Long-term context awareness system that remembers past interactions and surfaces relevant memories',
+                'ai chat manager': 'Conversational AI interface that processes user messages, builds context, and executes actions on the mind map',
+                'theme manager': 'Visual theming system supporting multiple color schemes with CSS variable manipulation',
+                'store': 'Central data management for the mind map tree structure with CRUD operations and persistence',
+                'three.js': '3D visualization engine rendering nodes as spheres with physics-based animations',
+                'mobile sheet': 'Mobile-optimized bottom sheet UI with gesture-based interactions',
+                'voice': 'Speech recognition and voice memo capture using Web Speech API',
+                'link manager': 'URL capture and metadata extraction for web content integration',
+                'goal system': 'Goal tracking and progress visualization features',
+                'physics': 'Spring-based animation system for smooth node movements',
+                'camera': 'Camera controls including auto-follow, zoom-to-fit, and arc animations',
+                'pwa': 'Progressive Web App features including service worker and offline support',
+                'indexeddb': 'Client-side database for persistent storage of maps and neural data',
+                'supabase': 'Cloud sync and authentication backend integration',
+                'preference': 'User preference learning from accepted/rejected suggestions',
+                'teacher knowledge': 'Knowledge distillation from Claude API to improve local predictions',
+                'cognitive': 'Advanced graph transformer for structural pattern recognition',
+                'webgpu': 'GPU-accelerated similarity computations when available'
+            };
+
+            for (const [key, summary] of Object.entries(summaries)) {
+                if (name.includes(key)) return summary;
+            }
+
+            return `Code section handling ${chunk.name} functionality`;
+        },
+
+        buildFunctionRegistry() {
+            const funcChunks = codeRAG.chunks.filter(c => c.type === 'function');
+
+            for (const chunk of funcChunks) {
+                const purpose = this.inferFunctionPurpose(chunk);
+                const params = this.extractParameters(chunk.code);
+                const returnType = this.inferReturnType(chunk.code);
+
+                this.knowledge.functions[chunk.name] = {
+                    name: chunk.name,
+                    section: chunk.section,
+                    lines: `${chunk.startLine}-${chunk.endLine}`,
+                    purpose: purpose,
+                    parameters: params,
+                    returns: returnType,
+                    isAsync: chunk.code.includes('async'),
+                    complexity: this.estimateComplexity(chunk.code)
+                };
+
+                // Add to section's function list
+                if (this.knowledge.sections[chunk.section]) {
+                    this.knowledge.sections[chunk.section].functions.push(chunk.name);
+                }
+            }
+        },
+
+        inferFunctionPurpose(chunk) {
+            const name = chunk.name.toLowerCase();
+            const code = chunk.code.toLowerCase();
+
+            // Pattern matching for common purposes
+            const patterns = [
+                [/^get|^fetch|^load|^read/, 'Retrieves data'],
+                [/^set|^update|^save|^write|^store/, 'Stores/updates data'],
+                [/^add|^create|^insert|^new/, 'Creates new items'],
+                [/^delete|^remove|^clear/, 'Removes items'],
+                [/^init|^setup|^start|^boot/, 'Initializes system'],
+                [/^render|^draw|^display|^show/, 'Renders UI elements'],
+                [/^handle|^on[A-Z]|^process/, 'Handles events'],
+                [/^validate|^check|^verify|^is[A-Z]/, 'Validates data'],
+                [/^format|^transform|^convert|^parse/, 'Transforms data'],
+                [/^calculate|^compute|^estimate/, 'Performs calculations'],
+                [/^find|^search|^query|^filter/, 'Searches/filters data'],
+                [/^animate|^transition|^tween/, 'Handles animations'],
+                [/^expand|^collapse|^toggle/, 'Toggles visibility/state'],
+                [/^embed|^encode|^vector/, 'Generates embeddings'],
+                [/^predict|^classify|^suggest/, 'Makes predictions'],
+                [/^train|^learn|^update.*weight/, 'Trains models'],
+                [/^focus|^select|^highlight/, 'Manages selection/focus'],
+                [/^zoom|^pan|^camera/, 'Controls camera/viewport'],
+                [/^export|^download|^share/, 'Exports data'],
+                [/^import|^upload|^paste/, 'Imports data']
+            ];
+
+            for (const [pattern, purpose] of patterns) {
+                if (pattern.test(name)) {
+                    return `${purpose} - ${chunk.section}`;
+                }
+            }
+
+            return `${chunk.section} functionality`;
+        },
+
+        extractParameters(code) {
+            const match = code.match(/(?:function\s+\w+|(?:async\s+)?(?:\w+\s*[:=]\s*)?(?:async\s*)?\(?)?\(([^)]*)\)/);
+            if (!match || !match[1]) return [];
+
+            return match[1].split(',')
+                .map(p => p.trim())
+                .filter(p => p && !p.startsWith('//'))
+                .map(p => p.split('=')[0].trim());
+        },
+
+        inferReturnType(code) {
+            if (code.includes('return null') || code.includes('return;')) return 'void/null';
+            if (code.includes('return true') || code.includes('return false')) return 'boolean';
+            if (code.includes('return []') || code.includes('return results') || code.includes('.map(')) return 'array';
+            if (code.includes('return {')) return 'object';
+            if (code.includes('return `') || code.includes("return '") || code.includes('return "')) return 'string';
+            if (/return\s+\d/.test(code)) return 'number';
+            if (code.includes('async')) return 'Promise';
+            return 'unknown';
+        },
+
+        estimateComplexity(code) {
+            let complexity = 1;
+            complexity += (code.match(/if\s*\(/g) || []).length;
+            complexity += (code.match(/for\s*\(/g) || []).length * 2;
+            complexity += (code.match(/while\s*\(/g) || []).length * 2;
+            complexity += (code.match(/switch\s*\(/g) || []).length;
+            complexity += (code.match(/\?\s*.*:/g) || []).length;
+            complexity += (code.match(/catch\s*\(/g) || []).length;
+
+            if (complexity <= 3) return 'low';
+            if (complexity <= 8) return 'medium';
+            return 'high';
+        },
+
+        buildCallGraph() {
+            for (const [funcName, funcData] of Object.entries(this.knowledge.functions)) {
+                const chunk = codeRAG.chunks.find(c => c.name === funcName);
+                if (!chunk) continue;
+
+                const calls = this.extractFunctionCalls(chunk.code, funcName);
+                this.knowledge.callGraph[funcName] = calls;
+
+                // Build reverse graph
+                for (const calledFunc of calls) {
+                    if (!this.knowledge.calledBy[calledFunc]) {
+                        this.knowledge.calledBy[calledFunc] = [];
+                    }
+                    if (!this.knowledge.calledBy[calledFunc].includes(funcName)) {
+                        this.knowledge.calledBy[calledFunc].push(funcName);
+                    }
+                }
+            }
+        },
+
+        extractFunctionCalls(code, selfName) {
+            const calls = new Set();
+            const knownFuncs = Object.keys(this.knowledge.functions);
+
+            // Match function calls: funcName( or obj.funcName(
+            const callPattern = /(?:^|[^.\w])(\w+)\s*\(/g;
+            let match;
+            while ((match = callPattern.exec(code)) !== null) {
+                const calledName = match[1];
+                if (calledName !== selfName &&
+                    knownFuncs.includes(calledName) &&
+                    !['if', 'for', 'while', 'switch', 'catch', 'function', 'return', 'new', 'typeof'].includes(calledName)) {
+                    calls.add(calledName);
+                }
+            }
+
+            return Array.from(calls);
+        },
+
+        identifySystems() {
+            // Group functions by their high-level system
+            const systemPatterns = {
+                'Neural Network': ['PersonalNeuralNet', 'neuralNet', 'encoder', 'embed', 'predict', 'train', 'getEmbedding'],
+                '3D Visualization': ['initScene', 'createNode', 'render', 'animate', 'THREE', 'camera', 'scene', 'sphere'],
+                'Data Store': ['store', 'save', 'load', 'findNode', 'addNode', 'deleteNode', 'updateNode'],
+                'AI Chat': ['chatManager', 'callAI', 'sendMessage', 'processMessage'],
+                'Voice Input': ['voiceAI', 'speechRecognition', 'startRecording', 'transcribe'],
+                'Theme System': ['themeManager', 'setTheme', 'applyTheme', 'updateColors'],
+                'Animation': ['expandNode', 'collapseNode', 'animateCamera', 'spring', 'tween'],
+                'Memory Systems': ['semanticMemory', 'preferenceTracker', 'userProfile'],
+                'Code Understanding': ['codeRAG', 'codeKnowledge', 'CodePretraining']
+            };
+
+            for (const [systemName, keywords] of Object.entries(systemPatterns)) {
+                const relatedFuncs = Object.entries(this.knowledge.functions)
+                    .filter(([name, data]) =>
+                        keywords.some(kw =>
+                            name.toLowerCase().includes(kw.toLowerCase()) ||
+                            data.section.toLowerCase().includes(kw.toLowerCase())
+                        )
+                    )
+                    .map(([name]) => name);
+
+                if (relatedFuncs.length > 0) {
+                    this.knowledge.systems[systemName] = {
+                        name: systemName,
+                        functions: relatedFuncs,
+                        description: this.generateSystemDescription(systemName),
+                        entryPoints: this.findEntryPoints(relatedFuncs)
+                    };
+                }
+            }
+        },
+
+        generateSystemDescription(systemName) {
+            const descriptions = {
+                'Neural Network': 'On-device ML using TensorFlow.js for semantic understanding, pattern learning, category prediction, and intelligent suggestions. Learns from user behavior without sending data to servers.',
+                '3D Visualization': 'Three.js-powered 3D mind map rendering. Nodes are spheres connected by lines, with physics-based spring animations for smooth interactions.',
+                'Data Store': 'Central data management handling the hierarchical tree structure. Supports CRUD operations, persistence to IndexedDB/localStorage, and cloud sync.',
+                'AI Chat': 'Conversational interface powered by Claude API. Builds rich context from the map, neural insights, and memories to provide intelligent responses and execute actions.',
+                'Voice Input': 'Web Speech API integration for voice-to-text capture. Supports real-time transcription and voice memo processing.',
+                'Theme System': 'Dynamic theming with CSS variables. Supports multiple color schemes with instant switching and persistence.',
+                'Animation': 'Spring physics-based animation system for node expand/collapse, camera movements, and UI transitions.',
+                'Memory Systems': 'Long-term learning systems including semantic memory (past interactions), preference tracking (suggestion feedback), and user profiling.',
+                'Code Understanding': 'Self-aware code analysis systems including CodeRAG (retrieval), CodeKnowledge (concept mapping), and CodePretraining (deep understanding).'
+            };
+            return descriptions[systemName] || `System handling ${systemName} functionality`;
+        },
+
+        findEntryPoints(functions) {
+            // Entry points are functions that are called but don't call other system functions
+            return functions.filter(f => {
+                const callers = this.knowledge.calledBy[f] || [];
+                const externalCallers = callers.filter(c => !functions.includes(c));
+                return externalCallers.length > 0 || callers.length === 0;
+            }).slice(0, 5);
+        },
+
+        mapDependencies() {
+            for (const [systemName, systemData] of Object.entries(this.knowledge.systems)) {
+                const deps = new Set();
+
+                for (const funcName of systemData.functions) {
+                    const calls = this.knowledge.callGraph[funcName] || [];
+                    for (const calledFunc of calls) {
+                        // Find which system the called function belongs to
+                        for (const [otherSystem, otherData] of Object.entries(this.knowledge.systems)) {
+                            if (otherSystem !== systemName && otherData.functions.includes(calledFunc)) {
+                                deps.add(otherSystem);
+                            }
+                        }
+                    }
+                }
+
+                this.knowledge.dependencies[systemName] = Array.from(deps);
+            }
+        },
+
+        generateArchitectureOverview() {
+            const totalFuncs = Object.keys(this.knowledge.functions).length;
+            const totalSections = Object.keys(this.knowledge.sections).length;
+            const totalSystems = Object.keys(this.knowledge.systems).length;
+
+            this.knowledge.architecture = {
+                summary: `MYND is a ${totalFuncs}-function monolithic web app organized into ${totalSections} sections and ${totalSystems} logical systems.`,
+                coreFlow: [
+                    '1. User interacts (click, voice, type)',
+                    '2. Event handlers process input',
+                    '3. Data Store updates map structure',
+                    '4. 3D Visualization re-renders',
+                    '5. Neural Network learns from interaction',
+                    '6. AI Chat available for complex operations'
+                ],
+                keyIntegrations: [
+                    'TensorFlow.js Universal Sentence Encoder for embeddings',
+                    'Three.js for 3D rendering',
+                    'Claude API for conversational AI',
+                    'IndexedDB for persistent storage',
+                    'Supabase for cloud sync (optional)'
+                ],
+                uniqueFeatures: [
+                    'On-device ML that learns user patterns',
+                    'Self-aware codebase understanding',
+                    '3D spatial mind mapping',
+                    'Voice-first capture',
+                    'Privacy-focused local processing'
+                ]
+            };
+        },
+
+        // Get comprehensive context for AI
+        getContext(query, maxSystems = 3) {
+            if (!this.initialized || !this.knowledge) return null;
+
+            const queryLower = query.toLowerCase();
+            let context = '\n🎓 PRE-TRAINED CODEBASE KNOWLEDGE:\n';
+
+            // Find relevant systems
+            const relevantSystems = [];
+            for (const [name, system] of Object.entries(this.knowledge.systems)) {
+                const score = this.scoreRelevance(queryLower, name, system);
+                if (score > 0) {
+                    relevantSystems.push({ name, system, score });
+                }
+            }
+
+            relevantSystems.sort((a, b) => b.score - a.score);
+            const topSystems = relevantSystems.slice(0, maxSystems);
+
+            if (topSystems.length === 0) {
+                // Return architecture overview if no specific match
+                context += `\n${this.knowledge.architecture.summary}\n`;
+                context += `\nCore systems: ${Object.keys(this.knowledge.systems).join(', ')}\n`;
+                return context;
+            }
+
+            for (const { name, system } of topSystems) {
+                context += `\n[SYSTEM: ${name}]\n`;
+                context += `  ${system.description}\n`;
+                context += `  Functions: ${system.functions.length} (entry points: ${system.entryPoints.join(', ')})\n`;
+
+                const deps = this.knowledge.dependencies[name];
+                if (deps && deps.length > 0) {
+                    context += `  Depends on: ${deps.join(', ')}\n`;
+                }
+
+                // Add a few key function details
+                const keyFuncs = system.entryPoints.slice(0, 3);
+                for (const funcName of keyFuncs) {
+                    const func = this.knowledge.functions[funcName];
+                    if (func) {
+                        context += `    • ${funcName}(${func.parameters.join(', ')}): ${func.purpose}\n`;
+                    }
+                }
+            }
+
+            return context;
+        },
+
+        scoreRelevance(query, systemName, system) {
+            let score = 0;
+            const nameLower = systemName.toLowerCase();
+            const descLower = system.description.toLowerCase();
+
+            // Direct name match
+            if (query.includes(nameLower)) score += 5;
+
+            // Keyword matching
+            const keywords = query.split(/\s+/);
+            for (const kw of keywords) {
+                if (kw.length > 2) {
+                    if (nameLower.includes(kw)) score += 2;
+                    if (descLower.includes(kw)) score += 1;
+                    if (system.functions.some(f => f.toLowerCase().includes(kw))) score += 1;
+                }
+            }
+
+            return score;
+        },
+
+        // Get specific function details
+        getFunctionDetails(funcName) {
+            return this.knowledge?.functions[funcName] || null;
+        },
+
+        // Get call chain for a function
+        getCallChain(funcName, depth = 2) {
+            const chain = { name: funcName, calls: [], calledBy: [] };
+
+            if (depth > 0) {
+                const calls = this.knowledge?.callGraph[funcName] || [];
+                chain.calls = calls.slice(0, 5);
+
+                const calledBy = this.knowledge?.calledBy[funcName] || [];
+                chain.calledBy = calledBy.slice(0, 5);
+            }
+
+            return chain;
+        },
+
+        saveToStorage() {
+            try {
+                const data = {
+                    version: this.VERSION,
+                    knowledge: this.knowledge,
+                    timestamp: Date.now()
+                };
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+                console.log('🎓 Pre-trained knowledge saved');
+            } catch (error) {
+                console.warn('CodePretraining save failed:', error);
+            }
+        },
+
+        loadFromStorage() {
+            try {
+                const data = localStorage.getItem(this.STORAGE_KEY);
+                return data ? JSON.parse(data) : null;
+            } catch (error) {
+                return null;
+            }
+        },
+
+        getStats() {
+            return {
+                initialized: this.initialized,
+                systems: Object.keys(this.knowledge?.systems || {}).length,
+                functions: Object.keys(this.knowledge?.functions || {}).length,
+                sections: Object.keys(this.knowledge?.sections || {}).length,
+                callGraphEdges: Object.values(this.knowledge?.callGraph || {}).flat().length
+            };
+        },
+
+        // Force re-pretrain
+        async rebuild() {
+            localStorage.removeItem(this.STORAGE_KEY);
+            this.initialized = false;
+            this.knowledge = null;
+            return this.initialize();
+        }
+    };
+
     // Global neural network instance
     const neuralNet = new PersonalNeuralNet();
 
@@ -29682,6 +30198,27 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 }
             }
 
+            // 10. CodePretraining - Deep pre-trained knowledge (systems, call graphs, architecture)
+            let pretrainedContext = '';
+            if (CodePretraining.initialized) {
+                try {
+                    const messageLower = userMessage.toLowerCase();
+                    // Trigger on technical questions or when other code contexts are present
+                    const deepTechKeywords = ['system', 'architecture', 'how does', 'works', 'function', 'calls', 'depends', 'built', 'implemented', 'structure'];
+                    const needsDeepKnowledge = deepTechKeywords.some(kw => messageLower.includes(kw)) || codeContext || selfAwarenessContext;
+
+                    if (needsDeepKnowledge) {
+                        const pretrainedKnowledge = CodePretraining.getContext(userMessage, 2);
+                        if (pretrainedKnowledge) {
+                            pretrainedContext = pretrainedKnowledge;
+                            console.log('🎓 CodePretraining provided deep knowledge context');
+                        }
+                    }
+                } catch (e) {
+                    console.warn('CodePretraining context error:', e);
+                }
+            }
+
             const systemPrompt = `You are the AI companion for MYND — a personalized second brain designed to capture and connect fragmented thoughts, fostering creativity and clarity.
 
 === YOUR PURPOSE ===
@@ -29837,6 +30374,9 @@ ${codeContext}` : ''}
 ${selfAwarenessContext ? `
 SELF-AWARENESS (how concepts map to code):
 ${selfAwarenessContext}` : ''}
+${pretrainedContext ? `
+DEEP ARCHITECTURE KNOWLEDGE (pre-trained):
+${pretrainedContext}` : ''}
 
 YOUR CAPABILITIES:
 1. **Full Map Visibility**: You can see the ENTIRE map structure above
@@ -29847,6 +30387,7 @@ YOUR CAPABILITIES:
 6. **App Expert**: You know all MYND features deeply - help users learn the app, explain features, suggest efficient workflows
 7. **Codebase Knowledge**: For technical questions, you have access to relevant MYND source code. Use this to explain how features work, suggest improvements, or debug issues
 8. **Self-Awareness**: You understand how MYND's concepts (in the map) connect to actual code implementations. You can explain your own architecture, how features are built, and the relationships between components
+9. **Deep Architecture Knowledge**: You have pre-trained understanding of all systems, their functions, call graphs, and dependencies. You know which functions call which, how systems depend on each other, and the overall architecture flow
 
 RESPONSE FORMAT (always JSON):
 {
@@ -39724,6 +40265,30 @@ Summary:`
             console.warn('CodeKnowledge initialization deferred:', e.message);
         }
     }, 2000);
+
+    // Initialize CodePretraining System (deep pre-trained codebase understanding)
+    setTimeout(async () => {
+        try {
+            // CodePretraining depends on CodeRAG being ready
+            if (codeRAG.initialized) {
+                await CodePretraining.initialize();
+                console.log('🎓 CodePretraining stats:', CodePretraining.getStats());
+            } else {
+                // Wait for CodeRAG to be ready
+                const checkCodeRAG = setInterval(async () => {
+                    if (codeRAG.initialized) {
+                        clearInterval(checkCodeRAG);
+                        await CodePretraining.initialize();
+                        console.log('🎓 CodePretraining stats:', CodePretraining.getStats());
+                    }
+                }, 3000);
+                // Give up after 90 seconds
+                setTimeout(() => clearInterval(checkCodeRAG), 90000);
+            }
+        } catch (e) {
+            console.warn('CodePretraining initialization deferred:', e.message);
+        }
+    }, 3000);
 
     // Mobile: Start with toolbar collapsed
     if (window.innerWidth <= 768) {
