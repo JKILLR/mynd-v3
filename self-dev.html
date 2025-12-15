@@ -2051,8 +2051,8 @@
             border: 1px solid var(--glass-border);
             border-radius: 20px;
             padding: var(--space-5);
-            width: min(800px, calc(100vw - 64px));
-            height: min(80vh, 700px);
+            width: min(900px, calc(100vw - 64px));
+            height: min(90vh, 850px);
             display: flex;
             flex-direction: column;
             box-shadow: 0 20px 60px rgba(0,0,0,0.4);
@@ -7542,7 +7542,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND v3.27</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND V.4.0</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -8028,29 +8028,52 @@
                 <!-- Preview box that opens the modal -->
                 <div id="vision-preview-box" style="
                     width: 100%;
-                    height: 80px;
+                    height: 120px;
                     padding: 12px;
                     margin-top: 10px;
                     border: 1px solid var(--glass-border);
-                    border-radius: 8px;
+                    border-radius: 10px;
                     background: var(--bg-secondary);
                     color: var(--text-secondary);
                     font-family: var(--font-mono);
                     font-size: 11px;
-                    line-height: 1.4;
+                    line-height: 1.5;
                     overflow: hidden;
                     cursor: pointer;
                     transition: all 0.2s;
                     position: relative;
                 ">
                     <div id="vision-preview-text" style="white-space: pre-wrap; overflow: hidden; height: 100%;"></div>
-                    <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 30px; background: linear-gradient(transparent, var(--bg-secondary)); pointer-events: none;"></div>
+                    <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: linear-gradient(transparent, var(--bg-secondary)); pointer-events: none;"></div>
+                    <!-- Expand indicator overlay -->
+                    <div id="vision-expand-overlay" style="
+                        position: absolute;
+                        bottom: 8px;
+                        right: 8px;
+                        padding: 4px 8px;
+                        background: var(--bg-tertiary);
+                        border: 1px solid var(--glass-border);
+                        border-radius: 6px;
+                        font-size: 10px;
+                        color: var(--text-muted);
+                        display: flex;
+                        align-items: center;
+                        gap: 4px;
+                        opacity: 0.7;
+                        transition: opacity 0.2s;
+                    ">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px;">
+                            <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+                        </svg>
+                        Click to edit
+                    </div>
                 </div>
                 <button class="api-key-btn primary" id="vision-expand-btn" style="width: 100%; margin-top: 10px;">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
                         <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
                     </svg>
                     Edit Vision Document
+                    <span style="margin-left: auto; font-size: 11px; opacity: 0.7;">⌘E</span>
                 </button>
                 <div id="vision-status" style="font-size: 11px; color: var(--text-muted); margin-top: 8px;"></div>
             </div>
@@ -38098,6 +38121,43 @@ MYND is your second brain - an intelligent extension of your memory and thinking
         visionModal?.addEventListener('click', (e) => {
             if (e.target === visionModal) closeVisionModal();
         });
+
+        // Keyboard shortcut: Cmd/Ctrl+E to open vision modal (when settings panel is open)
+        document.addEventListener('keydown', (e) => {
+            // Check if Cmd/Ctrl+E is pressed
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'e') {
+                // Only trigger if settings panel is visible
+                const settingsPanel = document.getElementById('api-key-modal');
+                const visionSection = document.getElementById('vision-settings-section');
+                if (settingsPanel?.classList.contains('active') && visionSection?.style.display !== 'none') {
+                    e.preventDefault();
+                    if (visionModal?.classList.contains('active')) {
+                        closeVisionModal();
+                    } else {
+                        openVisionModal();
+                    }
+                }
+            }
+            // Escape to close vision modal
+            if (e.key === 'Escape' && visionModal?.classList.contains('active')) {
+                e.preventDefault();
+                closeVisionModal();
+            }
+        });
+
+        // Hover effect for preview box expand overlay
+        const previewBox = document.getElementById('vision-preview-box');
+        const expandOverlay = document.getElementById('vision-expand-overlay');
+        if (previewBox && expandOverlay) {
+            previewBox.addEventListener('mouseenter', () => {
+                expandOverlay.style.opacity = '1';
+                previewBox.style.borderColor = 'var(--accent)';
+            });
+            previewBox.addEventListener('mouseleave', () => {
+                expandOverlay.style.opacity = '0.7';
+                previewBox.style.borderColor = 'var(--glass-border)';
+            });
+        }
 
         // Load vision into editor and update file storage UI when settings opens
         const originalShowSettings = typeof showApiKeyModal === 'function' ? showApiKeyModal : function() {
