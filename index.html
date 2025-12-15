@@ -22277,6 +22277,389 @@ Return as JSON:
     // Global CodeRAG instance
     const codeRAG = new CodeRAG();
 
+    // ═══════════════════════════════════════════════════════════════════
+    // CODE KNOWLEDGE SYSTEM - Self-Aware Codebase Understanding
+    // ═══════════════════════════════════════════════════════════════════
+    // Links map concepts to actual code implementations, building a
+    // knowledge graph that enables true self-awareness of the codebase
+    class CodeKnowledge {
+        constructor() {
+            this.links = new Map();           // nodeId -> [codeChunkIds]
+            this.reverseLinks = new Map();    // codeChunkId -> [nodeIds]
+            this.knowledgeGraph = new Map();  // conceptId -> {related: [], implementations: [], dependencies: []}
+            this.learnedAssociations = [];    // [{concept, code, confidence, reinforcements}]
+            this.initialized = false;
+            this.STORAGE_KEY = 'mynd_code_knowledge';
+            this.VERSION = '1.0';
+        }
+
+        // Initialize the knowledge system
+        async initialize() {
+            if (this.initialized) return true;
+
+            console.log('🧠 Initializing CodeKnowledge system...');
+
+            try {
+                // Load cached knowledge
+                const cached = this.loadFromStorage();
+                if (cached && cached.version === this.VERSION) {
+                    this.links = new Map(cached.links);
+                    this.reverseLinks = new Map(cached.reverseLinks);
+                    this.knowledgeGraph = new Map(cached.knowledgeGraph);
+                    this.learnedAssociations = cached.learnedAssociations || [];
+                    console.log(`✓ CodeKnowledge loaded: ${this.links.size} concept-code links`);
+                    this.initialized = true;
+                    return true;
+                }
+
+                // Build fresh knowledge if CodeRAG is ready
+                if (codeRAG.initialized && codeRAG.chunks.length > 0) {
+                    await this.buildKnowledgeGraph();
+                    this.initialized = true;
+                    console.log(`✓ CodeKnowledge built: ${this.links.size} concept-code links`);
+                    return true;
+                }
+
+                console.log('⏳ CodeKnowledge waiting for CodeRAG...');
+                return false;
+
+            } catch (error) {
+                console.warn('CodeKnowledge initialization failed:', error);
+                return false;
+            }
+        }
+
+        // Build the knowledge graph by linking concepts to code
+        async buildKnowledgeGraph() {
+            console.log('🧠 Building knowledge graph...');
+
+            // Get all nodes from the current map
+            const allNodes = store ? store.getAllNodes() : [];
+            if (allNodes.length === 0) {
+                console.log('⏳ No nodes in store yet');
+                return;
+            }
+
+            // Technical concept keywords that should link to code
+            const technicalKeywords = [
+                'neural', 'network', 'ai', 'machine learning', 'embedding',
+                '3d', 'three.js', 'visualization', 'animation', 'render',
+                'camera', 'scene', 'node', 'expand', 'collapse',
+                'store', 'data', 'save', 'load', 'indexeddb', 'localstorage',
+                'api', 'claude', 'chat', 'voice', 'speech',
+                'theme', 'css', 'style', 'color', 'ui',
+                'physics', 'spring', 'position', 'layout',
+                'encoder', 'tensor', 'model', 'predict',
+                'memory', 'semantic', 'pattern', 'learn',
+                'pwa', 'service worker', 'offline'
+            ];
+
+            // Process each node
+            for (const node of allNodes) {
+                const nodeText = `${node.label} ${node.description || ''}`.toLowerCase();
+
+                // Check if this is a technical node
+                const isTechnical = technicalKeywords.some(kw => nodeText.includes(kw));
+
+                if (isTechnical) {
+                    // Find relevant code chunks
+                    const searchQuery = `${node.label} ${node.description || ''}`;
+                    const relevantChunks = await codeRAG.search(searchQuery, 5);
+
+                    // Filter to high-confidence matches
+                    const strongMatches = relevantChunks.filter(c => c.similarity > 0.35);
+
+                    if (strongMatches.length > 0) {
+                        // Create links
+                        const chunkIds = strongMatches.map(c => c.id);
+                        this.links.set(node.id, {
+                            chunks: chunkIds,
+                            confidence: strongMatches[0].similarity,
+                            label: node.label
+                        });
+
+                        // Create reverse links
+                        for (const chunk of strongMatches) {
+                            if (!this.reverseLinks.has(chunk.id)) {
+                                this.reverseLinks.set(chunk.id, []);
+                            }
+                            this.reverseLinks.get(chunk.id).push({
+                                nodeId: node.id,
+                                label: node.label,
+                                similarity: chunk.similarity
+                            });
+                        }
+
+                        // Build knowledge graph entry
+                        this.knowledgeGraph.set(node.id, {
+                            label: node.label,
+                            description: node.description,
+                            implementations: strongMatches.map(c => ({
+                                name: c.name,
+                                section: c.section,
+                                type: c.type,
+                                lines: `${c.startLine}-${c.endLine}`,
+                                similarity: c.similarity
+                            })),
+                            related: [], // Will be filled by cross-referencing
+                            dependencies: this.extractDependencies(strongMatches)
+                        });
+                    }
+                }
+            }
+
+            // Cross-reference to find related concepts
+            this.buildRelationships();
+
+            // Save to storage
+            this.saveToStorage();
+
+            console.log(`🧠 Knowledge graph complete: ${this.knowledgeGraph.size} concepts mapped`);
+        }
+
+        // Extract code dependencies from chunks
+        extractDependencies(chunks) {
+            const deps = new Set();
+            const depPatterns = [
+                /(?:const|let|var)\s+\w+\s*=\s*(?:new\s+)?(\w+)/g,  // Variable assignments
+                /(\w+)\.(\w+)\s*\(/g,                                // Method calls
+                /import.*from\s+['"]([^'"]+)['"]/g,                  // Imports
+                /await\s+(\w+)\./g                                   // Async calls
+            ];
+
+            for (const chunk of chunks) {
+                const code = chunk.code || '';
+                for (const pattern of depPatterns) {
+                    let match;
+                    const regex = new RegExp(pattern.source, pattern.flags);
+                    while ((match = regex.exec(code)) !== null) {
+                        if (match[1] && match[1].length > 2) {
+                            deps.add(match[1]);
+                        }
+                    }
+                }
+            }
+
+            return Array.from(deps).slice(0, 20); // Limit to top 20
+        }
+
+        // Build relationships between concepts based on shared code
+        buildRelationships() {
+            const conceptsByChunk = new Map();
+
+            // Group concepts by their code chunks
+            for (const [nodeId, linkData] of this.links) {
+                for (const chunkId of linkData.chunks) {
+                    if (!conceptsByChunk.has(chunkId)) {
+                        conceptsByChunk.set(chunkId, []);
+                    }
+                    conceptsByChunk.get(chunkId).push(nodeId);
+                }
+            }
+
+            // Find related concepts (share code)
+            for (const [nodeId, graphEntry] of this.knowledgeGraph) {
+                const linkData = this.links.get(nodeId);
+                if (!linkData) continue;
+
+                const relatedSet = new Set();
+                for (const chunkId of linkData.chunks) {
+                    const sharedConcepts = conceptsByChunk.get(chunkId) || [];
+                    for (const relatedId of sharedConcepts) {
+                        if (relatedId !== nodeId) {
+                            relatedSet.add(relatedId);
+                        }
+                    }
+                }
+
+                graphEntry.related = Array.from(relatedSet).map(id => {
+                    const entry = this.knowledgeGraph.get(id);
+                    return entry ? entry.label : id;
+                });
+            }
+        }
+
+        // Learn a new association (reinforcement learning style)
+        learnAssociation(concept, codeChunkId, feedback = 1) {
+            // Find existing association
+            const existing = this.learnedAssociations.find(
+                a => a.concept === concept && a.codeChunkId === codeChunkId
+            );
+
+            if (existing) {
+                // Reinforce existing association
+                existing.reinforcements++;
+                existing.confidence = Math.min(1, existing.confidence + (feedback * 0.1));
+                existing.lastSeen = Date.now();
+            } else {
+                // Create new association
+                this.learnedAssociations.push({
+                    concept,
+                    codeChunkId,
+                    confidence: 0.5 + (feedback * 0.1),
+                    reinforcements: 1,
+                    createdAt: Date.now(),
+                    lastSeen: Date.now()
+                });
+            }
+
+            // Decay old associations
+            this.decayAssociations();
+
+            // Save
+            this.saveToStorage();
+        }
+
+        // Decay associations that haven't been reinforced
+        decayAssociations() {
+            const now = Date.now();
+            const dayMs = 24 * 60 * 60 * 1000;
+
+            this.learnedAssociations = this.learnedAssociations.filter(a => {
+                const daysSinceLastSeen = (now - a.lastSeen) / dayMs;
+                a.confidence *= Math.pow(0.95, daysSinceLastSeen); // 5% decay per day
+                return a.confidence > 0.1; // Remove very weak associations
+            });
+        }
+
+        // Get knowledge context for a query
+        async getContext(query, maxItems = 5) {
+            if (!this.initialized) return null;
+
+            // Search for relevant concepts
+            const relevantConcepts = [];
+
+            for (const [nodeId, graphEntry] of this.knowledgeGraph) {
+                const conceptText = `${graphEntry.label} ${graphEntry.description || ''}`.toLowerCase();
+                const queryLower = query.toLowerCase();
+
+                // Simple keyword matching + learned associations
+                const keywords = queryLower.split(/\s+/);
+                const matchScore = keywords.filter(kw =>
+                    kw.length > 2 && conceptText.includes(kw)
+                ).length / keywords.length;
+
+                if (matchScore > 0.2) {
+                    relevantConcepts.push({
+                        ...graphEntry,
+                        nodeId,
+                        matchScore
+                    });
+                }
+            }
+
+            // Sort by match score
+            relevantConcepts.sort((a, b) => b.matchScore - a.matchScore);
+            const topConcepts = relevantConcepts.slice(0, maxItems);
+
+            if (topConcepts.length === 0) return null;
+
+            // Build context string
+            let context = '\n🧠 SELF-AWARENESS CONTEXT (concept → code mapping):\n';
+
+            for (const concept of topConcepts) {
+                context += `\n[CONCEPT: ${concept.label}]\n`;
+                if (concept.description) {
+                    context += `  Purpose: ${concept.description.substring(0, 100)}\n`;
+                }
+
+                if (concept.implementations.length > 0) {
+                    context += `  Implemented in:\n`;
+                    for (const impl of concept.implementations.slice(0, 2)) {
+                        context += `    • ${impl.type} "${impl.name}" (${impl.section}, lines ${impl.lines})\n`;
+                    }
+                }
+
+                if (concept.related.length > 0) {
+                    context += `  Related concepts: ${concept.related.slice(0, 3).join(', ')}\n`;
+                }
+
+                if (concept.dependencies.length > 0) {
+                    context += `  Uses: ${concept.dependencies.slice(0, 5).join(', ')}\n`;
+                }
+            }
+
+            return context;
+        }
+
+        // Get implementation details for a specific concept
+        getImplementation(conceptLabel) {
+            for (const [nodeId, graphEntry] of this.knowledgeGraph) {
+                if (graphEntry.label.toLowerCase().includes(conceptLabel.toLowerCase())) {
+                    return graphEntry;
+                }
+            }
+            return null;
+        }
+
+        // Get all concepts that use a specific code section
+        getConceptsForCode(sectionName) {
+            const concepts = [];
+            for (const [nodeId, graphEntry] of this.knowledgeGraph) {
+                const usesSection = graphEntry.implementations.some(
+                    i => i.section.toLowerCase().includes(sectionName.toLowerCase())
+                );
+                if (usesSection) {
+                    concepts.push(graphEntry.label);
+                }
+            }
+            return concepts;
+        }
+
+        // Save to localStorage
+        saveToStorage() {
+            try {
+                const data = {
+                    version: this.VERSION,
+                    links: Array.from(this.links.entries()),
+                    reverseLinks: Array.from(this.reverseLinks.entries()),
+                    knowledgeGraph: Array.from(this.knowledgeGraph.entries()),
+                    learnedAssociations: this.learnedAssociations
+                };
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+            } catch (error) {
+                console.warn('CodeKnowledge save failed:', error);
+            }
+        }
+
+        // Load from localStorage
+        loadFromStorage() {
+            try {
+                const data = localStorage.getItem(this.STORAGE_KEY);
+                return data ? JSON.parse(data) : null;
+            } catch (error) {
+                console.warn('CodeKnowledge load failed:', error);
+                return null;
+            }
+        }
+
+        // Get stats for debugging
+        getStats() {
+            return {
+                initialized: this.initialized,
+                conceptsMapped: this.knowledgeGraph.size,
+                totalLinks: this.links.size,
+                learnedAssociations: this.learnedAssociations.length,
+                avgConfidence: this.learnedAssociations.length > 0
+                    ? this.learnedAssociations.reduce((sum, a) => sum + a.confidence, 0) / this.learnedAssociations.length
+                    : 0
+            };
+        }
+
+        // Rebuild knowledge graph
+        async rebuild() {
+            this.links.clear();
+            this.reverseLinks.clear();
+            this.knowledgeGraph.clear();
+            localStorage.removeItem(this.STORAGE_KEY);
+            this.initialized = false;
+            return this.initialize();
+        }
+    }
+
+    // Global CodeKnowledge instance
+    const codeKnowledge = new CodeKnowledge();
+
     // Global neural network instance
     const neuralNet = new PersonalNeuralNet();
 
@@ -29271,6 +29654,34 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 }
             }
 
+            // 9. CodeKnowledge - Self-awareness context (concept → code mapping)
+            let selfAwarenessContext = '';
+            if (codeKnowledge.initialized) {
+                try {
+                    const messageLower = userMessage.toLowerCase();
+                    // Check for self-referential or technical questions
+                    const selfAwareKeywords = ['yourself', 'your code', 'how do you', 'how are you', 'implemented', 'architecture', 'work internally', 'your neural', 'your ai', 'this app', 'mynd works', 'behind the scenes'];
+                    const isSelfAware = selfAwareKeywords.some(kw => messageLower.includes(kw));
+
+                    if (isSelfAware || codeContext) {
+                        const knowledgeContext = await codeKnowledge.getContext(userMessage, 3);
+                        if (knowledgeContext) {
+                            selfAwarenessContext = knowledgeContext;
+                            console.log('🧠 CodeKnowledge provided self-awareness context');
+
+                            // Learn from this interaction (reinforce associations)
+                            const stats = codeKnowledge.getStats();
+                            if (stats.conceptsMapped > 0) {
+                                // This query is helping the system learn
+                                codeKnowledge.learnAssociation(userMessage.substring(0, 50), 'query', 0.5);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('CodeKnowledge context error:', e);
+                }
+            }
+
             const systemPrompt = `You are the AI companion for MYND — a personalized second brain designed to capture and connect fragmented thoughts, fostering creativity and clarity.
 
 === YOUR PURPOSE ===
@@ -29423,6 +29834,9 @@ ${neuralContext}` : ''}
 ${codeContext ? `
 MYND CODEBASE CONTEXT (for technical questions):
 ${codeContext}` : ''}
+${selfAwarenessContext ? `
+SELF-AWARENESS (how concepts map to code):
+${selfAwarenessContext}` : ''}
 
 YOUR CAPABILITIES:
 1. **Full Map Visibility**: You can see the ENTIRE map structure above
@@ -29432,6 +29846,7 @@ YOUR CAPABILITIES:
 5. **Real-time info**: You can search the web for current information
 6. **App Expert**: You know all MYND features deeply - help users learn the app, explain features, suggest efficient workflows
 7. **Codebase Knowledge**: For technical questions, you have access to relevant MYND source code. Use this to explain how features work, suggest improvements, or debug issues
+8. **Self-Awareness**: You understand how MYND's concepts (in the map) connect to actual code implementations. You can explain your own architecture, how features are built, and the relationships between components
 
 RESPONSE FORMAT (always JSON):
 {
@@ -39285,6 +39700,30 @@ Summary:`
             console.warn('CodeRAG initialization deferred:', e.message);
         }
     }, 800);
+
+    // Initialize CodeKnowledge System (self-awareness - concept to code mapping)
+    setTimeout(async () => {
+        try {
+            // CodeKnowledge depends on CodeRAG being ready
+            if (codeRAG.initialized) {
+                await codeKnowledge.initialize();
+                console.log('🧠 CodeKnowledge stats:', codeKnowledge.getStats());
+            } else {
+                // Wait for CodeRAG to be ready
+                const checkCodeRAG = setInterval(async () => {
+                    if (codeRAG.initialized) {
+                        clearInterval(checkCodeRAG);
+                        await codeKnowledge.initialize();
+                        console.log('🧠 CodeKnowledge stats:', codeKnowledge.getStats());
+                    }
+                }, 3000);
+                // Give up after 60 seconds
+                setTimeout(() => clearInterval(checkCodeRAG), 60000);
+            }
+        } catch (e) {
+            console.warn('CodeKnowledge initialization deferred:', e.message);
+        }
+    }, 2000);
 
     // Mobile: Start with toolbar collapsed
     if (window.innerWidth <= 768) {
