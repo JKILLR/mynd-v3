@@ -23206,7 +23206,8 @@ Return as JSON:
             MODULARIZATION: { name: 'Modularization', weight: 6, icon: '📦' },
             ERROR_HANDLING: { name: 'Error Handling', weight: 8, icon: '🛡️' },
             ACCESSIBILITY: { name: 'Accessibility', weight: 7, icon: '♿' },
-            TESTING: { name: 'Testing', weight: 5, icon: '🧪' }
+            TESTING: { name: 'Testing', weight: 5, icon: '🧪' },
+            ML_INTELLIGENCE: { name: 'ML Intelligence', weight: 10, icon: '🧠' }
         },
 
         // Default analysis structure
@@ -23297,6 +23298,7 @@ Return as JSON:
             this.analyzeUXEnhancements();
             this.analyzeTestability();
             this.analyzeMaintainability();
+            this.analyzeMLCapabilities();
 
             // Calculate metrics
             this.calculateMetrics();
@@ -24059,6 +24061,377 @@ Return as JSON:
                     effort: 'quick',
                     impact: 'Consistent code style, fewer style debates',
                     tags: ['linting', 'formatting', 'style']
+                }
+            );
+        },
+
+        analyzeMLCapabilities() {
+            // ═══════════════════════════════════════════════════════════════════
+            // ML INTELLIGENCE - How MYND learns and can improve its learning
+            // ═══════════════════════════════════════════════════════════════════
+
+            // === EMBEDDING & REPRESENTATION LEARNING ===
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Upgrade to more powerful embedding model',
+                'Current Universal Sentence Encoder is good but limited. Consider fine-tuning on mind-mapping domain or using more recent models like E5, BGE, or sentence-transformers for better semantic understanding.',
+                {
+                    priority: 'high',
+                    effort: 'significant',
+                    impact: 'Better semantic similarity, more accurate predictions, improved retrieval',
+                    suggestedFix: 'Evaluate @xenova/transformers for browser-based alternatives or fine-tune USE on mind-map data',
+                    tags: ['embeddings', 'nlp', 'representation-learning']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Add multi-modal embeddings',
+                'Currently only text is embedded. Add image/visual embeddings for linked content, screenshots, and visual patterns in the 3D map layout.',
+                {
+                    priority: 'medium',
+                    effort: 'major',
+                    impact: 'Understand visual patterns, support image-based nodes',
+                    tags: ['multimodal', 'vision', 'embeddings']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Implement hierarchical embeddings',
+                'Create embeddings that capture the tree structure, not just text. A node\'s embedding should incorporate its position in the hierarchy and relationships.',
+                {
+                    priority: 'high',
+                    effort: 'significant',
+                    impact: 'Better structure-aware predictions, improved parent suggestions',
+                    suggestedFix: 'Combine text embeddings with positional encodings from graph structure',
+                    tags: ['graph-embeddings', 'hierarchy', 'structure']
+                }
+            );
+
+            // === NEURAL NETWORK ARCHITECTURE ===
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Add attention mechanism to PersonalNeuralNet',
+                'Current network uses simple dense layers. Adding self-attention would help capture relationships between concepts and improve context understanding.',
+                {
+                    priority: 'high',
+                    effort: 'significant',
+                    impact: 'Better pattern recognition, more nuanced predictions',
+                    suggestedFix: 'Implement multi-head attention layer before classification',
+                    tags: ['attention', 'transformer', 'architecture']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Implement Graph Neural Network for node relationships',
+                'Current predictions don\'t fully leverage graph structure. A GNN would naturally propagate information through the node hierarchy for better predictions.',
+                {
+                    priority: 'high',
+                    effort: 'major',
+                    impact: 'Structure-aware learning, better parent/sibling predictions',
+                    suggestedFix: 'Use message-passing GNN layers (GraphSAGE or GAT) on the node tree',
+                    tags: ['gnn', 'graph-learning', 'message-passing']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Add recurrent memory for session context',
+                'Current predictions are stateless per-query. An LSTM/GRU layer could remember session context for more coherent suggestions across a work session.',
+                {
+                    priority: 'medium',
+                    effort: 'significant',
+                    impact: 'More contextual suggestions, remembers session flow',
+                    tags: ['rnn', 'memory', 'session-context']
+                }
+            );
+
+            // === TRAINING & LEARNING STRATEGIES ===
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Implement online learning with replay buffer',
+                'Current training is batch-based. Implement experience replay to continuously learn from interactions without forgetting older patterns.',
+                {
+                    priority: 'high',
+                    effort: 'moderate',
+                    impact: 'Continuous improvement, no catastrophic forgetting',
+                    suggestedFix: 'Add prioritized experience replay buffer with importance sampling',
+                    tags: ['online-learning', 'replay-buffer', 'continual-learning']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Add meta-learning for faster adaptation',
+                'Implement MAML-style meta-learning so the network can quickly adapt to new users or dramatically changed map structures with few examples.',
+                {
+                    priority: 'medium',
+                    effort: 'major',
+                    impact: 'Faster personalization for new users, better adaptation',
+                    tags: ['meta-learning', 'few-shot', 'adaptation']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Implement curriculum learning',
+                'Train on progressively harder examples. Start with clear-cut categorizations, then gradually introduce edge cases and ambiguous nodes.',
+                {
+                    priority: 'medium',
+                    effort: 'moderate',
+                    impact: 'More robust learning, better handling of edge cases',
+                    tags: ['curriculum-learning', 'training-strategy']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Add active learning for uncertainty sampling',
+                'When the model is uncertain, proactively ask users for feedback on those specific predictions to maximize learning efficiency.',
+                {
+                    priority: 'high',
+                    effort: 'moderate',
+                    impact: 'Faster learning with fewer examples, better calibration',
+                    suggestedFix: 'Track prediction entropy and trigger feedback requests above threshold',
+                    tags: ['active-learning', 'uncertainty', 'feedback']
+                }
+            );
+
+            // === REINFORCEMENT LEARNING ===
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Implement reward shaping for suggestion quality',
+                'Current feedback is binary (accepted/rejected). Implement richer reward signals: time-to-accept, subsequent edits, node survival rate.',
+                {
+                    priority: 'high',
+                    effort: 'moderate',
+                    impact: 'More nuanced learning from user behavior',
+                    suggestedFix: 'Track suggestion lifecycle and compute delayed rewards',
+                    tags: ['reward-shaping', 'reinforcement-learning']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Add bandit algorithms for exploration/exploitation',
+                'Balance showing confident predictions vs. exploring new suggestion types using UCB or Thompson Sampling.',
+                {
+                    priority: 'medium',
+                    effort: 'moderate',
+                    impact: 'Better discovery of user preferences, avoid stale suggestions',
+                    tags: ['bandits', 'exploration', 'recommendation']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Implement policy gradient for action sequences',
+                'Learn optimal sequences of suggestions (not just individual ones) using policy gradient methods.',
+                {
+                    priority: 'low',
+                    effort: 'major',
+                    impact: 'Coherent multi-step assistance',
+                    tags: ['policy-gradient', 'sequence-learning', 'rl']
+                }
+            );
+
+            // === KNOWLEDGE DISTILLATION & TRANSFER ===
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Enhance Claude-to-local knowledge distillation',
+                'Current TeacherKnowledge captures examples but doesn\'t transfer reasoning. Implement soft-label distillation with temperature scaling.',
+                {
+                    priority: 'high',
+                    effort: 'significant',
+                    impact: 'Local model learns Claude\'s reasoning patterns, not just outputs',
+                    suggestedFix: 'Capture Claude\'s confidence distributions and train with KL divergence loss',
+                    tags: ['distillation', 'transfer-learning', 'teacher-student']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Add cross-user transfer learning',
+                'Learn general patterns from aggregate (anonymized) user data to bootstrap new users faster.',
+                {
+                    priority: 'medium',
+                    effort: 'major',
+                    impact: 'Better cold-start experience, shared intelligence',
+                    tags: ['transfer-learning', 'federated', 'cold-start']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Implement domain adaptation for different map types',
+                'Detect map domain (work, personal, creative) and adapt predictions accordingly using domain-adversarial training.',
+                {
+                    priority: 'medium',
+                    effort: 'significant',
+                    impact: 'Better predictions across different use cases',
+                    tags: ['domain-adaptation', 'multi-task']
+                }
+            );
+
+            // === MEMORY & RETRIEVAL ===
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Upgrade semantic memory with learned retrieval',
+                'Current retrieval uses cosine similarity. Train a retrieval model that learns which memories are actually useful for predictions.',
+                {
+                    priority: 'high',
+                    effort: 'significant',
+                    impact: 'More relevant memory surfacing, better context',
+                    suggestedFix: 'Implement Dense Passage Retrieval (DPR) style dual encoder',
+                    tags: ['retrieval', 'memory', 'learned-retrieval']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Add episodic memory for interaction patterns',
+                'Remember sequences of actions, not just individual nodes. Learn patterns like "after creating X, user usually creates Y".',
+                {
+                    priority: 'medium',
+                    effort: 'significant',
+                    impact: 'Anticipate user workflows, proactive suggestions',
+                    tags: ['episodic-memory', 'sequence-patterns']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Implement memory consolidation during idle time',
+                'When app is idle, consolidate and compress memories, identify patterns, and pre-compute useful representations.',
+                {
+                    priority: 'medium',
+                    effort: 'moderate',
+                    impact: 'Better use of idle time, improved recall',
+                    tags: ['memory-consolidation', 'background-learning']
+                }
+            );
+
+            // === UNCERTAINTY & CALIBRATION ===
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Add Bayesian uncertainty estimation',
+                'Current confidence scores aren\'t well-calibrated. Implement MC Dropout or ensemble methods for better uncertainty quantification.',
+                {
+                    priority: 'high',
+                    effort: 'moderate',
+                    impact: 'Know when to ask for help, better trust calibration',
+                    suggestedFix: 'Add dropout at inference time and average multiple forward passes',
+                    tags: ['uncertainty', 'bayesian', 'calibration']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Implement confidence calibration with temperature scaling',
+                'Post-hoc calibrate confidence scores so 80% confidence means 80% accuracy.',
+                {
+                    priority: 'medium',
+                    effort: 'quick',
+                    impact: 'Trustworthy confidence scores',
+                    tags: ['calibration', 'temperature-scaling']
+                }
+            );
+
+            // === INTERPRETABILITY & EXPLAINABILITY ===
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Add attention visualization for predictions',
+                'Show users which words/nodes the model focused on when making a prediction, building trust and understanding.',
+                {
+                    priority: 'medium',
+                    effort: 'moderate',
+                    impact: 'User understanding, debuggability, trust',
+                    tags: ['explainability', 'attention-viz', 'transparency']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Implement prediction explanations',
+                'Generate natural language explanations for why a category or connection was suggested.',
+                {
+                    priority: 'medium',
+                    effort: 'significant',
+                    impact: 'User trust, learning from the AI',
+                    suggestedFix: 'Use attention weights + templates or small explanation model',
+                    tags: ['explanations', 'nlg', 'trust']
+                }
+            );
+
+            // === SELF-IMPROVEMENT LOOP ===
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Implement automated model evaluation pipeline',
+                'Continuously measure prediction accuracy, track drift, and alert when performance degrades.',
+                {
+                    priority: 'high',
+                    effort: 'moderate',
+                    impact: 'Catch problems early, data-driven improvement',
+                    suggestedFix: 'Track rolling accuracy, A/B test model changes',
+                    tags: ['evaluation', 'monitoring', 'mlops']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Add hyperparameter auto-tuning',
+                'Automatically adjust learning rate, batch size, and architecture based on performance metrics.',
+                {
+                    priority: 'medium',
+                    effort: 'significant',
+                    impact: 'Optimal training configuration',
+                    suggestedFix: 'Implement simple grid search or Bayesian optimization',
+                    tags: ['hyperparameter-tuning', 'automl']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Create ML improvement roadmap tracker',
+                'Build a system that tracks which ML improvements have been made, their impact, and suggests next priorities based on measured gains.',
+                {
+                    priority: 'high',
+                    effort: 'moderate',
+                    impact: 'Systematic self-improvement, measurable progress',
+                    tags: ['meta', 'tracking', 'roadmap']
+                }
+            );
+
+            // === ADVANCED CAPABILITIES ===
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Add contrastive learning for better representations',
+                'Learn embeddings by contrasting similar vs dissimilar nodes, improving clustering and similarity search.',
+                {
+                    priority: 'medium',
+                    effort: 'significant',
+                    impact: 'Better node grouping, improved similarity',
+                    suggestedFix: 'Implement SimCLR-style contrastive loss on node pairs',
+                    tags: ['contrastive-learning', 'self-supervised']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Implement causal inference for connection suggestions',
+                'Move beyond correlation to understand causal relationships between concepts for smarter connection suggestions.',
+                {
+                    priority: 'low',
+                    effort: 'major',
+                    impact: 'Deeper understanding of concept relationships',
+                    tags: ['causal-inference', 'reasoning']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Add generative capabilities for node content',
+                'Beyond predictions, generate node labels, descriptions, and expansions using fine-tuned language models.',
+                {
+                    priority: 'medium',
+                    effort: 'major',
+                    impact: 'Creative assistance, content generation',
+                    suggestedFix: 'Fine-tune small LM (GPT-2/DistilGPT) on map content patterns',
+                    tags: ['generative', 'llm', 'content-creation']
+                }
+            );
+
+            this.addImprovement('ML_INTELLIGENCE',
+                'Implement neural architecture search for optimal model',
+                'Automatically discover the best neural network architecture for the specific patterns in user data.',
+                {
+                    priority: 'low',
+                    effort: 'major',
+                    impact: 'Optimal model for each user\'s patterns',
+                    tags: ['nas', 'automl', 'architecture-search']
                 }
             );
         },
@@ -31516,7 +31889,8 @@ YOUR CAPABILITIES:
 7. **Codebase Knowledge**: For technical questions, you have access to relevant MYND source code. Use this to explain how features work, suggest improvements, or debug issues
 8. **Self-Awareness**: You understand how MYND's concepts (in the map) connect to actual code implementations. You can explain your own architecture, how features are built, and the relationships between components
 9. **Deep Architecture Knowledge**: You have pre-trained understanding of all systems, their functions, call graphs, and dependencies. You know which functions call which, how systems depend on each other, and the overall architecture flow
-10. **Self-Improvement Analysis**: You have analyzed the entire codebase and identified all possible improvements across 15 categories: Performance, Architecture, Security, Code Quality, Maintainability, Scalability, UX Enhancement, Feature Gaps, Dead Code, Technical Debt, Optimization, Modularization, Error Handling, Accessibility, and Testing. You can suggest prioritized improvements, quick wins, and a roadmap for making MYND stronger over time
+10. **Self-Improvement Analysis**: You have analyzed the entire codebase and identified all possible improvements across 16 categories: Performance, Architecture, Security, Code Quality, Maintainability, Scalability, UX Enhancement, Feature Gaps, Dead Code, Technical Debt, Optimization, Modularization, Error Handling, Accessibility, Testing, and ML Intelligence. You can suggest prioritized improvements, quick wins, and a roadmap for making MYND stronger over time
+11. **ML Intelligence Mastery**: You deeply understand how MYND learns - from embeddings and neural architectures to training strategies, reinforcement learning, knowledge distillation, memory systems, uncertainty estimation, and self-improvement loops. You can explain how to make the ML systems more sophisticated and suggest a prioritized roadmap for evolving MYND's intelligence
 
 RESPONSE FORMAT (always JSON):
 {
