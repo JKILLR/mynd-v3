@@ -7405,7 +7405,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.16</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.17</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -24476,24 +24476,35 @@ Return as JSON:
             if (level === 1) {
                 // Spherical distribution: nodes near horizon (Y=0) spread further out
                 // nodes near poles (top/bottom) stay closer to center
-                // Formula: r = R * sqrt(1 - (y/maxY)²)
+                // Formula: r = R * sqrt(1 - (y/maxY)²) * 4 for dramatic spread at horizon
                 const normalizedY = helixAmp > 0 ? Math.abs(verticalOffset) / helixAmp : 0;
                 const sphereMultiplier = Math.sqrt(1 - normalizedY * normalizedY);
-                const sphericalRadius = baseRadius * sphereMultiplier;
+                const sphericalRadius = baseRadius * sphereMultiplier * 4.0; // 4x spread at horizon
 
                 data.basePosition = [
                     Math.cos(angle) * sphericalRadius,
                     verticalOffset,
                     Math.sin(angle) * sphericalRadius
                 ];
+                // Store sphere info for children to use
+                data.sphereMaxY = helixAmp;
             } else {
-                // Level 2+: Extend from parent position in XZ plane
-                // Children centered on parent Y, spread equally up/down
+                // Level 2+: Branch lengths follow same spherical math
+                // Branches near horizon extend further, branches near poles are shorter
+                const sphereMaxY = parentData?.sphereMaxY || (baseHelixAmp * 10.0);
+                const parentY = parentPos[1];
+                const normalizedParentY = sphereMaxY > 0 ? Math.abs(parentY) / sphereMaxY : 0;
+                const clampedNormalizedY = Math.min(normalizedParentY, 0.99); // Prevent NaN at poles
+                const sphereMultiplier = Math.sqrt(1 - clampedNormalizedY * clampedNormalizedY);
+                const sphericalBranchLength = baseRadius * (1 + sphereMultiplier * 3.0); // 1x to 4x based on Y
+
                 data.basePosition = [
-                    parentPos[0] + Math.cos(angle) * baseRadius,
+                    parentPos[0] + Math.cos(angle) * sphericalBranchLength,
                     parentPos[1] + siblingVerticalOffset,
-                    parentPos[2] + Math.sin(angle) * baseRadius
+                    parentPos[2] + Math.sin(angle) * sphericalBranchLength
                 ];
+                // Pass sphere info to children
+                data.sphereMaxY = sphereMaxY;
             }
 
             data.expandedPosition = [...data.basePosition];
