@@ -29597,16 +29597,26 @@ Respond with a JSON object:
         
         // Calculate end camera angle - offset so root node appears to the RIGHT of selected node
         // Subtract angle offset so we're viewing from an angle, not straight through the root
-        const endTheta = nodeDist2D > 0.5 ? nodeAngle - Math.PI * 0.35 : currentTheta;
+        // Added 30° (π/6) tilt toward root on horizontal axis
+        const tiltTowardRootHorizontal = Math.PI / 6; // 30 degrees
+        const endTheta = nodeDist2D > 0.5 ? nodeAngle - Math.PI * 0.35 + tiltTowardRootHorizontal : currentTheta;
         
-        // Use consistent close zoom for all nodes regardless of depth
+        // Zoom further out for better overview - scale based on child count
         const isMobile = window.innerWidth <= 768;
-        const baseRadius = isMobile ? 6 : 4; // Very close base zoom
+        const nodeLevel = mesh.userData.level || 0;
+        const baseRadius = isMobile ? 32 : 26; // Increased for less aggressive zoom
 
-        // Only add a small bonus if node has many children to show them
-        const childZoomBonus = hasChildren ? Math.min(childCount * 1.5, 8) : 0;
-        const endRadius = Math.max(3, baseRadius + childZoomBonus);
-        const endPhi = Math.PI * 0.35; // consistent downward viewing angle
+        // Depth zoom: deeper nodes need closer camera (subtract from radius)
+        // Level 0 = no bonus, Level 1 = -2, Level 2 = -4, Level 3+ = -6
+        const depthZoomBonus = Math.min(nodeLevel * 2, 6);
+
+        const childZoomBonus = hasChildren ? Math.min(childCount * 4, 20) : 0; // up to 20 extra for many children
+        const endRadius = Math.max(14, baseRadius + childZoomBonus - depthZoomBonus, nodeDist2D + 18 + childZoomBonus - depthZoomBonus);
+
+        // Camera angle tilted 30° toward root (on both x/z axes)
+        // π/6 ≈ 0.524 radians = 30 degrees
+        const tiltTowardRoot = Math.PI / 6; // 30 degrees
+        const endPhi = Math.PI * 0.35 + (nodeDist2D > 0.5 ? tiltTowardRoot * 0.5 : 0); // tilt down toward root
         
         // Calculate shortest angle difference for arc boost
         let angleDiff = endTheta - currentTheta;
