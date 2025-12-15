@@ -25584,6 +25584,9 @@ Return as JSON:
             return;
         }
 
+        // Play sound at START of expansion
+        audio.expand();
+
         // Sort by level (shallowest first)
         toExpand.sort((a, b) => (a.userData.level || 0) - (b.userData.level || 0));
 
@@ -25644,7 +25647,6 @@ Return as JSON:
                 if (autoCameraEnabled) {
                     setTimeout(() => zoomToFitMap(10), 300);
                 }
-                audio.expand();
                 return;
             }
 
@@ -25709,6 +25711,9 @@ Return as JSON:
             return;
         }
 
+        // Play sound at START of collapse
+        audio.collapse();
+
         // Sort nodes to hide by level descending (deepest first)
         toHide.sort((a, b) => (b.userData.level || 0) - (a.userData.level || 0));
 
@@ -25734,7 +25739,6 @@ Return as JSON:
                 if (autoCameraEnabled) {
                     setTimeout(() => zoomToFitMap(0), 300);
                 }
-                audio.collapse();
                 return;
             }
 
