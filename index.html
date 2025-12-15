@@ -24445,10 +24445,17 @@ Return as JSON:
             let verticalOffset = 0;
 
             if (level === 1) {
-                // Level 1: Helix positions main branches vertically around root
+                // Level 1: Equal vertical spacing based on index (not angle)
+                // This creates consistent spiral arm spacing
                 const depthBoost = 1 + (expandedDepth * 0.8);
                 const helixAmp = baseHelixAmp * depthBoost;
-                verticalOffset = Math.sin(angle * helixFreq * 2) * helixAmp;
+
+                // Evenly distribute from -helixAmp to +helixAmp based on index
+                if (total > 1) {
+                    verticalOffset = ((index / (total - 1)) - 0.5) * helixAmp * 2;
+                } else {
+                    verticalOffset = 0;
+                }
             }
             // Level 2+: Sibling vertical spread INCREASES SIGNIFICANTLY at deeper levels
             let siblingVerticalOffset = 0;
@@ -24509,27 +24516,30 @@ Return as JSON:
             const PHI = 1.618033988749895;
 
             if (level === 0) {
-                // Root: full circle
+                // Root: full circle for level 1 children
                 availableSector = Math.PI * 2;
                 childSectorStart = -Math.PI;
+            } else if (level === 1) {
+                // Level 1 nodes: their children (level 2) get 135° spread
+                const baseSectorSpread = Math.PI * 0.75; // 135 degrees
+                availableSector = baseSectorSpread;
+
+                // Center the sector on the parent's sector center
+                const sectorCenter = sectorStart + sectorWidth / 2;
+                childSectorStart = sectorCenter - availableSector / 2;
             } else {
-                // Ensure LARGE minimum angular space per child to prevent stacking
-                // Minimum increases with level to give deepest layers more room
-                const baseMinPerChild = Math.PI / 4; // 45 degrees base
-                const levelBoost = 1 + (level - 1) * 0.3; // Increase with depth
-                const minSectorPerChild = baseMinPerChild * levelBoost;
-                const minNeededSector = data.children.length * minSectorPerChild;
+                // Level 2+: Hyperbolic decay from 135° base
+                // spread = base / (1 + k * (level - 1))
+                // Level 2 parent -> Level 3 children: 135° / 1.5
+                // Level 3 parent -> Level 4 children: 135° / 2.0
+                const baseSectorSpread = Math.PI * 0.75; // 135 degrees
+                const decayRate = 0.5;
+                const levelFactor = 1 + decayRate * (level - 1);
+                const targetSpread = baseSectorSpread / levelFactor;
 
-                // GOLDEN RATIO sector expansion - increases with level
-                const expansionFactor = Math.pow(PHI, level * 0.8);
-                const expandedSector = sectorWidth * expansionFactor;
+                availableSector = Math.max(targetSpread, Math.PI * 0.15); // Min 27° spread
 
-                // Use whichever is larger
-                availableSector = Math.max(expandedSector, minNeededSector);
-                // Cap at full circle to prevent wraparound
-                availableSector = Math.min(availableSector, Math.PI * 2);
-
-                // Center the expanded sector on the parent's sector center
+                // Center the sector on the parent's sector center
                 const sectorCenter = sectorStart + sectorWidth / 2;
                 childSectorStart = sectorCenter - availableSector / 2;
             }
