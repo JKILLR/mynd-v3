@@ -7764,6 +7764,59 @@
         <div class="api-key-content">
             <div class="api-key-title">Settings</div>
 
+            <!-- File Storage Section (Self Developer Mode Only) -->
+            <div id="file-storage-section" style="margin-bottom: 20px; display: none;">
+                <div style="font-size: 12px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">
+                    <span style="margin-right: 6px;">📁</span>Local File Storage
+                </div>
+                <div class="api-key-desc">Save everything (map, neural data, vision) to a file on your computer. Auto-saves after changes.</div>
+
+                <div id="file-storage-status" style="
+                    margin-top: 10px;
+                    padding: 12px;
+                    border-radius: 8px;
+                    background: var(--bg-secondary);
+                    border: 1px solid var(--glass-border);
+                ">
+                    <div id="file-storage-info" style="font-size: 12px; color: var(--text-secondary);">
+                        No save location set - data saved to browser only
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-top: 10px;">
+                    <button class="api-key-btn primary" id="file-pick-location-btn" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        Set Save Location
+                    </button>
+                    <button class="api-key-btn secondary" id="file-open-btn" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        Open File
+                    </button>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <button class="api-key-btn secondary" id="file-save-now-btn" style="flex: 1;" disabled>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                            <polyline points="17 21 17 13 7 13 7 21"/>
+                            <polyline points="7 3 7 8 15 8"/>
+                        </svg>
+                        Save Now
+                    </button>
+                    <label style="flex: 1; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary);">
+                        <input type="checkbox" id="file-auto-save-toggle" checked style="margin: 0;">
+                        Auto-save enabled
+                    </label>
+                </div>
+                <div id="file-not-supported" style="display: none; margin-top: 10px; padding: 10px; background: rgba(220, 38, 38, 0.1); border-radius: 8px; font-size: 12px; color: #dc2626;">
+                    ⚠️ File System API not supported in this browser. Use Chrome or Edge for local file storage.
+                </div>
+            </div>
+
             <!-- Vision Document Section (Self Developer Mode Only) -->
             <div id="vision-settings-section" style="margin-bottom: 20px; display: none;">
                 <div style="font-size: 12px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">Vision Document</div>
@@ -26686,6 +26739,367 @@ Respond with a JSON object:
     const bus = new EventBus();
 
     // ═══════════════════════════════════════════════════════════════════
+    // FILE SYSTEM STORAGE (Self Developer Mode)
+    // Direct file system access for saving data to your computer
+    // ═══════════════════════════════════════════════════════════════════
+
+    const FileSystemStorage = {
+        // File handle for persistent access
+        fileHandle: null,
+        directoryHandle: null,
+        fileName: 'mynd-self-dev.json',
+
+        // Auto-save configuration
+        autoSaveEnabled: true,
+        autoSaveDebounceMs: 2000,
+        autoSaveTimer: null,
+        lastSaveTime: null,
+        isDirty: false,
+
+        // Check if File System Access API is supported
+        isSupported() {
+            return 'showSaveFilePicker' in window && 'showOpenFilePicker' in window;
+        },
+
+        // Initialize - try to restore previous file handle
+        async initialize() {
+            if (!this.isSupported()) {
+                console.log('📁 File System Access API not supported - using localStorage fallback');
+                return false;
+            }
+
+            // Check if we have a stored directory handle (for auto-reconnect)
+            try {
+                const stored = localStorage.getItem('mynd_fs_handle_name');
+                if (stored) {
+                    console.log('📁 Previous save location:', stored);
+                    // Note: We can't restore the handle directly due to security,
+                    // but we can prompt the user to re-select the same location
+                }
+            } catch (e) {
+                console.warn('Could not check stored file handle:', e);
+            }
+
+            console.log('📁 FileSystemStorage initialized - use pickSaveLocation() to choose file');
+            return true;
+        },
+
+        // Let user pick where to save the file
+        async pickSaveLocation() {
+            if (!this.isSupported()) {
+                showToast('File System API not supported in this browser', 'error');
+                return false;
+            }
+
+            try {
+                // Show save file picker
+                this.fileHandle = await window.showSaveFilePicker({
+                    suggestedName: this.fileName,
+                    types: [{
+                        description: 'MYND Data File',
+                        accept: { 'application/json': ['.json'] }
+                    }]
+                });
+
+                // Store the file name for reference
+                localStorage.setItem('mynd_fs_handle_name', this.fileHandle.name);
+
+                console.log('📁 Save location set:', this.fileHandle.name);
+                showToast(`Save location: ${this.fileHandle.name}`, 'success');
+
+                // Do an immediate save
+                await this.saveNow();
+
+                return true;
+            } catch (e) {
+                if (e.name === 'AbortError') {
+                    console.log('📁 File picker cancelled');
+                    return false;
+                }
+                console.error('Error picking save location:', e);
+                showToast('Failed to set save location', 'error');
+                return false;
+            }
+        },
+
+        // Open an existing file
+        async openFile() {
+            if (!this.isSupported()) {
+                showToast('File System API not supported in this browser', 'error');
+                return null;
+            }
+
+            try {
+                const [handle] = await window.showOpenFilePicker({
+                    types: [{
+                        description: 'MYND Data File',
+                        accept: { 'application/json': ['.json'] }
+                    }],
+                    multiple: false
+                });
+
+                this.fileHandle = handle;
+                localStorage.setItem('mynd_fs_handle_name', handle.name);
+
+                // Read the file
+                const file = await handle.getFile();
+                const contents = await file.text();
+                const data = JSON.parse(contents);
+
+                console.log('📁 Loaded file:', handle.name);
+                showToast(`Loaded: ${handle.name}`, 'success');
+
+                return data;
+            } catch (e) {
+                if (e.name === 'AbortError') {
+                    console.log('📁 File picker cancelled');
+                    return null;
+                }
+                console.error('Error opening file:', e);
+                showToast('Failed to open file', 'error');
+                return null;
+            }
+        },
+
+        // Save data immediately
+        async saveNow() {
+            if (!this.fileHandle) {
+                console.log('📁 No file handle - saving to localStorage only');
+                return false;
+            }
+
+            try {
+                // Gather all data to save
+                const exportData = await this.gatherAllData();
+
+                // Write to file
+                const writable = await this.fileHandle.createWritable();
+                await writable.write(JSON.stringify(exportData, null, 2));
+                await writable.close();
+
+                this.lastSaveTime = Date.now();
+                this.isDirty = false;
+
+                console.log('📁 Saved to file:', this.fileHandle.name, '(' + Math.round(JSON.stringify(exportData).length / 1024) + 'KB)');
+
+                // Emit event for UI updates
+                bus.emit('file:saved', { fileName: this.fileHandle.name, time: this.lastSaveTime });
+
+                return true;
+            } catch (e) {
+                console.error('Error saving to file:', e);
+                showToast('Failed to save to file', 'error');
+                return false;
+            }
+        },
+
+        // Schedule a debounced auto-save
+        scheduleSave() {
+            if (!this.autoSaveEnabled || !this.fileHandle) return;
+
+            this.isDirty = true;
+
+            // Clear existing timer
+            if (this.autoSaveTimer) {
+                clearTimeout(this.autoSaveTimer);
+            }
+
+            // Schedule new save
+            this.autoSaveTimer = setTimeout(async () => {
+                await this.saveNow();
+            }, this.autoSaveDebounceMs);
+        },
+
+        // Gather all data (map + neural + vision + everything)
+        async gatherAllData() {
+            const data = {
+                version: 4, // New file system format
+                savedAt: new Date().toISOString(),
+                savedFrom: 'MYND Self Developer',
+
+                // Map data
+                map: window.store?.data || null,
+
+                // Vision document
+                vision: localStorage.getItem('mynd_vision_document') || null,
+
+                // Neural network data
+                neural: {
+                    modelData: null,
+                    embeddings: null,
+                    patternWeights: null,
+                    expansionPatterns: null,
+                    categories: null,
+                    commonPatterns: null
+                },
+
+                // Learning systems
+                userProfile: null,
+                metaLearner: null,
+                conceptAbstractor: null,
+                semanticMemory: null,
+                preferenceHistory: null,
+
+                // Advanced systems
+                cognitiveGT: null,
+                styleTransfer: null,
+                codeAnalysis: null,
+                autonomousEvolution: null
+            };
+
+            try {
+                // Get neural network data from IndexedDB
+                if (typeof NeuralDB !== 'undefined') {
+                    data.neural.modelData = await NeuralDB.load('neural-models');
+                    data.neural.embeddings = await NeuralDB.load('embeddings');
+                    data.userProfile = await NeuralDB.load('user-profile');
+                    data.metaLearner = await NeuralDB.load('meta-learner');
+                    data.conceptAbstractor = await NeuralDB.load('concept-abstractions');
+                    data.semanticMemory = await NeuralDB.load('semantic-memories');
+                    data.preferenceHistory = await NeuralDB.load('preference-history');
+                }
+
+                // Get live neural net state
+                if (typeof neuralNet !== 'undefined' && neuralNet.isReady) {
+                    if (neuralNet.patternWeights?.size > 0) {
+                        data.neural.patternWeights = Object.fromEntries(neuralNet.patternWeights);
+                    }
+                    if (neuralNet.expansionPatterns?.size > 0) {
+                        data.neural.expansionPatterns = Object.fromEntries(neuralNet.expansionPatterns);
+                    }
+                    if (neuralNet.categories?.length > 0) {
+                        data.neural.categories = neuralNet.categories;
+                    }
+                    if (neuralNet.commonPatterns?.length > 0) {
+                        data.neural.commonPatterns = neuralNet.commonPatterns;
+                    }
+                }
+
+                // Get Cognitive Graph Transformer data
+                if (typeof cognitiveGT !== 'undefined' && cognitiveGT.initialized) {
+                    data.cognitiveGT = cognitiveGT.getExportData();
+                }
+
+                // Get Style Transfer data
+                if (typeof styleTransfer !== 'undefined' && styleTransfer.initialized) {
+                    data.styleTransfer = styleTransfer.export();
+                }
+
+                // Get CodeAnalyzer data
+                if (typeof CodeAnalyzer !== 'undefined') {
+                    data.codeAnalysis = CodeAnalyzer.loadFromStorage();
+                }
+
+                // Get AutonomousEvolution data
+                if (typeof AutonomousEvolution !== 'undefined') {
+                    data.autonomousEvolution = AutonomousEvolution.loadFromStorage();
+                }
+
+            } catch (e) {
+                console.warn('Could not gather some neural data:', e);
+            }
+
+            return data;
+        },
+
+        // Restore all data from a loaded file
+        async restoreAllData(data) {
+            if (!data) return false;
+
+            try {
+                console.log('📁 Restoring data from file (version ' + data.version + ')');
+
+                // Restore map data
+                if (data.map && window.store) {
+                    window.store.data = data.map;
+                    window.store.save();
+                    console.log('  ✓ Map data restored');
+                }
+
+                // Restore vision document
+                if (data.vision) {
+                    localStorage.setItem('mynd_vision_document', data.vision);
+                    if (typeof VisionCore !== 'undefined') {
+                        await VisionCore.setVision(data.vision);
+                    }
+                    console.log('  ✓ Vision document restored');
+                }
+
+                // Restore neural data to IndexedDB
+                if (typeof NeuralDB !== 'undefined') {
+                    if (data.neural?.modelData) {
+                        await NeuralDB.save('neural-models', data.neural.modelData);
+                        console.log('  ✓ Neural models restored');
+                    }
+                    if (data.neural?.embeddings) {
+                        await NeuralDB.save('embeddings', data.neural.embeddings);
+                        console.log('  ✓ Embeddings restored');
+                    }
+                    if (data.userProfile) {
+                        await NeuralDB.save('user-profile', data.userProfile);
+                        console.log('  ✓ User profile restored');
+                    }
+                    if (data.metaLearner) {
+                        await NeuralDB.save('meta-learner', data.metaLearner);
+                        console.log('  ✓ Meta learner restored');
+                    }
+                    if (data.conceptAbstractor) {
+                        await NeuralDB.save('concept-abstractions', data.conceptAbstractor);
+                        console.log('  ✓ Concept abstractor restored');
+                    }
+                    if (data.semanticMemory) {
+                        await NeuralDB.save('semantic-memories', data.semanticMemory);
+                        console.log('  ✓ Semantic memory restored');
+                    }
+                    if (data.preferenceHistory) {
+                        await NeuralDB.save('preference-history', data.preferenceHistory);
+                        console.log('  ✓ Preference history restored');
+                    }
+                }
+
+                // Restore live neural net state
+                if (typeof neuralNet !== 'undefined' && data.neural) {
+                    if (data.neural.patternWeights) {
+                        neuralNet.patternWeights = new Map(Object.entries(data.neural.patternWeights));
+                    }
+                    if (data.neural.expansionPatterns) {
+                        neuralNet.expansionPatterns = new Map(Object.entries(data.neural.expansionPatterns));
+                    }
+                    if (data.neural.categories) {
+                        neuralNet.categories = data.neural.categories;
+                    }
+                    if (data.neural.commonPatterns) {
+                        neuralNet.commonPatterns = data.neural.commonPatterns;
+                    }
+                    console.log('  ✓ Live neural state restored');
+                }
+
+                console.log('📁 Data restoration complete');
+                return true;
+
+            } catch (e) {
+                console.error('Error restoring data:', e);
+                return false;
+            }
+        },
+
+        // Get status for UI
+        getStatus() {
+            return {
+                isSupported: this.isSupported(),
+                hasFileHandle: !!this.fileHandle,
+                fileName: this.fileHandle?.name || localStorage.getItem('mynd_fs_handle_name') || null,
+                lastSaveTime: this.lastSaveTime,
+                isDirty: this.isDirty,
+                autoSaveEnabled: this.autoSaveEnabled
+            };
+        }
+    };
+
+    // Make FileSystemStorage globally accessible
+    window.FileSystemStorage = FileSystemStorage;
+
+    // ═══════════════════════════════════════════════════════════════════
     // DATA STORE (SELF DEVELOPER MODE)
     // ═══════════════════════════════════════════════════════════════════
 
@@ -26742,8 +27156,13 @@ Respond with a JSON object:
                 localStorage.setItem(storageKey, JSON.stringify(this.data));
                 bus.emit('data:saved');
 
-                // Sync to cloud (debounced) - disabled in Self Developer Mode
-                if (!SELF_DEVELOPER_MODE && SupabaseSync.syncEnabled) {
+                // In Self Developer Mode, also save to file system
+                if (typeof SELF_DEVELOPER_MODE !== 'undefined' && SELF_DEVELOPER_MODE) {
+                    if (typeof FileSystemStorage !== 'undefined' && FileSystemStorage.fileHandle) {
+                        FileSystemStorage.scheduleSave();
+                    }
+                } else if (SupabaseSync.syncEnabled) {
+                    // Sync to cloud (debounced) - disabled in Self Developer Mode
                     SupabaseSync.scheduleSave(this.exportData(), this.data?.label || 'My Mind');
                 }
             } catch (e) {
@@ -36142,9 +36561,120 @@ Respond with JSON only:`;
     });
 
     // ═══════════════════════════════════════════════════════════════════
-    // VISION UI HANDLERS (Self Developer Mode)
+    // FILE STORAGE & VISION UI HANDLERS (Self Developer Mode)
     // ═══════════════════════════════════════════════════════════════════
     if (typeof SELF_DEVELOPER_MODE !== 'undefined' && SELF_DEVELOPER_MODE) {
+
+        // ─────────────────────────────────────────────────────────────────
+        // FILE STORAGE HANDLERS
+        // ─────────────────────────────────────────────────────────────────
+
+        // Show file storage section
+        const fileStorageSection = document.getElementById('file-storage-section');
+        if (fileStorageSection) {
+            fileStorageSection.style.display = 'block';
+        }
+
+        // Check if File System API is supported
+        if (!FileSystemStorage.isSupported()) {
+            document.getElementById('file-not-supported').style.display = 'block';
+            document.getElementById('file-pick-location-btn').disabled = true;
+            document.getElementById('file-open-btn').disabled = true;
+        }
+
+        // Update file storage status display
+        function updateFileStorageUI() {
+            const status = FileSystemStorage.getStatus();
+            const infoEl = document.getElementById('file-storage-info');
+            const saveNowBtn = document.getElementById('file-save-now-btn');
+
+            if (status.hasFileHandle) {
+                let statusText = `<strong style="color: var(--accent);">📁 ${status.fileName}</strong>`;
+                if (status.lastSaveTime) {
+                    const ago = Math.round((Date.now() - status.lastSaveTime) / 1000);
+                    if (ago < 60) {
+                        statusText += `<br><span style="font-size: 11px;">Last saved: ${ago}s ago</span>`;
+                    } else {
+                        statusText += `<br><span style="font-size: 11px;">Last saved: ${Math.round(ago / 60)}m ago</span>`;
+                    }
+                }
+                if (status.isDirty) {
+                    statusText += `<br><span style="font-size: 11px; color: #f59e0b;">● Unsaved changes</span>`;
+                }
+                infoEl.innerHTML = statusText;
+                saveNowBtn.disabled = false;
+            } else {
+                infoEl.innerHTML = 'No save location set - data saved to browser only';
+                saveNowBtn.disabled = true;
+            }
+        }
+
+        // Listen for file save events
+        bus.on('file:saved', () => {
+            updateFileStorageUI();
+        });
+
+        // Set save location button
+        document.getElementById('file-pick-location-btn')?.addEventListener('click', async () => {
+            await FileSystemStorage.pickSaveLocation();
+            updateFileStorageUI();
+        });
+
+        // Open file button
+        document.getElementById('file-open-btn')?.addEventListener('click', async () => {
+            const data = await FileSystemStorage.openFile();
+            if (data) {
+                const confirmed = await showConfirm({
+                    title: 'Load Data from File',
+                    message: `Load data from "${FileSystemStorage.fileHandle?.name}"? This will replace your current map and neural data.`,
+                    confirmText: 'Load',
+                    cancelText: 'Cancel',
+                    danger: true
+                });
+
+                if (confirmed) {
+                    await FileSystemStorage.restoreAllData(data);
+                    buildScene();
+                    resetCamera();
+                    updateFileStorageUI();
+                    showToast('Data loaded from file', 'success');
+                }
+            }
+        });
+
+        // Save now button
+        document.getElementById('file-save-now-btn')?.addEventListener('click', async () => {
+            const btn = document.getElementById('file-save-now-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<span style="margin-right: 6px;">⏳</span>Saving...';
+
+            await FileSystemStorage.saveNow();
+
+            btn.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                    <polyline points="17 21 17 13 7 13 7 21"/>
+                    <polyline points="7 3 7 8 15 8"/>
+                </svg>
+                Save Now
+            `;
+            btn.disabled = false;
+            updateFileStorageUI();
+        });
+
+        // Auto-save toggle
+        document.getElementById('file-auto-save-toggle')?.addEventListener('change', (e) => {
+            FileSystemStorage.autoSaveEnabled = e.target.checked;
+            showToast(`Auto-save ${e.target.checked ? 'enabled' : 'disabled'}`, 'info');
+        });
+
+        // Initialize FileSystemStorage
+        FileSystemStorage.initialize();
+
+        // ─────────────────────────────────────────────────────────────────
+        // VISION DOCUMENT HANDLERS
+        // ─────────────────────────────────────────────────────────────────
+
         // Show vision settings section
         const visionSection = document.getElementById('vision-settings-section');
         if (visionSection) {
@@ -36189,13 +36719,17 @@ MYND is your second brain - an intelligent extension of your memory and thinking
 - Never overwhelm with suggestions
 - Never break user's mental models`;
 
-        // Load vision into editor when settings opens
+        // Load vision into editor and update file storage UI when settings opens
         const originalShowSettings = typeof showApiKeyModal === 'function' ? showApiKeyModal : function() {
             document.getElementById('api-key-modal').classList.add('active');
         };
 
         window.showApiKeyModal = function() {
             originalShowSettings();
+
+            // Update file storage status
+            updateFileStorageUI();
+
             // Load current vision document
             const editor = document.getElementById('vision-document-editor');
             if (editor && typeof VisionCore !== 'undefined') {
@@ -38827,7 +39361,13 @@ showKeyboardHints();
                 console.log('%c  • Embedded MYND map loaded', 'color: #8B5CF6;');
                 console.log('%c  • Local storage: mynd_self_dev_data', 'color: #8B5CF6;');
                 console.log('%c  • Cloud sync disabled', 'color: #8B5CF6;');
+                console.log('%c  • File System storage available (Settings → Set Save Location)', 'color: #8B5CF6;');
                 console.log('%c  • Vision UI available in Settings', 'color: #8B5CF6;');
+                if (FileSystemStorage.isSupported()) {
+                    console.log('%c  ✓ File System API supported', 'color: #16a34a;');
+                } else {
+                    console.log('%c  ⚠ File System API not supported (use Chrome/Edge)', 'color: #f59e0b;');
+                }
             } else {
                 console.log('✨ MYND initialized successfully');
             }
@@ -39383,6 +39923,14 @@ showKeyboardHints();
                 document.getElementById('neural-suggest-btn').disabled = false;
                 this.updateStatus();
                 showToast('Neural network trained successfully!', 'success');
+
+                // In Self Developer Mode, save to file after training completes
+                if (typeof SELF_DEVELOPER_MODE !== 'undefined' && SELF_DEVELOPER_MODE) {
+                    if (typeof FileSystemStorage !== 'undefined' && FileSystemStorage.fileHandle) {
+                        console.log('📁 Neural training complete - scheduling file save...');
+                        FileSystemStorage.scheduleSave();
+                    }
+                }
             });
             
             // Auto-train on first load if no model exists but enough nodes do
