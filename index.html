@@ -7405,7 +7405,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.11</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.12</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -24448,8 +24448,8 @@ Return as JSON:
 
             if (level === 1) {
                 // Level 1: EQUAL vertical spacing between all siblings
-                // Use FIXED amplitude so spacing between siblings is consistent
-                const helixAmp = baseHelixAmp * 1.8; // Fixed amplitude for equal sibling spacing
+                // Use LARGE fixed amplitude for big vertical separation
+                const helixAmp = baseHelixAmp * 4.0; // Much larger for more vertical spread
 
                 // Evenly distribute from -helixAmp to +helixAmp based on index
                 if (total > 1) {
