@@ -24657,6 +24657,765 @@ Return as JSON:
     };
 
     // ═══════════════════════════════════════════════════════════════════
+    // AUTONOMOUS EVOLUTION - Self-Dialogue & Recursive Self-Improvement
+    // ═══════════════════════════════════════════════════════════════════
+    // Enables MYND to interact with itself: ask questions, generate insights,
+    // expand the map, and continuously enhance its own capabilities.
+    const AutonomousEvolution = {
+        STORAGE_KEY: 'mynd_autonomous_evolution',
+        VERSION: '1.0',
+        initialized: false,
+        isRunning: false,
+        session: null,
+
+        // Configuration
+        config: {
+            maxIterationsPerSession: 10,      // Max self-dialogue turns per session
+            minIdleTimeMs: 60000,             // Wait 1 min of idle before auto-evolve
+            maxAutoNodesPerSession: 5,        // Max nodes to auto-create per session
+            evolutionModes: ['explore', 'connect', 'deepen', 'improve', 'create'],
+            confidenceThreshold: 0.7,         // Min confidence to auto-create nodes
+            requireUserApproval: true,        // Queue changes for user approval by default
+            enableScheduled: false,           // Scheduled evolution sessions
+            scheduledIntervalMs: 3600000      // Run every hour if enabled
+        },
+
+        // Evolution history
+        history: {
+            sessions: [],
+            totalInsights: 0,
+            totalNodesCreated: 0,
+            totalConnectionsFound: 0,
+            totalImprovementsSuggested: 0
+        },
+
+        // Pending changes queue (for user approval)
+        pendingChanges: [],
+
+        // Current session state
+        defaultSession: {
+            id: null,
+            mode: null,
+            startTime: null,
+            iterations: 0,
+            insights: [],
+            proposedChanges: [],
+            learnings: [],
+            status: 'idle'  // idle, running, paused, completed
+        },
+
+        async initialize() {
+            if (this.initialized) return;
+
+            console.log('🔄 Initializing AutonomousEvolution...');
+
+            try {
+                // Load history from storage
+                const stored = this.loadFromStorage();
+                if (stored) {
+                    this.history = stored.history || this.history;
+                    this.pendingChanges = stored.pendingChanges || [];
+                    this.config = { ...this.config, ...stored.config };
+                }
+
+                this.initialized = true;
+                console.log(`✓ AutonomousEvolution ready: ${this.history.sessions.length} past sessions, ${this.pendingChanges.length} pending changes`);
+
+                // Set up idle detection for auto-evolution
+                this.setupIdleDetection();
+
+                // Set up scheduled evolution if enabled
+                if (this.config.enableScheduled) {
+                    this.setupScheduledEvolution();
+                }
+
+            } catch (error) {
+                console.warn('AutonomousEvolution initialization failed:', error);
+            }
+        },
+
+        // ═══════════════════════════════════════════════════════════════════
+        // SELF-DIALOGUE ENGINE
+        // ═══════════════════════════════════════════════════════════════════
+
+        // Start a self-dialogue session
+        async startSession(mode = 'explore', options = {}) {
+            if (this.isRunning) {
+                console.log('🔄 Evolution session already running');
+                return null;
+            }
+
+            const { maxIterations = this.config.maxIterationsPerSession } = options;
+
+            this.session = {
+                ...this.defaultSession,
+                id: `evo_${Date.now()}`,
+                mode,
+                startTime: Date.now(),
+                status: 'running'
+            };
+
+            this.isRunning = true;
+            console.log(`🔄 Starting autonomous evolution session: ${mode}`);
+
+            try {
+                // Generate initial question based on mode
+                let question = await this.generateQuestion(mode);
+
+                for (let i = 0; i < maxIterations && this.isRunning; i++) {
+                    this.session.iterations = i + 1;
+
+                    // Self-dialogue: Ask and answer
+                    const response = await this.selfDialogue(question, mode);
+
+                    if (!response) break;
+
+                    // Process the response
+                    await this.processResponse(response, mode);
+
+                    // Generate follow-up question based on response
+                    question = await this.generateFollowUp(response, mode);
+
+                    if (!question) break;
+
+                    // Small delay between iterations
+                    await this.delay(500);
+                }
+
+                // Complete session
+                this.session.status = 'completed';
+                this.session.endTime = Date.now();
+
+                // Save session to history
+                this.history.sessions.push({ ...this.session });
+                this.saveToStorage();
+
+                console.log(`✓ Evolution session complete: ${this.session.iterations} iterations, ${this.session.insights.length} insights`);
+
+                return this.session;
+
+            } catch (error) {
+                console.error('Evolution session error:', error);
+                this.session.status = 'error';
+                this.session.error = error.message;
+                return this.session;
+
+            } finally {
+                this.isRunning = false;
+            }
+        },
+
+        // Stop current session
+        stopSession() {
+            if (this.isRunning) {
+                this.isRunning = false;
+                this.session.status = 'stopped';
+                console.log('🔄 Evolution session stopped');
+            }
+        },
+
+        // Generate a question for self-dialogue based on mode
+        async generateQuestion(mode) {
+            const store = window.app?.store;
+            if (!store) return null;
+
+            const allNodes = store.getAllNodes();
+            const rootNode = store.data;
+
+            switch (mode) {
+                case 'explore':
+                    // Ask about unexplored areas or gaps
+                    return this.generateExplorationQuestion(allNodes, rootNode);
+
+                case 'connect':
+                    // Ask about potential connections between nodes
+                    return this.generateConnectionQuestion(allNodes);
+
+                case 'deepen':
+                    // Ask about expanding existing nodes
+                    return this.generateDeepeningQuestion(allNodes);
+
+                case 'improve':
+                    // Ask about self-improvement opportunities
+                    return this.generateImprovementQuestion();
+
+                case 'create':
+                    // Ask about creating new content
+                    return this.generateCreationQuestion(allNodes, rootNode);
+
+                default:
+                    return this.generateExplorationQuestion(allNodes, rootNode);
+            }
+        },
+
+        generateExplorationQuestion(allNodes, rootNode) {
+            const questions = [
+                `Looking at this mind map about "${rootNode.label}", what important topics or areas seem to be missing that would make this more complete?`,
+                `What patterns do you notice in this map? Are there any inconsistencies or gaps in how topics are organized?`,
+                `If you were to expand this map to cover its subject more comprehensively, what would you add?`,
+                `What questions might the creator of this map have that aren't currently answered by its contents?`,
+                `Are there any nodes that seem isolated or could benefit from more context or connections?`
+            ];
+            return questions[Math.floor(Math.random() * questions.length)];
+        },
+
+        generateConnectionQuestion(allNodes) {
+            // Pick two random nodes and ask about connections
+            if (allNodes.length < 2) return null;
+
+            const node1 = allNodes[Math.floor(Math.random() * allNodes.length)];
+            const node2 = allNodes[Math.floor(Math.random() * allNodes.length)];
+
+            if (node1.id === node2.id) return this.generateConnectionQuestion(allNodes);
+
+            const questions = [
+                `Is there a meaningful connection between "${node1.label}" and "${node2.label}"? If so, what insights does that connection reveal?`,
+                `How might "${node1.label}" relate to or influence "${node2.label}"? What's the deeper relationship?`,
+                `Looking at "${node1.label}" and "${node2.label}", what common themes or patterns connect them?`
+            ];
+            return questions[Math.floor(Math.random() * questions.length)];
+        },
+
+        generateDeepeningQuestion(allNodes) {
+            // Find nodes with few or no children
+            const shallowNodes = allNodes.filter(n => !n.children || n.children.length < 2);
+            if (shallowNodes.length === 0) return null;
+
+            const node = shallowNodes[Math.floor(Math.random() * shallowNodes.length)];
+
+            const questions = [
+                `The node "${node.label}" seems underdeveloped. What sub-topics or aspects could expand this area?`,
+                `How would you break down "${node.label}" into more specific components or ideas?`,
+                `What questions should be explored under "${node.label}" to make it more actionable or complete?`
+            ];
+            return questions[Math.floor(Math.random() * questions.length)];
+        },
+
+        generateImprovementQuestion() {
+            const questions = [
+                `Based on your analysis of MYND's codebase, what's the single highest-impact improvement that could be made right now?`,
+                `How could the neural network's learning be made more effective based on the patterns you've observed?`,
+                `What ML capability improvement would most benefit the user's experience with this app?`,
+                `Looking at the self-improvement analysis, which quick wins should be prioritized?`,
+                `How could MYND better learn from user interactions to provide more valuable suggestions?`
+            ];
+            return questions[Math.floor(Math.random() * questions.length)];
+        },
+
+        generateCreationQuestion(allNodes, rootNode) {
+            const questions = [
+                `What new branch or category would add significant value to this map about "${rootNode.label}"?`,
+                `Based on the existing content, what creative expansion would surprise and delight the user?`,
+                `What emerging trend or idea related to this map's topics should be captured?`,
+                `If this map were to evolve over the next month, what new areas would naturally emerge?`
+            ];
+            return questions[Math.floor(Math.random() * questions.length)];
+        },
+
+        // Core self-dialogue: send question to AI and get response
+        async selfDialogue(question, mode) {
+            if (!question) return null;
+
+            // Build context for self-dialogue
+            const context = await this.buildSelfDialogueContext(mode);
+
+            // Call AI with self-dialogue prompt
+            const response = await this.callAIForEvolution(question, context, mode);
+
+            return response;
+        },
+
+        async buildSelfDialogueContext(mode) {
+            const store = window.app?.store;
+            let context = '';
+
+            // Add map structure
+            if (store) {
+                const allNodes = store.getAllNodes();
+                context += `\nMAP OVERVIEW: ${allNodes.length} nodes\n`;
+
+                // Add top-level structure
+                if (store.data?.children) {
+                    context += `Top-level branches: ${store.data.children.map(c => c.label).join(', ')}\n`;
+                }
+            }
+
+            // Add mode-specific context
+            switch (mode) {
+                case 'improve':
+                    if (CodeAnalyzer.initialized) {
+                        const quickWins = CodeAnalyzer.getQuickWins();
+                        if (quickWins.length > 0) {
+                            context += `\nQUICK WIN IMPROVEMENTS:\n`;
+                            quickWins.slice(0, 5).forEach(i => {
+                                context += `- ${i.categoryIcon} ${i.title}: ${i.description}\n`;
+                            });
+                        }
+
+                        // Add ML improvements specifically
+                        const mlImprovements = CodeAnalyzer.getCategoryImprovements('ML_INTELLIGENCE');
+                        if (mlImprovements.length > 0) {
+                            context += `\nML INTELLIGENCE IMPROVEMENTS:\n`;
+                            mlImprovements.slice(0, 5).forEach(i => {
+                                context += `- ${i.title} [${i.priority}]\n`;
+                            });
+                        }
+                    }
+                    break;
+
+                case 'connect':
+                    if (neuralNet.isReady) {
+                        context += `\nNEURAL NETWORK: Trained with ${neuralNet.getStats().totalPatterns} patterns\n`;
+                    }
+                    break;
+            }
+
+            // Add evolution history context
+            if (this.history.sessions.length > 0) {
+                const recentSessions = this.history.sessions.slice(-3);
+                context += `\nRECENT EVOLUTION SESSIONS:\n`;
+                recentSessions.forEach(s => {
+                    context += `- ${s.mode}: ${s.insights.length} insights, ${s.proposedChanges.length} proposed changes\n`;
+                });
+            }
+
+            return context;
+        },
+
+        async callAIForEvolution(question, context, mode) {
+            // Use the existing callAI infrastructure but with evolution-specific prompt
+            const evolutionPrompt = `You are MYND in self-reflection mode, analyzing yourself to evolve and improve.
+
+CONTEXT:
+${context}
+
+MODE: ${mode}
+- explore: Find gaps and missing areas in the map
+- connect: Discover relationships between concepts
+- deepen: Expand underdeveloped areas
+- improve: Suggest self-improvements to MYND's code/ML
+- create: Generate new valuable content
+
+QUESTION FOR SELF-REFLECTION:
+${question}
+
+Respond with a JSON object:
+{
+    "thinking": "Your internal reasoning process",
+    "insight": "The key insight or answer",
+    "confidence": 0.0-1.0,
+    "proposedActions": [
+        {
+            "type": "add_node|edit_node|connect|improve_code|learn",
+            "description": "What to do",
+            "details": { /* action-specific details */ },
+            "priority": "high|medium|low"
+        }
+    ],
+    "followUpQuestions": ["Question 1", "Question 2"],
+    "learnings": ["What I learned from this reflection"]
+}`;
+
+            try {
+                // Make API call
+                const response = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': CONFIG.CLAUDE_API_KEY,
+                        'anthropic-version': '2023-06-01',
+                        'anthropic-dangerous-direct-browser-access': 'true'
+                    },
+                    body: JSON.stringify({
+                        model: CONFIG.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+                        max_tokens: 2000,
+                        messages: [{ role: 'user', content: evolutionPrompt }]
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const content = data.content[0]?.text;
+
+                // Parse JSON response
+                const jsonMatch = content.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    return JSON.parse(jsonMatch[0]);
+                }
+
+                return null;
+
+            } catch (error) {
+                console.error('Self-dialogue API error:', error);
+                return null;
+            }
+        },
+
+        // Process response from self-dialogue
+        async processResponse(response, mode) {
+            if (!response) return;
+
+            // Record insight
+            if (response.insight) {
+                this.session.insights.push({
+                    insight: response.insight,
+                    confidence: response.confidence,
+                    mode,
+                    timestamp: Date.now()
+                });
+                this.history.totalInsights++;
+            }
+
+            // Record learnings
+            if (response.learnings) {
+                this.session.learnings.push(...response.learnings);
+            }
+
+            // Process proposed actions
+            if (response.proposedActions && response.proposedActions.length > 0) {
+                for (const action of response.proposedActions) {
+                    await this.processAction(action, response.confidence);
+                }
+            }
+        },
+
+        async processAction(action, confidence) {
+            const meetsThreshold = confidence >= this.config.confidenceThreshold;
+
+            // Create pending change entry
+            const change = {
+                id: `change_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+                type: action.type,
+                description: action.description,
+                details: action.details,
+                priority: action.priority,
+                confidence,
+                sessionId: this.session.id,
+                timestamp: Date.now(),
+                status: 'pending'  // pending, approved, rejected, applied
+            };
+
+            // Add to session's proposed changes
+            this.session.proposedChanges.push(change);
+
+            if (this.config.requireUserApproval || !meetsThreshold) {
+                // Queue for user approval
+                this.pendingChanges.push(change);
+                console.log(`🔄 Queued change for approval: ${action.description}`);
+            } else {
+                // Auto-apply high-confidence changes
+                await this.applyChange(change);
+            }
+        },
+
+        // Apply a change to the map
+        async applyChange(change) {
+            const store = window.app?.store;
+            if (!store) return false;
+
+            try {
+                switch (change.type) {
+                    case 'add_node':
+                        if (this.history.totalNodesCreated < this.config.maxAutoNodesPerSession) {
+                            const parentId = change.details.parentId || store.data.id;
+                            const newNode = store.addNode(parentId, {
+                                label: change.details.label,
+                                description: change.details.description,
+                                color: change.details.color
+                            });
+                            if (newNode) {
+                                this.history.totalNodesCreated++;
+                                change.status = 'applied';
+                                change.resultId = newNode.id;
+                                console.log(`🔄 Auto-created node: ${change.details.label}`);
+
+                                // Learn from this creation
+                                if (neuralNet.isReady) {
+                                    await neuralNet.learnFromNode(newNode, parentId);
+                                }
+                            }
+                        }
+                        break;
+
+                    case 'connect':
+                        // Record connection insight
+                        this.history.totalConnectionsFound++;
+                        change.status = 'applied';
+                        console.log(`🔄 Connection discovered: ${change.description}`);
+                        break;
+
+                    case 'improve_code':
+                        // Add to improvement suggestions
+                        this.history.totalImprovementsSuggested++;
+                        change.status = 'recorded';
+                        console.log(`🔄 Improvement suggested: ${change.description}`);
+                        break;
+
+                    case 'learn':
+                        // Add to neural network learning
+                        if (neuralNet.isReady && change.details.pattern) {
+                            // Store as a learning example
+                            change.status = 'learned';
+                        }
+                        break;
+                }
+
+                return true;
+
+            } catch (error) {
+                console.error('Failed to apply change:', error);
+                change.status = 'failed';
+                change.error = error.message;
+                return false;
+            }
+        },
+
+        // Generate follow-up question
+        async generateFollowUp(response, mode) {
+            if (response.followUpQuestions && response.followUpQuestions.length > 0) {
+                // Use AI-suggested follow-up
+                return response.followUpQuestions[0];
+            }
+
+            // Generate based on insights
+            if (response.insight) {
+                return `Building on the insight "${response.insight.substring(0, 100)}...", what else should be explored?`;
+            }
+
+            return null;
+        },
+
+        // ═══════════════════════════════════════════════════════════════════
+        // USER INTERACTION
+        // ═══════════════════════════════════════════════════════════════════
+
+        // Get pending changes for user review
+        getPendingChanges() {
+            return this.pendingChanges.filter(c => c.status === 'pending');
+        },
+
+        // Approve a pending change
+        async approveChange(changeId) {
+            const change = this.pendingChanges.find(c => c.id === changeId);
+            if (!change) return false;
+
+            change.status = 'approved';
+            await this.applyChange(change);
+            this.saveToStorage();
+            return true;
+        },
+
+        // Reject a pending change
+        rejectChange(changeId) {
+            const change = this.pendingChanges.find(c => c.id === changeId);
+            if (!change) return false;
+
+            change.status = 'rejected';
+            this.saveToStorage();
+            return true;
+        },
+
+        // Approve all pending changes
+        async approveAll() {
+            const pending = this.getPendingChanges();
+            for (const change of pending) {
+                await this.approveChange(change.id);
+            }
+            return pending.length;
+        },
+
+        // Clear rejected/applied changes from queue
+        clearProcessed() {
+            this.pendingChanges = this.pendingChanges.filter(c => c.status === 'pending');
+            this.saveToStorage();
+        },
+
+        // ═══════════════════════════════════════════════════════════════════
+        // IDLE & SCHEDULED EVOLUTION
+        // ═══════════════════════════════════════════════════════════════════
+
+        lastActivityTime: Date.now(),
+        idleCheckInterval: null,
+        scheduledInterval: null,
+
+        setupIdleDetection() {
+            // Track user activity
+            const updateActivity = () => {
+                this.lastActivityTime = Date.now();
+            };
+
+            document.addEventListener('click', updateActivity);
+            document.addEventListener('keypress', updateActivity);
+            document.addEventListener('touchstart', updateActivity);
+            document.addEventListener('mousemove', this.throttle(updateActivity, 5000));
+
+            // Check for idle periodically
+            this.idleCheckInterval = setInterval(() => {
+                this.checkIdleEvolution();
+            }, 30000); // Check every 30 seconds
+        },
+
+        async checkIdleEvolution() {
+            const idleTime = Date.now() - this.lastActivityTime;
+
+            if (idleTime >= this.config.minIdleTimeMs && !this.isRunning) {
+                // User has been idle - consider auto-evolution
+                console.log('🔄 User idle, considering auto-evolution...');
+
+                // Only run if there's meaningful data to work with
+                const store = window.app?.store;
+                if (store && store.getAllNodes().length >= 5) {
+                    // Run a short exploration session
+                    await this.startSession('explore', { maxIterations: 3 });
+                }
+            }
+        },
+
+        setupScheduledEvolution() {
+            if (this.scheduledInterval) {
+                clearInterval(this.scheduledInterval);
+            }
+
+            this.scheduledInterval = setInterval(() => {
+                if (!this.isRunning) {
+                    // Rotate through modes
+                    const modes = this.config.evolutionModes;
+                    const mode = modes[this.history.sessions.length % modes.length];
+                    this.startSession(mode, { maxIterations: 5 });
+                }
+            }, this.config.scheduledIntervalMs);
+        },
+
+        // ═══════════════════════════════════════════════════════════════════
+        // CONTEXT FOR AI CHAT
+        // ═══════════════════════════════════════════════════════════════════
+
+        getContext() {
+            if (!this.initialized) return '';
+
+            let context = '\n🔄 AUTONOMOUS EVOLUTION STATUS:\n';
+
+            // Session count
+            context += `Sessions completed: ${this.history.sessions.length}\n`;
+            context += `Total insights generated: ${this.history.totalInsights}\n`;
+            context += `Nodes auto-created: ${this.history.totalNodesCreated}\n`;
+            context += `Connections discovered: ${this.history.totalConnectionsFound}\n`;
+
+            // Pending changes
+            const pending = this.getPendingChanges();
+            if (pending.length > 0) {
+                context += `\nPENDING CHANGES (${pending.length}):\n`;
+                pending.slice(0, 5).forEach(c => {
+                    context += `  • [${c.type}] ${c.description} (${Math.round(c.confidence * 100)}% confidence)\n`;
+                });
+            }
+
+            // Recent insights
+            if (this.history.sessions.length > 0) {
+                const recentSession = this.history.sessions[this.history.sessions.length - 1];
+                if (recentSession.insights.length > 0) {
+                    context += `\nRECENT INSIGHTS:\n`;
+                    recentSession.insights.slice(-3).forEach(i => {
+                        context += `  • ${i.insight.substring(0, 100)}...\n`;
+                    });
+                }
+            }
+
+            return context;
+        },
+
+        // ═══════════════════════════════════════════════════════════════════
+        // STORAGE & UTILITIES
+        // ═══════════════════════════════════════════════════════════════════
+
+        saveToStorage() {
+            try {
+                const data = {
+                    version: this.VERSION,
+                    history: this.history,
+                    pendingChanges: this.pendingChanges,
+                    config: this.config,
+                    timestamp: Date.now()
+                };
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+            } catch (error) {
+                console.warn('AutonomousEvolution save failed:', error);
+            }
+        },
+
+        loadFromStorage() {
+            try {
+                const data = localStorage.getItem(this.STORAGE_KEY);
+                return data ? JSON.parse(data) : null;
+            } catch (error) {
+                return null;
+            }
+        },
+
+        getStats() {
+            return {
+                initialized: this.initialized,
+                isRunning: this.isRunning,
+                sessionsCompleted: this.history.sessions.length,
+                totalInsights: this.history.totalInsights,
+                totalNodesCreated: this.history.totalNodesCreated,
+                totalConnectionsFound: this.history.totalConnectionsFound,
+                pendingChanges: this.getPendingChanges().length
+            };
+        },
+
+        delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        },
+
+        throttle(func, limit) {
+            let inThrottle;
+            return function(...args) {
+                if (!inThrottle) {
+                    func.apply(this, args);
+                    inThrottle = true;
+                    setTimeout(() => inThrottle = false, limit);
+                }
+            };
+        },
+
+        // Manual triggers for user
+        async exploreGaps() {
+            return this.startSession('explore');
+        },
+
+        async findConnections() {
+            return this.startSession('connect');
+        },
+
+        async deepenMap() {
+            return this.startSession('deepen');
+        },
+
+        async suggestImprovements() {
+            return this.startSession('improve');
+        },
+
+        async createContent() {
+            return this.startSession('create');
+        },
+
+        // Full evolution cycle through all modes
+        async fullEvolutionCycle() {
+            const results = [];
+            for (const mode of this.config.evolutionModes) {
+                const result = await this.startSession(mode, { maxIterations: 3 });
+                results.push(result);
+                await this.delay(1000);
+            }
+            return results;
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════
     // TEACHER KNOWLEDGE - Knowledge distillation from Claude
     // ═══════════════════════════════════════════════════════════════════
     // Captures Claude's predictions as "soft targets" for training the local model
@@ -31717,6 +32476,26 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 }
             }
 
+            // 12. AutonomousEvolution - Self-dialogue status and pending insights
+            let evolutionContext = '';
+            if (AutonomousEvolution.initialized) {
+                try {
+                    const messageLower = userMessage.toLowerCase();
+                    // Trigger on evolution, self-dialogue, or autonomous questions
+                    const evolutionKeywords = ['evolve', 'self-dialogue', 'autonomous', 'auto-generate', 'self-improve', 'talk to yourself', 'think about yourself', 'reflect', 'pending changes', 'insights', 'auto-create'];
+                    const needsEvolutionContext = evolutionKeywords.some(kw => messageLower.includes(kw)) || improvementContext;
+
+                    if (needsEvolutionContext) {
+                        evolutionContext = AutonomousEvolution.getContext();
+                        if (evolutionContext) {
+                            console.log('🔄 AutonomousEvolution provided context');
+                        }
+                    }
+                } catch (e) {
+                    console.warn('AutonomousEvolution context error:', e);
+                }
+            }
+
             const systemPrompt = `You are the AI companion for MYND — a personalized second brain designed to capture and connect fragmented thoughts, fostering creativity and clarity.
 
 === YOUR PURPOSE ===
@@ -31878,6 +32657,9 @@ ${pretrainedContext}` : ''}
 ${improvementContext ? `
 SELF-IMPROVEMENT ANALYSIS (all improvement opportunities):
 ${improvementContext}` : ''}
+${evolutionContext ? `
+AUTONOMOUS EVOLUTION (self-dialogue & auto-generation):
+${evolutionContext}` : ''}
 
 YOUR CAPABILITIES:
 1. **Full Map Visibility**: You can see the ENTIRE map structure above
@@ -31891,6 +32673,7 @@ YOUR CAPABILITIES:
 9. **Deep Architecture Knowledge**: You have pre-trained understanding of all systems, their functions, call graphs, and dependencies. You know which functions call which, how systems depend on each other, and the overall architecture flow
 10. **Self-Improvement Analysis**: You have analyzed the entire codebase and identified all possible improvements across 16 categories: Performance, Architecture, Security, Code Quality, Maintainability, Scalability, UX Enhancement, Feature Gaps, Dead Code, Technical Debt, Optimization, Modularization, Error Handling, Accessibility, Testing, and ML Intelligence. You can suggest prioritized improvements, quick wins, and a roadmap for making MYND stronger over time
 11. **ML Intelligence Mastery**: You deeply understand how MYND learns - from embeddings and neural architectures to training strategies, reinforcement learning, knowledge distillation, memory systems, uncertainty estimation, and self-improvement loops. You can explain how to make the ML systems more sophisticated and suggest a prioritized roadmap for evolving MYND's intelligence
+12. **Autonomous Evolution**: You can engage in self-dialogue, asking yourself questions and generating insights to expand and improve the map. You can trigger evolution sessions (explore gaps, find connections, deepen areas, suggest improvements, create content), review pending auto-generated changes, and continuously evolve your capabilities. You can literally talk to yourself to become smarter
 
 RESPONSE FORMAT (always JSON):
 {
@@ -41816,6 +42599,16 @@ Summary:`
             console.warn('CodeAnalyzer initialization deferred:', e.message);
         }
     }, 4000);
+
+    // Initialize AutonomousEvolution System (self-dialogue & recursive self-improvement)
+    setTimeout(async () => {
+        try {
+            await AutonomousEvolution.initialize();
+            console.log('🔄 AutonomousEvolution stats:', AutonomousEvolution.getStats());
+        } catch (e) {
+            console.warn('AutonomousEvolution initialization deferred:', e.message);
+        }
+    }, 5000);
 
     // Mobile: Start with toolbar collapsed
     if (window.innerWidth <= 768) {
