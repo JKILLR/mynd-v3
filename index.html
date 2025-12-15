@@ -24438,15 +24438,12 @@ Return as JSON:
             // Position at center of this node's sector
             const angle = sectorCenter;
 
-            // Helix effect - ONLY for level 1 branches
-            const baseHelixAmp = CONFIG.LAYOUT.helixAmplitude || 12.0;
-
             let verticalOffset = 0;
 
             if (level === 1) {
                 // Level 1: Equal vertical spacing based on index (not angle)
                 // Use FIXED amplitude so all level 1 nodes spread equally above/below horizon
-                const helixAmp = baseHelixAmp * 0.8; // Fixed amplitude for symmetry
+                const helixAmp = (CONFIG.LAYOUT.helixAmplitude || 12.0) * 0.8;
 
                 // Evenly distribute from -helixAmp to +helixAmp based on index
                 if (total > 1) {
