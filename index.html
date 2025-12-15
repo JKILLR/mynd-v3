@@ -7405,7 +7405,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.14</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.16</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -24446,10 +24446,13 @@ Return as JSON:
 
             let verticalOffset = 0;
 
+            // For spherical distribution, we need helixAmp accessible for radius calc
+            let helixAmp = 0;
+
             if (level === 1) {
                 // Level 1: EQUAL vertical spacing between all siblings
                 // MUCH larger vertical separation - branches get longer as nodes move from horizon
-                const helixAmp = baseHelixAmp * 10.0; // Very large for dramatic vertical spread
+                helixAmp = baseHelixAmp * 10.0; // Very large for dramatic vertical spread
 
                 // Evenly distribute from -helixAmp to +helixAmp based on index
                 if (total > 1) {
@@ -24471,10 +24474,17 @@ Return as JSON:
 
             // Position nodes
             if (level === 1) {
+                // Spherical distribution: nodes near horizon (Y=0) spread further out
+                // nodes near poles (top/bottom) stay closer to center
+                // Formula: r = R * sqrt(1 - (y/maxY)²)
+                const normalizedY = helixAmp > 0 ? Math.abs(verticalOffset) / helixAmp : 0;
+                const sphereMultiplier = Math.sqrt(1 - normalizedY * normalizedY);
+                const sphericalRadius = baseRadius * sphereMultiplier;
+
                 data.basePosition = [
-                    Math.cos(angle) * baseRadius,
+                    Math.cos(angle) * sphericalRadius,
                     verticalOffset,
-                    Math.sin(angle) * baseRadius
+                    Math.sin(angle) * sphericalRadius
                 ];
             } else {
                 // Level 2+: Extend from parent position in XZ plane
