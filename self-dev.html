@@ -27841,6 +27841,9 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                 this.lastSaveTime = Date.now();
                 this.isDirty = false;
 
+                // Persist last save time to localStorage for display after refresh
+                localStorage.setItem('mynd_fs_last_save', this.lastSaveTime.toString());
+
                 console.log('📁 Saved to file:', this.fileHandle.name, '(' + Math.round(JSON.stringify(exportData).length / 1024) + 'KB)');
 
                 // Emit event for UI updates
@@ -28046,11 +28049,15 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
 
         // Get status for UI
         getStatus() {
+            // Get last save time from memory or localStorage
+            const storedLastSave = localStorage.getItem('mynd_fs_last_save');
+            const lastSave = this.lastSaveTime || (storedLastSave ? parseInt(storedLastSave, 10) : null);
+
             return {
                 isSupported: this.isSupported(),
                 hasFileHandle: !!this.fileHandle,
                 fileName: this.fileHandle?.name || localStorage.getItem('mynd_fs_handle_name') || null,
-                lastSaveTime: this.lastSaveTime,
+                lastSaveTime: lastSave,
                 isDirty: this.isDirty,
                 autoSaveEnabled: this.autoSaveEnabled
             };
@@ -37548,6 +37555,7 @@ Respond with JSON only:`;
             const saveNowBtn = document.getElementById('file-save-now-btn');
 
             if (status.hasFileHandle) {
+                // Active file handle - show connected status
                 let statusText = `<strong style="color: var(--accent);">📁 ${status.fileName}</strong>`;
                 if (status.lastSaveTime) {
                     const ago = Math.round((Date.now() - status.lastSaveTime) / 1000);
@@ -37562,7 +37570,20 @@ Respond with JSON only:`;
                 }
                 infoEl.innerHTML = statusText;
                 saveNowBtn.disabled = false;
+            } else if (status.fileName) {
+                // No active handle but we remember the file name - show reconnect prompt
+                let disconnectedText = `<span style="color: #f59e0b;">⚠ Disconnected from: <strong>${status.fileName}</strong></span>`;
+                if (status.lastSaveTime) {
+                    const lastSaveDate = new Date(status.lastSaveTime);
+                    const timeStr = lastSaveDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const dateStr = lastSaveDate.toLocaleDateString();
+                    disconnectedText += `<br><span style="font-size: 11px;">Last saved: ${dateStr} at ${timeStr}</span>`;
+                }
+                disconnectedText += `<br><span style="font-size: 11px;">Click "Open File" to reconnect and restore latest data</span>`;
+                infoEl.innerHTML = disconnectedText;
+                saveNowBtn.disabled = true;
             } else {
+                // No file ever set
                 infoEl.innerHTML = 'No save location set - data saved to browser only';
                 saveNowBtn.disabled = true;
             }
@@ -37629,6 +37650,47 @@ Respond with JSON only:`;
 
         // Initialize FileSystemStorage
         FileSystemStorage.initialize();
+
+        // Check for previous file and prompt to reconnect on startup
+        async function checkPreviousFileAndPrompt() {
+            const previousFileName = localStorage.getItem('mynd_fs_handle_name');
+            if (previousFileName && !FileSystemStorage.fileHandle && FileSystemStorage.isSupported()) {
+                // Wait a moment for the UI to settle
+                await new Promise(r => setTimeout(r, 1500));
+
+                const reconnect = await showConfirm({
+                    title: 'Reconnect to Save File',
+                    message: `Your previous save location was:\n\n📁 ${previousFileName}\n\nWould you like to open this file to restore your latest data and re-enable auto-save?`,
+                    confirmText: 'Open File',
+                    cancelText: 'Skip for Now'
+                });
+
+                if (reconnect) {
+                    const data = await FileSystemStorage.openFile();
+                    if (data) {
+                        const loadIt = await showConfirm({
+                            title: 'Load Data from File',
+                            message: `Successfully connected to "${FileSystemStorage.fileHandle?.name}".\n\nLoad the saved data? This will replace your current map and neural data with the file contents.`,
+                            confirmText: 'Load Data',
+                            cancelText: 'Just Enable Auto-Save',
+                            danger: true
+                        });
+
+                        if (loadIt) {
+                            await FileSystemStorage.restoreAllData(data);
+                            buildScene();
+                            resetCamera();
+                            showToast('Data restored from file', 'success');
+                        } else {
+                            showToast('Auto-save re-enabled', 'success');
+                        }
+                    }
+                }
+            }
+        }
+
+        // Run the check after a short delay
+        setTimeout(checkPreviousFileAndPrompt, 500);
 
         // ─────────────────────────────────────────────────────────────────
         // SELF-IMPROVER HANDLERS
