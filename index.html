@@ -24502,20 +24502,32 @@ Return as JSON:
             const PHI = 1.618033988749895;
 
             if (level === 0) {
-                // Root: full circle
+                // Root: full circle for level 1 children
                 availableSector = Math.PI * 2;
                 childSectorStart = -Math.PI;
-            } else {
-                // GOLDEN RATIO sector expansion
-                // Each level expands by φ to counteract the natural narrowing
-                // This creates a balanced, natural-looking spread
-                const expansionFactor = Math.pow(PHI, level); // φ^1, φ^2, φ^3...
-                const expandedSector = Math.min(sectorWidth * expansionFactor, Math.PI * 1.8);
+            } else if (level === 1) {
+                // Level 1 nodes: their children (level 2) get 135° spread
+                const baseSectorSpread = Math.PI * 0.75; // 135 degrees
+                availableSector = baseSectorSpread;
 
-                // Center the expanded sector on the parent's sector center
+                // Center the sector on the parent's sector center
                 const sectorCenter = sectorStart + sectorWidth / 2;
-                childSectorStart = sectorCenter - expandedSector / 2;
-                availableSector = expandedSector;
+                childSectorStart = sectorCenter - availableSector / 2;
+            } else {
+                // Level 2+: Hyperbolic decay from 135° base
+                // spread = base / (1 + k * (level - 1))
+                // Level 2 parent -> Level 3 children: 135° / 1.5
+                // Level 3 parent -> Level 4 children: 135° / 2.0
+                const baseSectorSpread = Math.PI * 0.75; // 135 degrees
+                const decayRate = 0.5;
+                const levelFactor = 1 + decayRate * (level - 1);
+                const targetSpread = baseSectorSpread / levelFactor;
+
+                availableSector = Math.max(targetSpread, Math.PI * 0.15); // Min 27° spread
+
+                // Center the sector on the parent's sector center
+                const sectorCenter = sectorStart + sectorWidth / 2;
+                childSectorStart = sectorCenter - availableSector / 2;
             }
 
             data.children.forEach((child, i) => {
