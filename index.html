@@ -24458,21 +24458,15 @@ Return as JSON:
                     verticalOffset = 0;
                 }
             }
-            // Level 2+: Vertical spread decays sequentially
+            // Level 2+: Siblings spread equally UP and DOWN from parent center
             let siblingVerticalOffset = 0;
-            // Y inheritance factor - decays with level so deep nodes stay flatter
-            let yInheritance = 1.0;
-            if (level > 1) {
-                // Decay Y inheritance: level 2 gets 70%, level 3 gets 50%, level 4 gets 35%...
-                yInheritance = Math.pow(0.7, level - 1);
-
-                if (total > 1) {
-                    const verticalSpread = CONFIG.LAYOUT.verticalSpread || 3.0;
-                    // Aggressive decay for sibling spacing
-                    const levelFactor = Math.pow(0.5, level - 2); // 1, 0.5, 0.25, 0.125...
-                    const siblingSpacing = verticalSpread * levelFactor * 0.3;
-                    siblingVerticalOffset = (index - (total - 1) / 2) * siblingSpacing;
-                }
+            if (level > 1 && total > 1) {
+                const verticalSpread = CONFIG.LAYOUT.verticalSpread || 3.0;
+                // Decay the SPREAD amount with depth, but center on parent Y
+                const levelFactor = Math.pow(0.6, level - 2); // 1, 0.6, 0.36, 0.216...
+                const siblingSpacing = verticalSpread * levelFactor;
+                // This spreads equally above and below parent's Y position
+                siblingVerticalOffset = (index - (total - 1) / 2) * siblingSpacing;
             }
 
             // Position nodes
@@ -24484,10 +24478,10 @@ Return as JSON:
                 ];
             } else {
                 // Level 2+: Extend from parent position in XZ plane
-                // Y decays towards zero with depth
+                // Children centered on parent Y, spread equally up/down
                 data.basePosition = [
                     parentPos[0] + Math.cos(angle) * baseRadius,
-                    parentPos[1] * yInheritance + siblingVerticalOffset,
+                    parentPos[1] + siblingVerticalOffset,
                     parentPos[2] + Math.sin(angle) * baseRadius
                 ];
             }
