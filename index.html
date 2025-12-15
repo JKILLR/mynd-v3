@@ -7405,7 +7405,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.26</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.27</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -24056,7 +24056,7 @@ Return as JSON:
         controls.dampingFactor = 0.12;
         controls.rotateSpeed = 0.5;
         controls.minDistance = 8;
-        controls.maxDistance = 750;
+        controls.maxDistance = 1125; // 50% more than 750
         controls.enablePan = true;
         controls.panSpeed = 0.8;
         controls.maxPolarAngle = Math.PI * 0.85;
@@ -24499,9 +24499,9 @@ Return as JSON:
                     Math.sin(theta) * horizontalRadius
                 ];
 
-                // Collapsed position (40% of expanded distance - closer to root)
-                const collapsedRadius = horizontalRadius * 0.4;
-                const collapsedY = y * 0.4;
+                // Collapsed position (25% of expanded distance - much closer to root)
+                const collapsedRadius = horizontalRadius * 0.25;
+                const collapsedY = y * 0.25;
                 data.collapsedPosition = [
                     Math.cos(theta) * collapsedRadius,
                     collapsedY,
@@ -25281,23 +25281,23 @@ Return as JSON:
                     // Only proceed if this collapse wasn't cancelled by an expand
                     if (childMesh.userData.collapseId !== thisCollapseId) return;
 
-                    // Hide label immediately when animation starts
+                    // Hide label and connection line immediately when animation starts
                     if (childMesh.userData.labelSprite) childMesh.userData.labelSprite.visible = false;
                     if (childMesh.userData.contextBadge) childMesh.userData.contextBadge.visible = false;
+                    if (childMesh.userData.connectionLine) childMesh.userData.connectionLine.visible = false;
 
                     // Animate back to parent position
                     childMesh.userData.spring.target.copy(parentPos);
                     childMesh.userData.spring.scaleTarget = 0.1;
                 }, itemDelay);
 
-                // Hide node AND connection line together after animation completes
+                // Hide node after animation completes
                 setTimeout(() => {
                     // Only hide if this collapse wasn't cancelled
                     if (childMesh.userData.collapseId !== thisCollapseId) return;
                     if (!childMesh.userData.collapsed) return;
 
                     childMesh.visible = false;
-                    if (childMesh.userData.connectionLine) childMesh.userData.connectionLine.visible = false;
                     if (childMesh.userData.outlineMesh) childMesh.userData.outlineMesh.visible = false;
                     if (childMesh.userData.glowRing) childMesh.userData.glowRing.visible = false;
                     if (childMesh.userData.targetRing) childMesh.userData.targetRing.visible = false;
