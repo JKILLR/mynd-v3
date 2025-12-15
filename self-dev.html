@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MYND — Your Mind, Visualized</title>
+    <title>MYND Self Developer — Build Your Mind</title>
     <meta name="theme-color" content="#0a0a0f">
     
     <link rel="manifest" href="manifest.json">
@@ -16,6 +16,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         /* ═══════════════════════════════════════════════════════════
+           SELF DEVELOPER MODE - Hidden Elements
+           ═══════════════════════════════════════════════════════════ */
+        .self-dev-hide { display: none !important; }
+
+        /* ═══════════════════════════════════════════════════════════
            THEME SYSTEM - 6 Modern Themes
            ═══════════════════════════════════════════════════════════ */
         :root {
@@ -23,20 +28,20 @@
             --font-display: 'Space Grotesk', sans-serif;
             --font-body: 'Inter', sans-serif;
             --font-mono: 'JetBrains Mono', monospace;
-            
-            --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; 
+
+            --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
             --space-5: 20px; --space-6: 24px; --space-7: 32px; --space-8: 40px;
-            
+
             --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
             --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
             --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
-            
+
             --duration-instant: 100ms;
             --duration-fast: 200ms;
             --duration-normal: 350ms;
             --duration-slow: 500ms;
             --duration-slower: 800ms;
-            
+
             --z-bg: 0;
             --z-canvas: 1;
             --z-ui: 100;
@@ -45,7 +50,7 @@
             --z-spotlight: 250;
             --z-modal: 300;
             --z-toast: 400;
-            
+
             /* Default to Sandstone theme */
             --bg-deep: #F9F7F0;
             --bg-primary: #FAF9F6;
@@ -55,11 +60,15 @@
             --text-primary: #2C2C2C;
             --text-secondary: #5A5A52;
             --text-muted: #8A8A7E;
+            --text-tertiary: #A0A096;
             --accent: #C4978A;
             --accent-light: #D4A89A;
             --accent-glow: rgba(196, 151, 138, 0.3);
+            --accent-rgb: 196, 151, 138;
             --glass-bg: rgba(250, 249, 246, 0.92);
+            --glass-bg-light: rgba(250, 249, 246, 0.6);
             --glass-border: rgba(0, 0, 0, 0.06);
+            --glass-hover: rgba(0, 0, 0, 0.04);
             --glass-blur: 20px;
             --nebula-1: rgba(0, 0, 0, 0);
             --nebula-2: rgba(0, 0, 0, 0);
@@ -67,8 +76,10 @@
             --shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
             --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
             --shadow-lg: 0 8px 32px rgba(0,0,0,0.08);
+            --shadow-modal: 0 12px 48px rgba(0,0,0,0.12);
             --shadow-glow: 0 0 24px var(--accent-glow);
-            
+            --success: #16a34a;
+
             /* AI/Brainstorm button colors */
             --purple: #8B5CF6;
             --pink: #EC4899;
@@ -5049,15 +5060,11 @@
             margin: 0 auto var(--space-6);
             animation: spin 1s linear infinite;
         }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
+
         .spin {
             animation: spin 1s linear infinite;
         }
-        
+
         .processing-title {
             font-size: 20px;
             font-weight: 600;
@@ -5144,11 +5151,7 @@
             animation: spin 1s linear infinite;
             margin: 0 auto var(--space-4);
         }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
+
         .loader-text {
             font-family: var(--font-display);
             font-size: 18px;
@@ -5734,12 +5737,7 @@
         .link-transcript-status .spinner {
             animation: spin 1s linear infinite;
         }
-        
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-        
+
         .link-category {
             padding: 0 20px 20px;
         }
@@ -7505,7 +7503,7 @@
                 <button class="user-dropdown-signout" id="user-dropdown-signout">Sign out</button>
             </div>
             
-            <div class="user-dropdown-section">
+            <div class="user-dropdown-section self-dev-hide">
                 <div class="user-dropdown-section-title">Your Maps</div>
                 <div class="user-maps-list" id="user-maps-list">
                     <!-- Maps loaded dynamically -->
@@ -7513,7 +7511,7 @@
             </div>
             
             <div class="user-dropdown-actions">
-                <button class="user-dropdown-action" id="user-action-new">
+                <button class="user-dropdown-action self-dev-hide" id="user-action-new">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                     </svg>
@@ -7535,12 +7533,12 @@
                 </button>
             </div>
             
-            <div class="user-dropdown-sync" id="user-dropdown-sync">
+            <div class="user-dropdown-sync self-dev-hide" id="user-dropdown-sync">
                 <span class="user-dropdown-sync-dot synced"></span>
                 <span id="user-sync-status">Synced</span>
             </div>
         </div>
-        
+
         <!-- Logged out state -->
         <div id="user-dropdown-loggedout">
             <div class="user-dropdown-offline">
@@ -7607,16 +7605,16 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             Settings
         </div>
-        <div class="menu-divider"></div>
-        <div class="menu-item" id="menu-new">
+        <div class="menu-divider self-dev-hide"></div>
+        <div class="menu-item self-dev-hide" id="menu-new">
             <svg viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
             New Map
         </div>
-        <div class="menu-item" id="menu-save">
+        <div class="menu-item self-dev-hide" id="menu-save">
             <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Save Map
         </div>
-        <div class="menu-item" id="menu-load">
+        <div class="menu-item self-dev-hide" id="menu-load">
             <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             Load Map
         </div>
@@ -7758,7 +7756,185 @@
     <div id="api-key-modal">
         <div class="api-key-content">
             <div class="api-key-title">Settings</div>
-            
+
+            <!-- File Storage Section (Self Developer Mode Only) -->
+            <div id="file-storage-section" style="margin-bottom: 20px; display: none;">
+                <div style="font-size: 12px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">
+                    <span style="margin-right: 6px;">📁</span>Local File Storage
+                </div>
+                <div class="api-key-desc">Save everything (map, neural data, vision) to a file on your computer. Auto-saves after changes.</div>
+
+                <div id="file-storage-status" style="
+                    margin-top: 10px;
+                    padding: 12px;
+                    border-radius: 8px;
+                    background: var(--bg-secondary);
+                    border: 1px solid var(--glass-border);
+                ">
+                    <div id="file-storage-info" style="font-size: 12px; color: var(--text-secondary);">
+                        No save location set - data saved to browser only
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-top: 10px;">
+                    <button class="api-key-btn primary" id="file-pick-location-btn" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        Set Save Location
+                    </button>
+                    <button class="api-key-btn secondary" id="file-open-btn" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        Open File
+                    </button>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <button class="api-key-btn secondary" id="file-save-now-btn" style="flex: 1;" disabled>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                            <polyline points="17 21 17 13 7 13 7 21"/>
+                            <polyline points="7 3 7 8 15 8"/>
+                        </svg>
+                        Save Now
+                    </button>
+                    <label style="flex: 1; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary);">
+                        <input type="checkbox" id="file-auto-save-toggle" checked style="margin: 0;">
+                        Auto-save enabled
+                    </label>
+                </div>
+                <div id="file-not-supported" style="display: none; margin-top: 10px; padding: 10px; background: rgba(220, 38, 38, 0.1); border-radius: 8px; font-size: 12px; color: #dc2626;">
+                    ⚠️ File System API not supported in this browser. Use Chrome or Edge for local file storage.
+                </div>
+            </div>
+
+            <!-- Self-Improver Section (Self Developer Mode Only) -->
+            <div id="self-improver-section" style="margin-bottom: 20px; display: none;">
+                <div style="font-size: 12px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">
+                    <span style="margin-right: 6px;">🔧</span>Self-Improvement Engine
+                </div>
+                <div class="api-key-desc">MYND can analyze its own code and generate improvement patches. Review and apply changes with your approval.</div>
+
+                <div id="self-improver-status" style="
+                    margin-top: 10px;
+                    padding: 12px;
+                    border-radius: 8px;
+                    background: var(--bg-secondary);
+                    border: 1px solid var(--glass-border);
+                ">
+                    <div id="self-improver-info" style="font-size: 12px; color: var(--text-secondary);">
+                        Ready to analyze and improve
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-top: 10px;">
+                    <button class="api-key-btn primary" id="self-improve-analyze-btn" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+                        </svg>
+                        Analyze & Generate Patches
+                    </button>
+                    <button class="api-key-btn secondary" id="self-improve-pick-file-btn" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        Select Source File
+                    </button>
+                </div>
+
+                <!-- Pending Patches List -->
+                <div id="self-improver-patches" style="margin-top: 12px; display: none;">
+                    <div style="font-size: 11px; font-weight: 500; color: var(--text-muted); margin-bottom: 8px;">PENDING PATCHES</div>
+                    <div id="self-improver-patches-list" style="max-height: 200px; overflow-y: auto;"></div>
+                </div>
+
+                <!-- Diff Viewer -->
+                <div id="self-improver-diff" style="margin-top: 12px; display: none;">
+                    <div style="font-size: 11px; font-weight: 500; color: var(--text-muted); margin-bottom: 8px;">
+                        DIFF PREVIEW: <span id="diff-patch-title"></span>
+                    </div>
+                    <div id="diff-viewer" style="
+                        max-height: 300px;
+                        overflow: auto;
+                        background: var(--bg-deep);
+                        border: 1px solid var(--glass-border);
+                        border-radius: 8px;
+                        font-family: var(--font-mono);
+                        font-size: 11px;
+                        line-height: 1.4;
+                    "></div>
+                    <div style="display: flex; gap: 8px; margin-top: 10px;">
+                        <button class="api-key-btn primary" id="diff-apply-btn" style="flex: 1; background: #16a34a; border-color: #16a34a;">
+                            ✓ Apply Patch
+                        </button>
+                        <button class="api-key-btn secondary" id="diff-export-btn" style="flex: 1;">
+                            ↓ Export .patch
+                        </button>
+                        <button class="api-key-btn secondary" id="diff-reject-btn" style="flex: 1; background: rgba(220, 38, 38, 0.1); border-color: rgba(220, 38, 38, 0.3); color: #dc2626;">
+                            ✗ Reject
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Vision Document Section (Self Developer Mode Only) -->
+            <div id="vision-settings-section" style="margin-bottom: 20px; display: none;">
+                <div style="font-size: 12px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">Vision Document</div>
+                <div class="api-key-desc">Pre-train MYND on your goals, values, and vision. This document guides all AI suggestions.</div>
+                <textarea id="vision-document-editor" style="
+                    width: 100%;
+                    min-height: 200px;
+                    max-height: 400px;
+                    padding: 12px;
+                    margin-top: 10px;
+                    border: 1px solid var(--glass-border);
+                    border-radius: 8px;
+                    background: var(--bg-secondary);
+                    color: var(--text-primary);
+                    font-family: var(--font-mono);
+                    font-size: 12px;
+                    line-height: 1.5;
+                    resize: vertical;
+                " placeholder="# MYND Vision Document
+
+## Mission
+What is the core purpose of MYND?
+
+## Values
+- Value 1
+- Value 2
+
+## Goals
+- Short-term goals
+- Long-term goals
+
+## Philosophy
+The guiding principles...
+
+## Anti-patterns
+Things to avoid..."></textarea>
+                <div style="display: flex; gap: 8px; margin-top: 10px;">
+                    <button class="api-key-btn primary" id="vision-save-btn" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                            <polyline points="17 21 17 13 7 13 7 21"/>
+                            <polyline points="7 3 7 8 15 8"/>
+                        </svg>
+                        Save Vision
+                    </button>
+                    <button class="api-key-btn secondary" id="vision-reset-btn" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+                        </svg>
+                        Reset to Default
+                    </button>
+                </div>
+                <div id="vision-status" style="font-size: 11px; color: var(--text-muted); margin-top: 8px;"></div>
+            </div>
+
             <!-- Neural Network Section -->
             <div style="margin-bottom: 20px;">
                 <div style="font-size: 12px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">Neural Network</div>
@@ -9270,6 +9446,14 @@
     <!-- MYND Modules -->
     <script src="js/config.js"></script>
     <script src="js/goal-system.js"></script>
+
+    <!-- SELF DEVELOPER MODE: Embedded MYND Map Data -->
+    <script src="mynd-app-data.js"></script>
+    <script>
+        // Self Developer Mode - Restricted access version
+        const SELF_DEVELOPER_MODE = true;
+        const SELF_DEV_STORAGE_KEY = 'mynd_self_dev_data';
+    </script>
 
     <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
     <script type="module">
@@ -26618,15 +26802,1104 @@ Respond with a JSON object:
     const bus = new EventBus();
 
     // ═══════════════════════════════════════════════════════════════════
-    // DATA STORE
+    // SELF-IMPROVER ENGINE
+    // Recursive self-improvement through code analysis and generation
     // ═══════════════════════════════════════════════════════════════════
-    const defaultData = {
-        id: 'mynd',
-        label: 'My Mind',
-        color: '#A8D5E5',
-        description: '',
-        children: []
+    // This system enables MYND to identify improvements in its own code,
+    // generate patches, and optionally apply them with user approval.
+
+    const SelfImprover = {
+        STORAGE_KEY: 'mynd_self_improver',
+        VERSION: '1.0',
+        initialized: false,
+
+        // Configuration
+        config: {
+            maxPatchesPerSession: 10,
+            autoAnalyzeInterval: 3600000, // 1 hour
+            requireApproval: true,
+            backupBeforeApply: true,
+            syntaxValidation: true
+        },
+
+        // State
+        state: {
+            pendingPatches: [],
+            appliedPatches: [],
+            rejectedPatches: [],
+            analysisHistory: [],
+            lastAnalysis: null,
+            isAnalyzing: false,
+            isGenerating: false
+        },
+
+        // Current source code (loaded when needed)
+        sourceCode: null,
+        sourceFileHandle: null,
+
+        // Initialize
+        async initialize() {
+            if (this.initialized) return;
+
+            // Load saved state
+            const saved = this.loadFromStorage();
+            if (saved) {
+                this.state = { ...this.state, ...saved };
+            }
+
+            this.initialized = true;
+            console.log('🔧 SelfImprover initialized');
+            console.log(`   ${this.state.pendingPatches.length} pending patches`);
+            console.log(`   ${this.state.appliedPatches.length} applied patches`);
+
+            return this;
+        },
+
+        // Save/Load from storage
+        saveToStorage() {
+            try {
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify({
+                    version: this.VERSION,
+                    state: this.state,
+                    savedAt: Date.now()
+                }));
+            } catch (e) {
+                console.warn('Failed to save SelfImprover state:', e);
+            }
+        },
+
+        loadFromStorage() {
+            try {
+                const saved = localStorage.getItem(this.STORAGE_KEY);
+                if (saved) {
+                    const data = JSON.parse(saved);
+                    return data.state;
+                }
+            } catch (e) {
+                console.warn('Failed to load SelfImprover state:', e);
+            }
+            return null;
+        },
+
+        // ─────────────────────────────────────────────────────────────────
+        // IMPROVEMENT IDENTIFICATION
+        // ─────────────────────────────────────────────────────────────────
+
+        // Get prioritized improvements from CodeAnalyzer
+        async getImprovementCandidates(limit = 5) {
+            if (typeof CodeAnalyzer === 'undefined') {
+                console.warn('CodeAnalyzer not available');
+                return [];
+            }
+
+            // Get quick wins (high impact, low effort)
+            const quickWins = CodeAnalyzer.getQuickWins(limit);
+
+            // Also get critical improvements
+            const analysis = CodeAnalyzer.loadFromStorage();
+            const critical = [];
+
+            if (analysis?.results) {
+                for (const [category, result] of Object.entries(analysis.results)) {
+                    for (const improvement of result.improvements || []) {
+                        if (improvement.priority === 'critical' || improvement.priority === 'high') {
+                            critical.push({
+                                category,
+                                ...improvement,
+                                categoryWeight: CodeAnalyzer.CATEGORIES[category]?.weight || 5
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Combine and dedupe
+            const all = [...quickWins, ...critical];
+            const seen = new Set();
+            const unique = all.filter(item => {
+                const key = item.title + item.category;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+
+            // Sort by priority
+            unique.sort((a, b) => {
+                const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+                const pa = priorityOrder[a.priority] ?? 2;
+                const pb = priorityOrder[b.priority] ?? 2;
+                if (pa !== pb) return pa - pb;
+                return (b.categoryWeight || 5) - (a.categoryWeight || 5);
+            });
+
+            return unique.slice(0, limit);
+        },
+
+        // ─────────────────────────────────────────────────────────────────
+        // CODE PATCH GENERATION
+        // ─────────────────────────────────────────────────────────────────
+
+        // Generate a code patch for a specific improvement
+        async generatePatch(improvement) {
+            if (this.state.isGenerating) {
+                throw new Error('Already generating a patch');
+            }
+
+            this.state.isGenerating = true;
+
+            try {
+                // Get relevant code context
+                const context = await this.getCodeContext(improvement);
+
+                // Build the prompt for Claude
+                const prompt = this.buildPatchPrompt(improvement, context);
+
+                // Call Claude API
+                const response = await this.callClaudeForPatch(prompt);
+
+                // Parse the response into a structured patch
+                const patch = this.parsePatchResponse(response, improvement);
+
+                // Validate the patch
+                if (this.config.syntaxValidation) {
+                    await this.validatePatch(patch);
+                }
+
+                // Add to pending patches
+                patch.id = `patch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                patch.createdAt = Date.now();
+                patch.status = 'pending';
+                patch.improvement = improvement;
+
+                this.state.pendingPatches.push(patch);
+                this.saveToStorage();
+
+                console.log('🔧 Generated patch:', patch.title);
+                return patch;
+
+            } finally {
+                this.state.isGenerating = false;
+            }
+        },
+
+        // Get relevant code context for an improvement
+        async getCodeContext(improvement) {
+            const context = {
+                relevantCode: [],
+                relatedSystems: [],
+                existingPatterns: []
+            };
+
+            // Use CodePretraining if available
+            if (typeof CodePretraining !== 'undefined' && CodePretraining.initialized) {
+                const knowledge = CodePretraining.getContext(improvement.title, 5);
+                if (knowledge) {
+                    context.relevantCode = knowledge.functions || [];
+                    context.relatedSystems = knowledge.systems || [];
+                }
+            }
+
+            // Use CodeRAG if available
+            if (typeof CodeRAG !== 'undefined' && CodeRAG.initialized) {
+                const ragContext = await CodeRAG.query(improvement.description || improvement.title, 3);
+                if (ragContext?.chunks) {
+                    context.relevantCode.push(...ragContext.chunks.map(c => ({
+                        code: c.content,
+                        location: c.location,
+                        relevance: c.score
+                    })));
+                }
+            }
+
+            // Category-specific context
+            if (improvement.category === 'ML_INTELLIGENCE') {
+                context.relatedSystems.push('neuralNet', 'cognitiveGT', 'styleTransfer');
+            } else if (improvement.category === 'PERFORMANCE') {
+                context.relatedSystems.push('rendering', 'buildScene', 'animate');
+            } else if (improvement.category === 'AI_INTEGRATION') {
+                context.relatedSystems.push('callAI', 'voiceAI', 'AutonomousEvolution');
+            }
+
+            return context;
+        },
+
+        // Build the prompt for generating a patch
+        buildPatchPrompt(improvement, context) {
+            let prompt = `You are an expert code improver for MYND, an AI-powered mind mapping application.
+
+## Task
+Generate a specific code patch for the following improvement:
+
+**Category:** ${improvement.category}
+**Title:** ${improvement.title}
+**Description:** ${improvement.description || 'No description'}
+**Priority:** ${improvement.priority || 'medium'}
+**Estimated Effort:** ${improvement.effort || 'unknown'}
+
+## Relevant Code Context
+`;
+
+            if (context.relevantCode.length > 0) {
+                prompt += '\n### Related Code:\n';
+                for (const code of context.relevantCode.slice(0, 3)) {
+                    prompt += `\n**${code.location || 'Unknown location'}:**\n\`\`\`javascript\n${code.code?.substring(0, 1000) || code.substring?.(0, 1000) || ''}\n\`\`\`\n`;
+                }
+            }
+
+            if (context.relatedSystems.length > 0) {
+                prompt += `\n### Related Systems: ${context.relatedSystems.join(', ')}\n`;
+            }
+
+            prompt += `
+## Requirements
+1. Generate a SPECIFIC code patch that implements this improvement
+2. The patch should be minimal and focused - only change what's necessary
+3. Maintain the existing code style and patterns
+4. Include comments explaining the changes
+5. Consider edge cases and error handling
+
+## Response Format
+Respond with a JSON object in this exact format:
+\`\`\`json
+{
+    "title": "Short title for this patch",
+    "description": "What this patch does and why",
+    "risk": "low|medium|high",
+    "changes": [
+        {
+            "file": "self-dev.html",
+            "description": "What this change does",
+            "searchPattern": "The EXACT code to find (be precise, include enough context)",
+            "replacement": "The new code to replace it with",
+            "lineHint": "approximate line number or function name"
+        }
+    ],
+    "testInstructions": "How to verify this patch works correctly",
+    "rollbackInstructions": "How to undo this change if needed"
+}
+\`\`\`
+
+IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so it can be found and replaced.`;
+
+            return prompt;
+        },
+
+        // Call Claude API to generate patch
+        async callClaudeForPatch(prompt) {
+            // Check for API key
+            const apiKey = localStorage.getItem('claude_api_key');
+            if (!apiKey) {
+                throw new Error('Claude API key not set. Please add it in Settings.');
+            }
+
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 4096,
+                    messages: [{
+                        role: 'user',
+                        content: prompt
+                    }],
+                    system: 'You are a precise code improvement assistant. Generate minimal, focused patches that improve code quality without breaking existing functionality. Always respond with valid JSON.'
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(`API error: ${error}`);
+            }
+
+            const data = await response.json();
+            return data.content[0].text;
+        },
+
+        // Parse Claude's response into a structured patch
+        parsePatchResponse(response, improvement) {
+            // Extract JSON from response
+            const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+            if (!jsonMatch) {
+                // Try parsing the whole response as JSON
+                try {
+                    return JSON.parse(response);
+                } catch (e) {
+                    throw new Error('Could not parse patch response as JSON');
+                }
+            }
+
+            try {
+                const patch = JSON.parse(jsonMatch[1]);
+
+                // Validate required fields
+                if (!patch.title || !patch.changes || !Array.isArray(patch.changes)) {
+                    throw new Error('Invalid patch structure');
+                }
+
+                return patch;
+            } catch (e) {
+                throw new Error(`Failed to parse patch JSON: ${e.message}`);
+            }
+        },
+
+        // Validate a patch (basic syntax check)
+        async validatePatch(patch) {
+            for (const change of patch.changes) {
+                // Check that replacement is valid JavaScript (basic check)
+                if (change.replacement) {
+                    try {
+                        // Try to parse as a function or statement
+                        new Function(change.replacement);
+                    } catch (e) {
+                        // It might be a partial snippet, which is okay
+                        // Just log a warning
+                        console.warn(`Patch validation warning: ${e.message}`);
+                    }
+                }
+            }
+            return true;
+        },
+
+        // ─────────────────────────────────────────────────────────────────
+        // PATCH APPLICATION
+        // ─────────────────────────────────────────────────────────────────
+
+        // Apply a patch (with user approval)
+        async applyPatch(patchId, options = {}) {
+            const patch = this.state.pendingPatches.find(p => p.id === patchId);
+            if (!patch) {
+                throw new Error('Patch not found');
+            }
+
+            // Require approval unless explicitly bypassed
+            if (this.config.requireApproval && !options.approved) {
+                throw new Error('Patch requires approval before applying');
+            }
+
+            // Get the source file
+            if (!this.sourceFileHandle) {
+                throw new Error('No source file handle. Use pickSourceFile() first.');
+            }
+
+            try {
+                // Read current source
+                const file = await this.sourceFileHandle.getFile();
+                let sourceCode = await file.text();
+
+                // Backup if configured
+                if (this.config.backupBeforeApply) {
+                    patch.backup = sourceCode;
+                }
+
+                // Apply each change
+                let appliedCount = 0;
+                for (const change of patch.changes) {
+                    const originalLength = sourceCode.length;
+
+                    if (change.searchPattern && change.replacement !== undefined) {
+                        // Exact string replacement
+                        if (sourceCode.includes(change.searchPattern)) {
+                            sourceCode = sourceCode.replace(change.searchPattern, change.replacement);
+                            appliedCount++;
+                            console.log(`  ✓ Applied change: ${change.description}`);
+                        } else {
+                            console.warn(`  ⚠ Could not find pattern for: ${change.description}`);
+                        }
+                    }
+
+                    if (sourceCode.length === originalLength && change.replacement !== change.searchPattern) {
+                        console.warn(`  ⚠ Change had no effect: ${change.description}`);
+                    }
+                }
+
+                if (appliedCount === 0) {
+                    throw new Error('No changes could be applied - patterns not found');
+                }
+
+                // Write back to file
+                const writable = await this.sourceFileHandle.createWritable();
+                await writable.write(sourceCode);
+                await writable.close();
+
+                // Update patch status
+                patch.status = 'applied';
+                patch.appliedAt = Date.now();
+                patch.appliedChanges = appliedCount;
+
+                // Move to applied list
+                this.state.pendingPatches = this.state.pendingPatches.filter(p => p.id !== patchId);
+                this.state.appliedPatches.push(patch);
+                this.saveToStorage();
+
+                console.log(`🔧 Patch applied: ${patch.title} (${appliedCount}/${patch.changes.length} changes)`);
+
+                return {
+                    success: true,
+                    patch,
+                    appliedChanges: appliedCount,
+                    totalChanges: patch.changes.length
+                };
+
+            } catch (error) {
+                console.error('Failed to apply patch:', error);
+                patch.status = 'failed';
+                patch.error = error.message;
+                this.saveToStorage();
+                throw error;
+            }
+        },
+
+        // Rollback an applied patch
+        async rollbackPatch(patchId) {
+            const patch = this.state.appliedPatches.find(p => p.id === patchId);
+            if (!patch) {
+                throw new Error('Applied patch not found');
+            }
+
+            if (!patch.backup) {
+                throw new Error('No backup available for this patch');
+            }
+
+            if (!this.sourceFileHandle) {
+                throw new Error('No source file handle');
+            }
+
+            // Write backup back to file
+            const writable = await this.sourceFileHandle.createWritable();
+            await writable.write(patch.backup);
+            await writable.close();
+
+            // Update status
+            patch.status = 'rolled_back';
+            patch.rolledBackAt = Date.now();
+
+            // Move back to pending
+            this.state.appliedPatches = this.state.appliedPatches.filter(p => p.id !== patchId);
+            this.state.pendingPatches.unshift(patch);
+            this.saveToStorage();
+
+            console.log(`🔧 Patch rolled back: ${patch.title}`);
+
+            return { success: true, patch };
+        },
+
+        // Reject a pending patch
+        rejectPatch(patchId, reason = '') {
+            const patch = this.state.pendingPatches.find(p => p.id === patchId);
+            if (!patch) {
+                throw new Error('Patch not found');
+            }
+
+            patch.status = 'rejected';
+            patch.rejectedAt = Date.now();
+            patch.rejectionReason = reason;
+
+            this.state.pendingPatches = this.state.pendingPatches.filter(p => p.id !== patchId);
+            this.state.rejectedPatches.push(patch);
+            this.saveToStorage();
+
+            console.log(`🔧 Patch rejected: ${patch.title}`);
+
+            return { success: true, patch };
+        },
+
+        // ─────────────────────────────────────────────────────────────────
+        // FILE HANDLING
+        // ─────────────────────────────────────────────────────────────────
+
+        // Let user pick the source file to modify
+        async pickSourceFile() {
+            if (!('showOpenFilePicker' in window)) {
+                throw new Error('File System API not supported');
+            }
+
+            try {
+                const [handle] = await window.showOpenFilePicker({
+                    types: [{
+                        description: 'HTML/JavaScript Files',
+                        accept: {
+                            'text/html': ['.html'],
+                            'application/javascript': ['.js']
+                        }
+                    }],
+                    multiple: false
+                });
+
+                this.sourceFileHandle = handle;
+
+                // Read the file
+                const file = await handle.getFile();
+                this.sourceCode = await file.text();
+
+                console.log(`🔧 Source file loaded: ${handle.name} (${Math.round(this.sourceCode.length / 1024)}KB)`);
+
+                return {
+                    name: handle.name,
+                    size: this.sourceCode.length
+                };
+
+            } catch (e) {
+                if (e.name === 'AbortError') {
+                    return null;
+                }
+                throw e;
+            }
+        },
+
+        // ─────────────────────────────────────────────────────────────────
+        // EXPORT
+        // ─────────────────────────────────────────────────────────────────
+
+        // Export a patch as a .patch file
+        exportPatch(patchId) {
+            const patch = this.state.pendingPatches.find(p => p.id === patchId) ||
+                         this.state.appliedPatches.find(p => p.id === patchId);
+
+            if (!patch) {
+                throw new Error('Patch not found');
+            }
+
+            // Generate unified diff format
+            let diffContent = `# MYND Self-Improvement Patch
+# Title: ${patch.title}
+# Generated: ${new Date(patch.createdAt).toISOString()}
+# Risk: ${patch.risk || 'unknown'}
+#
+# ${patch.description}
+#
+# Test Instructions: ${patch.testInstructions || 'N/A'}
+# Rollback: ${patch.rollbackInstructions || 'Restore from backup'}
+
+`;
+
+            for (const change of patch.changes) {
+                diffContent += `
+--- a/${change.file}
++++ b/${change.file}
+@@ ${change.lineHint || 'unknown location'} - ${change.description} @@
+-${change.searchPattern?.split('\n').join('\n-') || ''}
++${change.replacement?.split('\n').join('\n+') || ''}
+
+`;
+            }
+
+            // Create download
+            const blob = new Blob([diffContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `mynd-patch-${patchId}.patch`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            return { success: true, filename: a.download };
+        },
+
+        // Export all pending patches
+        exportAllPatches() {
+            const exported = [];
+            for (const patch of this.state.pendingPatches) {
+                this.exportPatch(patch.id);
+                exported.push(patch.id);
+            }
+            return { exported };
+        },
+
+        // ─────────────────────────────────────────────────────────────────
+        // FULL IMPROVEMENT CYCLE
+        // ─────────────────────────────────────────────────────────────────
+
+        // Run a full improvement cycle
+        async runImprovementCycle(options = {}) {
+            const { maxPatches = 3, autoApply = false } = options;
+
+            console.log('🔧 Starting self-improvement cycle...');
+            this.state.isAnalyzing = true;
+
+            const results = {
+                analyzed: 0,
+                generated: 0,
+                applied: 0,
+                failed: 0,
+                patches: []
+            };
+
+            try {
+                // Step 1: Get improvement candidates
+                console.log('  1. Identifying improvements...');
+                const candidates = await this.getImprovementCandidates(maxPatches);
+                results.analyzed = candidates.length;
+                console.log(`     Found ${candidates.length} improvement candidates`);
+
+                // Step 2: Generate patches for each
+                console.log('  2. Generating patches...');
+                for (const improvement of candidates) {
+                    try {
+                        console.log(`     - ${improvement.title}...`);
+                        const patch = await this.generatePatch(improvement);
+                        results.generated++;
+                        results.patches.push(patch);
+                    } catch (error) {
+                        console.error(`     ✗ Failed: ${error.message}`);
+                        results.failed++;
+                    }
+                }
+
+                // Step 3: Auto-apply if configured
+                if (autoApply && this.sourceFileHandle) {
+                    console.log('  3. Auto-applying patches...');
+                    for (const patch of results.patches) {
+                        if (patch.risk !== 'high') {
+                            try {
+                                await this.applyPatch(patch.id, { approved: true });
+                                results.applied++;
+                            } catch (error) {
+                                console.error(`     ✗ Apply failed: ${error.message}`);
+                            }
+                        } else {
+                            console.log(`     ⚠ Skipping high-risk patch: ${patch.title}`);
+                        }
+                    }
+                }
+
+                console.log(`🔧 Improvement cycle complete: ${results.generated} patches generated, ${results.applied} applied`);
+
+            } finally {
+                this.state.isAnalyzing = false;
+                this.state.lastAnalysis = Date.now();
+                this.saveToStorage();
+            }
+
+            return results;
+        },
+
+        // ─────────────────────────────────────────────────────────────────
+        // DIFF GENERATION
+        // ─────────────────────────────────────────────────────────────────
+
+        // Generate a visual diff for a patch
+        generateDiff(patch) {
+            const diffs = [];
+
+            for (const change of patch.changes) {
+                const oldLines = (change.searchPattern || '').split('\n');
+                const newLines = (change.replacement || '').split('\n');
+
+                diffs.push({
+                    file: change.file,
+                    description: change.description,
+                    location: change.lineHint,
+                    oldCode: change.searchPattern,
+                    newCode: change.replacement,
+                    oldLines,
+                    newLines,
+                    additions: newLines.length,
+                    deletions: oldLines.length
+                });
+            }
+
+            return diffs;
+        },
+
+        // Get status summary
+        getStatus() {
+            return {
+                initialized: this.initialized,
+                hasSourceFile: !!this.sourceFileHandle,
+                sourceFileName: this.sourceFileHandle?.name || null,
+                pendingCount: this.state.pendingPatches.length,
+                appliedCount: this.state.appliedPatches.length,
+                rejectedCount: this.state.rejectedPatches.length,
+                isAnalyzing: this.state.isAnalyzing,
+                isGenerating: this.state.isGenerating,
+                lastAnalysis: this.state.lastAnalysis
+            };
+        }
     };
+
+    // Make SelfImprover globally accessible
+    window.SelfImprover = SelfImprover;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // FILE SYSTEM STORAGE (Self Developer Mode)
+    // Direct file system access for saving data to your computer
+    // ═══════════════════════════════════════════════════════════════════
+
+    const FileSystemStorage = {
+        // File handle for persistent access
+        fileHandle: null,
+        directoryHandle: null,
+        fileName: 'mynd-self-dev.json',
+
+        // Auto-save configuration
+        autoSaveEnabled: true,
+        autoSaveDebounceMs: 2000,
+        autoSaveTimer: null,
+        lastSaveTime: null,
+        isDirty: false,
+
+        // Check if File System Access API is supported
+        isSupported() {
+            return 'showSaveFilePicker' in window && 'showOpenFilePicker' in window;
+        },
+
+        // Initialize - try to restore previous file handle
+        async initialize() {
+            if (!this.isSupported()) {
+                console.log('📁 File System Access API not supported - using localStorage fallback');
+                return false;
+            }
+
+            // Check if we have a stored directory handle (for auto-reconnect)
+            try {
+                const stored = localStorage.getItem('mynd_fs_handle_name');
+                if (stored) {
+                    console.log('📁 Previous save location:', stored);
+                    // Note: We can't restore the handle directly due to security,
+                    // but we can prompt the user to re-select the same location
+                }
+            } catch (e) {
+                console.warn('Could not check stored file handle:', e);
+            }
+
+            console.log('📁 FileSystemStorage initialized - use pickSaveLocation() to choose file');
+            return true;
+        },
+
+        // Let user pick where to save the file
+        async pickSaveLocation() {
+            if (!this.isSupported()) {
+                showToast('File System API not supported in this browser', 'error');
+                return false;
+            }
+
+            try {
+                // Show save file picker
+                this.fileHandle = await window.showSaveFilePicker({
+                    suggestedName: this.fileName,
+                    types: [{
+                        description: 'MYND Data File',
+                        accept: { 'application/json': ['.json'] }
+                    }]
+                });
+
+                // Store the file name for reference
+                localStorage.setItem('mynd_fs_handle_name', this.fileHandle.name);
+
+                console.log('📁 Save location set:', this.fileHandle.name);
+                showToast(`Save location: ${this.fileHandle.name}`, 'success');
+
+                // Do an immediate save
+                await this.saveNow();
+
+                return true;
+            } catch (e) {
+                if (e.name === 'AbortError') {
+                    console.log('📁 File picker cancelled');
+                    return false;
+                }
+                console.error('Error picking save location:', e);
+                showToast('Failed to set save location', 'error');
+                return false;
+            }
+        },
+
+        // Open an existing file
+        async openFile() {
+            if (!this.isSupported()) {
+                showToast('File System API not supported in this browser', 'error');
+                return null;
+            }
+
+            try {
+                const [handle] = await window.showOpenFilePicker({
+                    types: [{
+                        description: 'MYND Data File',
+                        accept: { 'application/json': ['.json'] }
+                    }],
+                    multiple: false
+                });
+
+                this.fileHandle = handle;
+                localStorage.setItem('mynd_fs_handle_name', handle.name);
+
+                // Read the file
+                const file = await handle.getFile();
+                const contents = await file.text();
+                const data = JSON.parse(contents);
+
+                console.log('📁 Loaded file:', handle.name);
+                showToast(`Loaded: ${handle.name}`, 'success');
+
+                return data;
+            } catch (e) {
+                if (e.name === 'AbortError') {
+                    console.log('📁 File picker cancelled');
+                    return null;
+                }
+                console.error('Error opening file:', e);
+                showToast('Failed to open file', 'error');
+                return null;
+            }
+        },
+
+        // Save data immediately
+        async saveNow() {
+            if (!this.fileHandle) {
+                console.log('📁 No file handle - saving to localStorage only');
+                return false;
+            }
+
+            try {
+                // Gather all data to save
+                const exportData = await this.gatherAllData();
+
+                // Write to file
+                const writable = await this.fileHandle.createWritable();
+                await writable.write(JSON.stringify(exportData, null, 2));
+                await writable.close();
+
+                this.lastSaveTime = Date.now();
+                this.isDirty = false;
+
+                console.log('📁 Saved to file:', this.fileHandle.name, '(' + Math.round(JSON.stringify(exportData).length / 1024) + 'KB)');
+
+                // Emit event for UI updates
+                bus.emit('file:saved', { fileName: this.fileHandle.name, time: this.lastSaveTime });
+
+                return true;
+            } catch (e) {
+                console.error('Error saving to file:', e);
+                showToast('Failed to save to file', 'error');
+                return false;
+            }
+        },
+
+        // Schedule a debounced auto-save
+        scheduleSave() {
+            if (!this.autoSaveEnabled || !this.fileHandle) return;
+
+            this.isDirty = true;
+
+            // Clear existing timer
+            if (this.autoSaveTimer) {
+                clearTimeout(this.autoSaveTimer);
+            }
+
+            // Schedule new save
+            this.autoSaveTimer = setTimeout(async () => {
+                await this.saveNow();
+            }, this.autoSaveDebounceMs);
+        },
+
+        // Gather all data (map + neural + vision + everything)
+        async gatherAllData() {
+            const data = {
+                version: 4, // New file system format
+                savedAt: new Date().toISOString(),
+                savedFrom: 'MYND Self Developer',
+
+                // Map data
+                map: window.store?.data || null,
+
+                // Vision document
+                vision: localStorage.getItem('mynd_vision_document') || null,
+
+                // Neural network data
+                neural: {
+                    modelData: null,
+                    embeddings: null,
+                    patternWeights: null,
+                    expansionPatterns: null,
+                    categories: null,
+                    commonPatterns: null
+                },
+
+                // Learning systems
+                userProfile: null,
+                metaLearner: null,
+                conceptAbstractor: null,
+                semanticMemory: null,
+                preferenceHistory: null,
+
+                // Advanced systems
+                cognitiveGT: null,
+                styleTransfer: null,
+                codeAnalysis: null,
+                autonomousEvolution: null
+            };
+
+            try {
+                // Get neural network data from IndexedDB
+                if (typeof NeuralDB !== 'undefined') {
+                    data.neural.modelData = await NeuralDB.load('neural-models');
+                    data.neural.embeddings = await NeuralDB.load('embeddings');
+                    data.userProfile = await NeuralDB.load('user-profile');
+                    data.metaLearner = await NeuralDB.load('meta-learner');
+                    data.conceptAbstractor = await NeuralDB.load('concept-abstractions');
+                    data.semanticMemory = await NeuralDB.load('semantic-memories');
+                    data.preferenceHistory = await NeuralDB.load('preference-history');
+                }
+
+                // Get live neural net state
+                if (typeof neuralNet !== 'undefined' && neuralNet.isReady) {
+                    if (neuralNet.patternWeights?.size > 0) {
+                        data.neural.patternWeights = Object.fromEntries(neuralNet.patternWeights);
+                    }
+                    if (neuralNet.expansionPatterns?.size > 0) {
+                        data.neural.expansionPatterns = Object.fromEntries(neuralNet.expansionPatterns);
+                    }
+                    if (neuralNet.categories?.length > 0) {
+                        data.neural.categories = neuralNet.categories;
+                    }
+                    if (neuralNet.commonPatterns?.length > 0) {
+                        data.neural.commonPatterns = neuralNet.commonPatterns;
+                    }
+                }
+
+                // Get Cognitive Graph Transformer data
+                if (typeof cognitiveGT !== 'undefined' && cognitiveGT.initialized) {
+                    data.cognitiveGT = cognitiveGT.getExportData();
+                }
+
+                // Get Style Transfer data
+                if (typeof styleTransfer !== 'undefined' && styleTransfer.initialized) {
+                    data.styleTransfer = styleTransfer.export();
+                }
+
+                // Get CodeAnalyzer data
+                if (typeof CodeAnalyzer !== 'undefined') {
+                    data.codeAnalysis = CodeAnalyzer.loadFromStorage();
+                }
+
+                // Get AutonomousEvolution data
+                if (typeof AutonomousEvolution !== 'undefined') {
+                    data.autonomousEvolution = AutonomousEvolution.loadFromStorage();
+                }
+
+            } catch (e) {
+                console.warn('Could not gather some neural data:', e);
+            }
+
+            return data;
+        },
+
+        // Restore all data from a loaded file
+        async restoreAllData(data) {
+            if (!data) return false;
+
+            try {
+                console.log('📁 Restoring data from file (version ' + data.version + ')');
+
+                // Restore map data
+                if (data.map && window.store) {
+                    window.store.data = data.map;
+                    window.store.save();
+                    console.log('  ✓ Map data restored');
+                }
+
+                // Restore vision document
+                if (data.vision) {
+                    localStorage.setItem('mynd_vision_document', data.vision);
+                    if (typeof VisionCore !== 'undefined') {
+                        await VisionCore.setVision(data.vision);
+                    }
+                    console.log('  ✓ Vision document restored');
+                }
+
+                // Restore neural data to IndexedDB
+                if (typeof NeuralDB !== 'undefined') {
+                    if (data.neural?.modelData) {
+                        await NeuralDB.save('neural-models', data.neural.modelData);
+                        console.log('  ✓ Neural models restored');
+                    }
+                    if (data.neural?.embeddings) {
+                        await NeuralDB.save('embeddings', data.neural.embeddings);
+                        console.log('  ✓ Embeddings restored');
+                    }
+                    if (data.userProfile) {
+                        await NeuralDB.save('user-profile', data.userProfile);
+                        console.log('  ✓ User profile restored');
+                    }
+                    if (data.metaLearner) {
+                        await NeuralDB.save('meta-learner', data.metaLearner);
+                        console.log('  ✓ Meta learner restored');
+                    }
+                    if (data.conceptAbstractor) {
+                        await NeuralDB.save('concept-abstractions', data.conceptAbstractor);
+                        console.log('  ✓ Concept abstractor restored');
+                    }
+                    if (data.semanticMemory) {
+                        await NeuralDB.save('semantic-memories', data.semanticMemory);
+                        console.log('  ✓ Semantic memory restored');
+                    }
+                    if (data.preferenceHistory) {
+                        await NeuralDB.save('preference-history', data.preferenceHistory);
+                        console.log('  ✓ Preference history restored');
+                    }
+                }
+
+                // Restore live neural net state
+                if (typeof neuralNet !== 'undefined' && data.neural) {
+                    if (data.neural.patternWeights) {
+                        neuralNet.patternWeights = new Map(Object.entries(data.neural.patternWeights));
+                    }
+                    if (data.neural.expansionPatterns) {
+                        neuralNet.expansionPatterns = new Map(Object.entries(data.neural.expansionPatterns));
+                    }
+                    if (data.neural.categories) {
+                        neuralNet.categories = data.neural.categories;
+                    }
+                    if (data.neural.commonPatterns) {
+                        neuralNet.commonPatterns = data.neural.commonPatterns;
+                    }
+                    console.log('  ✓ Live neural state restored');
+                }
+
+                console.log('📁 Data restoration complete');
+                return true;
+
+            } catch (e) {
+                console.error('Error restoring data:', e);
+                return false;
+            }
+        },
+
+        // Get status for UI
+        getStatus() {
+            return {
+                isSupported: this.isSupported(),
+                hasFileHandle: !!this.fileHandle,
+                fileName: this.fileHandle?.name || localStorage.getItem('mynd_fs_handle_name') || null,
+                lastSaveTime: this.lastSaveTime,
+                isDirty: this.isDirty,
+                autoSaveEnabled: this.autoSaveEnabled
+            };
+        }
+    };
+
+    // Make FileSystemStorage globally accessible
+    window.FileSystemStorage = FileSystemStorage;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // DATA STORE (SELF DEVELOPER MODE)
+    // ═══════════════════════════════════════════════════════════════════
+
+    // In Self Developer Mode, use the embedded MYND map as default
+    const defaultData = (typeof SELF_DEVELOPER_MODE !== 'undefined' && SELF_DEVELOPER_MODE && typeof EMBEDDED_MYND_MAP !== 'undefined')
+        ? JSON.parse(JSON.stringify(EMBEDDED_MYND_MAP.map))
+        : {
+            id: 'mynd',
+            label: 'My Mind',
+            color: '#A8D5E5',
+            description: '',
+            children: []
+        };
 
     class Store {
         constructor() {
@@ -26636,31 +27909,47 @@ Respond with a JSON object:
             this.undoStack = [];
             this.maxUndoSteps = 50;
         }
-        
+
         load() {
+            // In Self Developer Mode, use dedicated storage key
+            const storageKey = (typeof SELF_DEVELOPER_MODE !== 'undefined' && SELF_DEVELOPER_MODE)
+                ? (typeof SELF_DEV_STORAGE_KEY !== 'undefined' ? SELF_DEV_STORAGE_KEY : 'mynd_self_dev_data')
+                : CONFIG.STORAGE_KEY;
+
             try {
-                const saved = localStorage.getItem(CONFIG.STORAGE_KEY);
+                const saved = localStorage.getItem(storageKey);
                 if (saved) {
                     const parsed = JSON.parse(saved);
                     // Validate basic structure
                     if (parsed && parsed.id && parsed.label) {
                         return parsed;
                     }
-                    console.warn('Invalid saved data structure, using defaults');
+                    console.warn('Invalid saved data structure, using embedded MYND map');
                 }
             } catch (e) {
-                console.warn('Failed to parse saved data, using defaults:', e.message);
+                console.warn('Failed to parse saved data, using embedded MYND map:', e.message);
             }
+            // Return embedded map as default in Self Developer Mode
             return JSON.parse(JSON.stringify(defaultData));
         }
         
         save() {
+            // In Self Developer Mode, use dedicated storage key and skip cloud sync
+            const storageKey = (typeof SELF_DEVELOPER_MODE !== 'undefined' && SELF_DEVELOPER_MODE)
+                ? (typeof SELF_DEV_STORAGE_KEY !== 'undefined' ? SELF_DEV_STORAGE_KEY : 'mynd_self_dev_data')
+                : CONFIG.STORAGE_KEY;
+
             try {
-                localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(this.data));
+                localStorage.setItem(storageKey, JSON.stringify(this.data));
                 bus.emit('data:saved');
-                
-                // Sync to cloud (debounced)
-                if (SupabaseSync.syncEnabled) {
+
+                // In Self Developer Mode, also save to file system
+                if (typeof SELF_DEVELOPER_MODE !== 'undefined' && SELF_DEVELOPER_MODE) {
+                    if (typeof FileSystemStorage !== 'undefined' && FileSystemStorage.fileHandle) {
+                        FileSystemStorage.scheduleSave();
+                    }
+                } else if (SupabaseSync.syncEnabled) {
+                    // Sync to cloud (debounced) - disabled in Self Developer Mode
                     SupabaseSync.scheduleSave(this.exportData(), this.data?.label || 'My Mind');
                 }
             } catch (e) {
@@ -36059,6 +37348,490 @@ Respond with JSON only:`;
     });
 
     // ═══════════════════════════════════════════════════════════════════
+    // FILE STORAGE & VISION UI HANDLERS (Self Developer Mode)
+    // ═══════════════════════════════════════════════════════════════════
+    if (typeof SELF_DEVELOPER_MODE !== 'undefined' && SELF_DEVELOPER_MODE) {
+
+        // ─────────────────────────────────────────────────────────────────
+        // FILE STORAGE HANDLERS
+        // ─────────────────────────────────────────────────────────────────
+
+        // Show file storage section
+        const fileStorageSection = document.getElementById('file-storage-section');
+        if (fileStorageSection) {
+            fileStorageSection.style.display = 'block';
+        }
+
+        // Check if File System API is supported
+        if (!FileSystemStorage.isSupported()) {
+            document.getElementById('file-not-supported').style.display = 'block';
+            document.getElementById('file-pick-location-btn').disabled = true;
+            document.getElementById('file-open-btn').disabled = true;
+        }
+
+        // Update file storage status display
+        function updateFileStorageUI() {
+            const status = FileSystemStorage.getStatus();
+            const infoEl = document.getElementById('file-storage-info');
+            const saveNowBtn = document.getElementById('file-save-now-btn');
+
+            if (status.hasFileHandle) {
+                let statusText = `<strong style="color: var(--accent);">📁 ${status.fileName}</strong>`;
+                if (status.lastSaveTime) {
+                    const ago = Math.round((Date.now() - status.lastSaveTime) / 1000);
+                    if (ago < 60) {
+                        statusText += `<br><span style="font-size: 11px;">Last saved: ${ago}s ago</span>`;
+                    } else {
+                        statusText += `<br><span style="font-size: 11px;">Last saved: ${Math.round(ago / 60)}m ago</span>`;
+                    }
+                }
+                if (status.isDirty) {
+                    statusText += `<br><span style="font-size: 11px; color: #f59e0b;">● Unsaved changes</span>`;
+                }
+                infoEl.innerHTML = statusText;
+                saveNowBtn.disabled = false;
+            } else {
+                infoEl.innerHTML = 'No save location set - data saved to browser only';
+                saveNowBtn.disabled = true;
+            }
+        }
+
+        // Listen for file save events
+        bus.on('file:saved', () => {
+            updateFileStorageUI();
+        });
+
+        // Set save location button
+        document.getElementById('file-pick-location-btn')?.addEventListener('click', async () => {
+            await FileSystemStorage.pickSaveLocation();
+            updateFileStorageUI();
+        });
+
+        // Open file button
+        document.getElementById('file-open-btn')?.addEventListener('click', async () => {
+            const data = await FileSystemStorage.openFile();
+            if (data) {
+                const confirmed = await showConfirm({
+                    title: 'Load Data from File',
+                    message: `Load data from "${FileSystemStorage.fileHandle?.name}"? This will replace your current map and neural data.`,
+                    confirmText: 'Load',
+                    cancelText: 'Cancel',
+                    danger: true
+                });
+
+                if (confirmed) {
+                    await FileSystemStorage.restoreAllData(data);
+                    buildScene();
+                    resetCamera();
+                    updateFileStorageUI();
+                    showToast('Data loaded from file', 'success');
+                }
+            }
+        });
+
+        // Save now button
+        document.getElementById('file-save-now-btn')?.addEventListener('click', async () => {
+            const btn = document.getElementById('file-save-now-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<span style="margin-right: 6px;">⏳</span>Saving...';
+
+            await FileSystemStorage.saveNow();
+
+            btn.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                    <polyline points="17 21 17 13 7 13 7 21"/>
+                    <polyline points="7 3 7 8 15 8"/>
+                </svg>
+                Save Now
+            `;
+            btn.disabled = false;
+            updateFileStorageUI();
+        });
+
+        // Auto-save toggle
+        document.getElementById('file-auto-save-toggle')?.addEventListener('change', (e) => {
+            FileSystemStorage.autoSaveEnabled = e.target.checked;
+            showToast(`Auto-save ${e.target.checked ? 'enabled' : 'disabled'}`, 'info');
+        });
+
+        // Initialize FileSystemStorage
+        FileSystemStorage.initialize();
+
+        // ─────────────────────────────────────────────────────────────────
+        // SELF-IMPROVER HANDLERS
+        // ─────────────────────────────────────────────────────────────────
+
+        // Show self-improver section
+        const selfImproverSection = document.getElementById('self-improver-section');
+        if (selfImproverSection) {
+            selfImproverSection.style.display = 'block';
+        }
+
+        // State for diff viewer
+        let currentViewingPatch = null;
+
+        // Update self-improver status display
+        function updateSelfImproverUI() {
+            const status = SelfImprover.getStatus();
+            const infoEl = document.getElementById('self-improver-info');
+            const patchesContainer = document.getElementById('self-improver-patches');
+            const patchesList = document.getElementById('self-improver-patches-list');
+
+            let statusHTML = '';
+
+            if (status.hasSourceFile) {
+                statusHTML += `<strong style="color: var(--accent);">📄 ${status.sourceFileName}</strong><br>`;
+            } else {
+                statusHTML += `<span style="color: #f59e0b;">⚠ No source file selected</span><br>`;
+            }
+
+            statusHTML += `<span style="font-size: 11px;">`;
+            statusHTML += `Pending: ${status.pendingCount} | Applied: ${status.appliedCount} | Rejected: ${status.rejectedCount}`;
+            if (status.isAnalyzing) {
+                statusHTML += ` | <span style="color: var(--accent);">Analyzing...</span>`;
+            }
+            if (status.isGenerating) {
+                statusHTML += ` | <span style="color: var(--accent);">Generating patch...</span>`;
+            }
+            statusHTML += `</span>`;
+
+            infoEl.innerHTML = statusHTML;
+
+            // Show/hide patches list
+            if (status.pendingCount > 0) {
+                patchesContainer.style.display = 'block';
+                patchesList.innerHTML = SelfImprover.state.pendingPatches.map(patch => `
+                    <div class="self-improver-patch-item" data-patch-id="${patch.id}" style="
+                        padding: 8px 10px;
+                        margin-bottom: 6px;
+                        background: var(--bg-tertiary);
+                        border-radius: 6px;
+                        cursor: pointer;
+                        border-left: 3px solid ${patch.risk === 'high' ? '#dc2626' : patch.risk === 'medium' ? '#f59e0b' : '#16a34a'};
+                    ">
+                        <div style="font-size: 12px; font-weight: 500; color: var(--text-primary);">${patch.title}</div>
+                        <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+                            ${patch.changes?.length || 0} changes | Risk: ${patch.risk || 'unknown'} | ${patch.improvement?.category || 'General'}
+                        </div>
+                    </div>
+                `).join('');
+
+                // Add click handlers
+                patchesList.querySelectorAll('.self-improver-patch-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const patchId = item.dataset.patchId;
+                        showPatchDiff(patchId);
+                    });
+                });
+            } else {
+                patchesContainer.style.display = 'none';
+            }
+        }
+
+        // Show diff for a specific patch
+        function showPatchDiff(patchId) {
+            const patch = SelfImprover.state.pendingPatches.find(p => p.id === patchId);
+            if (!patch) return;
+
+            currentViewingPatch = patch;
+
+            const diffContainer = document.getElementById('self-improver-diff');
+            const diffViewer = document.getElementById('diff-viewer');
+            const titleEl = document.getElementById('diff-patch-title');
+
+            titleEl.textContent = patch.title;
+
+            // Generate diff HTML
+            const diffs = SelfImprover.generateDiff(patch);
+            let diffHTML = '';
+
+            for (const diff of diffs) {
+                diffHTML += `
+                    <div style="padding: 8px; border-bottom: 1px solid var(--glass-border);">
+                        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 6px;">
+                            📄 ${diff.file} - ${diff.description}
+                            <span style="color: var(--accent);">${diff.location || ''}</span>
+                        </div>
+                        <div style="background: rgba(220, 38, 38, 0.1); padding: 6px; border-radius: 4px; margin-bottom: 4px;">
+                            <div style="font-size: 9px; color: #dc2626; margin-bottom: 4px;">- REMOVE (${diff.deletions} lines)</div>
+                            <pre style="margin: 0; white-space: pre-wrap; word-break: break-all; color: #dc2626; font-size: 10px;">${escapeHtml(diff.oldCode || '')}</pre>
+                        </div>
+                        <div style="background: rgba(22, 163, 74, 0.1); padding: 6px; border-radius: 4px;">
+                            <div style="font-size: 9px; color: #16a34a; margin-bottom: 4px;">+ ADD (${diff.additions} lines)</div>
+                            <pre style="margin: 0; white-space: pre-wrap; word-break: break-all; color: #16a34a; font-size: 10px;">${escapeHtml(diff.newCode || '')}</pre>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (patch.testInstructions) {
+                diffHTML += `
+                    <div style="padding: 8px; background: rgba(59, 130, 246, 0.1); border-radius: 0 0 8px 8px;">
+                        <div style="font-size: 10px; color: #3b82f6;">📋 Test: ${patch.testInstructions}</div>
+                    </div>
+                `;
+            }
+
+            diffViewer.innerHTML = diffHTML;
+            diffContainer.style.display = 'block';
+        }
+
+        // Helper to escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Pick source file button
+        document.getElementById('self-improve-pick-file-btn')?.addEventListener('click', async () => {
+            const result = await SelfImprover.pickSourceFile();
+            if (result) {
+                showToast(`Loaded: ${result.name}`, 'success');
+            }
+            updateSelfImproverUI();
+        });
+
+        // Analyze & Generate button
+        document.getElementById('self-improve-analyze-btn')?.addEventListener('click', async () => {
+            const btn = document.getElementById('self-improve-analyze-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<span style="margin-right: 6px;">⏳</span>Analyzing...';
+
+            try {
+                // Make sure CodeAnalyzer has run
+                if (typeof CodeAnalyzer !== 'undefined' && !CodeAnalyzer.loadFromStorage()) {
+                    showToast('Running code analysis first...', 'info');
+                    await CodeAnalyzer.analyze();
+                }
+
+                // Run improvement cycle
+                const results = await SelfImprover.runImprovementCycle({ maxPatches: 3 });
+
+                if (results.generated > 0) {
+                    showToast(`Generated ${results.generated} improvement patches!`, 'success');
+                } else if (results.failed > 0) {
+                    showToast(`Analysis complete but patch generation failed`, 'warning');
+                } else {
+                    showToast('No improvements identified at this time', 'info');
+                }
+
+                updateSelfImproverUI();
+
+            } catch (error) {
+                console.error('Self-improvement error:', error);
+                showToast(`Error: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+                    </svg>
+                    Analyze & Generate Patches
+                `;
+            }
+        });
+
+        // Apply patch button
+        document.getElementById('diff-apply-btn')?.addEventListener('click', async () => {
+            if (!currentViewingPatch) return;
+
+            if (!SelfImprover.sourceFileHandle) {
+                showToast('Please select a source file first', 'warning');
+                return;
+            }
+
+            const confirmed = await showConfirm({
+                title: 'Apply Patch',
+                message: `Apply "${currentViewingPatch.title}"? This will modify ${SelfImprover.sourceFileHandle.name}. A backup will be saved.`,
+                confirmText: 'Apply',
+                cancelText: 'Cancel',
+                danger: false
+            });
+
+            if (confirmed) {
+                try {
+                    const result = await SelfImprover.applyPatch(currentViewingPatch.id, { approved: true });
+                    showToast(`Patch applied! ${result.appliedChanges}/${result.totalChanges} changes`, 'success');
+                    currentViewingPatch = null;
+                    document.getElementById('self-improver-diff').style.display = 'none';
+                    updateSelfImproverUI();
+                } catch (error) {
+                    showToast(`Failed: ${error.message}`, 'error');
+                }
+            }
+        });
+
+        // Export patch button
+        document.getElementById('diff-export-btn')?.addEventListener('click', () => {
+            if (!currentViewingPatch) return;
+            SelfImprover.exportPatch(currentViewingPatch.id);
+            showToast('Patch exported!', 'success');
+        });
+
+        // Reject patch button
+        document.getElementById('diff-reject-btn')?.addEventListener('click', async () => {
+            if (!currentViewingPatch) return;
+
+            SelfImprover.rejectPatch(currentViewingPatch.id, 'User rejected');
+            showToast('Patch rejected', 'info');
+            currentViewingPatch = null;
+            document.getElementById('self-improver-diff').style.display = 'none';
+            updateSelfImproverUI();
+        });
+
+        // Initialize SelfImprover
+        SelfImprover.initialize();
+
+        // ─────────────────────────────────────────────────────────────────
+        // VISION DOCUMENT HANDLERS
+        // ─────────────────────────────────────────────────────────────────
+
+        // Show vision settings section
+        const visionSection = document.getElementById('vision-settings-section');
+        if (visionSection) {
+            visionSection.style.display = 'block';
+        }
+
+        // Default vision document for MYND Self Developer
+        const DEFAULT_MYND_VISION = `# MYND Self-Developer Vision
+
+## Mission
+Build an AI-powered cognitive operating system that helps users think in constellations, not lists.
+MYND is your second brain - an intelligent extension of your memory and thinking that learns and grows with you.
+
+## Values
+- Privacy by design: Your thoughts stay yours
+- Local-first: AI processing happens on device
+- User ownership: Complete control over your data
+- Anticipatory: Predicts and suggests, never judges
+- Spatial thinking: Ideas have relationships and context
+
+## Goals
+### Short-term
+- Perfect the neural network for intelligent suggestions
+- Enhance autonomous evolution capabilities
+- Improve self-improvement analysis systems
+
+### Long-term
+- Create the most intelligent personal thinking tool
+- Enable true AI-human collaboration in thought organization
+- Build a system that grows smarter with every interaction
+
+## Philosophy
+- Thoughts are spatial - proximity equals relevance
+- AI as mirror - reflects patterns, shows blind spots
+- Local-first privacy - your brain stays yours
+- Anticipatory not reactive - suggests before you ask
+
+## Anti-patterns
+- Never surveillance user thoughts
+- Never require cloud for core functionality
+- Never judge or criticize user's thinking
+- Never overwhelm with suggestions
+- Never break user's mental models`;
+
+        // Load vision into editor and update file storage UI when settings opens
+        const originalShowSettings = typeof showApiKeyModal === 'function' ? showApiKeyModal : function() {
+            document.getElementById('api-key-modal').classList.add('active');
+        };
+
+        window.showApiKeyModal = function() {
+            originalShowSettings();
+
+            // Update file storage status
+            updateFileStorageUI();
+
+            // Update self-improver status
+            updateSelfImproverUI();
+
+            // Load current vision document
+            const editor = document.getElementById('vision-document-editor');
+            if (editor && typeof VisionCore !== 'undefined') {
+                editor.value = VisionCore.vision?.raw || DEFAULT_MYND_VISION;
+            } else if (editor) {
+                const stored = localStorage.getItem('mynd_vision_document');
+                editor.value = stored || DEFAULT_MYND_VISION;
+            }
+        };
+
+        // Save vision button
+        document.getElementById('vision-save-btn')?.addEventListener('click', async () => {
+            const editor = document.getElementById('vision-document-editor');
+            const statusEl = document.getElementById('vision-status');
+            if (!editor) return;
+
+            const visionText = editor.value.trim();
+            if (!visionText) {
+                statusEl.textContent = '⚠️ Vision document cannot be empty';
+                statusEl.style.color = '#dc2626';
+                return;
+            }
+
+            statusEl.textContent = '⏳ Saving and processing vision...';
+            statusEl.style.color = 'var(--text-muted)';
+
+            try {
+                // Save to localStorage
+                localStorage.setItem('mynd_vision_document', visionText);
+
+                // Process with VisionCore if available
+                if (typeof VisionCore !== 'undefined') {
+                    await VisionCore.setVision(visionText);
+                    statusEl.textContent = '✅ Vision saved and processed! ' + (VisionCore.vision?.concepts?.length || 0) + ' concepts identified.';
+                } else {
+                    statusEl.textContent = '✅ Vision document saved!';
+                }
+                statusEl.style.color = '#16a34a';
+
+                showToast('Vision document updated', 'success');
+            } catch (error) {
+                console.error('Error saving vision:', error);
+                statusEl.textContent = '❌ Error: ' + error.message;
+                statusEl.style.color = '#dc2626';
+            }
+        });
+
+        // Reset vision button
+        document.getElementById('vision-reset-btn')?.addEventListener('click', async () => {
+            const editor = document.getElementById('vision-document-editor');
+            const statusEl = document.getElementById('vision-status');
+            if (!editor) return;
+
+            const confirmed = await showConfirm({
+                title: 'Reset Vision Document',
+                message: 'Reset to the default MYND vision? Your custom vision will be lost.',
+                confirmText: 'Reset',
+                cancelText: 'Cancel',
+                danger: true
+            });
+
+            if (confirmed) {
+                editor.value = DEFAULT_MYND_VISION;
+                localStorage.setItem('mynd_vision_document', DEFAULT_MYND_VISION);
+
+                if (typeof VisionCore !== 'undefined') {
+                    await VisionCore.setVision(DEFAULT_MYND_VISION);
+                }
+
+                statusEl.textContent = '✅ Vision reset to default';
+                statusEl.style.color = '#16a34a';
+                showToast('Vision document reset', 'info');
+            }
+        });
+
+        // Initialize VisionCore with stored/default vision on startup
+        setTimeout(async () => {
+            const storedVision = localStorage.getItem('mynd_vision_document') || DEFAULT_MYND_VISION;
+            if (typeof VisionCore !== 'undefined' && !VisionCore.vision?.raw) {
+                await VisionCore.setVision(storedVision);
+                console.log('🎯 Self Developer: VisionCore initialized with vision document');
+            }
+        }, 3000);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // AUTH MODAL HANDLERS
     // ═══════════════════════════════════════════════════════════════════
     const authModal = document.getElementById('auth-modal');
@@ -38598,7 +40371,23 @@ showKeyboardHints();
                 }
             }, 2000);
             
-            console.log('✨ MYND initialized successfully');
+            // Self Developer Mode startup banner
+            if (typeof SELF_DEVELOPER_MODE !== 'undefined' && SELF_DEVELOPER_MODE) {
+                console.log('%c🔧 MYND Self Developer Mode Active', 'background: #8B5CF6; color: white; padding: 4px 12px; border-radius: 4px; font-weight: bold;');
+                console.log('%c  • Embedded MYND map loaded', 'color: #8B5CF6;');
+                console.log('%c  • Local storage: mynd_self_dev_data', 'color: #8B5CF6;');
+                console.log('%c  • Cloud sync disabled', 'color: #8B5CF6;');
+                console.log('%c  • File System storage (Settings → Set Save Location)', 'color: #8B5CF6;');
+                console.log('%c  • Self-Improvement Engine (Settings → Analyze & Generate)', 'color: #8B5CF6;');
+                console.log('%c  • Vision UI (Settings → Vision Document)', 'color: #8B5CF6;');
+                if (FileSystemStorage.isSupported()) {
+                    console.log('%c  ✓ File System API supported', 'color: #16a34a;');
+                } else {
+                    console.log('%c  ⚠ File System API not supported (use Chrome/Edge)', 'color: #f59e0b;');
+                }
+            } else {
+                console.log('✨ MYND initialized successfully');
+            }
             
         } catch (error) {
             console.error('Initialization failed:', error);
@@ -39151,6 +40940,14 @@ showKeyboardHints();
                 document.getElementById('neural-suggest-btn').disabled = false;
                 this.updateStatus();
                 showToast('Neural network trained successfully!', 'success');
+
+                // In Self Developer Mode, save to file after training completes
+                if (typeof SELF_DEVELOPER_MODE !== 'undefined' && SELF_DEVELOPER_MODE) {
+                    if (typeof FileSystemStorage !== 'undefined' && FileSystemStorage.fileHandle) {
+                        console.log('📁 Neural training complete - scheduling file save...');
+                        FileSystemStorage.scheduleSave();
+                    }
+                }
             });
             
             // Auto-train on first load if no model exists but enough nodes do
@@ -43306,8 +45103,5 @@ Summary:`
     setTimeout(handleShareTarget, 100);
 
     </script>
-    <!-- External modules -->
-    <script src="js/goal-system.js"></script>
-    <script src="js/demo-map.js"></script>
 </body>
 </html>
