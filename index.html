@@ -7405,7 +7405,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.18</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.19</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -24480,8 +24480,13 @@ Return as JSON:
                     : 0;
                 const y = normalizedY * sphereHeight;
 
-                // Horizontal radius at this Y level (sphere equation: r = R * sqrt(1 - y²))
-                const horizontalRadius = sphereRadius * Math.sqrt(1 - normalizedY * normalizedY);
+                // Horizontal radius: use oblate spheroid with minimum radius at poles
+                // This prevents poles from being too compressed
+                // Pure sphere: r = R * sqrt(1 - y²) goes from 0 to R
+                // Modified: r = R * (minR + (1-minR) * sqrt(1 - y²)) ensures minimum spread
+                const minRadiusFactor = 0.4; // Poles have at least 40% of max radius
+                const sphereFactor = Math.sqrt(1 - normalizedY * normalizedY);
+                const horizontalRadius = sphereRadius * (minRadiusFactor + (1 - minRadiusFactor) * sphereFactor);
 
                 // Angle: golden angle increment for each node (creates optimal spiral)
                 const theta = goldenAngle * index;
