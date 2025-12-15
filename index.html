@@ -7405,7 +7405,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.25</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.26</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -24529,7 +24529,7 @@ Return as JSON:
                 }
 
                 // Add angular spread for siblings - larger for level 2, decay for deeper
-                const baseSpreadAngle = Math.PI * 1.0; // 180° total spread for level 2
+                const baseSpreadAngle = Math.PI * 0.75; // 135° total spread for level 2
                 const spreadDecay = Math.pow(0.6, level - 2); // 1, 0.6, 0.36...
                 const siblingSpreadAngle = baseSpreadAngle * spreadDecay;
                 const angularOffset = total > 1
