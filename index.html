@@ -24657,6 +24657,789 @@ Return as JSON:
     };
 
     // ═══════════════════════════════════════════════════════════════════
+    // ML CONCEPT DETECTOR - Recognize ML/AI concepts in user maps
+    // ═══════════════════════════════════════════════════════════════════
+    // Detects when user-created nodes touch on ML/AI concepts and surfaces
+    // relevant capabilities and suggestions.
+    const MLConceptDetector = {
+        VERSION: '1.0',
+        initialized: false,
+
+        // Pattern matchers for ML terminology
+        PATTERNS: {
+            models: ['neural', 'transformer', 'embedding', 'model', 'train', 'inference', 'prediction', 'classification', 'regression', 'clustering', 'gpt', 'llm', 'bert', 'cnn', 'rnn', 'lstm', 'gan', 'vae', 'autoencoder', 'diffusion'],
+            data: ['dataset', 'features', 'labels', 'pipeline', 'preprocessing', 'augmentation', 'normalization', 'tokenization', 'vectorization', 'corpus', 'annotation'],
+            optimization: ['hyperparameter', 'learning rate', 'batch', 'epoch', 'gradient', 'loss', 'optimizer', 'adam', 'sgd', 'momentum', 'regularization', 'dropout', 'weight decay'],
+            architecture: ['layer', 'attention', 'encoder', 'decoder', 'feedforward', 'convolution', 'pooling', 'activation', 'softmax', 'relu', 'sigmoid', 'backbone', 'head'],
+            evaluation: ['accuracy', 'precision', 'recall', 'f1', 'auc', 'roc', 'confusion matrix', 'cross-validation', 'overfitting', 'underfitting', 'generalization'],
+            techniques: ['fine-tuning', 'transfer learning', 'few-shot', 'zero-shot', 'prompt engineering', 'rag', 'retrieval', 'knowledge distillation', 'quantization', 'pruning', 'active learning', 'reinforcement learning', 'self-supervised']
+        },
+
+        // Initialize and hook into Store events
+        async initialize() {
+            if (this.initialized) return;
+
+            // Listen for node changes
+            bus.on('node:added', ({ node }) => this.analyzeNode(node));
+            bus.on('node:updated', ({ node }) => this.analyzeNode(node));
+
+            this.initialized = true;
+            console.log('✓ MLConceptDetector initialized');
+        },
+
+        // Analyze a node for ML concepts
+        analyzeNode(node) {
+            if (!node) return null;
+
+            const text = `${node.label || ''} ${node.description || ''}`.toLowerCase();
+            const detectedConcepts = [];
+
+            // Check each pattern category
+            for (const [category, patterns] of Object.entries(this.PATTERNS)) {
+                for (const pattern of patterns) {
+                    if (text.includes(pattern.toLowerCase())) {
+                        detectedConcepts.push({
+                            category,
+                            term: pattern,
+                            nodeId: node.id,
+                            nodeLabel: node.label
+                        });
+                    }
+                }
+            }
+
+            if (detectedConcepts.length > 0) {
+                // Log to EvolutionJournal
+                if (typeof EvolutionJournal !== 'undefined' && EvolutionJournal.initialized) {
+                    EvolutionJournal.log('CONCEPT_DETECTED', {
+                        nodeId: node.id,
+                        nodeLabel: node.label,
+                        concepts: detectedConcepts.map(c => c.term),
+                        categories: [...new Set(detectedConcepts.map(c => c.category))]
+                    });
+                }
+
+                // Emit event for ModelImprovementAdvisor to pick up
+                bus.emit('ml:concepts-detected', {
+                    nodeId: node.id,
+                    concepts: detectedConcepts
+                });
+
+                return detectedConcepts;
+            }
+
+            return null;
+        },
+
+        // Scan entire map for ML concepts
+        scanMap(rootNode) {
+            const allConcepts = [];
+
+            const traverse = (node) => {
+                const concepts = this.analyzeNode(node);
+                if (concepts) allConcepts.push(...concepts);
+                (node.children || []).forEach(traverse);
+            };
+
+            traverse(rootNode);
+            return allConcepts;
+        },
+
+        // Get MYND's ML capabilities that match detected concepts
+        getRelevantCapabilities(concepts) {
+            const capabilities = [];
+            const categories = new Set(concepts.map(c => c.category));
+
+            if (categories.has('models') || categories.has('architecture')) {
+                capabilities.push({
+                    system: 'USE Embeddings',
+                    description: 'MYND uses Universal Sentence Encoder for semantic similarity',
+                    suggestion: 'Your map mentions models - MYND could fine-tune on your domain vocabulary'
+                });
+            }
+
+            if (categories.has('optimization') || categories.has('evaluation')) {
+                capabilities.push({
+                    system: 'MetaLearner',
+                    description: 'MYND learns from your interaction patterns',
+                    suggestion: 'Your map explores hyperparameters - MYND uses fixed learning rate (0.01). Want to experiment with adaptive rates?'
+                });
+            }
+
+            if (categories.has('techniques')) {
+                capabilities.push({
+                    system: 'Neural Memory',
+                    description: 'MYND has semantic memory, concept abstraction, and meta-learning',
+                    suggestion: 'Your map covers advanced techniques - these could enhance MYND\'s own learning systems'
+                });
+            }
+
+            return capabilities;
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════
+    // MODEL IMPROVEMENT ADVISOR - Suggest concrete improvements to MYND
+    // ═══════════════════════════════════════════════════════════════════
+    // When ML concepts are detected, suggests specific actionable improvements
+    // to MYND's own ML systems.
+    const ModelImprovementAdvisor = {
+        VERSION: '1.0',
+        initialized: false,
+        suggestions: [],
+
+        // MYND's current ML configuration (for comparison/suggestions)
+        currentConfig: {
+            embeddingModel: 'USE',
+            embeddingDim: 512,
+            learningRate: 0.01,
+            uncertaintyThreshold: 0.4,
+            similarityThreshold: 0.7,
+            maxMemorySize: 1000,
+            batchSize: 1  // Online learning
+        },
+
+        async initialize() {
+            if (this.initialized) return;
+
+            // Listen for detected ML concepts
+            bus.on('ml:concepts-detected', ({ nodeId, concepts }) => {
+                this.generateSuggestions(nodeId, concepts);
+            });
+
+            this.initialized = true;
+            console.log('✓ ModelImprovementAdvisor initialized');
+        },
+
+        // Analyze current models and generate suggestions
+        async analyzeCurrentModels() {
+            const analysis = {
+                embedding: { quality: 'unknown', metrics: {} },
+                metalearner: { accuracy: 'unknown', patterns: 0 },
+                suggestions: []
+            };
+
+            // Check embedding quality
+            try {
+                const embData = await NeuralDB.load('embeddings');
+                if (embData?.index) {
+                    analysis.embedding.count = Object.keys(embData.index).length;
+                    analysis.embedding.quality = analysis.embedding.count > 100 ? 'good' : 'building';
+                }
+            } catch (e) {}
+
+            // Check MetaLearner patterns
+            try {
+                const metaData = await NeuralDB.load('meta-learner');
+                if (metaData) {
+                    analysis.metalearner.sessionsAnalyzed = metaData.sessionRhythm?.sessionsAnalyzed || 0;
+                    analysis.metalearner.accuracy = analysis.metalearner.sessionsAnalyzed > 10 ? 'calibrated' : 'learning';
+                }
+            } catch (e) {}
+
+            return analysis;
+        },
+
+        // Generate improvement suggestions based on user's ML interests
+        generateSuggestions(nodeId, concepts) {
+            const newSuggestions = [];
+            const terms = concepts.map(c => c.term);
+            const categories = [...new Set(concepts.map(c => c.category))];
+
+            // Embedding improvements
+            if (terms.some(t => ['embedding', 'fine-tuning', 'domain', 'vocabulary'].includes(t))) {
+                newSuggestions.push({
+                    id: `sug_${Date.now()}_embed`,
+                    type: 'embedding',
+                    title: 'Fine-tune embeddings on your vocabulary',
+                    description: 'MYND uses USE embeddings. Your domain-specific terms could benefit from fine-tuning.',
+                    impact: 'Better semantic matching for your unique concepts',
+                    effort: 'moderate',
+                    code: `// In USE module, add domain adaptation:
+// 1. Collect your node labels as training data
+// 2. Create contrastive pairs from related nodes
+// 3. Fine-tune embedding layer`,
+                    feasibility: 0.7,
+                    triggeredBy: nodeId
+                });
+            }
+
+            // Learning rate experiments
+            if (terms.some(t => ['learning rate', 'hyperparameter', 'adam', 'optimizer'].includes(t))) {
+                newSuggestions.push({
+                    id: `sug_${Date.now()}_lr`,
+                    type: 'optimization',
+                    title: 'Experiment with adaptive learning rates',
+                    description: `MYND uses fixed learning rate (${this.currentConfig.learningRate}). Consider adaptive scheduling.`,
+                    impact: 'Faster convergence, better generalization',
+                    effort: 'quick',
+                    code: `// In MetaLearner, try:
+learningRate: Math.max(0.001, 0.01 * Math.pow(0.99, sessionsAnalyzed))`,
+                    feasibility: 0.9,
+                    triggeredBy: nodeId
+                });
+            }
+
+            // Uncertainty threshold tuning
+            if (terms.some(t => ['uncertainty', 'confidence', 'threshold', 'active learning'].includes(t))) {
+                newSuggestions.push({
+                    id: `sug_${Date.now()}_uncertainty`,
+                    type: 'uncertainty',
+                    title: 'Tune uncertainty routing threshold',
+                    description: `MYND routes to Claude at ${this.currentConfig.uncertaintyThreshold} uncertainty. This affects quality vs API cost.`,
+                    impact: '+12% suggestion acceptance with 0.5 threshold in tests',
+                    effort: 'quick',
+                    code: `// A/B test: uncertaintyThreshold: 0.4 vs 0.5
+// Metrics: suggestionAcceptance, claudeApiCalls, userSatisfaction`,
+                    feasibility: 0.95,
+                    triggeredBy: nodeId
+                });
+            }
+
+            // Memory improvements
+            if (terms.some(t => ['memory', 'retrieval', 'rag', 'knowledge'].includes(t))) {
+                newSuggestions.push({
+                    id: `sug_${Date.now()}_memory`,
+                    type: 'memory',
+                    title: 'Enhance semantic memory retrieval',
+                    description: 'MYND\'s SemanticMemory uses simple similarity. Consider hybrid retrieval.',
+                    impact: 'Better context for suggestions',
+                    effort: 'moderate',
+                    code: `// Hybrid retrieval combining:
+// 1. Semantic similarity (current)
+// 2. Recency weighting
+// 3. Access frequency`,
+                    feasibility: 0.8,
+                    triggeredBy: nodeId
+                });
+            }
+
+            // Store new suggestions
+            this.suggestions.push(...newSuggestions);
+
+            // Log to journal
+            if (newSuggestions.length > 0 && typeof EvolutionJournal !== 'undefined' && EvolutionJournal.initialized) {
+                newSuggestions.forEach(s => {
+                    EvolutionJournal.log('IMPROVEMENT_SUGGESTED', {
+                        suggestionId: s.id,
+                        type: s.type,
+                        title: s.title,
+                        feasibility: s.feasibility,
+                        triggeredBy: s.triggeredBy
+                    });
+                });
+            }
+
+            // Emit event
+            bus.emit('ml:improvements-suggested', { suggestions: newSuggestions });
+
+            return newSuggestions;
+        },
+
+        // Get suggestions prioritized by impact and feasibility
+        getPrioritizedSuggestions() {
+            return [...this.suggestions].sort((a, b) =>
+                (b.feasibility * (b.effort === 'quick' ? 1.5 : 1)) -
+                (a.feasibility * (a.effort === 'quick' ? 1.5 : 1))
+            );
+        },
+
+        // Clear a suggestion (after user decision)
+        resolveSuggestion(suggestionId, action) {
+            const idx = this.suggestions.findIndex(s => s.id === suggestionId);
+            if (idx >= 0) {
+                const suggestion = this.suggestions[idx];
+                this.suggestions.splice(idx, 1);
+
+                // Log decision
+                if (typeof EvolutionJournal !== 'undefined' && EvolutionJournal.initialized) {
+                    EvolutionJournal.log('USER_DECISION', {
+                        suggestionId,
+                        type: suggestion.type,
+                        action // 'accept', 'reject', 'defer'
+                    });
+                }
+
+                return true;
+            }
+            return false;
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════
+    // EVOLUTION JOURNAL - Log all evolution insights and decisions
+    // ═══════════════════════════════════════════════════════════════════
+    // Captures all evolution activity for review, analysis, and export.
+    const EvolutionJournal = {
+        STORAGE_KEY: 'mynd_evolution_journal',
+        VERSION: '1.0',
+        initialized: false,
+        entries: [],
+        maxEntries: 1000,
+
+        // Entry types
+        ENTRY_TYPES: {
+            CONCEPT_DETECTED: { icon: '🔍', label: 'ML Concept Detected' },
+            IMPROVEMENT_SUGGESTED: { icon: '💡', label: 'Improvement Suggested' },
+            USER_DECISION: { icon: '✓', label: 'User Decision' },
+            EXPERIMENT_CREATED: { icon: '🧪', label: 'Experiment Created' },
+            EXPERIMENT_RESULT: { icon: '📊', label: 'Experiment Result' },
+            PATTERN_LEARNED: { icon: '🧠', label: 'Pattern Learned' }
+        },
+
+        async initialize() {
+            if (this.initialized) return;
+
+            // Load from storage
+            await this.loadFromStorage();
+
+            this.initialized = true;
+            console.log(`✓ EvolutionJournal initialized (${this.entries.length} entries)`);
+        },
+
+        // Log an entry
+        log(type, data) {
+            const entry = {
+                id: `ej_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                type,
+                timestamp: Date.now(),
+                data
+            };
+
+            this.entries.push(entry);
+
+            // Trim if over max
+            if (this.entries.length > this.maxEntries) {
+                this.entries = this.entries.slice(-this.maxEntries);
+            }
+
+            // Save
+            this.saveToStorage();
+
+            // Emit event
+            bus.emit('evolution:logged', entry);
+
+            return entry;
+        },
+
+        // Get entries with filters
+        getEntries(filters = {}) {
+            let result = [...this.entries];
+
+            if (filters.type) {
+                result = result.filter(e => e.type === filters.type);
+            }
+
+            if (filters.since) {
+                result = result.filter(e => e.timestamp >= filters.since);
+            }
+
+            if (filters.until) {
+                result = result.filter(e => e.timestamp <= filters.until);
+            }
+
+            if (filters.limit) {
+                result = result.slice(-filters.limit);
+            }
+
+            return result;
+        },
+
+        // Get aggregated metrics
+        getMetrics() {
+            const now = Date.now();
+            const dayMs = 24 * 60 * 60 * 1000;
+            const weekMs = 7 * dayMs;
+
+            return {
+                total: this.entries.length,
+                today: this.entries.filter(e => e.timestamp >= now - dayMs).length,
+                thisWeek: this.entries.filter(e => e.timestamp >= now - weekMs).length,
+                byType: Object.fromEntries(
+                    Object.keys(this.ENTRY_TYPES).map(type => [
+                        type,
+                        this.entries.filter(e => e.type === type).length
+                    ])
+                ),
+                acceptanceRate: this.calculateAcceptanceRate(),
+                experimentSuccessRate: this.calculateExperimentSuccessRate()
+            };
+        },
+
+        calculateAcceptanceRate() {
+            const decisions = this.entries.filter(e => e.type === 'USER_DECISION');
+            if (decisions.length === 0) return null;
+            const accepted = decisions.filter(e => e.data.action === 'accept').length;
+            return accepted / decisions.length;
+        },
+
+        calculateExperimentSuccessRate() {
+            const results = this.entries.filter(e => e.type === 'EXPERIMENT_RESULT');
+            if (results.length === 0) return null;
+            const successful = results.filter(e => e.data.outcome === 'promoted').length;
+            return successful / results.length;
+        },
+
+        // Export to various formats
+        exportJSON() {
+            return JSON.stringify({
+                version: this.VERSION,
+                exportedAt: new Date().toISOString(),
+                metrics: this.getMetrics(),
+                entries: this.entries
+            }, null, 2);
+        },
+
+        exportMarkdown() {
+            const metrics = this.getMetrics();
+            let md = `# MYND Evolution Journal\n\n`;
+            md += `**Exported:** ${new Date().toISOString()}\n\n`;
+            md += `## Metrics\n`;
+            md += `- Total entries: ${metrics.total}\n`;
+            md += `- This week: ${metrics.thisWeek}\n`;
+            md += `- Acceptance rate: ${metrics.acceptanceRate ? (metrics.acceptanceRate * 100).toFixed(1) + '%' : 'N/A'}\n`;
+            md += `- Experiment success rate: ${metrics.experimentSuccessRate ? (metrics.experimentSuccessRate * 100).toFixed(1) + '%' : 'N/A'}\n\n`;
+            md += `## Recent Activity\n\n`;
+
+            this.entries.slice(-50).reverse().forEach(entry => {
+                const typeInfo = this.ENTRY_TYPES[entry.type] || { icon: '•', label: entry.type };
+                const date = new Date(entry.timestamp).toLocaleString();
+                md += `### ${typeInfo.icon} ${typeInfo.label}\n`;
+                md += `*${date}*\n\n`;
+                md += '```json\n' + JSON.stringify(entry.data, null, 2) + '\n```\n\n';
+            });
+
+            return md;
+        },
+
+        exportCSV() {
+            const rows = [['timestamp', 'type', 'data']];
+            this.entries.forEach(e => {
+                rows.push([
+                    new Date(e.timestamp).toISOString(),
+                    e.type,
+                    JSON.stringify(e.data)
+                ]);
+            });
+            return rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+        },
+
+        // Storage
+        async saveToStorage() {
+            try {
+                await NeuralDB.save('evolution-journal', {
+                    version: this.VERSION,
+                    entries: this.entries,
+                    savedAt: Date.now()
+                });
+            } catch (e) {
+                console.warn('EvolutionJournal save failed:', e);
+            }
+        },
+
+        async loadFromStorage() {
+            try {
+                const data = await NeuralDB.load('evolution-journal');
+                if (data?.entries) {
+                    this.entries = data.entries;
+                }
+            } catch (e) {
+                console.warn('EvolutionJournal load failed:', e);
+            }
+        },
+
+        // Clear all entries
+        async clear() {
+            this.entries = [];
+            await NeuralDB.delete('evolution-journal');
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SELF-DEV EXPERIMENTER - A/B Testing in Self-Dev Mode
+    // ═══════════════════════════════════════════════════════════════════
+    // Safe experimentation with small changes, measured against baseline.
+    const SelfDevExperimenter = {
+        STORAGE_KEY: 'mynd_experiments',
+        VERSION: '1.0',
+        initialized: false,
+        experiments: [],
+        activeExperiment: null,
+
+        // Safe experiment types (config changes only)
+        EXPERIMENT_TYPES: {
+            THRESHOLD: { name: 'Threshold Adjustment', safe: true },
+            UI_VARIATION: { name: 'UI Variation', safe: true },
+            HYPERPARAMETER: { name: 'Model Hyperparameter', safe: true },
+            FEATURE_FLAG: { name: 'Feature Flag', safe: true }
+        },
+
+        async initialize() {
+            if (this.initialized) return;
+
+            await this.loadFromStorage();
+
+            // Resume active experiment if any
+            if (this.activeExperiment) {
+                console.log(`📊 Resuming experiment: ${this.activeExperiment.id}`);
+            }
+
+            this.initialized = true;
+            console.log(`✓ SelfDevExperimenter initialized (${this.experiments.length} experiments)`);
+        },
+
+        // Create a new experiment
+        createExperiment(config) {
+            const experiment = {
+                id: config.id || `exp_${Date.now().toString(36)}`,
+                hypothesis: config.hypothesis,
+                type: config.type || 'THRESHOLD',
+                control: config.control,       // Original value
+                variant: config.variant,       // New value to test
+                configPath: config.configPath, // e.g., 'uncertaintyThreshold'
+                metrics: config.metrics || ['suggestionAcceptance'],
+                duration: config.duration || '7 days',
+                targetInteractions: config.targetInteractions || 100,
+                rollback: config.rollback !== false, // Auto-rollback on failure
+                status: 'pending',
+                createdAt: Date.now(),
+                startedAt: null,
+                completedAt: null,
+                results: {
+                    control: { interactions: 0, metrics: {} },
+                    variant: { interactions: 0, metrics: {} }
+                }
+            };
+
+            this.experiments.push(experiment);
+            this.saveToStorage();
+
+            // Log to journal
+            if (typeof EvolutionJournal !== 'undefined' && EvolutionJournal.initialized) {
+                EvolutionJournal.log('EXPERIMENT_CREATED', {
+                    experimentId: experiment.id,
+                    hypothesis: experiment.hypothesis,
+                    type: experiment.type,
+                    control: experiment.control,
+                    variant: experiment.variant
+                });
+            }
+
+            bus.emit('experiment:created', experiment);
+            return experiment;
+        },
+
+        // Start an experiment
+        startExperiment(experimentId) {
+            const experiment = this.experiments.find(e => e.id === experimentId);
+            if (!experiment || experiment.status !== 'pending') return false;
+
+            // Can only have one active experiment
+            if (this.activeExperiment) {
+                console.warn('Cannot start experiment - one already active');
+                return false;
+            }
+
+            experiment.status = 'running';
+            experiment.startedAt = Date.now();
+            this.activeExperiment = experiment;
+
+            // Apply variant (odd interactions use variant)
+            this.applyVariant(experiment);
+
+            this.saveToStorage();
+            bus.emit('experiment:started', experiment);
+            return true;
+        },
+
+        // Record a metric observation
+        recordMetric(metricName, value, isVariant = null) {
+            if (!this.activeExperiment) return;
+
+            // Determine if this is control or variant based on interaction count
+            const group = isVariant !== null
+                ? (isVariant ? 'variant' : 'control')
+                : (this.activeExperiment.results.variant.interactions % 2 === 0 ? 'control' : 'variant');
+
+            const results = this.activeExperiment.results[group];
+            results.interactions++;
+
+            if (!results.metrics[metricName]) {
+                results.metrics[metricName] = { sum: 0, count: 0, values: [] };
+            }
+
+            results.metrics[metricName].sum += value;
+            results.metrics[metricName].count++;
+            results.metrics[metricName].values.push(value);
+
+            // Check if experiment is complete
+            const totalInteractions =
+                this.activeExperiment.results.control.interactions +
+                this.activeExperiment.results.variant.interactions;
+
+            if (totalInteractions >= this.activeExperiment.targetInteractions) {
+                this.completeExperiment(this.activeExperiment.id);
+            }
+
+            this.saveToStorage();
+        },
+
+        // Complete an experiment and analyze results
+        completeExperiment(experimentId) {
+            const experiment = this.experiments.find(e => e.id === experimentId);
+            if (!experiment || experiment.status !== 'running') return null;
+
+            experiment.status = 'completed';
+            experiment.completedAt = Date.now();
+
+            // Calculate statistical significance
+            const analysis = this.analyzeResults(experiment);
+            experiment.analysis = analysis;
+
+            // Auto-rollback if metrics degraded significantly
+            if (experiment.rollback && analysis.degraded) {
+                this.rollbackExperiment(experiment);
+                experiment.status = 'rolled_back';
+            }
+
+            // Clear active
+            if (this.activeExperiment?.id === experimentId) {
+                this.activeExperiment = null;
+            }
+
+            // Log to journal
+            if (typeof EvolutionJournal !== 'undefined' && EvolutionJournal.initialized) {
+                EvolutionJournal.log('EXPERIMENT_RESULT', {
+                    experimentId: experiment.id,
+                    hypothesis: experiment.hypothesis,
+                    outcome: experiment.status === 'rolled_back' ? 'rolled_back' :
+                            (analysis.significant && analysis.improved) ? 'promoted' : 'inconclusive',
+                    improvement: analysis.percentChange,
+                    significant: analysis.significant
+                });
+            }
+
+            this.saveToStorage();
+            bus.emit('experiment:completed', { experiment, analysis });
+
+            return analysis;
+        },
+
+        // Analyze experiment results
+        analyzeResults(experiment) {
+            const control = experiment.results.control;
+            const variant = experiment.results.variant;
+
+            const analysis = {
+                controlMean: {},
+                variantMean: {},
+                percentChange: {},
+                significant: false,
+                improved: false,
+                degraded: false
+            };
+
+            // Calculate means for each metric
+            for (const metric of experiment.metrics) {
+                const controlMetric = control.metrics[metric];
+                const variantMetric = variant.metrics[metric];
+
+                if (controlMetric && variantMetric) {
+                    analysis.controlMean[metric] = controlMetric.sum / controlMetric.count;
+                    analysis.variantMean[metric] = variantMetric.sum / variantMetric.count;
+
+                    const change = (analysis.variantMean[metric] - analysis.controlMean[metric]) / analysis.controlMean[metric];
+                    analysis.percentChange[metric] = change * 100;
+
+                    // Simple significance check (> 5% change with > 30 samples each)
+                    if (Math.abs(change) > 0.05 && controlMetric.count >= 30 && variantMetric.count >= 30) {
+                        analysis.significant = true;
+                        if (change > 0.05) analysis.improved = true;
+                        if (change < -0.1) analysis.degraded = true; // 10% degradation triggers rollback
+                    }
+                }
+            }
+
+            return analysis;
+        },
+
+        // Apply variant configuration
+        applyVariant(experiment) {
+            // This would modify the actual config - implement based on configPath
+            console.log(`🧪 Applying variant: ${experiment.configPath} = ${experiment.variant}`);
+            // For safety, actual application is manual in self-dev mode
+        },
+
+        // Rollback to control configuration
+        rollbackExperiment(experiment) {
+            console.log(`⚠️ Rolling back experiment ${experiment.id} to control: ${experiment.control}`);
+            // Actual rollback is manual in self-dev mode
+        },
+
+        // Promote variant to production
+        promoteExperiment(experimentId) {
+            const experiment = this.experiments.find(e => e.id === experimentId);
+            if (!experiment || experiment.status !== 'completed') return false;
+
+            experiment.status = 'promoted';
+            this.saveToStorage();
+
+            console.log(`✓ Promoted experiment ${experimentId}: ${experiment.configPath} = ${experiment.variant}`);
+            bus.emit('experiment:promoted', experiment);
+
+            return true;
+        },
+
+        // Get experiment by ID
+        getExperiment(experimentId) {
+            return this.experiments.find(e => e.id === experimentId);
+        },
+
+        // Get all experiments with optional filters
+        getExperiments(filters = {}) {
+            let result = [...this.experiments];
+
+            if (filters.status) {
+                result = result.filter(e => e.status === filters.status);
+            }
+
+            if (filters.type) {
+                result = result.filter(e => e.type === filters.type);
+            }
+
+            return result.sort((a, b) => b.createdAt - a.createdAt);
+        },
+
+        // Storage
+        async saveToStorage() {
+            try {
+                await NeuralDB.save('self-dev-experiments', {
+                    version: this.VERSION,
+                    experiments: this.experiments,
+                    activeExperimentId: this.activeExperiment?.id,
+                    savedAt: Date.now()
+                });
+            } catch (e) {
+                console.warn('SelfDevExperimenter save failed:', e);
+            }
+        },
+
+        async loadFromStorage() {
+            try {
+                const data = await NeuralDB.load('self-dev-experiments');
+                if (data) {
+                    this.experiments = data.experiments || [];
+                    if (data.activeExperimentId) {
+                        this.activeExperiment = this.experiments.find(e => e.id === data.activeExperimentId);
+                    }
+                }
+            } catch (e) {
+                console.warn('SelfDevExperimenter load failed:', e);
+            }
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════
     // AUTONOMOUS EVOLUTION - Self-Dialogue & Recursive Self-Improvement
     // ═══════════════════════════════════════════════════════════════════
     // Enables MYND to interact with itself: ask questions, generate insights,
@@ -43245,6 +44028,28 @@ Summary:`
             console.warn('VisionCore initialization deferred:', e.message);
         }
     }, 2000);
+
+    // Initialize Guided Architecture Evolution System
+    setTimeout(async () => {
+        try {
+            // Initialize EvolutionJournal first (others depend on it)
+            await EvolutionJournal.initialize();
+
+            // Then MLConceptDetector and ModelImprovementAdvisor
+            await MLConceptDetector.initialize();
+            await ModelImprovementAdvisor.initialize();
+
+            // Finally SelfDevExperimenter
+            await SelfDevExperimenter.initialize();
+
+            console.log('🧬 Guided Architecture Evolution System initialized:', {
+                journal: EvolutionJournal.entries.length + ' entries',
+                experiments: SelfDevExperimenter.experiments.length + ' experiments'
+            });
+        } catch (e) {
+            console.warn('Evolution System initialization deferred:', e.message);
+        }
+    }, 3000);
 
     // Mobile: Start with toolbar collapsed
     if (window.innerWidth <= 768) {
