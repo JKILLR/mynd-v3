@@ -7405,7 +7405,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.17</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.18</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -24449,18 +24449,6 @@ Return as JSON:
             // For spherical distribution, we need helixAmp accessible for radius calc
             let helixAmp = 0;
 
-            if (level === 1) {
-                // Level 1: EQUAL vertical spacing between all siblings
-                // MUCH larger vertical separation - branches get longer as nodes move from horizon
-                helixAmp = baseHelixAmp * 10.0; // Very large for dramatic vertical spread
-
-                // Evenly distribute from -helixAmp to +helixAmp based on index
-                if (total > 1) {
-                    verticalOffset = ((index / (total - 1)) - 0.5) * helixAmp * 2;
-                } else {
-                    verticalOffset = 0;
-                }
-            }
             // Level 2+: Siblings spread equally UP and DOWN from parent center
             let siblingVerticalOffset = 0;
             if (level > 1 && total > 1) {
@@ -24474,20 +24462,39 @@ Return as JSON:
 
             // Position nodes
             if (level === 1) {
-                // Spherical distribution: nodes near horizon (Y=0) spread further out
-                // nodes near poles (top/bottom) stay closer to center
-                // Formula: r = R * sqrt(1 - (y/maxY)²) * 4 for dramatic spread at horizon
-                const normalizedY = helixAmp > 0 ? Math.abs(verticalOffset) / helixAmp : 0;
-                const sphereMultiplier = Math.sqrt(1 - normalizedY * normalizedY);
-                const sphericalRadius = baseRadius * sphereMultiplier * 4.0; // 4x spread at horizon
+                // FIBONACCI SPHERE DISTRIBUTION
+                // Uses golden angle to create optimal even spacing on a sphere
+                // Inspired by sunflower seed patterns (phyllotaxis)
+                const PHI = (1 + Math.sqrt(5)) / 2; // Golden ratio ≈ 1.618
+                const goldenAngle = 2 * Math.PI / (PHI * PHI); // ≈ 137.5° in radians
+
+                // Sphere dimensions
+                const sphereHeight = baseHelixAmp * 10.0; // Total height of sphere
+                const sphereRadius = baseRadius * 4.0; // Max horizontal radius at equator
+
+                // Y position: evenly spaced from top (+1) to bottom (-1) with epsilon offset
+                // Epsilon prevents clustering at poles
+                const epsilon = 0.5;
+                const normalizedY = total > 1
+                    ? 1 - ((index + epsilon) / (total - 1 + 2 * epsilon)) * 2
+                    : 0;
+                const y = normalizedY * sphereHeight;
+
+                // Horizontal radius at this Y level (sphere equation: r = R * sqrt(1 - y²))
+                const horizontalRadius = sphereRadius * Math.sqrt(1 - normalizedY * normalizedY);
+
+                // Angle: golden angle increment for each node (creates optimal spiral)
+                const theta = goldenAngle * index;
 
                 data.basePosition = [
-                    Math.cos(angle) * sphericalRadius,
-                    verticalOffset,
-                    Math.sin(angle) * sphericalRadius
+                    Math.cos(theta) * horizontalRadius,
+                    y,
+                    Math.sin(theta) * horizontalRadius
                 ];
-                // Store sphere info for children to use
-                data.sphereMaxY = helixAmp;
+
+                // Store sphere info for children
+                data.sphereMaxY = sphereHeight;
+                helixAmp = sphereHeight;
             } else {
                 // Level 2+: Branch lengths follow same spherical math
                 // Branches near horizon extend further, branches near poles are shorter
