@@ -7405,7 +7405,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.23</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.24</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -24369,7 +24369,7 @@ Return as JSON:
     }
 
     // SECTOR-BASED LAYOUT: Each branch owns an angular sector, children stay within parent's sector
-    function calculatePositions(data, parentPos = [0, 0, 0], level = 0, sectorStart = 0, sectorEnd = Math.PI * 2, total = 1, index = 0) {
+    function calculatePositions(data, parentPos = [0, 0, 0], level = 0, sectorStart = 0, sectorEnd = Math.PI * 2, total = 1, index = 0, parentBranchAngle = 0) {
         data.level = level;
 
         // Size based on level - smaller for deeper nodes
@@ -24498,20 +24498,20 @@ Return as JSON:
                     Math.sin(theta) * horizontalRadius
                 ];
 
-                // Store sphere info for children
+                // Store sphere info and branch angle for children
                 data.sphereMaxY = sphereHeight;
+                data.branchAngle = theta; // Store the actual angle used
                 helixAmp = sphereHeight;
             } else {
-                // Level 2+: Extend RADIALLY OUTWARD from root (not based on sector angle)
-                // Calculate the radial direction from root to parent in XZ plane
-                const parentDistXZ = Math.sqrt(parentPos[0] * parentPos[0] + parentPos[2] * parentPos[2]);
+                // Level 2+: Continue in parent's branch direction (not from root!)
+                // Use the parent's branch angle so branches extend outward consistently
                 let radialAngle;
-                if (parentDistXZ > 0.01) {
-                    // Use the direction from root to parent
-                    radialAngle = Math.atan2(parentPos[2], parentPos[0]);
+                if (level === 2) {
+                    // Level 2: branch from level 1, use parent's theta (direction from root)
+                    radialAngle = parentBranchAngle;
                 } else {
-                    // Fallback if parent is at center
-                    radialAngle = angle;
+                    // Level 3+: continue in the same direction as parent was going
+                    radialAngle = parentBranchAngle;
                 }
 
                 // Add angular spread for siblings - larger for level 2, decay for deeper
@@ -24536,11 +24536,13 @@ Return as JSON:
                     parentPos[1] + siblingVerticalOffset,
                     parentPos[2] + Math.sin(finalAngle) * sphericalBranchLength
                 ];
+
+                // Store the actual angle used for this branch (for children to inherit)
+                data.branchAngle = finalAngle;
             }
 
             data.expandedPosition = [...data.basePosition];
             data.position = [...data.basePosition];
-            data.branchAngle = angle;
         }
 
         // If node has a custom position (from move mode), use it instead
@@ -24614,7 +24616,8 @@ Return as JSON:
                     childSectorStart,
                     childSectorEnd,
                     data.children.length,
-                    i
+                    i,
+                    data.branchAngle || 0  // Pass parent's branch angle to children
                 );
 
                 // Move to next child's sector start
