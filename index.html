@@ -7405,7 +7405,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.19</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.20</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -24501,19 +24501,37 @@ Return as JSON:
                 data.sphereMaxY = sphereHeight;
                 helixAmp = sphereHeight;
             } else {
-                // Level 2+: Branch lengths follow same spherical math
-                // Branches near horizon extend further, branches near poles are shorter
-                const sphereMaxY = baseHelixAmp * 10.0; // Same as level 1 helixAmp
+                // Level 2+: Extend RADIALLY OUTWARD from root (not based on sector angle)
+                // Calculate the radial direction from root to parent in XZ plane
+                const parentDistXZ = Math.sqrt(parentPos[0] * parentPos[0] + parentPos[2] * parentPos[2]);
+                let radialAngle;
+                if (parentDistXZ > 0.01) {
+                    // Use the direction from root to parent
+                    radialAngle = Math.atan2(parentPos[2], parentPos[0]);
+                } else {
+                    // Fallback if parent is at center
+                    radialAngle = angle;
+                }
+
+                // Add angular spread for siblings (fan out slightly)
+                const siblingSpreadAngle = Math.PI * 0.4; // 72° total spread for siblings
+                const angularOffset = total > 1
+                    ? ((index / (total - 1)) - 0.5) * siblingSpreadAngle
+                    : 0;
+                const finalAngle = radialAngle + angularOffset;
+
+                // Branch length: still use spherical math for consistency
+                const sphereMaxY = baseHelixAmp * 10.0;
                 const parentY = parentPos[1];
                 const normalizedParentY = sphereMaxY > 0 ? Math.abs(parentY) / sphereMaxY : 0;
-                const clampedNormalizedY = Math.min(normalizedParentY, 0.99); // Prevent NaN at poles
+                const clampedNormalizedY = Math.min(normalizedParentY, 0.99);
                 const sphereMultiplier = Math.sqrt(1 - clampedNormalizedY * clampedNormalizedY);
-                const sphericalBranchLength = baseRadius * (1 + sphereMultiplier * 3.0); // 1x to 4x based on Y
+                const sphericalBranchLength = baseRadius * (1 + sphereMultiplier * 3.0);
 
                 data.basePosition = [
-                    parentPos[0] + Math.cos(angle) * sphericalBranchLength,
+                    parentPos[0] + Math.cos(finalAngle) * sphericalBranchLength,
                     parentPos[1] + siblingVerticalOffset,
-                    parentPos[2] + Math.sin(angle) * sphericalBranchLength
+                    parentPos[2] + Math.sin(finalAngle) * sphericalBranchLength
                 ];
             }
 
