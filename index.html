@@ -24440,15 +24440,14 @@ Return as JSON:
 
             // Helix effect - ONLY for level 1 branches
             const baseHelixAmp = CONFIG.LAYOUT.helixAmplitude || 12.0;
-            const helixFreq = CONFIG.LAYOUT.helixFrequency || 1.5;
 
             let verticalOffset = 0;
 
             if (level === 1) {
                 // Level 1: Equal vertical spacing based on index (not angle)
                 // This creates consistent spiral arm spacing
-                const depthBoost = 1 + (expandedDepth * 0.8);
-                const helixAmp = baseHelixAmp * depthBoost;
+                const depthBoost = 1 + (expandedDepth * 0.4); // Reduced boost
+                const helixAmp = baseHelixAmp * depthBoost * 0.6; // Reduced amplitude
 
                 // Evenly distribute from -helixAmp to +helixAmp based on index
                 if (total > 1) {
@@ -24457,14 +24456,21 @@ Return as JSON:
                     verticalOffset = 0;
                 }
             }
-            // Level 2+: Sibling vertical spread INCREASES SIGNIFICANTLY at deeper levels
+            // Level 2+: Vertical spread decays sequentially
             let siblingVerticalOffset = 0;
-            if (level > 1 && total > 1) {
-                const verticalSpread = CONFIG.LAYOUT.verticalSpread || 3.0;
-                // MUCH LARGER spread at deeper levels to prevent stacking
-                const levelFactor = 1 + (level - 2) * 0.8; // Level 3: 1.8, Level 4: 2.6, Level 5: 3.4
-                const siblingSpacing = verticalSpread * levelFactor * 1.2;
-                siblingVerticalOffset = (index - (total - 1) / 2) * siblingSpacing;
+            // Y inheritance factor - decays with level so deep nodes stay flatter
+            let yInheritance = 1.0;
+            if (level > 1) {
+                // Decay Y inheritance: level 2 gets 70%, level 3 gets 50%, level 4 gets 35%...
+                yInheritance = Math.pow(0.7, level - 1);
+
+                if (total > 1) {
+                    const verticalSpread = CONFIG.LAYOUT.verticalSpread || 3.0;
+                    // Aggressive decay for sibling spacing
+                    const levelFactor = Math.pow(0.5, level - 2); // 1, 0.5, 0.25, 0.125...
+                    const siblingSpacing = verticalSpread * levelFactor * 0.3;
+                    siblingVerticalOffset = (index - (total - 1) / 2) * siblingSpacing;
+                }
             }
 
             // Position nodes
@@ -24476,10 +24482,10 @@ Return as JSON:
                 ];
             } else {
                 // Level 2+: Extend from parent position in XZ plane
-                // Inherit parent Y fully, only add small sibling vertical spread
+                // Y decays towards zero with depth
                 data.basePosition = [
                     parentPos[0] + Math.cos(angle) * baseRadius,
-                    parentPos[1] + siblingVerticalOffset,
+                    parentPos[1] * yInheritance + siblingVerticalOffset,
                     parentPos[2] + Math.sin(angle) * baseRadius
                 ];
             }
@@ -25578,6 +25584,9 @@ Return as JSON:
             return;
         }
 
+        // Play sound at START of expansion
+        audio.expand();
+
         // Sort by level (shallowest first)
         toExpand.sort((a, b) => (a.userData.level || 0) - (b.userData.level || 0));
 
@@ -25638,7 +25647,6 @@ Return as JSON:
                 if (autoCameraEnabled) {
                     setTimeout(() => zoomToFitMap(10), 300);
                 }
-                audio.expand();
                 return;
             }
 
@@ -25703,6 +25711,9 @@ Return as JSON:
             return;
         }
 
+        // Play sound at START of collapse
+        audio.collapse();
+
         // Sort nodes to hide by level descending (deepest first)
         toHide.sort((a, b) => (b.userData.level || 0) - (a.userData.level || 0));
 
@@ -25728,7 +25739,6 @@ Return as JSON:
                 if (autoCameraEnabled) {
                     setTimeout(() => zoomToFitMap(0), 300);
                 }
-                audio.collapse();
                 return;
             }
 
