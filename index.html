@@ -24491,7 +24491,7 @@ Return as JSON:
             } else {
                 // Level 2+: Branch lengths follow same spherical math
                 // Branches near horizon extend further, branches near poles are shorter
-                const sphereMaxY = parentData?.sphereMaxY || (baseHelixAmp * 10.0);
+                const sphereMaxY = baseHelixAmp * 10.0; // Same as level 1 helixAmp
                 const parentY = parentPos[1];
                 const normalizedParentY = sphereMaxY > 0 ? Math.abs(parentY) / sphereMaxY : 0;
                 const clampedNormalizedY = Math.min(normalizedParentY, 0.99); // Prevent NaN at poles
@@ -24503,8 +24503,6 @@ Return as JSON:
                     parentPos[1] + siblingVerticalOffset,
                     parentPos[2] + Math.sin(angle) * sphericalBranchLength
                 ];
-                // Pass sphere info to children
-                data.sphereMaxY = sphereMaxY;
             }
 
             data.expandedPosition = [...data.basePosition];
