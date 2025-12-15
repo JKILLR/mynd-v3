@@ -7403,7 +7403,10 @@
             </div>
         </div>
     </div>
-    
+
+    <!-- Version indicator for testing -->
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.27</div>
+
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
         <!-- Top: Small centered MYND branding -->
@@ -24053,7 +24056,7 @@ Return as JSON:
         controls.dampingFactor = 0.12;
         controls.rotateSpeed = 0.5;
         controls.minDistance = 8;
-        controls.maxDistance = 750;
+        controls.maxDistance = 1125; // 50% more than 750
         controls.enablePan = true;
         controls.panSpeed = 0.8;
         controls.maxPolarAngle = Math.PI * 0.85;
@@ -24366,7 +24369,7 @@ Return as JSON:
     }
 
     // SECTOR-BASED LAYOUT: Each branch owns an angular sector, children stay within parent's sector
-    function calculatePositions(data, parentPos = [0, 0, 0], level = 0, sectorStart = 0, sectorEnd = Math.PI * 2, total = 1, index = 0) {
+    function calculatePositions(data, parentPos = [0, 0, 0], level = 0, sectorStart = 0, sectorEnd = Math.PI * 2, total = 1, index = 0, parentBranchAngle = 0) {
         data.level = level;
 
         // Size based on level - smaller for deeper nodes
@@ -24443,55 +24446,120 @@ Return as JSON:
 
             let verticalOffset = 0;
 
-            if (level === 1) {
-                // Level 1: Equal vertical spacing based on index (not angle)
-                // Use FIXED amplitude so all level 1 nodes spread equally above/below horizon
-                const helixAmp = baseHelixAmp * 0.8; // Fixed amplitude for symmetry
+            // For spherical distribution, we need helixAmp accessible for radius calc
+            let helixAmp = 0;
 
-                // Evenly distribute from -helixAmp to +helixAmp based on index
-                if (total > 1) {
-                    verticalOffset = ((index / (total - 1)) - 0.5) * helixAmp * 2;
-                } else {
-                    verticalOffset = 0;
-                }
-            }
-            // Level 2+: Vertical spread decays sequentially
+            // Level 2+: Siblings spread equally UP and DOWN from parent center
             let siblingVerticalOffset = 0;
-            // Y inheritance factor - decays with level so deep nodes stay flatter
-            let yInheritance = 1.0;
-            if (level > 1) {
-                // Decay Y inheritance: level 2 gets 70%, level 3 gets 50%, level 4 gets 35%...
-                yInheritance = Math.pow(0.7, level - 1);
-
-                if (total > 1) {
-                    const verticalSpread = CONFIG.LAYOUT.verticalSpread || 3.0;
-                    // Aggressive decay for sibling spacing
-                    const levelFactor = Math.pow(0.5, level - 2); // 1, 0.5, 0.25, 0.125...
-                    const siblingSpacing = verticalSpread * levelFactor * 0.3;
-                    siblingVerticalOffset = (index - (total - 1) / 2) * siblingSpacing;
-                }
+            if (level > 1 && total > 1) {
+                // Large vertical spread for level 2, exponential decay after
+                const baseVerticalSpread = 15.0;
+                // Exponential decay: halves each level after level 2
+                const levelFactor = Math.pow(0.5, level - 2); // 1, 0.5, 0.25, 0.125...
+                const siblingSpacing = baseVerticalSpread * levelFactor;
+                // This spreads equally above and below parent's Y position
+                siblingVerticalOffset = (index - (total - 1) / 2) * siblingSpacing;
             }
 
             // Position nodes
             if (level === 1) {
-                data.basePosition = [
-                    Math.cos(angle) * baseRadius,
-                    verticalOffset,
-                    Math.sin(angle) * baseRadius
+                // FIBONACCI SPHERE DISTRIBUTION
+                // Uses golden angle to create optimal even spacing on a sphere
+                // Inspired by sunflower seed patterns (phyllotaxis)
+                const PHI = (1 + Math.sqrt(5)) / 2; // Golden ratio ≈ 1.618
+                const goldenAngle = 2 * Math.PI / (PHI * PHI); // ≈ 137.5° in radians
+
+                // Sphere dimensions
+                const sphereHeight = baseHelixAmp * 10.0; // Total height of sphere
+                const sphereRadius = baseRadius * 4.0; // Max horizontal radius at equator
+
+                // Y position: evenly spaced from top (+1) to bottom (-1) with epsilon offset
+                // Epsilon prevents clustering at poles
+                const epsilon = 0.5;
+                const normalizedY = total > 1
+                    ? 1 - ((index + epsilon) / (total - 1 + 2 * epsilon)) * 2
+                    : 0;
+                const y = normalizedY * sphereHeight;
+
+                // Horizontal radius: use oblate spheroid with minimum radius at poles
+                // This prevents poles from being too compressed
+                // Pure sphere: r = R * sqrt(1 - y²) goes from 0 to R
+                // Modified: r = R * (minR + (1-minR) * sqrt(1 - y²)) ensures minimum spread
+                const minRadiusFactor = 0.4; // Poles have at least 40% of max radius
+                const sphereFactor = Math.sqrt(1 - normalizedY * normalizedY);
+                const horizontalRadius = sphereRadius * (minRadiusFactor + (1 - minRadiusFactor) * sphereFactor);
+
+                // Angle: golden angle increment for each node (creates optimal spiral)
+                const theta = goldenAngle * index;
+
+                // Expanded position (full distance)
+                data.expandedPosition = [
+                    Math.cos(theta) * horizontalRadius,
+                    y,
+                    Math.sin(theta) * horizontalRadius
                 ];
+
+                // Collapsed position (25% of expanded distance - much closer to root)
+                const collapsedRadius = horizontalRadius * 0.25;
+                const collapsedY = y * 0.25;
+                data.collapsedPosition = [
+                    Math.cos(theta) * collapsedRadius,
+                    collapsedY,
+                    Math.sin(theta) * collapsedRadius
+                ];
+
+                // Use collapsed position as default (expanded when children are shown)
+                const isExpanded = store.expandedNodes.has(data.id);
+                data.basePosition = isExpanded ? [...data.expandedPosition] : [...data.collapsedPosition];
+
+                // Store sphere info and branch angle for children
+                data.sphereMaxY = sphereHeight;
+                data.branchAngle = theta; // Store the actual angle used
+                helixAmp = sphereHeight;
             } else {
-                // Level 2+: Extend from parent position in XZ plane
-                // Y decays towards zero with depth
+                // Level 2+: Continue in parent's branch direction (not from root!)
+                // Use the parent's branch angle so branches extend outward consistently
+                let radialAngle;
+                if (level === 2) {
+                    // Level 2: branch from level 1, use parent's theta (direction from root)
+                    radialAngle = parentBranchAngle;
+                } else {
+                    // Level 3+: continue in the same direction as parent was going
+                    radialAngle = parentBranchAngle;
+                }
+
+                // Add angular spread for siblings - larger for level 2, decay for deeper
+                const baseSpreadAngle = Math.PI * 0.75; // 135° total spread for level 2
+                const spreadDecay = Math.pow(0.6, level - 2); // 1, 0.6, 0.36...
+                const siblingSpreadAngle = baseSpreadAngle * spreadDecay;
+                const angularOffset = total > 1
+                    ? ((index / (total - 1)) - 0.5) * siblingSpreadAngle
+                    : 0;
+                const finalAngle = radialAngle + angularOffset;
+
+                // Branch length: still use spherical math for consistency
+                const sphereMaxY = baseHelixAmp * 10.0;
+                const parentY = parentPos[1];
+                const normalizedParentY = sphereMaxY > 0 ? Math.abs(parentY) / sphereMaxY : 0;
+                const clampedNormalizedY = Math.min(normalizedParentY, 0.99);
+                const sphereMultiplier = Math.sqrt(1 - clampedNormalizedY * clampedNormalizedY);
+                const sphericalBranchLength = baseRadius * (1 + sphereMultiplier * 3.0);
+
                 data.basePosition = [
-                    parentPos[0] + Math.cos(angle) * baseRadius,
-                    parentPos[1] * yInheritance + siblingVerticalOffset,
-                    parentPos[2] + Math.sin(angle) * baseRadius
+                    parentPos[0] + Math.cos(finalAngle) * sphericalBranchLength,
+                    parentPos[1] + siblingVerticalOffset,
+                    parentPos[2] + Math.sin(finalAngle) * sphericalBranchLength
                 ];
+
+                // Store the actual angle used for this branch (for children to inherit)
+                data.branchAngle = finalAngle;
             }
 
-            data.expandedPosition = [...data.basePosition];
+            // For level 2+, set expanded position (level 1 already has it set)
+            if (level > 1) {
+                data.expandedPosition = [...data.basePosition];
+            }
             data.position = [...data.basePosition];
-            data.branchAngle = angle;
         }
 
         // If node has a custom position (from move mode), use it instead
@@ -24505,7 +24573,11 @@ Return as JSON:
         // Children are confined to parent's angular sector (no crossover!)
         if (data.children) {
             // Calculate weights for children based on their descendants
+            // Level 0 (root) children get EQUAL weights for even angular distribution
             const childWeights = data.children.map(child => {
+                if (level === 0) {
+                    return 1; // Equal weight for level 1 siblings - even angular spread
+                }
                 const descendants = countVisibleDescendants(child);
                 return 1 + Math.sqrt(descendants) * 0.8; // Weight: 1 base + sqrt of descendants
             });
@@ -24521,7 +24593,7 @@ Return as JSON:
             const PHI = 1.618033988749895;
 
             if (level === 0) {
-                // Root: full circle for level 1 children
+                // Root: full circle for level 1 children with EQUAL angular spacing
                 availableSector = Math.PI * 2;
                 childSectorStart = -Math.PI;
             } else if (level === 1) {
@@ -24561,7 +24633,8 @@ Return as JSON:
                     childSectorStart,
                     childSectorEnd,
                     data.children.length,
-                    i
+                    i,
+                    data.branchAngle || 0  // Pass parent's branch angle to children
                 );
 
                 // Move to next child's sector start
@@ -25102,7 +25175,7 @@ Return as JSON:
             });
             
             // Start children from parent position for animation
-            newMesh.userData.children?.forEach((childData) => {
+            newMesh.userData.children?.forEach((childData, index) => {
                 const childMesh = nodes.get(childData.id);
                 if (childMesh) {
                     const parentPos = newMesh.position.clone();
@@ -25113,6 +25186,17 @@ Return as JSON:
                     const importance = childMesh.userData.importance || 1;
                     childMesh.scale.set(0.5 * importance, 0.5 * importance, 0.5 * importance);
                     childMesh.material.opacity = 0.3;
+
+                    // Hide connection line initially - show after node starts moving
+                    if (childMesh.userData.connectionLine) {
+                        childMesh.userData.connectionLine.visible = false;
+                        // Show connection line after a short delay (when node is partway there)
+                        setTimeout(() => {
+                            if (childMesh.userData.connectionLine && childMesh.visible) {
+                                childMesh.userData.connectionLine.visible = true;
+                            }
+                        }, 100 + index * 30); // Stagger slightly
+                    }
                 }
             });
         }
@@ -25196,17 +25280,17 @@ Return as JSON:
                 setTimeout(() => {
                     // Only proceed if this collapse wasn't cancelled by an expand
                     if (childMesh.userData.collapseId !== thisCollapseId) return;
-                    
-                    // Hide connection line and label immediately
-                    if (childMesh.userData.connectionLine) childMesh.userData.connectionLine.visible = false;
+
+                    // Hide label and connection line immediately when animation starts
                     if (childMesh.userData.labelSprite) childMesh.userData.labelSprite.visible = false;
                     if (childMesh.userData.contextBadge) childMesh.userData.contextBadge.visible = false;
-                    
+                    if (childMesh.userData.connectionLine) childMesh.userData.connectionLine.visible = false;
+
                     // Animate back to parent position
                     childMesh.userData.spring.target.copy(parentPos);
                     childMesh.userData.spring.scaleTarget = 0.1;
                 }, itemDelay);
-                
+
                 // Hide node after animation completes
                 setTimeout(() => {
                     // Only hide if this collapse wasn't cancelled
@@ -25232,7 +25316,17 @@ Return as JSON:
         if (animate && depth === 0) {
             audio.collapse();
             haptic.light();
-            
+
+            // If this is a level 1 node, retract it closer to root
+            if (mesh.userData.level === 1 && mesh.userData.collapsedPosition) {
+                const totalDuration = baseDelay + thisLevelDuration;
+                setTimeout(() => {
+                    const collapsedPos = mesh.userData.collapsedPosition;
+                    const targetVec = new THREE.Vector3(collapsedPos[0], collapsedPos[1], collapsedPos[2]);
+                    mesh.userData.spring.target.copy(targetVec);
+                }, totalDuration);
+            }
+
             // Smoothly update positions after collapse animation (don't rebuild)
             const totalDuration = baseDelay + thisLevelDuration + 100;
             setTimeout(() => updateNodePositions(), totalDuration);
