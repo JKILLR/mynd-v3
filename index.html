@@ -7405,7 +7405,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.24</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(99, 102, 241, 0.9); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">V3.25</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -24492,11 +24492,25 @@ Return as JSON:
                 // Angle: golden angle increment for each node (creates optimal spiral)
                 const theta = goldenAngle * index;
 
-                data.basePosition = [
+                // Expanded position (full distance)
+                data.expandedPosition = [
                     Math.cos(theta) * horizontalRadius,
                     y,
                     Math.sin(theta) * horizontalRadius
                 ];
+
+                // Collapsed position (40% of expanded distance - closer to root)
+                const collapsedRadius = horizontalRadius * 0.4;
+                const collapsedY = y * 0.4;
+                data.collapsedPosition = [
+                    Math.cos(theta) * collapsedRadius,
+                    collapsedY,
+                    Math.sin(theta) * collapsedRadius
+                ];
+
+                // Use collapsed position as default (expanded when children are shown)
+                const isExpanded = store.expandedNodes.has(data.id);
+                data.basePosition = isExpanded ? [...data.expandedPosition] : [...data.collapsedPosition];
 
                 // Store sphere info and branch angle for children
                 data.sphereMaxY = sphereHeight;
@@ -24541,7 +24555,10 @@ Return as JSON:
                 data.branchAngle = finalAngle;
             }
 
-            data.expandedPosition = [...data.basePosition];
+            // For level 2+, set expanded position (level 1 already has it set)
+            if (level > 1) {
+                data.expandedPosition = [...data.basePosition];
+            }
             data.position = [...data.basePosition];
         }
 
@@ -25158,7 +25175,7 @@ Return as JSON:
             });
             
             // Start children from parent position for animation
-            newMesh.userData.children?.forEach((childData) => {
+            newMesh.userData.children?.forEach((childData, index) => {
                 const childMesh = nodes.get(childData.id);
                 if (childMesh) {
                     const parentPos = newMesh.position.clone();
@@ -25169,6 +25186,17 @@ Return as JSON:
                     const importance = childMesh.userData.importance || 1;
                     childMesh.scale.set(0.5 * importance, 0.5 * importance, 0.5 * importance);
                     childMesh.material.opacity = 0.3;
+
+                    // Hide connection line initially - show after node starts moving
+                    if (childMesh.userData.connectionLine) {
+                        childMesh.userData.connectionLine.visible = false;
+                        // Show connection line after a short delay (when node is partway there)
+                        setTimeout(() => {
+                            if (childMesh.userData.connectionLine && childMesh.visible) {
+                                childMesh.userData.connectionLine.visible = true;
+                            }
+                        }, 100 + index * 30); // Stagger slightly
+                    }
                 }
             });
         }
@@ -25252,24 +25280,24 @@ Return as JSON:
                 setTimeout(() => {
                     // Only proceed if this collapse wasn't cancelled by an expand
                     if (childMesh.userData.collapseId !== thisCollapseId) return;
-                    
-                    // Hide connection line and label immediately
-                    if (childMesh.userData.connectionLine) childMesh.userData.connectionLine.visible = false;
+
+                    // Hide label immediately when animation starts
                     if (childMesh.userData.labelSprite) childMesh.userData.labelSprite.visible = false;
                     if (childMesh.userData.contextBadge) childMesh.userData.contextBadge.visible = false;
-                    
+
                     // Animate back to parent position
                     childMesh.userData.spring.target.copy(parentPos);
                     childMesh.userData.spring.scaleTarget = 0.1;
                 }, itemDelay);
-                
-                // Hide node after animation completes
+
+                // Hide node AND connection line together after animation completes
                 setTimeout(() => {
                     // Only hide if this collapse wasn't cancelled
                     if (childMesh.userData.collapseId !== thisCollapseId) return;
                     if (!childMesh.userData.collapsed) return;
 
                     childMesh.visible = false;
+                    if (childMesh.userData.connectionLine) childMesh.userData.connectionLine.visible = false;
                     if (childMesh.userData.outlineMesh) childMesh.userData.outlineMesh.visible = false;
                     if (childMesh.userData.glowRing) childMesh.userData.glowRing.visible = false;
                     if (childMesh.userData.targetRing) childMesh.userData.targetRing.visible = false;
@@ -25288,7 +25316,17 @@ Return as JSON:
         if (animate && depth === 0) {
             audio.collapse();
             haptic.light();
-            
+
+            // If this is a level 1 node, retract it closer to root
+            if (mesh.userData.level === 1 && mesh.userData.collapsedPosition) {
+                const totalDuration = baseDelay + thisLevelDuration;
+                setTimeout(() => {
+                    const collapsedPos = mesh.userData.collapsedPosition;
+                    const targetVec = new THREE.Vector3(collapsedPos[0], collapsedPos[1], collapsedPos[2]);
+                    mesh.userData.spring.target.copy(targetVec);
+                }, totalDuration);
+            }
+
             // Smoothly update positions after collapse animation (don't rebuild)
             const totalDuration = baseDelay + thisLevelDuration + 100;
             setTimeout(() => updateNodePositions(), totalDuration);
