@@ -29601,22 +29601,27 @@ Respond with a JSON object:
         const tiltTowardRootHorizontal = Math.PI / 6; // 30 degrees
         const endTheta = nodeDist2D > 0.5 ? nodeAngle - Math.PI * 0.35 + tiltTowardRootHorizontal : currentTheta;
         
-        // Zoom further out for better overview - scale based on child count
+        // Zoom further out to show full map context with selected node visible
         const isMobile = window.innerWidth <= 768;
         const nodeLevel = mesh.userData.level || 0;
-        const baseRadius = isMobile ? 32 : 26; // Increased for less aggressive zoom
 
-        // Depth zoom: deeper nodes need closer camera (subtract from radius)
-        // Level 0 = no bonus, Level 1 = -2, Level 2 = -4, Level 3+ = -6
-        const depthZoomBonus = Math.min(nodeLevel * 2, 6);
+        // Calculate map extent to ensure we can see the whole map
+        let maxNodeDist = 0;
+        nodes.forEach(n => {
+            const dist = Math.sqrt(n.position.x * n.position.x + n.position.z * n.position.z);
+            maxNodeDist = Math.max(maxNodeDist, dist);
+        });
 
-        const childZoomBonus = hasChildren ? Math.min(childCount * 4, 20) : 0; // up to 20 extra for many children
-        const endRadius = Math.max(14, baseRadius + childZoomBonus - depthZoomBonus, nodeDist2D + 18 + childZoomBonus - depthZoomBonus);
+        // Base radius scales with map size - aim to see most of the map
+        const mapBasedRadius = Math.max(maxNodeDist * 1.8, isMobile ? 55 : 45);
+        const baseRadius = mapBasedRadius;
 
-        // Camera angle tilted 30° toward root (on both x/z axes)
-        // π/6 ≈ 0.524 radians = 30 degrees
-        const tiltTowardRoot = Math.PI / 6; // 30 degrees
-        const endPhi = Math.PI * 0.35 + (nodeDist2D > 0.5 ? tiltTowardRoot * 0.5 : 0); // tilt down toward root
+        // Slight adjustment for children - but keep overview perspective
+        const childZoomBonus = hasChildren ? Math.min(childCount * 2, 10) : 0;
+        const endRadius = Math.max(40, baseRadius + childZoomBonus);
+
+        // More top-down angle (around 50-55 degrees from vertical) for better overview
+        const endPhi = Math.PI * 0.28; // ~50 degrees - more top-down view
         
         // Calculate shortest angle difference for arc boost
         let angleDiff = endTheta - currentTheta;
