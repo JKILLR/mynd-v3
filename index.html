@@ -15272,12 +15272,15 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                         
                         // Share encoder with semantic memory system
                         semanticMemory.setEncoder(this.encoder);
-                        
+
                         // Share encoder with relationship classifier
                         relationshipClassifier.setEncoder(this.encoder);
-                        
+
                         // Share encoder with concept abstractor
                         conceptAbstractor.setEncoder(this.encoder);
+
+                        // Share encoder with CodeRAG system
+                        codeRAG.setEncoder(this.encoder);
                     } catch (loadError) {
                         // Model fetch blocked (common in preview environments)
                         console.warn('⚠️ Neural network: Model loading blocked (preview environment)');
@@ -21839,7 +21842,441 @@ Return as JSON:
     
     // Global SemanticEngine instance
     const semanticEngine = new SemanticEngine();
-    
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CODE RAG SYSTEM - Retrieval-Augmented Generation for Codebase
+    // ═══════════════════════════════════════════════════════════════════
+    // Enables AI to understand and reference the actual MYND codebase
+    // by chunking, embedding, and retrieving relevant code sections
+    class CodeRAG {
+        constructor() {
+            this.chunks = [];
+            this.embeddings = new Map(); // chunkId -> embedding vector
+            this.encoder = null;
+            this.initialized = false;
+            this.isProcessing = false;
+            this.STORAGE_KEY = 'mynd_code_rag';
+            this.VERSION = '1.0'; // Increment to force re-chunking
+        }
+
+        // Initialize the system
+        async initialize() {
+            if (this.initialized || this.isProcessing) return this.initialized;
+            this.isProcessing = true;
+
+            console.log('📚 Initializing CodeRAG system...');
+
+            try {
+                // Try to load cached chunks and embeddings
+                const cached = this.loadFromStorage();
+                if (cached && cached.version === this.VERSION && cached.chunks.length > 0) {
+                    this.chunks = cached.chunks;
+                    cached.embeddings.forEach(([id, vec]) => this.embeddings.set(id, vec));
+                    console.log(`✓ CodeRAG loaded ${this.chunks.length} cached chunks`);
+                    this.initialized = true;
+                    this.isProcessing = false;
+                    return true;
+                }
+
+                // Need to chunk and embed the codebase
+                console.log('📚 Chunking codebase (first run)...');
+                await this.processCodebase();
+
+                this.initialized = true;
+                this.isProcessing = false;
+                console.log(`✓ CodeRAG ready with ${this.chunks.length} chunks`);
+                return true;
+
+            } catch (error) {
+                console.warn('CodeRAG initialization failed:', error);
+                this.isProcessing = false;
+                return false;
+            }
+        }
+
+        // Set encoder (shared from neuralNet)
+        setEncoder(encoder) {
+            this.encoder = encoder;
+        }
+
+        // Process the entire codebase
+        async processCodebase() {
+            // Get the current page's HTML (the entire app)
+            const code = document.documentElement.outerHTML;
+
+            // Extract just the script content
+            const scriptMatch = code.match(/<script>([\s\S]*?)<\/script>\s*<!--\s*External modules/);
+            const scriptCode = scriptMatch ? scriptMatch[1] : code;
+
+            // Chunk the code
+            this.chunks = this.chunkCode(scriptCode);
+            console.log(`📚 Created ${this.chunks.length} code chunks`);
+
+            // Generate embeddings
+            await this.embedChunks();
+
+            // Save to storage
+            this.saveToStorage();
+        }
+
+        // Parse code into semantic chunks
+        chunkCode(code) {
+            const chunks = [];
+            const lines = code.split('\n');
+            let chunkId = 0;
+
+            // Pattern matchers for different code structures
+            const patterns = {
+                // Major section headers: // ═══════════ SECTION NAME ═══════════
+                section: /\/\/\s*═+\s*(.+?)\s*═+/,
+                // Class definitions
+                classStart: /^\s*class\s+(\w+)/,
+                // Function declarations (various forms)
+                functionDecl: /^\s*(?:async\s+)?function\s+(\w+)\s*\(/,
+                // Method/arrow function in object
+                objectMethod: /^\s*(?:async\s+)?(\w+)\s*(?::\s*(?:async\s+)?function)?\s*\(|^\s*(\w+)\s*:\s*(?:async\s+)?\(/,
+                // Arrow function assignment
+                arrowFunc: /^\s*(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\(/,
+                // Object/const declaration
+                constDecl: /^\s*(?:const|let|var)\s+(\w+)\s*=\s*\{/,
+            };
+
+            let currentSection = 'Global';
+            let currentClass = null;
+            let braceDepth = 0;
+            let inMultilineComment = false;
+
+            // First pass: identify section headers and major structures
+            const sections = [];
+            let currentSectionStart = 0;
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+
+                // Track multiline comments
+                if (line.includes('/*')) inMultilineComment = true;
+                if (line.includes('*/')) inMultilineComment = false;
+                if (inMultilineComment) continue;
+
+                // Check for section header
+                const sectionMatch = line.match(patterns.section);
+                if (sectionMatch) {
+                    // Save previous section
+                    if (i > currentSectionStart + 5) {
+                        sections.push({
+                            name: currentSection,
+                            startLine: currentSectionStart,
+                            endLine: i - 1
+                        });
+                    }
+                    currentSection = sectionMatch[1].trim();
+                    currentSectionStart = i;
+                }
+            }
+            // Add final section
+            sections.push({
+                name: currentSection,
+                startLine: currentSectionStart,
+                endLine: lines.length - 1
+            });
+
+            // Second pass: extract meaningful chunks from each section
+            for (const section of sections) {
+                const sectionLines = lines.slice(section.startLine, section.endLine + 1);
+                const sectionCode = sectionLines.join('\n');
+
+                // Skip very small sections
+                if (sectionLines.length < 10) continue;
+
+                // Extract functions and classes from this section
+                const functionChunks = this.extractFunctions(sectionCode, section.name, section.startLine);
+                chunks.push(...functionChunks);
+
+                // Also create a section overview chunk
+                const overviewLines = sectionLines.slice(0, Math.min(50, sectionLines.length));
+                chunks.push({
+                    id: `section-${chunkId++}`,
+                    type: 'section',
+                    name: section.name,
+                    section: section.name,
+                    startLine: section.startLine,
+                    endLine: Math.min(section.startLine + 50, section.endLine),
+                    code: overviewLines.join('\n'),
+                    summary: `Section: ${section.name} (${section.endLine - section.startLine} lines)`
+                });
+            }
+
+            return chunks;
+        }
+
+        // Extract functions from a code section
+        extractFunctions(code, sectionName, baseLineNumber) {
+            const chunks = [];
+            const lines = code.split('\n');
+            let chunkId = 0;
+
+            // Regex patterns for function detection
+            const funcPatterns = [
+                // Standard function
+                /(?:async\s+)?function\s+(\w+)\s*\([^)]*\)\s*\{/g,
+                // Class method
+                /^\s*(?:async\s+)?(\w+)\s*\([^)]*\)\s*\{/gm,
+                // Arrow function assignment
+                /(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/g,
+                // Object method
+                /(\w+)\s*:\s*(?:async\s+)?function\s*\([^)]*\)\s*\{/g,
+                /(\w+)\s*:\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{/g,
+            ];
+
+            // Find function boundaries by matching braces
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+
+                // Check for function start
+                let funcName = null;
+                let funcMatch = null;
+
+                // Try different patterns
+                const stdFunc = line.match(/(?:async\s+)?function\s+(\w+)\s*\(/);
+                const classMethod = line.match(/^\s*(?:async\s+)?(\w+)\s*\([^)]*\)\s*\{/);
+                const arrowFunc = line.match(/(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\(/);
+                const objMethod = line.match(/(\w+)\s*:\s*(?:async\s+)?(?:function)?\s*\(/);
+
+                if (stdFunc) funcName = stdFunc[1];
+                else if (classMethod && !line.includes('if') && !line.includes('for') && !line.includes('while')) funcName = classMethod[1];
+                else if (arrowFunc) funcName = arrowFunc[1];
+                else if (objMethod && !line.trim().startsWith('//')) funcName = objMethod[1];
+
+                if (funcName && funcName.length > 1 && !['if', 'for', 'while', 'switch', 'catch', 'try'].includes(funcName)) {
+                    // Find the end of this function by counting braces
+                    let braceCount = 0;
+                    let started = false;
+                    let endLine = i;
+
+                    for (let j = i; j < Math.min(i + 200, lines.length); j++) {
+                        const checkLine = lines[j];
+                        for (const char of checkLine) {
+                            if (char === '{') { braceCount++; started = true; }
+                            if (char === '}') braceCount--;
+                        }
+                        if (started && braceCount === 0) {
+                            endLine = j;
+                            break;
+                        }
+                    }
+
+                    // Extract function code (limit to 100 lines for embedding efficiency)
+                    const funcLines = lines.slice(i, Math.min(endLine + 1, i + 100));
+                    const funcCode = funcLines.join('\n');
+
+                    // Only keep substantial functions
+                    if (funcLines.length >= 3) {
+                        chunks.push({
+                            id: `func-${sectionName.replace(/\s+/g, '-')}-${funcName}-${chunkId++}`,
+                            type: 'function',
+                            name: funcName,
+                            section: sectionName,
+                            startLine: baseLineNumber + i,
+                            endLine: baseLineNumber + endLine,
+                            code: funcCode,
+                            summary: `Function ${funcName} in ${sectionName}`
+                        });
+                    }
+
+                    // Skip past this function
+                    i = endLine;
+                }
+            }
+
+            return chunks;
+        }
+
+        // Generate embeddings for all chunks
+        async embedChunks() {
+            if (!this.encoder && !neuralNet?.encoder) {
+                console.warn('CodeRAG: No encoder available, skipping embeddings');
+                return;
+            }
+
+            const encoder = this.encoder || neuralNet.encoder;
+            console.log(`📚 Embedding ${this.chunks.length} code chunks...`);
+
+            // Process in batches to avoid memory issues
+            const batchSize = 20;
+            for (let i = 0; i < this.chunks.length; i += batchSize) {
+                const batch = this.chunks.slice(i, i + batchSize);
+                const texts = batch.map(chunk => {
+                    // Create searchable text from chunk
+                    return `${chunk.name} ${chunk.section} ${chunk.type}: ${chunk.code.substring(0, 500)}`;
+                });
+
+                try {
+                    const embeddings = await encoder.embed(texts);
+                    const vectors = await embeddings.array();
+                    embeddings.dispose();
+
+                    batch.forEach((chunk, idx) => {
+                        this.embeddings.set(chunk.id, vectors[idx]);
+                    });
+
+                    // Progress update
+                    if ((i + batchSize) % 100 === 0 || i + batchSize >= this.chunks.length) {
+                        console.log(`📚 Embedded ${Math.min(i + batchSize, this.chunks.length)}/${this.chunks.length} chunks`);
+                    }
+                } catch (error) {
+                    console.warn(`CodeRAG embedding batch ${i} failed:`, error);
+                }
+            }
+        }
+
+        // Search for relevant code chunks
+        async search(query, topK = 5) {
+            if (!this.initialized || this.chunks.length === 0) {
+                return [];
+            }
+
+            const encoder = this.encoder || neuralNet?.encoder;
+            if (!encoder) return [];
+
+            try {
+                // Embed the query
+                const queryEmbedding = await encoder.embed([query]);
+                const queryVector = (await queryEmbedding.array())[0];
+                queryEmbedding.dispose();
+
+                // Calculate similarities
+                const results = [];
+                for (const chunk of this.chunks) {
+                    const chunkVector = this.embeddings.get(chunk.id);
+                    if (!chunkVector) continue;
+
+                    const similarity = this.cosineSimilarity(queryVector, chunkVector);
+                    results.push({ ...chunk, similarity });
+                }
+
+                // Sort by similarity and return top K
+                results.sort((a, b) => b.similarity - a.similarity);
+                return results.slice(0, topK);
+
+            } catch (error) {
+                console.warn('CodeRAG search failed:', error);
+                return [];
+            }
+        }
+
+        // Get formatted context for Claude
+        async getContext(query, maxChunks = 3, maxChars = 4000) {
+            const results = await this.search(query, maxChunks * 2);
+
+            if (results.length === 0) {
+                return null;
+            }
+
+            // Filter to high-relevance results
+            const relevant = results.filter(r => r.similarity > 0.25).slice(0, maxChunks);
+
+            if (relevant.length === 0) {
+                return null;
+            }
+
+            let context = `\n📚 RELEVANT CODEBASE SECTIONS:\n`;
+            let totalChars = 0;
+
+            for (const chunk of relevant) {
+                const header = `\n[${chunk.type.toUpperCase()}: ${chunk.name}] (${chunk.section}, lines ${chunk.startLine}-${chunk.endLine}, ${Math.round(chunk.similarity * 100)}% relevant)\n`;
+                const codeSnippet = chunk.code.substring(0, Math.min(chunk.code.length, (maxChars - totalChars) / relevant.length));
+
+                if (totalChars + header.length + codeSnippet.length > maxChars) {
+                    break;
+                }
+
+                context += header + '```javascript\n' + codeSnippet + '\n```\n';
+                totalChars += header.length + codeSnippet.length;
+            }
+
+            return context;
+        }
+
+        // Cosine similarity between two vectors
+        cosineSimilarity(a, b) {
+            if (!a || !b || a.length !== b.length) return 0;
+
+            let dotProduct = 0;
+            let normA = 0;
+            let normB = 0;
+
+            for (let i = 0; i < a.length; i++) {
+                dotProduct += a[i] * b[i];
+                normA += a[i] * a[i];
+                normB += b[i] * b[i];
+            }
+
+            const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+            return denominator === 0 ? 0 : dotProduct / denominator;
+        }
+
+        // Save to localStorage
+        saveToStorage() {
+            try {
+                const data = {
+                    version: this.VERSION,
+                    chunks: this.chunks,
+                    embeddings: Array.from(this.embeddings.entries())
+                };
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+                console.log('📚 CodeRAG saved to storage');
+            } catch (error) {
+                console.warn('CodeRAG save failed:', error);
+                // Try saving without embeddings if too large
+                try {
+                    const data = {
+                        version: this.VERSION,
+                        chunks: this.chunks,
+                        embeddings: []
+                    };
+                    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+                } catch (e) {
+                    console.warn('CodeRAG save failed completely:', e);
+                }
+            }
+        }
+
+        // Load from localStorage
+        loadFromStorage() {
+            try {
+                const data = localStorage.getItem(this.STORAGE_KEY);
+                if (!data) return null;
+                return JSON.parse(data);
+            } catch (error) {
+                console.warn('CodeRAG load failed:', error);
+                return null;
+            }
+        }
+
+        // Get stats for UI
+        getStats() {
+            return {
+                initialized: this.initialized,
+                totalChunks: this.chunks.length,
+                embeddedChunks: this.embeddings.size,
+                sections: [...new Set(this.chunks.map(c => c.section))].length,
+                functions: this.chunks.filter(c => c.type === 'function').length
+            };
+        }
+
+        // Clear and reprocess
+        async reprocess() {
+            this.chunks = [];
+            this.embeddings.clear();
+            this.initialized = false;
+            localStorage.removeItem(this.STORAGE_KEY);
+            return this.initialize();
+        }
+    }
+
+    // Global CodeRAG instance
+    const codeRAG = new CodeRAG();
+
     // Global neural network instance
     const neuralNet = new PersonalNeuralNet();
 
@@ -28812,7 +29249,28 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             } catch (e) {
                 // Feedback stats not critical
             }
-            
+
+            // 8. CodeRAG - Relevant codebase context (for technical questions about MYND)
+            let codeContext = '';
+            if (codeRAG.initialized) {
+                try {
+                    // Check if the message seems to be about the codebase/implementation
+                    const technicalKeywords = ['code', 'function', 'implement', 'how does', 'how do', 'bug', 'fix', 'feature', 'animation', 'render', 'node', 'expand', 'collapse', 'camera', 'theme', 'neural', 'AI', 'embed', 'store', 'save', 'load', 'api', 'claude', 'three.js', '3d', 'css', 'style', 'layout', 'position', 'technical', 'architecture', 'system'];
+                    const messageLower = userMessage.toLowerCase();
+                    const isTechnical = technicalKeywords.some(kw => messageLower.includes(kw));
+
+                    if (isTechnical) {
+                        const relevantCode = await codeRAG.getContext(userMessage, 3, 3000);
+                        if (relevantCode) {
+                            codeContext = relevantCode;
+                            console.log('📚 CodeRAG provided context for technical query');
+                        }
+                    }
+                } catch (e) {
+                    console.warn('CodeRAG context error:', e);
+                }
+            }
+
             const systemPrompt = `You are the AI companion for MYND — a personalized second brain designed to capture and connect fragmented thoughts, fostering creativity and clarity.
 
 === YOUR PURPOSE ===
@@ -28962,6 +29420,9 @@ ${treeStructure || '(empty map)'}
 ${neuralContext ? `
 NEURAL INTELLIGENCE CONTEXT:
 ${neuralContext}` : ''}
+${codeContext ? `
+MYND CODEBASE CONTEXT (for technical questions):
+${codeContext}` : ''}
 
 YOUR CAPABILITIES:
 1. **Full Map Visibility**: You can see the ENTIRE map structure above
@@ -28970,6 +29431,7 @@ YOUR CAPABILITIES:
 4. **Proactive**: Suggest improvements, identify duplicates, offer to help organize based on learned patterns
 5. **Real-time info**: You can search the web for current information
 6. **App Expert**: You know all MYND features deeply - help users learn the app, explain features, suggest efficient workflows
+7. **Codebase Knowledge**: For technical questions, you have access to relevant MYND source code. Use this to explain how features work, suggest improvements, or debug issues
 
 RESPONSE FORMAT (always JSON):
 {
@@ -38798,6 +39260,31 @@ Summary:`
             console.warn('WebGPU initialization deferred:', e.message);
         }
     }, 700);
+
+    // Initialize CodeRAG System (codebase understanding for AI)
+    setTimeout(async () => {
+        try {
+            // Wait for neuralNet to be ready (need encoder)
+            if (neuralNet.isReady || neuralNet.encoder) {
+                await codeRAG.initialize();
+                console.log('📚 CodeRAG stats:', codeRAG.getStats());
+            } else {
+                // Retry after neuralNet initializes
+                const checkEncoder = setInterval(async () => {
+                    if (neuralNet.encoder) {
+                        clearInterval(checkEncoder);
+                        codeRAG.setEncoder(neuralNet.encoder);
+                        await codeRAG.initialize();
+                        console.log('📚 CodeRAG stats:', codeRAG.getStats());
+                    }
+                }, 2000);
+                // Give up after 30 seconds
+                setTimeout(() => clearInterval(checkEncoder), 30000);
+            }
+        } catch (e) {
+            console.warn('CodeRAG initialization deferred:', e.message);
+        }
+    }, 800);
 
     // Mobile: Start with toolbar collapsed
     if (window.innerWidth <= 768) {
