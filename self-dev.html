@@ -7542,7 +7542,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND V.4.0.9</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND V.4.1.0</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -9765,6 +9765,13 @@ Things to avoid..."></textarea>
 
     <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 
+    <!-- Test if THREE.js CDN is accessible -->
+    <script>
+        fetch('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js', {method: 'HEAD'})
+            .then(r => console.log('📡 THREE.js CDN status:', r.status))
+            .catch(e => console.error('❌ THREE.js CDN failed:', e));
+    </script>
+
     <!-- Global onboarding functions (available immediately for inline onclick) -->
     <script>
         // Check if already onboarded - hide overlay immediately (before module loads)
@@ -9829,7 +9836,7 @@ Things to avoid..."></textarea>
         };
     </script>
 
-    <script type="module">
+    <script type="module" onerror="console.error('Module failed to load')">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
