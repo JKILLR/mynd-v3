@@ -7949,6 +7949,45 @@
                 </div>
             </div>
 
+            <!-- Claude API Key Section (Self Developer Mode Only) -->
+            <div id="claude-api-key-section" style="margin-bottom: 20px; display: none;">
+                <div style="font-size: 12px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">
+                    <span style="margin-right: 6px;">🔑</span>Claude API Key
+                </div>
+                <div class="api-key-desc">Required for the Self-Improvement Engine and AI features. Your key is stored locally in your browser.</div>
+
+                <div style="margin-top: 10px;">
+                    <input type="password" id="claude-api-key-input" placeholder="sk-ant-..." style="
+                        width: 100%;
+                        padding: 10px 12px;
+                        border: 1px solid var(--glass-border);
+                        border-radius: 8px;
+                        background: var(--bg-secondary);
+                        color: var(--text-primary);
+                        font-family: var(--font-mono);
+                        font-size: 12px;
+                        box-sizing: border-box;
+                    ">
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 10px;">
+                    <button class="api-key-btn primary" id="claude-api-key-save-btn" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                            <polyline points="17 21 17 13 7 13 7 21"/>
+                            <polyline points="7 3 7 8 15 8"/>
+                        </svg>
+                        Save Key
+                    </button>
+                    <button class="api-key-btn secondary" id="claude-api-key-clear-btn" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                        Clear
+                    </button>
+                </div>
+                <div id="claude-api-key-status" style="font-size: 11px; color: var(--text-muted); margin-top: 8px;"></div>
+            </div>
+
             <!-- Self-Improver Section (Self Developer Mode Only) -->
             <div id="self-improver-section" style="margin-bottom: 20px; display: none;">
                 <div style="font-size: 12px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">
@@ -37697,6 +37736,56 @@ Respond with JSON only:`;
             document.getElementById('file-pick-location-btn').disabled = true;
             document.getElementById('file-open-btn').disabled = true;
         }
+
+        // Show Claude API key section
+        const claudeApiKeySection = document.getElementById('claude-api-key-section');
+        if (claudeApiKeySection) {
+            claudeApiKeySection.style.display = 'block';
+        }
+
+        // Initialize Claude API key UI
+        function updateClaudeApiKeyUI() {
+            const apiKey = localStorage.getItem('claude-api-key');
+            const statusEl = document.getElementById('claude-api-key-status');
+            const inputEl = document.getElementById('claude-api-key-input');
+
+            if (apiKey) {
+                statusEl.innerHTML = '<span style="color: #22c55e;">✓ API key saved</span>';
+                inputEl.placeholder = '••••••••' + apiKey.slice(-8);
+                inputEl.value = '';
+            } else {
+                statusEl.innerHTML = '<span style="color: var(--text-muted);">No API key set</span>';
+                inputEl.placeholder = 'sk-ant-...';
+            }
+        }
+        updateClaudeApiKeyUI();
+
+        // Save API key button
+        document.getElementById('claude-api-key-save-btn')?.addEventListener('click', () => {
+            const inputEl = document.getElementById('claude-api-key-input');
+            const key = inputEl.value.trim();
+
+            if (!key) {
+                showToast('Please enter an API key', 'warning');
+                return;
+            }
+
+            if (!key.startsWith('sk-ant-')) {
+                showToast('Invalid API key format. Should start with sk-ant-', 'warning');
+                return;
+            }
+
+            localStorage.setItem('claude-api-key', key);
+            updateClaudeApiKeyUI();
+            showToast('API key saved!', 'success');
+        });
+
+        // Clear API key button
+        document.getElementById('claude-api-key-clear-btn')?.addEventListener('click', () => {
+            localStorage.removeItem('claude-api-key');
+            updateClaudeApiKeyUI();
+            showToast('API key cleared', 'info');
+        });
 
         // Update file storage status display
         function updateFileStorageUI() {
