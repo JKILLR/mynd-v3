@@ -15,14 +15,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        /* ═══════════════════════════════════════════════════════════
-           SELF DEVELOPER MODE - Hidden Elements
-           ═══════════════════════════════════════════════════════════ */
+
         .self-dev-hide { display: none !important; }
 
-        /* ═══════════════════════════════════════════════════════════
-           THEME SYSTEM - 6 Modern Themes
-           ═══════════════════════════════════════════════════════════ */
         :root {
             /* Base/Shared Variables */
             --font-display: 'Space Grotesk', sans-serif;
@@ -85,36 +80,8 @@
             --pink: #EC4899;
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           Theme 1: SANDSTONE - Natural/Professional (Default)
-           Inspired by: Milk, Light Stone, Desert Clay, Graphite
-           ═══════════════════════════════════════════════════════════ */
-        [data-theme="sandstone"] {
-            --bg-deep: #F9F7F0;
-            --bg-primary: #FAF9F6;
-            --bg-secondary: #F5F3EE;
-            --bg-tertiary: #EBE8E2;
-            --bg-elevated: #E5E1D8;
-            --text-primary: #2C2C2C;
-            --text-secondary: #5A5A52;
-            --text-muted: #8A8A7E;
-            --accent: #C4978A;
-            --accent-light: #D4A89A;
-            --accent-glow: rgba(196, 151, 138, 0.3);
-            --glass-bg: rgba(250, 249, 246, 0.92);
-            --glass-border: rgba(0, 0, 0, 0.06);
-            --nebula-1: rgba(0, 0, 0, 0);
-            --nebula-2: rgba(0, 0, 0, 0);
-            --nebula-3: rgba(0, 0, 0, 0);
-            --shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
-            --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
-            --shadow-lg: 0 8px 32px rgba(0,0,0,0.08);
-        }
+        [data-theme="sandstone"] { /* uses :root defaults */ }
 
-        /* ═══════════════════════════════════════════════════════════
-           Theme 2: CORAL - Ultra-flat Cartoon/Pastel
-           Inspired by: Clean white UI, soft pastels, no shadows
-           ═══════════════════════════════════════════════════════════ */
         [data-theme="coral"] {
             --bg-deep: #FAFAFA;
             --bg-primary: #FFFFFF;
@@ -231,10 +198,6 @@
             }
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           Theme 3: EMBER - Warm Light
-           Inspired by: Burnt orange to cream gradient on warm white
-           ═══════════════════════════════════════════════════════════ */
         [data-theme="ember"] {
             --bg-deep: #FAF6F0;
             --bg-primary: #FDF9F4;
@@ -257,10 +220,6 @@
             --shadow-lg: 0 8px 40px rgba(42, 36, 32, 0.1);
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           Theme 4: FROST - Glassmorphism Light
-           Inspired by: Frosted glass panels, soft backgrounds
-           ═══════════════════════════════════════════════════════════ */
         [data-theme="frost"] {
             --bg-deep: #E8ECF0;
             --bg-primary: #F0F4F8;
@@ -300,10 +259,6 @@
             border: 1px solid rgba(255, 255, 255, 0.5) !important;
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           Theme 5: OBSIDIAN - Glassmorphism Dark
-           Inspired by: Dark translucent panels, deep purple accents
-           ═══════════════════════════════════════════════════════════ */
         [data-theme="obsidian"] {
             --bg-deep: #0A0A0C;
             --bg-primary: #101014;
@@ -343,9 +298,6 @@
             border: 1px solid rgba(255, 255, 255, 0.1) !important;
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           BASE STYLES
-           ═══════════════════════════════════════════════════════════ */
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
         html {
@@ -369,9 +321,6 @@
         /* Selection */
         ::selection { background: var(--accent); color: white; }
 
-        /* ═══════════════════════════════════════════════════════════
-           AMBIENT BACKGROUND - Living, Breathing Space
-           ═══════════════════════════════════════════════════════════ */
         #ambient-bg {
             position: fixed;
             inset: 0;
@@ -414,9 +363,6 @@
             pointer-events: none;
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           CANVAS & 3D SCENE
-           ═══════════════════════════════════════════════════════════ */
         #canvas-container {
             position: fixed;
             inset: 0;
@@ -424,9 +370,6 @@
             touch-action: none;
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           FOCUS MODE - Spotlight Effect
-           ═══════════════════════════════════════════════════════════ */
         #focus-overlay {
             position: fixed;
             inset: 0;
@@ -451,9 +394,6 @@
             transition: opacity var(--duration-normal);
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           HEADER & BRANDING
-           ═══════════════════════════════════════════════════════════ */
         #header {
             position: fixed;
             top: var(--space-5);
@@ -515,9 +455,6 @@
             text-transform: uppercase;
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           TOP CONTROLS
-           ═══════════════════════════════════════════════════════════ */
         #top-controls {
             position: fixed;
             top: var(--space-5);
@@ -584,10 +521,6 @@
             color: white;
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           MOBILE HEADER
-           New simplified header for mobile devices
-           ═══════════════════════════════════════════════════════════ */
         #mobile-header {
             display: none; /* Hidden on desktop */
         }
@@ -947,9 +880,6 @@
             }
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           SPOTLIGHT SEARCH (Cmd+K)
-           ═══════════════════════════════════════════════════════════ */
         #spotlight-overlay {
             position: fixed;
             inset: 0;
@@ -1126,9 +1056,6 @@
             border: 1px solid var(--glass-border);
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           QUICK CAPTURE BAR
-           ═══════════════════════════════════════════════════════════ */
         #quick-capture {
             position: fixed;
             bottom: var(--space-5);
@@ -1221,9 +1148,6 @@
             color: var(--text-primary);
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           TOOLBAR TOGGLE - Mobile Only
-           ═══════════════════════════════════════════════════════════ */
         #toolbar-toggle {
             display: none;
             position: fixed;
@@ -1243,9 +1167,6 @@
             justify-content: center;
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           SIDE PANEL - Controls
-           ═══════════════════════════════════════════════════════════ */
         #side-panel {
             position: fixed;
             top: 50%;
@@ -2668,9 +2589,6 @@
             margin: var(--space-1) 0;
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           INFO PANEL - Node Details
-           ═══════════════════════════════════════════════════════════ */
         #info-panel {
             position: fixed;
             bottom: var(--space-5);
@@ -3467,9 +3385,6 @@
             border-color: #ef4444;
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           ATTACHMENTS
-           ═══════════════════════════════════════════════════════════ */
         .info-attachments {
             margin-top: 12px;
             padding-top: 12px;
@@ -3743,9 +3658,6 @@
             color: var(--text-muted);
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           MODAL SYSTEM
-           ═══════════════════════════════════════════════════════════ */
         .modal-overlay {
             position: fixed;
             inset: 0;
@@ -3897,9 +3809,6 @@
             box-shadow: var(--shadow-glow);
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           GOAL WIZARD - Manifestation Creation Flow
-           ═══════════════════════════════════════════════════════════ */
         #goal-wizard {
             position: fixed;
             inset: 0;
@@ -4195,9 +4104,6 @@
             transform: rotate(90deg);
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           NEURAL NETWORK PANEL
-           ═══════════════════════════════════════════════════════════ */
         #neural-panel {
             position: fixed;
             bottom: 100px;
@@ -4515,9 +4421,6 @@
             }
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           TOAST NOTIFICATIONS
-           ═══════════════════════════════════════════════════════════ */
         #toast-container {
             position: fixed;
             top: var(--space-4);
@@ -4588,9 +4491,6 @@
             to { opacity: 0; transform: translateY(-10px); }
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           CELEBRATION PARTICLES
-           ═══════════════════════════════════════════════════════════ */
         .celebration-particle {
             position: fixed;
             pointer-events: none;
@@ -4598,9 +4498,6 @@
             border-radius: 50%;
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           DEPTH INDICATOR
-           ═══════════════════════════════════════════════════════════ */
         #depth-indicator {
             position: fixed;
             top: var(--space-5);
@@ -4662,9 +4559,6 @@
             font-weight: 600;
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           RADIAL MENU
-           ═══════════════════════════════════════════════════════════ */
         #radial-menu {
             position: fixed;
             z-index: var(--z-overlay);
@@ -4749,9 +4643,6 @@
             stroke-width: 2;
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           KEYBOARD HINTS
-           ═══════════════════════════════════════════════════════════ */
         #keyboard-hints {
             position: fixed;
             bottom: calc(var(--space-5) + 70px + 80px);
@@ -4791,9 +4682,6 @@
             border: 1px solid var(--glass-border);
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           LOADING STATE
-           ═══════════════════════════════════════════════════════════ */
         #loading {
             position: fixed;
             inset: 0;
@@ -4830,9 +4718,6 @@
             color: var(--text-secondary);
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           THEME PICKER
-           ═══════════════════════════════════════════════════════════ */
         #theme-picker {
             position: fixed;
             top: 80px;
@@ -4890,9 +4775,6 @@
             font-weight: 500;
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           MENU DROPDOWN
-           ═══════════════════════════════════════════════════════════ */
         #menu-dropdown {
             position: fixed;
             top: 80px;
@@ -4944,9 +4826,6 @@
             margin: var(--space-2) 0;
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           RESPONSIVE DESIGN
-           ═══════════════════════════════════════════════════════════ */
         @media (max-width: 768px) {
             :root {
                 --space-5: 16px;
@@ -5550,9 +5429,6 @@
             stroke: white;
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           AI CHAT PANEL
-           ═══════════════════════════════════════════════════════════ */
         #ai-chat-panel {
             position: fixed;
             right: -420px;
@@ -6124,11 +6000,6 @@
                 max-width: 100%;
             }
         }
-
-        /* ═══════════════════════════════════════════════════════════
-           MOBILE BOTTOM SHEET UI - Input-First Design
-           Only applies to mobile (max-width: 768px)
-           ═══════════════════════════════════════════════════════════ */
 
         /* Hide mobile bottom sheet on desktop */
         #mobile-bottom-sheet {
@@ -6898,10 +6769,6 @@
             }
         }
 
-        /* ═══════════════════════════════════════════════════════════
-           MOBILE PERFORMANCE OPTIMIZATIONS
-           Disable expensive effects on mobile devices
-           ═══════════════════════════════════════════════════════════ */
         @media (max-width: 768px) {
             /* Disable all backdrop-filter for performance */
             *, *::before, *::after {
@@ -6980,7 +6847,6 @@
         </div>
     </div>
 
-
     <!-- Header -->
     <div id="header">
         <div class="brand">
@@ -6993,7 +6859,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND v3.30</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND v3.31</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -9087,9 +8953,7 @@ Things to avoid..."></textarea>
 
     // CONFIG is now loaded from js/config.js
 
-    // ═══════════════════════════════════════════════════════════════════
     // SUPABASE CLIENT INITIALIZATION
-    // ═══════════════════════════════════════════════════════════════════
     let supabase = null;
 
     function initSupabase() {
@@ -9110,9 +8974,7 @@ Things to avoid..."></textarea>
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════
     // TENSORFLOW LAZY LOADER - Only load when AI features are used
-    // ═══════════════════════════════════════════════════════════════════
     const TensorFlowLoader = {
         loaded: false,
         loading: false,
@@ -9181,9 +9043,7 @@ Things to avoid..."></textarea>
         }
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // ANIMATION THROTTLING - Reduce CPU when idle
-    // ═══════════════════════════════════════════════════════════════════
     const AnimationController = {
         isIdle: false,
         needsRender: true,  // Flag to request a render
@@ -9266,9 +9126,7 @@ Things to avoid..."></textarea>
         }
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // SUPABASE AUTH - User authentication management
-    // ═══════════════════════════════════════════════════════════════════
     const SupabaseAuth = {
         user: null,
         listeners: [],
@@ -9284,7 +9142,6 @@ Things to avoid..."></textarea>
             supabase.auth.onAuthStateChange((event, session) => {
                 const previousUser = this.user;
                 this.user = session?.user || null;
-
 
                 // Notify listeners
                 this.listeners.forEach(callback => callback(this.user, previousUser, event));
@@ -9408,9 +9265,7 @@ Things to avoid..."></textarea>
         }
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // SUPABASE SYNC - Cloud data synchronization with Real-time
-    // ═══════════════════════════════════════════════════════════════════
     const SupabaseSync = {
         currentMapId: null,
         syncEnabled: false,
@@ -9447,7 +9302,6 @@ Things to avoid..."></textarea>
 
             // Unsubscribe from previous channel if exists
             this.unsubscribeFromRealtime();
-
 
             this.realtimeChannel = supabase
                 .channel(`map-${mapId}`)
@@ -9490,7 +9344,6 @@ Things to avoid..."></textarea>
             if (this.lastKnownVersion && updatedAt <= this.lastKnownVersion) {
                 return;
             }
-
 
             // Show notification to user
             this.showSyncNotification(newData);
@@ -10102,7 +9955,6 @@ Things to avoid..."></textarea>
         async performFullSync(store, neuralNet, metaLearner, conceptAbstractor) {
             if (!this.syncEnabled) return;
 
-
             try {
                 // Save current map
                 await this.saveMap(store.exportData(), store.data?.label || 'My Mind');
@@ -10276,9 +10128,7 @@ Things to avoid..."></textarea>
         }
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // INDEXEDDB STORAGE FOR NEURAL NETWORK
-    // ═══════════════════════════════════════════════════════════════════
     const NeuralDB = {
         db: null,
 
@@ -10394,9 +10244,7 @@ Things to avoid..."></textarea>
         }
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // ATTACHMENT STORAGE - IndexedDB for file blobs
-    // ═══════════════════════════════════════════════════════════════════
     const AttachmentDB = {
         db: null,
 
@@ -10520,9 +10368,7 @@ Things to avoid..."></textarea>
         }
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // ATTACHMENT PROCESSOR - Handles images, PDFs, AI descriptions
-    // ═══════════════════════════════════════════════════════════════════
     const AttachmentProcessor = {
         pdfWorker: null,
 
@@ -10884,9 +10730,7 @@ Things to avoid..."></textarea>
         }
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // ATTACHMENT MANAGER - UI and integration for node attachments
-    // ═══════════════════════════════════════════════════════════════════
     const AttachmentManager = {
         currentNodeId: null,
         processingCount: 0,
@@ -11499,9 +11343,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
         }
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // USER PREFERENCE TRACKER - Learns from accepted/rejected suggestions
-    // ═══════════════════════════════════════════════════════════════════
     class PreferenceTracker {
         constructor() {
             this.pendingSuggestions = new Map(); // sessionId -> { parentLabel, parentId, suggestions, timestamp }
@@ -11894,9 +11736,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
     // Create global preference tracker instance
     const preferenceTracker = new PreferenceTracker();
 
-    // ═══════════════════════════════════════════════════════════════════
     // SEMANTIC MEMORY SYSTEM - Long-term context awareness
-    // ═══════════════════════════════════════════════════════════════════
     class SemanticMemory {
         constructor() {
             this.memories = [];
@@ -11981,7 +11821,6 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
 
             // Prune if over limit
             this.pruneMemories();
-
 
             // Debounced save
             this.scheduleSave();
@@ -12217,9 +12056,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
     // Create global semantic memory instance
     const semanticMemory = new SemanticMemory();
 
-    // ═══════════════════════════════════════════════════════════════════
     // USER PROFILE - Evolving preferences and behavior patterns
-    // ═══════════════════════════════════════════════════════════════════
     class UserProfile {
         constructor() {
             this.loaded = false;
@@ -12732,9 +12569,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
     // Create global user profile instance
     const userProfile = new UserProfile();
 
-    // ═══════════════════════════════════════════════════════════════════
     // RELATIONSHIP TYPE CLASSIFIER - Understanding pattern semantics
-    // ═══════════════════════════════════════════════════════════════════
     class RelationshipClassifier {
         constructor() {
             this.cache = new Map(); // Cache classifications
@@ -13168,9 +13003,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
     // Create global classifier instance
     const relationshipClassifier = new RelationshipClassifier();
 
-    // ═══════════════════════════════════════════════════════════════════
     // CONCEPT ABSTRACTOR - Learning structural schemas across domains
-    // ═══════════════════════════════════════════════════════════════════
     class ConceptAbstractor {
         constructor() {
             this.encoder = null;
@@ -13742,9 +13575,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
     // Create global concept abstractor instance
     const conceptAbstractor = new ConceptAbstractor();
 
-    // ═══════════════════════════════════════════════════════════════════
     // META-LEARNER - Understanding HOW the user thinks
-    // ═══════════════════════════════════════════════════════════════════
     class MetaLearner {
         constructor() {
             this.loaded = false;
@@ -14234,9 +14065,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════════
         // SEMANTIC MEMORY BRIDGE: Learn from AI feedback patterns
-        // ═══════════════════════════════════════════════════════════════════
         // Track how user responds to AI suggestions to improve understanding
 
         // AI feedback patterns
@@ -14642,9 +14471,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
     // Create global meta-learner instance
     const metaLearner = new MetaLearner();
 
-    // ═══════════════════════════════════════════════════════════════════
     // NEURAL NETWORK TRAINING WORKER
-    // ═══════════════════════════════════════════════════════════════════
     // Create a worker for training a single model type
     const createModelWorker = (modelType) => {
         const workerCode = `
@@ -14875,9 +14702,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
         return new Worker(URL.createObjectURL(blob));
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // EMBEDDING WORKER - Offload USE inference to background thread
-    // ═══════════════════════════════════════════════════════════════════
     const createEmbeddingWorker = () => {
         const workerCode = `
             // Load TensorFlow.js and Universal Sentence Encoder
@@ -14939,9 +14764,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
         return new Worker(URL.createObjectURL(blob));
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // PERSONAL NEURAL NETWORK - TensorFlow.js Integration
-    // ═══════════════════════════════════════════════════════════════════
     class PersonalNeuralNet {
         constructor() {
             this.encoder = null;
@@ -15622,9 +15445,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
 
         }
 
-        // ═══════════════════════════════════════════════════════════════════
         // INCREMENTAL LEARNING - Real-time pattern updates
-        // ═══════════════════════════════════════════════════════════════════
 
         // Learn a new parent->child pattern immediately when node is added
         incrementalLearnPattern(parentLabel, childLabel, source = 'user', depth = 1) {
@@ -15721,7 +15542,6 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
             }
 
             this.patternWeights.set(patternKey, currentWeight);
-
 
             // Create memory when pattern reaches high confidence for the first time
             if (!wasHighConfidence && currentWeight.weight >= 0.7 && typeof semanticMemory !== 'undefined') {
@@ -15836,7 +15656,6 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 toProcess.forEach((text, i) => {
                     this.embeddings.set(text, embeddingArrays[i]);
                 });
-
 
                 // If more pending, continue processing
                 if (this.pendingEmbeddings.length > 0) {
@@ -16310,9 +16129,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════════
         // ACTIVE LEARNING: Route uncertain predictions to Claude
-        // ═══════════════════════════════════════════════════════════════════
         // When the local model is uncertain, ask Claude for help
         // Claude's response becomes a teacher example for future training
 
@@ -17281,9 +17098,7 @@ Return as JSON:
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════
     // COGNITIVE GRAPH TRANSFORMER (CGT) - Advanced Mind Learning System
-    // ═══════════════════════════════════════════════════════════════════
 
     /**
      * CognitiveGNN - Graph Neural Network for learning structural thought patterns
@@ -18872,9 +18687,7 @@ Return as JSON:
     // Global CGT instance
     const cognitiveGT = new CognitiveGraphTransformer();
 
-    // ═══════════════════════════════════════════════════════════════════
     // PHASE 4: CROSS-MAP TRANSFER & STYLE FINGERPRINTING
-    // ═══════════════════════════════════════════════════════════════════
 
     /**
      * CognitiveStyleFingerprint - Captures your unique thinking signature
@@ -20031,9 +19844,7 @@ Return as JSON:
     // Global StyleTransferSystem instance
     const styleTransfer = new StyleTransferSystem();
 
-    // ═══════════════════════════════════════════════════════════════════
     // WebGPU COMPUTE ENGINE - GPU-accelerated similarity search
-    // ═══════════════════════════════════════════════════════════════════
 
     /**
      * WebGPU Compute Engine
@@ -20119,7 +19930,6 @@ Return as JSON:
 
                 this.initialized = true;
                 this.supported = true;
-
 
                 return true;
 
@@ -20608,9 +20418,7 @@ Return as JSON:
                 .sort((a, b) => b.similarity - a.similarity);
         }
 
-        // ═══════════════════════════════════════════════════════════════
         // CPU FALLBACK IMPLEMENTATIONS (SIMD-optimized where possible)
-        // ═══════════════════════════════════════════════════════════════
 
         /**
          * CPU fallback for cosine similarity batch
@@ -20808,9 +20616,7 @@ Return as JSON:
     // Global WebGPU Compute instance
     const gpuCompute = new WebGPUCompute();
 
-    // ═══════════════════════════════════════════════════════════════════
     // REAL SEMANTIC ENGINE - Transformers.js Integration
-    // ═══════════════════════════════════════════════════════════════════
 
     /**
      * SemanticEngine - Real transformer-based embeddings
@@ -20904,7 +20710,6 @@ Return as JSON:
                 this.initialized = true;
                 this.initializing = false;
                 this.loadProgress = 100;
-
 
                 if (this.onReady) {
                     this.onReady();
@@ -21532,9 +21337,7 @@ Return as JSON:
     // Global SemanticEngine instance
     const semanticEngine = new SemanticEngine();
 
-    // ═══════════════════════════════════════════════════════════════════
     // CODE RAG SYSTEM - Retrieval-Augmented Generation for Codebase
-    // ═══════════════════════════════════════════════════════════════════
     // Enables AI to understand and reference the actual MYND codebase
     // by chunking, embedding, and retrieving relevant code sections
     class CodeRAG {
@@ -21956,9 +21759,7 @@ Return as JSON:
     // Global CodeRAG instance
     const codeRAG = new CodeRAG();
 
-    // ═══════════════════════════════════════════════════════════════════
     // CODE KNOWLEDGE SYSTEM - Self-Aware Codebase Understanding
-    // ═══════════════════════════════════════════════════════════════════
     // Links map concepts to actual code implementations, building a
     // knowledge graph that enables true self-awareness of the codebase
     class CodeKnowledge {
@@ -22330,9 +22131,7 @@ Return as JSON:
     // Global CodeKnowledge instance
     const codeKnowledge = new CodeKnowledge();
 
-    // ═══════════════════════════════════════════════════════════════════
     // CODE PRETRAINING SYSTEM - Deep Codebase Understanding
-    // ═══════════════════════════════════════════════════════════════════
     // Pre-analyzes the entire codebase to build comprehensive understanding
     // without requiring user interactions. Runs once on first load.
     const CodePretraining = {
@@ -22842,9 +22641,7 @@ Return as JSON:
     // Global neural network instance
     const neuralNet = new PersonalNeuralNet();
 
-    // ═══════════════════════════════════════════════════════════════════
     // CODE ANALYZER - Self-Improvement Analysis System
-    // ═══════════════════════════════════════════════════════════════════
     // Comprehensive analysis system that identifies every possible area
     // for incremental improvement, making MYND stronger over time.
     const CodeAnalyzer = {
@@ -23017,9 +22814,7 @@ Return as JSON:
             return improvement;
         },
 
-        // ═══════════════════════════════════════════════════════════════════
         // ANALYSIS PASSES - Each focuses on a different improvement type
-        // ═══════════════════════════════════════════════════════════════════
 
         analyzeComplexity() {
             if (!CodePretraining.knowledge?.functions) return;
@@ -23723,9 +23518,7 @@ Return as JSON:
         },
 
         analyzeMLCapabilities() {
-            // ═══════════════════════════════════════════════════════════════════
             // ML INTELLIGENCE - How MYND learns and can improve its learning
-            // ═══════════════════════════════════════════════════════════════════
 
             // === EMBEDDING & REPRESENTATION LEARNING ===
 
@@ -24093,9 +23886,7 @@ Return as JSON:
             );
         },
 
-        // ═══════════════════════════════════════════════════════════════════
         // METRICS & REPORTING
-        // ═══════════════════════════════════════════════════════════════════
 
         calculateMetrics() {
             const improvements = this.analysis.improvements;
@@ -24312,9 +24103,7 @@ Return as JSON:
         }
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // AUTONOMOUS EVOLUTION - Self-Dialogue & Recursive Self-Improvement
-    // ═══════════════════════════════════════════════════════════════════
     // Enables MYND to interact with itself: ask questions, generate insights,
     // expand the map, and continuously enhance its own capabilities.
     const AutonomousEvolution = {
@@ -24386,9 +24175,7 @@ Return as JSON:
             }
         },
 
-        // ═══════════════════════════════════════════════════════════════════
         // SELF-DIALOGUE ENGINE
-        // ═══════════════════════════════════════════════════════════════════
 
         // Start a self-dialogue session
         async startSession(mode = 'explore', options = {}) {
@@ -24830,9 +24617,7 @@ Respond with a JSON object:
             return null;
         },
 
-        // ═══════════════════════════════════════════════════════════════════
         // USER INTERACTION
-        // ═══════════════════════════════════════════════════════════════════
 
         // Get pending changes for user review
         getPendingChanges() {
@@ -24875,9 +24660,7 @@ Respond with a JSON object:
             this.saveToStorage();
         },
 
-        // ═══════════════════════════════════════════════════════════════════
         // IDLE & SCHEDULED EVOLUTION
-        // ═══════════════════════════════════════════════════════════════════
 
         lastActivityTime: Date.now(),
         idleCheckInterval: null,
@@ -24930,9 +24713,7 @@ Respond with a JSON object:
             }, this.config.scheduledIntervalMs);
         },
 
-        // ═══════════════════════════════════════════════════════════════════
         // CONTEXT FOR AI CHAT
-        // ═══════════════════════════════════════════════════════════════════
 
         getContext() {
             if (!this.initialized) return '';
@@ -24968,9 +24749,7 @@ Respond with a JSON object:
             return context;
         },
 
-        // ═══════════════════════════════════════════════════════════════════
         // STORAGE & UTILITIES
-        // ═══════════════════════════════════════════════════════════════════
 
         saveToStorage() {
             try {
@@ -25056,9 +24835,7 @@ Respond with a JSON object:
         }
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // VISION CORE - Foundational Purpose & Mission Understanding
-    // ═══════════════════════════════════════════════════════════════════
     // Pre-trains MYND on the creator's vision, goals, values, and purpose.
     // This becomes the "soul" that guides all AI behaviors and evolution.
     const VisionCore = {
@@ -25640,9 +25417,7 @@ Respond with a JSON object:
         }
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // TEACHER KNOWLEDGE - Knowledge distillation from Claude
-    // ═══════════════════════════════════════════════════════════════════
     // Captures Claude's predictions as "soft targets" for training the local model
     // This allows the local neural network to learn from Claude's reasoning
     const TeacherKnowledge = {
@@ -25740,9 +25515,7 @@ Respond with a JSON object:
         }
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // AI FEEDBACK TRACKING - Learns from user responses to suggestions
-    // ═══════════════════════════════════════════════════════════════════
     const AIFeedback = {
         pending: new Map(),
 
@@ -26082,9 +25855,7 @@ Respond with a JSON object:
     // Expose for debugging: window.AIFeedback.debug()
     window.AIFeedback = AIFeedback;
 
-    // ═══════════════════════════════════════════════════════════════════
     // UTILITY FUNCTIONS
-    // ═══════════════════════════════════════════════════════════════════
     const Utils = {
         // Smoother easing functions for transitions
         easing: {
@@ -26200,9 +25971,7 @@ Respond with a JSON object:
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════
     // EVENT BUS
-    // ═══════════════════════════════════════════════════════════════════
     class EventBus {
         constructor() { this.listeners = new Map(); }
         on(event, cb) {
@@ -27257,9 +27026,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
     // Make FileSystemStorage globally accessible
     window.FileSystemStorage = FileSystemStorage;
 
-    // ═══════════════════════════════════════════════════════════════════
     // DATA STORE (SELF DEVELOPER MODE)
-    // ═══════════════════════════════════════════════════════════════════
 
     // In Self Developer Mode, use the embedded MYND map as default
     const defaultData = (typeof SELF_DEVELOPER_MODE !== 'undefined' && SELF_DEVELOPER_MODE && typeof EMBEDDED_MYND_MAP !== 'undefined')
@@ -27936,7 +27703,6 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                     }
                 }
 
-
             } catch (e) {
                 console.error('Error restoring neural data:', e);
                 throw e;
@@ -27977,9 +27743,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
     // Expose store globally for external modules (like goal-system.js)
     window.store = store;
 
-    // ═══════════════════════════════════════════════════════════════════
     // CONNECTION MANAGER - Batched Connection Updates for Performance
-    // ═══════════════════════════════════════════════════════════════════
     const ConnectionManager = {
         pendingUpdates: new Set(),
 
@@ -28007,9 +27771,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         }
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // LABEL SYSTEM - Smart Decluttering with Camera Movement Detection
-    // ═══════════════════════════════════════════════════════════════════
     const LabelSystem = {
         lastCameraPosition: null,
         lastCameraTarget: null,
@@ -28126,9 +27888,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         }
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // UTILITIES
-    // ═══════════════════════════════════════════════════════════════════
     function escapeHTML(str) {
         const div = document.createElement('div');
         div.textContent = str;
@@ -28168,9 +27928,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         return t === 0 ? 0 : t === 1 ? 1 : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
     }
 
-    // ═══════════════════════════════════════════════════════════════════
     // HAPTIC FEEDBACK
-    // ═══════════════════════════════════════════════════════════════════
     const haptic = {
         light: () => navigator.vibrate?.(10),
         medium: () => navigator.vibrate?.(20),
@@ -28179,9 +27937,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         error: () => navigator.vibrate?.([50, 100, 50])
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // AUDIO FEEDBACK
-    // ═══════════════════════════════════════════════════════════════════
     const audio = {
         ctx: null,
         getCtx() {
@@ -28212,9 +27968,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         error: () => audio.play(200, 0.2)
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // CELEBRATION SYSTEM
-    // ═══════════════════════════════════════════════════════════════════
     function createCelebration(x, y, color = '#7c3aed', count = 6) {
         const container = document.body;
 
@@ -28268,9 +28022,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════
     // TOAST NOTIFICATIONS
-    // ═══════════════════════════════════════════════════════════════════
     function showToast(message, type = 'info', duration = 3000) {
         const container = document.getElementById('toast-container');
         const toast = document.createElement('div');
@@ -28556,9 +28308,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         document.addEventListener('keydown', handleEscape);
     }
 
-    // ═══════════════════════════════════════════════════════════════════
     // THEME MANAGER
-    // ═══════════════════════════════════════════════════════════════════
     const themeManager = {
         current: 'obsidian',
         themes: ['sandstone', 'coral', 'ember', 'frost', 'obsidian'],
@@ -28599,9 +28349,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         }
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // THREE.JS SCENE
-    // ═══════════════════════════════════════════════════════════════════
     let scene, camera, renderer, controls;
     let nodes = new Map();
     let connections = [];
@@ -31009,9 +30757,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         renderer.render(scene, camera);
     }
 
-    // ═══════════════════════════════════════════════════════════════════
     // UI INTERACTIONS
-    // ═══════════════════════════════════════════════════════════════════
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
     let moveMode = false;
@@ -31453,9 +31199,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════
     // KEYBOARD SHORTCUTS
-    // ═══════════════════════════════════════════════════════════════════
     document.addEventListener('keydown', (e) => {
         // Cmd/Ctrl + K for spotlight
         if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -31644,9 +31388,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         setTimeout(() => hints.classList.remove('visible'), 3000);
     }
 
-    // ═══════════════════════════════════════════════════════════════════
     // SPOTLIGHT SEARCH
-    // ═══════════════════════════════════════════════════════════════════
     const spotlightOverlay = document.getElementById('spotlight-overlay');
     const spotlightInput = document.getElementById('spotlight-input');
     const spotlightNodesList = document.getElementById('spotlight-nodes-list');
@@ -31743,9 +31485,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         });
     });
 
-    // ═══════════════════════════════════════════════════════════════════
     // MODAL SYSTEM
-    // ═══════════════════════════════════════════════════════════════════
     const modalOverlay = document.getElementById('modal-overlay');
     const modalTitle = document.getElementById('modal-title');
     const inputName = document.getElementById('input-name');
@@ -31877,9 +31617,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         }
     });
 
-    // ═══════════════════════════════════════════════════════════════════
     // AI BRAINSTORM
-    // ═══════════════════════════════════════════════════════════════════
     async function brainstormNode(nodeId) {
         const node = store.findNode(nodeId);
         if (!node) return;
@@ -31992,9 +31730,7 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════
     // INFO PANEL
-    // ═══════════════════════════════════════════════════════════════════
     const infoPanel = document.getElementById('info-panel');
     const infoTitle = document.getElementById('info-title');
     const infoColor = document.getElementById('info-color');
@@ -32356,9 +32092,7 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         document.getElementById('toolbar-toggle').classList.remove('info-visible');
     });
 
-    // ═══════════════════════════════════════════════════════════════════
     // INCREMENTAL LEARNING - Learn from every node addition
-    // ═══════════════════════════════════════════════════════════════════
     bus.on('node:added', ({ parent, node }) => {
         if (!neuralNet.isReady) return;
 
@@ -32719,9 +32453,7 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         }
     });
 
-    // ═══════════════════════════════════════════════════════════════════
     // QUICK CAPTURE
-    // ═══════════════════════════════════════════════════════════════════
     const quickInput = document.getElementById('quick-input');
 
     quickInput.addEventListener('keydown', (e) => {
@@ -32756,9 +32488,7 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         }
     });
 
-    // ═══════════════════════════════════════════════════════════════════
     // ROTATING PROMPTS
-    // ═══════════════════════════════════════════════════════════════════
     const rotatingPrompts = [
         "What's on your mind?",
         "Capture that thought...",
@@ -32822,9 +32552,7 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
     // Start rotation on load
     startPromptRotation();
 
-    // ═══════════════════════════════════════════════════════════════════
     // CONTEXT QUESTION SYSTEM
-    // ═══════════════════════════════════════════════════════════════════
     const contextQuestionBtn = document.getElementById('context-question-btn');
     const contextQuestionPopover = document.getElementById('context-question-popover');
     const contextQuestionText = document.getElementById('context-question-text');
@@ -33021,9 +32749,7 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         }
     });
 
-    // ═══════════════════════════════════════════════════════════════════
     // SIDE PANEL BUTTONS
-    // ═══════════════════════════════════════════════════════════════════
     document.getElementById('btn-home').addEventListener('click', resetCamera);
     document.getElementById('btn-expand').addEventListener('click', expandAll);
     document.getElementById('btn-collapse').addEventListener('click', collapseAll);
@@ -33061,9 +32787,7 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         showToast(autoCameraEnabled ? 'Auto camera enabled' : 'Auto camera disabled', 'info');
     });
 
-    // ═══════════════════════════════════════════════════════════════════
     // AI CHAT MANAGER - Conversational AI Interface
-    // ═══════════════════════════════════════════════════════════════════
     const chatManager = {
         isOpen: false,
         isProcessing: false,
@@ -34494,7 +34218,6 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
             const results = [];
             const createdNodes = [];
 
-
             for (const action of actions) {
                 try {
                     let result = { action: action.action, success: false, description: '' };
@@ -34906,9 +34629,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
         }
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // VOICE AI SYSTEM
-    // ═══════════════════════════════════════════════════════════════════
     const voiceAI = {
         recognition: null,
         isRecording: false,
@@ -35246,7 +34967,6 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 return;
             }
 
-
             // Fix common speech recognition errors
             let cleanedTranscript = transcript.trim()
                 .replace(/\bnote\b/gi, 'node')
@@ -35258,11 +34978,8 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 .replace(/\bnew no\b/gi, 'new node')
                 .replace(/\bcreate a no\b/gi, 'create a node');
 
-
             try {
-                // ═══════════════════════════════════════════════════════════
                 // GATHER NEURAL NETWORK CONTEXT (if available)
-                // ═══════════════════════════════════════════════════════════
                 let neuralContext = '';
 
                 if (neuralNet.isReady || userProfile.loaded) {
@@ -36143,7 +35860,6 @@ Respond with JSON only:`;
                     }
                 }
 
-
                 // Parse the JSON response
                 const jsonMatch = content.match(/\{[\s\S]*\}/);
                 if (!jsonMatch) {
@@ -36156,7 +35872,6 @@ Respond with JSON only:`;
                 } catch (parseError) {
                     throw new Error('AI response was unclear. Try rephrasing your command.');
                 }
-
 
                 // Handle new multi-action format
                 const actions = result.actions || [result]; // Support both old and new format
@@ -36356,7 +36071,6 @@ Respond with JSON only:`;
                         // Resolve parentId (including PREV_N references)
                         let parentId = store.data.id; // Default to root
 
-
                         if (action.parentId === 'selected' && selectedNode) {
                             parentId = selectedNode.userData.id;
                         } else if (action.parentId === 'root') {
@@ -36405,7 +36119,6 @@ Respond with JSON only:`;
                             console.warn('Parent not found, falling back to root');
                             parentId = store.data.id;
                         }
-
 
                         const nodeData = {
                             label: action.label,
@@ -36645,9 +36358,7 @@ Respond with JSON only:`;
         if (e.target === e.currentTarget) hideApiKeyModal();
     });
 
-    // ═══════════════════════════════════════════════════════════════════
     // FILE STORAGE & VISION UI HANDLERS (Self Developer Mode)
-    // ═══════════════════════════════════════════════════════════════════
     if (typeof SELF_DEVELOPER_MODE !== 'undefined' && SELF_DEVELOPER_MODE) {
 
         // ─────────────────────────────────────────────────────────────────
@@ -37224,9 +36935,7 @@ MYND is your second brain - an intelligent extension of your memory and thinking
         }, 3000);
     }
 
-    // ═══════════════════════════════════════════════════════════════════
     // AUTH MODAL HANDLERS
-    // ═══════════════════════════════════════════════════════════════════
     const authModal = document.getElementById('auth-modal');
     const authForm = document.getElementById('auth-form');
     const authError = document.getElementById('auth-error');
@@ -37267,7 +36976,6 @@ MYND is your second brain - an intelligent extension of your memory and thinking
             console.warn('Auth UI elements not found');
             return;
         }
-
 
         if (user) {
             // Show user initial
@@ -37746,9 +37454,7 @@ MYND is your second brain - an intelligent extension of your memory and thinking
         }
     });
 
-    // ═══════════════════════════════════════════════════════════════════
     // TOP CONTROLS
-    // ═══════════════════════════════════════════════════════════════════
     const themePicker = document.getElementById('theme-picker');
 
     document.getElementById('theme-btn')?.addEventListener('click', () => {
@@ -37856,9 +37562,7 @@ MYND is your second brain - an intelligent extension of your memory and thinking
         showToast('MYND: 3D Mind Mapping\n\nClick nodes to expand/collapse\nDouble-click to expand all\nDrag to rotate view\nUse sidebar for actions', 'info', 5000);
     });
 
-    // ═══════════════════════════════════════════════════════════════════
     // IMPORT NOTES FEATURE
-    // ═══════════════════════════════════════════════════════════════════
 
     const ImportNotes = {
         modal: null,
@@ -38607,9 +38311,7 @@ Guidelines:
         }
     });
 
-    // ═══════════════════════════════════════════════════════════════════
     // MOBILE HEADER HANDLERS
-    // ═══════════════════════════════════════════════════════════════════
 
     // Mobile menu button - same as desktop menu
     document.getElementById('mobile-menu-btn')?.addEventListener('click', () => {
@@ -38839,9 +38541,7 @@ Guidelines:
     function updateOnboardingAvatar() {}
     async function updateOnboardingForAuth() {}
     function completeOnboarding() {}
-    // ═══════════════════════════════════════════════════════════════════
     // INITIALIZATION
-    // ═══════════════════════════════════════════════════════════════════
     async function init() {
         try {
             // Self Developer Mode: Skip onboarding entirely
@@ -38880,7 +38580,6 @@ Guidelines:
                         // Check for cloud data
                         const maps = await SupabaseSync.loadUserMaps();
                         if (maps.length > 0) {
-                            console.log(`Found ${maps.length} cloud map(s)`);
                         }
                     });
                 }
@@ -38945,9 +38644,7 @@ showKeyboardHints();
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════
     // NEURAL NETWORK UI INTEGRATION
-    // ═══════════════════════════════════════════════════════════════════
 
     const NeuralUI = {
         panel: null,
@@ -38976,7 +38673,6 @@ showKeyboardHints();
             document.getElementById('neural-training-toggle')?.addEventListener('change', (e) => {
                 neuralTrainingEnabled = e.target.checked;
                 showToast(neuralTrainingEnabled ? 'Neural training enabled' : 'Neural training disabled', 'info');
-                console.log(`Neural training ${neuralTrainingEnabled ? 'enabled' : 'disabled'}`);
             });
 
             // Train button (now in settings modal)
@@ -40819,9 +40515,7 @@ showKeyboardHints();
         }
     };
 
-    // ═══════════════════════════════════════════════════════════════════
     // CLAUDE API HELPER - Uses Edge Function when authenticated
-    // ═══════════════════════════════════════════════════════════════════
 
     async function callClaudeAPI(requestBody) {
         // Check if user is authenticated with Supabase
@@ -40853,7 +40547,6 @@ showKeyboardHints();
             } catch (error) {
                 console.error('Edge function error:', error);
                 // Fall back to direct API if edge function fails
-                console.log('Falling back to direct API call...');
             }
         }
 
@@ -40975,9 +40668,7 @@ IMPORTANT: In the "items" array, use ONLY the exact node label (the part before 
         return { success: true, suggestions };
     }
 
-    // ═══════════════════════════════════════════════════════════════════
     // ENHANCED BRAINSTORM WITH NEURAL NETWORK
-    // ═══════════════════════════════════════════════════════════════════
 
     async function brainstormNodeEnhanced(nodeId) {
         const node = store.findNode(nodeId);
@@ -41074,9 +40765,7 @@ Consider these learned patterns when generating suggestions.`;
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════
     // SMART NODE PLACEMENT - Uses neural network for intelligent categorization
-    // ═══════════════════════════════════════════════════════════════════
 
     async function smartAddNode(label, description = '') {
         if (!neuralNet.isReady || neuralNet.categories.length === 0) {
@@ -41166,9 +40855,7 @@ Consider these learned patterns when generating suggestions.`;
         return newNode;
     }
 
-    // ═══════════════════════════════════════════════════════════════════
     // AUTO-TRAIN ON SIGNIFICANT CHANGES
-    // ═══════════════════════════════════════════════════════════════════
 
     let nodeCountAtLastTrain = 0;
     const AUTO_TRAIN_THRESHOLD = 10; // Train when 10 new nodes added
@@ -41195,9 +40882,7 @@ Consider these learned patterns when generating suggestions.`;
     // Start the app
     init();
 
-    // ═══════════════════════════════════════════════════════════════════
     // LINK MANAGER - Add links from URLs
-    // ═══════════════════════════════════════════════════════════════════
     const LinkManager = {
         modal: null,
         currentLink: null,
@@ -41938,13 +41623,10 @@ Return ONLY JSON:
             return 'link';
         },
 
-        // ═══════════════════════════════════════════════════════════════════
         // VIDEO TRANSCRIPT EXTRACTION
-        // ═══════════════════════════════════════════════════════════════════
 
         async fetchTranscript(url, metadata) {
             const domain = metadata.domain;
-            console.log('📝 Attempting transcript fetch for:', domain);
 
             let transcript = null;
             let transcriptSource = null;
@@ -41977,7 +41659,6 @@ Return ONLY JSON:
                 return { text: transcript, source: transcriptSource };
             }
 
-            console.log('✗ No transcript available');
             return null;
         },
 
@@ -42001,7 +41682,6 @@ Return ONLY JSON:
                 return null;
             }
 
-            console.log('📺 Fetching YouTube transcript for:', videoId);
 
             // Method 1: Try youtubetranscript.com API (free, no key needed)
             try {
@@ -42068,7 +41748,6 @@ Return ONLY JSON:
         },
 
         async fetchTikTokTranscript(url) {
-            console.log('📱 Fetching TikTok transcript...');
 
             // Method 1: Try supdata.ai (has free tier for transcripts)
             try {
@@ -42093,7 +41772,6 @@ Return ONLY JSON:
 
         async fetchGenericTranscript(url) {
             // Try generic video transcript services
-            console.log('🎬 Trying generic transcript fetch...');
 
             // Could add more services here as they become available
             // For now, return null - user can add description manually
@@ -42104,7 +41782,6 @@ Return ONLY JSON:
             const apiKey = localStorage.getItem(CONFIG.API_KEY);
             if (!apiKey || !transcript) return null;
 
-            console.log('🤖 Generating AI summary from transcript...');
 
             // Truncate transcript if too long (keep first 4000 chars)
             const truncatedTranscript = transcript.length > 4000
@@ -42272,9 +41949,7 @@ Summary:`
             }
         },
 
-        // ═══════════════════════════════════════════════════════════════════
         // SMART ORGANIZATION - Creates sub-folders when patterns detected
-        // ═══════════════════════════════════════════════════════════════════
 
         async smartOrganize(parentId, newItemDomain, newItemType) {
             const parentNode = store.findNode(parentId);
@@ -42285,7 +41960,6 @@ Summary:`
             // Analyze siblings for patterns
             const siblings = parentNode.children;
             const domainGroups = {};
-
 
             // Group existing children by domain (check both link.domain and URL)
             siblings.forEach(child => {
@@ -42309,7 +41983,6 @@ Summary:`
                 }
             });
 
-
             const normalizedNewDomain = this.normalizeDomain(newItemDomain);
 
             // Check if we should create a domain-based sub-folder
@@ -42317,7 +41990,6 @@ Summary:`
             if (normalizedNewDomain && domainGroups[normalizedNewDomain]?.length >= 1) {
                 const existingSameDomain = domainGroups[normalizedNewDomain];
                 const folderName = this.getDomainFolderName(normalizedNewDomain);
-
 
                 // Check if folder already exists
                 const existingFolder = siblings.find(s =>
@@ -42548,7 +42220,6 @@ Summary:`
             // Update auto-cam button state
             this.updateAutoCamState();
 
-            console.log('📱 Mobile Sheet initialized');
         },
 
         updateAutoCamState() {
@@ -43081,7 +42752,6 @@ Summary:`
         },
 
         handleToolAction(action) {
-            console.log('Sheet tool action:', action);
             switch(action) {
                 case 'add-node':
                     if (typeof openModal !== 'undefined') {
@@ -43094,7 +42764,6 @@ Summary:`
                     break;
 
                 case 'add-link':
-                    console.log('Add-link action - LinkManager:', typeof LinkManager, LinkManager?.modal);
                     if (typeof LinkManager !== 'undefined' && LinkManager.modal) {
                         LinkManager.open();
                     } else {
@@ -43115,7 +42784,6 @@ Summary:`
 
                 case 'focus':
                     // Focus mode - zoom to fit entire map and center on root
-                    console.log('Focus action - window.zoomToFitMap:', typeof window.zoomToFitMap);
                     if (window.zoomToFitMap) {
                         window.zoomToFitMap(0);
                         showToast('Showing full map', 'info');
@@ -43127,7 +42795,6 @@ Summary:`
 
                 case 'export':
                     // Export map as JSON
-                    console.log('Export action - store:', typeof store, store?.exportJSON);
                     if (typeof store !== 'undefined' && store.exportJSON) {
                         const data = store.exportJSON();
                         const blob = new Blob([data], { type: 'application/json' });
@@ -43215,7 +42882,6 @@ Summary:`
                     break;
 
                 default:
-                    console.log('Unknown quick action:', action);
             }
         },
 
@@ -43548,8 +43214,8 @@ Summary:`
 
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('sw.js')
-                .then(() => console.log('SW registered'))
-                .catch(err => console.log('SW failed:', err));
+                
+                .catch(() => {});
         }
 
     // Handle incoming shared content (PWA Share Target)
@@ -43562,7 +43228,6 @@ Summary:`
         // Check if this is a share action
         if (!sharedUrl && !sharedText) return;
 
-        console.log('Share Target received:', { url: sharedUrl, text: sharedText, title: sharedTitle });
 
         // Extract URL from text if no direct URL provided
         let urlToAdd = sharedUrl;
