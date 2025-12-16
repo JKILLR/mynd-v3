@@ -7542,7 +7542,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND V.4.0.4</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND V.4.0.5</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -9767,20 +9767,50 @@ Things to avoid..."></textarea>
 
     <!-- Global onboarding functions (available immediately for inline onclick) -->
     <script>
-        // These will be replaced by the real implementations once the module loads
-        window._onboardingQueue = [];
+        // These wait for the module to load, then call the real functions
         window.createBasicMapStructure = function() {
+            console.log('🔘 Scratch button clicked');
             if (window._realCreateBasicMapStructure) {
+                console.log('✅ Calling real createBasicMapStructure');
                 window._realCreateBasicMapStructure();
             } else {
-                window._onboardingQueue.push('scratch');
+                console.log('⏳ Waiting for module to load...');
+                // Poll until ready
+                var attempts = 0;
+                var interval = setInterval(function() {
+                    attempts++;
+                    if (window._realCreateBasicMapStructure) {
+                        clearInterval(interval);
+                        console.log('✅ Module loaded, calling createBasicMapStructure');
+                        window._realCreateBasicMapStructure();
+                    } else if (attempts > 50) {
+                        clearInterval(interval);
+                        console.error('❌ Module failed to load');
+                        alert('App is still loading. Please wait a moment and try again.');
+                    }
+                }, 100);
             }
         };
         window.showQuestionnaire = function() {
+            console.log('🔘 AI button clicked');
             if (window._realShowQuestionnaire) {
+                console.log('✅ Calling real showQuestionnaire');
                 window._realShowQuestionnaire();
             } else {
-                window._onboardingQueue.push('ai');
+                console.log('⏳ Waiting for module to load...');
+                var attempts = 0;
+                var interval = setInterval(function() {
+                    attempts++;
+                    if (window._realShowQuestionnaire) {
+                        clearInterval(interval);
+                        console.log('✅ Module loaded, calling showQuestionnaire');
+                        window._realShowQuestionnaire();
+                    } else if (attempts > 50) {
+                        clearInterval(interval);
+                        console.error('❌ Module failed to load');
+                        alert('App is still loading. Please wait a moment and try again.');
+                    }
+                }, 100);
             }
         };
     </script>
@@ -42024,21 +42054,11 @@ Replace placeholder labels with real content from user's answers. MUST have exac
     }
 
     // Make onboarding functions globally accessible (connect to stubs)
+    console.log('🔗 Connecting real onboarding functions to global stubs...');
     window._realCreateBasicMapStructure = createBasicMapStructure;
     window._realShowQuestionnaire = showQuestionnaire;
-    window.createBasicMapStructure = createBasicMapStructure;
-    window.showQuestionnaire = showQuestionnaire;
     window.completeOnboarding = completeOnboarding;
-
-    // Process any queued calls from before module loaded
-    if (window._onboardingQueue && window._onboardingQueue.length > 0) {
-        console.log('📋 Processing queued onboarding actions:', window._onboardingQueue);
-        window._onboardingQueue.forEach(action => {
-            if (action === 'scratch') createBasicMapStructure();
-            else if (action === 'ai') showQuestionnaire();
-        });
-        window._onboardingQueue = [];
-    }
+    console.log('✅ Onboarding functions ready');
 
     // AI-Assisted Setup choice - use class selector for clarity
     console.log('🔧 Attaching onboarding button handlers...');
