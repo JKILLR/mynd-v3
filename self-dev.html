@@ -7542,7 +7542,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND V.4.0</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND V.4.0.1</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -35841,12 +35841,13 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
 
             // 14. Loaded Source File - When user has selected a source file for review via Self-Improvement Engine
             let loadedSourceContext = '';
+
+            // Check for code review/analysis requests (used by multiple context providers)
+            const sourceReviewKeywords = ['review', 'analyze', 'code', 'source', 'file', 'look at', 'check', 'inspect', 'examine', 'audit', 'bug', 'issue', 'fix', 'improve', 'self-dev', 'self-improvement', 'codebase'];
+            const wantsSourceReview = sourceReviewKeywords.some(kw => messageLower.includes(kw));
+
             if (typeof SelfImprover !== 'undefined' && SelfImprover.sourceCode && SelfImprover.sourceFileHandle) {
                 try {
-                    // Check for code review/analysis requests
-                    const sourceReviewKeywords = ['review', 'analyze', 'code', 'source', 'file', 'look at', 'check', 'inspect', 'examine', 'audit', 'bug', 'issue', 'fix', 'improve', 'self-dev', 'self-improvement', 'codebase'];
-                    const wantsSourceReview = sourceReviewKeywords.some(kw => messageLower.includes(kw));
-
                     if (wantsSourceReview || isComprehensiveReview || isMLReview) {
                         const sourceCode = SelfImprover.sourceCode;
                         const fileName = SelfImprover.sourceFileHandle.name;
@@ -35966,6 +35967,84 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                     }
                 } catch (e) {
                     console.warn('Loaded source file context error:', e);
+                }
+            }
+
+            // 15. Direct Source Access Fallback - When no other source is available but user wants code review
+            // This reads the current page's source directly as a fallback
+            if (!loadedSourceContext && !codeContext && (isComprehensiveReview || isMLReview || wantsSourceReview)) {
+                try {
+                    console.log('📂 No codeRAG or loaded source - using direct source access fallback...');
+
+                    // Read the current page's HTML directly
+                    const rawHtml = document.documentElement.outerHTML;
+
+                    // Extract just the main script content
+                    const scriptMatch = rawHtml.match(/<script>([\s\S]*?)<\/script>\s*<!--\s*External modules/);
+                    const sourceCode = scriptMatch ? scriptMatch[1] : rawHtml;
+                    const fileName = window.location.pathname.split('/').pop() || 'self-dev.html';
+
+                    if (sourceCode && sourceCode.length > 1000) {
+                        const maxChars = isMLReview ? 360000 : (isComprehensiveReview ? 350000 : 50000);
+
+                        loadedSourceContext = `\n📂 DIRECT SOURCE ACCESS: ${fileName} (${Math.round(sourceCode.length / 1024)}KB)\n`;
+                        loadedSourceContext += `Source code loaded directly from the current page.\n`;
+
+                        if (isMLReview) {
+                            // ML Review mode - extract specific sections
+                            const lines = sourceCode.split('\n');
+                            const mlSections = [
+                                { name: 'TensorFlow Lazy Loader', start: 9798, end: 9870 },
+                                { name: 'NeuralDB (IndexedDB Storage)', start: 10979, end: 11097 },
+                                { name: 'PreferenceTracker', start: 12209, end: 12607 },
+                                { name: 'SemanticMemory System', start: 12609, end: 12935 },
+                                { name: 'RelationshipClassifier', start: 13454, end: 13890 },
+                                { name: 'ConceptAbstractor', start: 13892, end: 14466 },
+                                { name: 'MetaLearner', start: 14468, end: 14959 },
+                                { name: 'Neural Training Worker', start: 15371, end: 15602 },
+                                { name: 'Embedding Worker', start: 15604, end: 15669 },
+                                { name: 'PersonalNeuralNet (Core + Distillation)', start: 15671, end: 18386 },
+                                { name: 'Cognitive Graph Transformer', start: 18388, end: 19950 },
+                                { name: 'WebGPU Compute Engine', start: 21163, end: 21945 },
+                                { name: 'TeacherKnowledge (Enhanced Distillation)', start: 27026, end: 27645 },
+                                { name: 'AIFeedback System', start: 27647, end: 28180 }
+                            ];
+
+                            loadedSourceContext += `\n🧠 ML/LEARNING SYSTEM REVIEW MODE\n`;
+                            loadedSourceContext += `📋 ML SECTIONS INCLUDED:\n`;
+                            mlSections.forEach((s, i) => {
+                                loadedSourceContext += `  ${i + 1}. ${s.name} (lines ${s.start}-${s.end})\n`;
+                            });
+
+                            let mlCode = '';
+                            for (const section of mlSections) {
+                                const startIdx = section.start - 1;
+                                const endIdx = section.end;
+                                const sectionLines = lines.slice(startIdx, endIdx);
+                                mlCode += `\n// ═══════════════════════════════════════════════════════════════════\n`;
+                                mlCode += `// ${section.name.toUpperCase()} (lines ${section.start}-${section.end})\n`;
+                                mlCode += `// ═══════════════════════════════════════════════════════════════════\n`;
+                                mlCode += sectionLines.join('\n') + '\n';
+                            }
+
+                            loadedSourceContext += `\n📄 COMPLETE ML/LEARNING CODE (~${Math.round(mlCode.length / 1024)}KB):\n`;
+                            loadedSourceContext += `\`\`\`javascript\n${mlCode}\n\`\`\`\n`;
+                        } else {
+                            // Regular/comprehensive review - include source up to limit
+                            const codeToInclude = sourceCode.substring(0, maxChars);
+                            loadedSourceContext += `\n📄 SOURCE CODE (${Math.round(codeToInclude.length / 1024)}KB of ${Math.round(sourceCode.length / 1024)}KB):\n`;
+                            loadedSourceContext += `\`\`\`javascript\n${codeToInclude}\n\`\`\`\n`;
+
+                            if (sourceCode.length > maxChars) {
+                                loadedSourceContext += `\n... [truncated - ${Math.round((sourceCode.length - maxChars) / 1024)}KB more]\n`;
+                                loadedSourceContext += `\nTo see specific sections, ask about: "neural net", "AI feedback", "self-improvement", etc.\n`;
+                            }
+                        }
+
+                        console.log(`📂 Direct source access provided: ${fileName} (${Math.round(loadedSourceContext.length / 1024)}KB context)`);
+                    }
+                } catch (e) {
+                    console.warn('Direct source access fallback error:', e);
                 }
             }
 
