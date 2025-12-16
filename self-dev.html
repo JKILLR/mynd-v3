@@ -41980,7 +41980,7 @@ Replace placeholder labels with real content from user's answers. MUST have exac
         // Create basic structure without AI
         store.updateNode(store.data.id, { label: mapName });
         store.data.children = []; // Clear any existing children
-        
+
         // Use colors from current theme palette
         const colors = getThemeColors();
         
@@ -42001,6 +42001,11 @@ Replace placeholder labels with real content from user's answers. MUST have exac
         buildScene();
         completeOnboarding();
     }
+
+    // Make onboarding functions globally accessible
+    window.createBasicMapStructure = createBasicMapStructure;
+    window.showQuestionnaire = showQuestionnaire;
+    window.completeOnboarding = completeOnboarding;
 
     // AI-Assisted Setup choice - use class selector for clarity
     console.log('🔧 Attaching onboarding button handlers...');
