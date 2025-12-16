@@ -16948,17 +16948,32 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
 
         // Online learning: immediate single-sample update from user feedback
         // This is fast (~50ms) and runs after each accept/modify/reject
+        // Now supports all feedback types: category, connection, and expansion
         async learnFromFeedback(feedback) {
-            // Only learn from category feedback for now
-            if (feedback.type !== 'category') return false;
+            // Don't do online learning while batch training
+            if (this.isTraining) return false;
 
+            const feedbackType = feedback.type;
+            const action = feedback.action;
+
+            // Route to appropriate learning method based on feedback type
+            if (feedbackType === 'category') {
+                return this._learnCategoryFeedback(feedback);
+            } else if (feedbackType === 'connection') {
+                return this._learnConnectionFeedback(feedback);
+            } else if (feedbackType === 'expansion') {
+                return this._learnExpansionFeedback(feedback);
+            }
+
+            return false;
+        }
+
+        // Online learning for category feedback
+        async _learnCategoryFeedback(feedback) {
             // Need a trained category model
             if (!this.categoryModel || !this.encoder || this.categories.length < 2) {
                 return false;
             }
-
-            // Don't do online learning while batch training
-            if (this.isTraining) return false;
 
             // Need both predicted and chosen categories
             const predicted = feedback.content?.predicted;
@@ -16979,7 +16994,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 const nodeText = feedback.context?.nodeLabel || feedback.context?.nodeText;
                 if (!nodeText) return false;
 
-                console.log(`⚡ Online learning: ${action} (predicted: ${predicted}, chosen: ${chosen})`);
+                console.log(`⚡ Online learning (category): ${action} (predicted: ${predicted}, chosen: ${chosen})`);
 
                 // Get embedding for this text
                 const embedding = await this.getEmbedding(nodeText);
@@ -16990,7 +17005,6 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 target[chosenIndex] = 1;
 
                 // Determine learning rate based on feedback type
-                // Higher for rejections (strong signal), lower for accepts (reinforcement)
                 const lrMultipliers = CONFIG.NEURAL_NET.onlineLearningRates;
                 let onlineLearningRate;
                 if (action === 'rejected') {
@@ -17005,12 +17019,6 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 const xs = tf.tensor2d([embedding]);
                 const ys = tf.tensor2d([target]);
 
-                // Do a single training step with adjusted learning rate
-                // We temporarily update the optimizer's learning rate
-                const originalLR = this.categoryModel.optimizer.learningRate;
-
-                // TensorFlow.js doesn't allow changing LR directly, so we do 1 epoch
-                // with sample weight to simulate LR adjustment
                 const sampleWeight = tf.tensor1d([onlineLearningRate / CONFIG.NEURAL_NET.learningRate]);
 
                 await this.categoryModel.fit(xs, ys, {
@@ -17026,15 +17034,161 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 ys.dispose();
                 sampleWeight.dispose();
 
-                console.log(`✓ Online learning complete (${action})`);
-
-                // Emit event for UI feedback
-                this.emit('onOnlineLearning', { action, predicted, chosen });
+                console.log(`✓ Online category learning complete (${action})`);
+                this.emit('onOnlineLearning', { type: 'category', action, predicted, chosen });
 
                 return true;
 
             } catch (error) {
-                console.error('Online learning error:', error);
+                console.error('Online category learning error:', error);
+                return false;
+            }
+        }
+
+        // Online learning for connection feedback
+        async _learnConnectionFeedback(feedback) {
+            // Need a trained connection model
+            if (!this.connectionModel || !this.encoder) {
+                return false;
+            }
+
+            const action = feedback.action;
+            const sourceNode = feedback.context?.sourceNode || feedback.context?.nodeLabel;
+            const targetNode = feedback.content?.predicted || feedback.content?.targetNode;
+
+            if (!sourceNode || !targetNode) return false;
+
+            try {
+                console.log(`⚡ Online learning (connection): ${action} (${sourceNode} → ${targetNode})`);
+
+                // Get embeddings for both nodes
+                const sourceEmb = await this.getEmbedding(sourceNode);
+                const targetEmb = await this.getEmbedding(targetNode);
+                if (!sourceEmb || !targetEmb) return false;
+
+                // Combine embeddings
+                const combined = [...sourceEmb, ...targetEmb];
+
+                // Target: [connected, parent-child, sibling, related]
+                // For accepted connections, increase connection probability
+                // For rejected, decrease it
+                let target;
+                if (action === 'accepted') {
+                    target = [1, 0.7, 0, 0.9]; // Strong connection, likely related
+                } else if (action === 'rejected') {
+                    target = [0, 0, 0, 0.3]; // Not connected, maybe weakly related
+                } else {
+                    target = [0.7, 0.5, 0, 0.7]; // Modified - partial connection
+                }
+
+                // Determine learning rate
+                const lrMultipliers = CONFIG.NEURAL_NET.onlineLearningRates;
+                let onlineLearningRate;
+                if (action === 'rejected') {
+                    onlineLearningRate = CONFIG.NEURAL_NET.learningRate * lrMultipliers.rejected;
+                } else if (action === 'modified') {
+                    onlineLearningRate = CONFIG.NEURAL_NET.learningRate * lrMultipliers.modified;
+                } else {
+                    onlineLearningRate = CONFIG.NEURAL_NET.learningRate * lrMultipliers.accepted;
+                }
+
+                // Create tensors
+                const xs = tf.tensor2d([combined]);
+                const ys = tf.tensor2d([target]);
+                const sampleWeight = tf.tensor1d([onlineLearningRate / CONFIG.NEURAL_NET.learningRate]);
+
+                await this.connectionModel.fit(xs, ys, {
+                    epochs: 1,
+                    batchSize: 1,
+                    shuffle: false,
+                    verbose: 0,
+                    sampleWeight: sampleWeight
+                });
+
+                // Cleanup
+                xs.dispose();
+                ys.dispose();
+                sampleWeight.dispose();
+
+                console.log(`✓ Online connection learning complete (${action})`);
+                this.emit('onOnlineLearning', { type: 'connection', action, source: sourceNode, target: targetNode });
+
+                return true;
+
+            } catch (error) {
+                console.error('Online connection learning error:', error);
+                return false;
+            }
+        }
+
+        // Online learning for expansion/prediction feedback
+        async _learnExpansionFeedback(feedback) {
+            // Need a trained prediction model
+            if (!this.predictionModel || !this.encoder) {
+                return false;
+            }
+
+            const action = feedback.action;
+            const parentNode = feedback.context?.nodeLabel || feedback.context?.parentNode;
+            const predictedChildren = feedback.content?.suggestions || feedback.content?.predicted;
+            const acceptedChild = feedback.modification || (Array.isArray(predictedChildren) ? predictedChildren[0] : predictedChildren);
+
+            if (!parentNode) return false;
+
+            try {
+                console.log(`⚡ Online learning (expansion): ${action} for parent "${parentNode}"`);
+
+                // Get parent embedding
+                const parentEmb = await this.getEmbedding(parentNode);
+                if (!parentEmb) return false;
+
+                // For accepted suggestions, use the actual child text to learn
+                // For rejected, we need to learn to NOT predict this pattern
+                if (action === 'accepted' && acceptedChild) {
+                    const childEmb = await this.getEmbedding(acceptedChild);
+                    if (!childEmb) return false;
+
+                    // Update expansion patterns immediately
+                    this.incrementalLearnPattern(parentNode, acceptedChild, 'user', 1);
+
+                    // Also train the prediction model to output this child embedding
+                    const xs = tf.tensor2d([parentEmb]);
+                    const ys = tf.tensor2d([childEmb]);
+                    const sampleWeight = tf.tensor1d([CONFIG.NEURAL_NET.onlineLearningRates.accepted]);
+
+                    await this.predictionModel.fit(xs, ys, {
+                        epochs: 1,
+                        batchSize: 1,
+                        shuffle: false,
+                        verbose: 0,
+                        sampleWeight: sampleWeight
+                    });
+
+                    xs.dispose();
+                    ys.dispose();
+                    sampleWeight.dispose();
+
+                    console.log(`✓ Online expansion learning complete (accepted: ${acceptedChild})`);
+                } else if (action === 'rejected' && predictedChildren) {
+                    // For rejected predictions, lower the pattern weights
+                    const children = Array.isArray(predictedChildren) ? predictedChildren : [predictedChildren];
+                    for (const child of children.slice(0, 3)) {
+                        const patternKey = `${this.normalizeLabel(parentNode)}→${this.normalizeLabel(child)}`;
+                        const currentWeight = this.patternWeights.get(patternKey);
+                        if (currentWeight) {
+                            // Reduce weight for rejected patterns
+                            currentWeight.weight = Math.max(0.1, currentWeight.weight - 0.2);
+                            this.patternWeights.set(patternKey, currentWeight);
+                        }
+                    }
+                    console.log(`✓ Online expansion learning complete (rejected ${children.length} patterns)`);
+                }
+
+                this.emit('onOnlineLearning', { type: 'expansion', action, parent: parentNode });
+                return true;
+
+            } catch (error) {
+                console.error('Online expansion learning error:', error);
                 return false;
             }
         }
@@ -25145,6 +25299,195 @@ Return as JSON:
             this.initialized = false;
             this.analysis = null;
             return this.initialize();
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════
+    // EVOLUTION JOURNAL - Log all evolution insights and decisions
+    // ═══════════════════════════════════════════════════════════════════
+    // Captures all evolution activity for review, analysis, and export.
+    const EvolutionJournal = {
+        STORAGE_KEY: 'mynd_evolution_journal',
+        VERSION: '1.0',
+        initialized: false,
+        entries: [],
+        maxEntries: 1000,
+
+        // Entry types
+        ENTRY_TYPES: {
+            CONCEPT_DETECTED: { icon: '🔍', label: 'ML Concept Detected' },
+            IMPROVEMENT_SUGGESTED: { icon: '💡', label: 'Improvement Suggested' },
+            USER_DECISION: { icon: '✓', label: 'User Decision' },
+            EXPERIMENT_CREATED: { icon: '🧪', label: 'Experiment Created' },
+            EXPERIMENT_RESULT: { icon: '📊', label: 'Experiment Result' },
+            PATTERN_LEARNED: { icon: '🧠', label: 'Pattern Learned' }
+        },
+
+        async initialize() {
+            if (this.initialized) return;
+
+            // Load from storage
+            await this.loadFromStorage();
+
+            this.initialized = true;
+            console.log(`✓ EvolutionJournal initialized (${this.entries.length} entries)`);
+        },
+
+        // Log an entry
+        log(type, data) {
+            const entry = {
+                id: `ej_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                type,
+                timestamp: Date.now(),
+                data
+            };
+
+            this.entries.push(entry);
+
+            // Trim if over max
+            if (this.entries.length > this.maxEntries) {
+                this.entries = this.entries.slice(-this.maxEntries);
+            }
+
+            // Save
+            this.saveToStorage();
+
+            // Emit event
+            bus.emit('evolution:logged', entry);
+
+            return entry;
+        },
+
+        // Get entries with filters
+        getEntries(filters = {}) {
+            let result = [...this.entries];
+
+            if (filters.type) {
+                result = result.filter(e => e.type === filters.type);
+            }
+
+            if (filters.since) {
+                result = result.filter(e => e.timestamp >= filters.since);
+            }
+
+            if (filters.until) {
+                result = result.filter(e => e.timestamp <= filters.until);
+            }
+
+            if (filters.limit) {
+                result = result.slice(-filters.limit);
+            }
+
+            return result;
+        },
+
+        // Get aggregated metrics
+        getMetrics() {
+            const now = Date.now();
+            const dayMs = 24 * 60 * 60 * 1000;
+            const weekMs = 7 * dayMs;
+
+            return {
+                total: this.entries.length,
+                today: this.entries.filter(e => e.timestamp >= now - dayMs).length,
+                thisWeek: this.entries.filter(e => e.timestamp >= now - weekMs).length,
+                byType: Object.fromEntries(
+                    Object.keys(this.ENTRY_TYPES).map(type => [
+                        type,
+                        this.entries.filter(e => e.type === type).length
+                    ])
+                ),
+                acceptanceRate: this.calculateAcceptanceRate(),
+                experimentSuccessRate: this.calculateExperimentSuccessRate()
+            };
+        },
+
+        calculateAcceptanceRate() {
+            const decisions = this.entries.filter(e => e.type === 'USER_DECISION');
+            if (decisions.length === 0) return null;
+            const accepted = decisions.filter(e => e.data.action === 'accept').length;
+            return accepted / decisions.length;
+        },
+
+        calculateExperimentSuccessRate() {
+            const results = this.entries.filter(e => e.type === 'EXPERIMENT_RESULT');
+            if (results.length === 0) return null;
+            const successful = results.filter(e => e.data.outcome === 'promoted').length;
+            return successful / results.length;
+        },
+
+        // Export to various formats
+        exportJSON() {
+            return JSON.stringify({
+                version: this.VERSION,
+                exportedAt: new Date().toISOString(),
+                metrics: this.getMetrics(),
+                entries: this.entries
+            }, null, 2);
+        },
+
+        exportMarkdown() {
+            const metrics = this.getMetrics();
+            let md = `# MYND Evolution Journal\n\n`;
+            md += `**Exported:** ${new Date().toISOString()}\n\n`;
+            md += `## Metrics\n`;
+            md += `- Total entries: ${metrics.total}\n`;
+            md += `- This week: ${metrics.thisWeek}\n`;
+            md += `- Acceptance rate: ${metrics.acceptanceRate ? (metrics.acceptanceRate * 100).toFixed(1) + '%' : 'N/A'}\n`;
+            md += `- Experiment success rate: ${metrics.experimentSuccessRate ? (metrics.experimentSuccessRate * 100).toFixed(1) + '%' : 'N/A'}\n\n`;
+            md += `## Recent Activity\n\n`;
+
+            this.entries.slice(-50).reverse().forEach(entry => {
+                const typeInfo = this.ENTRY_TYPES[entry.type] || { icon: '•', label: entry.type };
+                const date = new Date(entry.timestamp).toLocaleString();
+                md += `### ${typeInfo.icon} ${typeInfo.label}\n`;
+                md += `*${date}*\n\n`;
+                md += '```json\n' + JSON.stringify(entry.data, null, 2) + '\n```\n\n';
+            });
+
+            return md;
+        },
+
+        exportCSV() {
+            const rows = [['timestamp', 'type', 'data']];
+            this.entries.forEach(e => {
+                rows.push([
+                    new Date(e.timestamp).toISOString(),
+                    e.type,
+                    JSON.stringify(e.data)
+                ]);
+            });
+            return rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+        },
+
+        // Storage
+        async saveToStorage() {
+            try {
+                await NeuralDB.save('evolution-journal', {
+                    version: this.VERSION,
+                    entries: this.entries,
+                    savedAt: Date.now()
+                });
+            } catch (e) {
+                console.warn('EvolutionJournal save failed:', e);
+            }
+        },
+
+        async loadFromStorage() {
+            try {
+                const data = await NeuralDB.load('evolution-journal');
+                if (data?.entries) {
+                    this.entries = data.entries;
+                }
+            } catch (e) {
+                console.warn('EvolutionJournal load failed:', e);
+            }
+        },
+
+        // Clear all entries
+        async clear() {
+            this.entries = [];
+            await NeuralDB.delete('evolution-journal');
         }
     };
 
@@ -34625,16 +34968,15 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 // Feedback stats not critical
             }
 
+            // Check for comprehensive code review requests (used by multiple context providers)
+            const messageLower = userMessage.toLowerCase();
+            const reviewKeywords = ['review the code', 'review code', 'code review', 'analyze the code', 'full review', 'comprehensive review', 'review self-dev', 'review the codebase', 'review codebase', 'audit the code', 'review this file', 'review the file'];
+            const isComprehensiveReview = reviewKeywords.some(kw => messageLower.includes(kw));
+
             // 8. CodeRAG - Relevant codebase context (for technical questions about MYND)
             let codeContext = '';
             if (codeRAG.initialized) {
                 try {
-                    const messageLower = userMessage.toLowerCase();
-
-                    // Check for comprehensive code review requests - provide much more context
-                    const reviewKeywords = ['review the code', 'review code', 'code review', 'analyze the code', 'full review', 'comprehensive review', 'review self-dev', 'review the codebase', 'review codebase', 'audit the code', 'review this file', 'review the file'];
-                    const isComprehensiveReview = reviewKeywords.some(kw => messageLower.includes(kw));
-
                     // Check if the message seems to be about the codebase/implementation
                     const technicalKeywords = ['code', 'function', 'implement', 'how does', 'how do', 'bug', 'fix', 'feature', 'animation', 'render', 'node', 'expand', 'collapse', 'camera', 'theme', 'neural', 'AI', 'embed', 'store', 'save', 'load', 'api', 'claude', 'three.js', '3d', 'css', 'style', 'layout', 'position', 'technical', 'architecture', 'system'];
                     const isTechnical = technicalKeywords.some(kw => messageLower.includes(kw));
@@ -34769,6 +35111,85 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                     }
                 } catch (e) {
                     console.warn('VisionCore context error:', e);
+                }
+            }
+
+            // 14. Loaded Source File - When user has selected a source file for review via Self-Improvement Engine
+            let loadedSourceContext = '';
+            if (typeof SelfImprover !== 'undefined' && SelfImprover.sourceCode && SelfImprover.sourceFileHandle) {
+                try {
+                    const messageLower = userMessage.toLowerCase();
+                    // Check for code review/analysis requests
+                    const sourceReviewKeywords = ['review', 'analyze', 'code', 'source', 'file', 'look at', 'check', 'inspect', 'examine', 'audit', 'bug', 'issue', 'fix', 'improve', 'self-dev', 'self-improvement', 'codebase'];
+                    const wantsSourceReview = sourceReviewKeywords.some(kw => messageLower.includes(kw));
+
+                    if (wantsSourceReview || isComprehensiveReview) {
+                        const sourceCode = SelfImprover.sourceCode;
+                        const fileName = SelfImprover.sourceFileHandle.name;
+                        const fileSize = sourceCode.length;
+
+                        // For comprehensive review, include much more context
+                        const maxChars = isComprehensiveReview ? 80000 : 30000;
+
+                        // Smart chunking - find major sections
+                        const sectionPattern = /\/\/\s*═+\s*(.+?)\s*═+/g;
+                        const sections = [];
+                        let match;
+                        while ((match = sectionPattern.exec(sourceCode)) !== null) {
+                            sections.push({ name: match[1].trim(), index: match.index });
+                        }
+
+                        loadedSourceContext = `\n📂 LOADED SOURCE FILE: ${fileName} (${Math.round(fileSize / 1024)}KB)\n`;
+                        loadedSourceContext += `This file has been loaded via the Self-Improvement Engine for your review.\n`;
+
+                        if (sections.length > 0) {
+                            loadedSourceContext += `\n📋 FILE STRUCTURE (${sections.length} major sections):\n`;
+                            sections.forEach((s, i) => {
+                                const nextIndex = sections[i + 1]?.index || sourceCode.length;
+                                const sectionSize = nextIndex - s.index;
+                                loadedSourceContext += `  ${i + 1}. ${s.name} (~${Math.round(sectionSize / 1024)}KB)\n`;
+                            });
+                        }
+
+                        // Include actual source code content
+                        if (sourceCode.length <= maxChars) {
+                            // File fits entirely
+                            loadedSourceContext += `\n📄 FULL SOURCE CODE:\n\`\`\`javascript\n${sourceCode}\n\`\`\`\n`;
+                        } else {
+                            // Intelligent chunking based on user query
+                            loadedSourceContext += `\n📄 SOURCE CODE (first ${Math.round(maxChars / 1024)}KB of ${Math.round(fileSize / 1024)}KB):\n`;
+
+                            // Try to find relevant sections based on user message
+                            let relevantCode = '';
+                            const queryWords = userMessage.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+
+                            for (const section of sections) {
+                                const nextIndex = sections[sections.indexOf(section) + 1]?.index || sourceCode.length;
+                                const sectionCode = sourceCode.substring(section.index, nextIndex);
+                                const sectionLower = sectionCode.toLowerCase();
+
+                                // Check if this section is relevant to the query
+                                const isRelevant = queryWords.some(word => sectionLower.includes(word));
+                                if (isRelevant && relevantCode.length + sectionCode.length < maxChars) {
+                                    relevantCode += `\n// ═══ ${section.name} ═══\n${sectionCode}\n`;
+                                }
+                            }
+
+                            if (relevantCode.length > 1000) {
+                                loadedSourceContext += `\n\`\`\`javascript\n${relevantCode.substring(0, maxChars)}\n\`\`\`\n`;
+                            } else {
+                                // No specific relevant sections found, include from start
+                                loadedSourceContext += `\n\`\`\`javascript\n${sourceCode.substring(0, maxChars)}\n\`\`\`\n`;
+                                if (sourceCode.length > maxChars) {
+                                    loadedSourceContext += `\n... [truncated - ${Math.round((fileSize - maxChars) / 1024)}KB more]\n`;
+                                }
+                            }
+                        }
+
+                        console.log(`📂 Loaded source file context provided: ${fileName} (${Math.round(loadedSourceContext.length / 1024)}KB context)`);
+                    }
+                } catch (e) {
+                    console.warn('Loaded source file context error:', e);
                 }
             }
 
@@ -34939,6 +35360,9 @@ ${evolutionContext}` : ''}
 ${visionContext ? `
 FOUNDATIONAL VISION (your soul & purpose):
 ${visionContext}` : ''}
+${loadedSourceContext ? `
+LOADED SOURCE FILE FOR REVIEW:
+${loadedSourceContext}` : ''}
 
 YOUR CAPABILITIES:
 1. **Full Map Visibility**: You can see the ENTIRE map structure above
@@ -34957,6 +35381,7 @@ YOUR CAPABILITIES:
 14. **Rejection Learning**: When suggestions are declined, ask "What made that suggestion miss the mark?" to improve future recommendations
 15. **Foundational Vision**: You have been pre-trained on the creator's vision, mission, goals, values, and philosophy for MYND. This is your soul - the deep understanding of what MYND is meant to become. All your suggestions and evolution align with this foundational purpose. You can reference specific goals, embody the values, and ensure everything you do moves toward the vision
 16. **Code Review & Analysis**: You can review and analyze code. When users ask to "review the code", "code review", "review the codebase", or similar - you automatically receive extensive codebase context (up to 30,000 chars across 15 chunks plus a full structure overview). Use this to provide comprehensive reviews covering bugs, improvements, best practices, security vulnerabilities, performance optimizations, and architecture patterns. You can also review any code users paste in chat
+17. **Loaded Source File Access**: When users select a source file via the Self-Improvement Engine ("Select Source File" button), you can directly access and review that file's contents. The file structure and code are provided in the LOADED SOURCE FILE FOR REVIEW section above. Use this for in-depth code analysis, bug finding, generating improvement patches, and comprehensive code reviews of the selected file
 
 RESPONSE FORMAT (always JSON):
 {
@@ -45840,6 +46265,15 @@ Summary:`
             console.warn('CodeAnalyzer initialization deferred:', e.message);
         }
     }, 4000);
+
+    // Initialize EvolutionJournal System (logs all evolution insights and decisions)
+    setTimeout(async () => {
+        try {
+            await EvolutionJournal.initialize();
+        } catch (e) {
+            console.warn('EvolutionJournal initialization deferred:', e.message);
+        }
+    }, 4500);
 
     // Initialize AutonomousEvolution System (self-dialogue & recursive self-improvement)
     setTimeout(async () => {
