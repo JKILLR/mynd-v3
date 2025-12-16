@@ -7542,7 +7542,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND V.4.0.6</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND V.4.0.7</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -9767,26 +9767,43 @@ Things to avoid..."></textarea>
 
     <!-- Global onboarding functions (available immediately for inline onclick) -->
     <script>
-        // These wait for the module to load, then call the real functions
+        // Fallback that works without the module - creates basic data and reloads
+        function fallbackCompleteOnboarding() {
+            console.log('🔄 Using fallback onboarding completion');
+            var overlay = document.getElementById('onboarding-overlay');
+            if (overlay) overlay.style.display = 'none';
+            localStorage.setItem('mynd_onboarding_complete', 'true');
+            var mapName = document.getElementById('onboarding-name')?.value || 'My Mind';
+            var basicData = {
+                id: 'root',
+                label: mapName,
+                children: [
+                    { id: 'g1', label: 'Goals', color: '#4A90D9', children: [] },
+                    { id: 'i1', label: 'Ideas', color: '#F5A623', children: [] },
+                    { id: 't1', label: 'To Do', color: '#9B59B6', children: [] },
+                    { id: 'w1', label: 'Wants', color: '#1ABC9C', children: [] }
+                ]
+            };
+            localStorage.setItem('mynd_self_dev_data', JSON.stringify(basicData));
+            console.log('✅ Basic map created, reloading...');
+            location.reload();
+        }
+
         window.createBasicMapStructure = function() {
             console.log('🔘 Scratch button clicked');
             if (window._realCreateBasicMapStructure) {
-                console.log('✅ Calling real createBasicMapStructure');
                 window._realCreateBasicMapStructure();
             } else {
-                console.log('⏳ Waiting for module to load...');
-                // Poll until ready
                 var attempts = 0;
                 var interval = setInterval(function() {
                     attempts++;
                     if (window._realCreateBasicMapStructure) {
                         clearInterval(interval);
-                        console.log('✅ Module loaded, calling createBasicMapStructure');
                         window._realCreateBasicMapStructure();
-                    } else if (attempts > 50) {
+                    } else if (attempts > 30) {
                         clearInterval(interval);
-                        console.error('❌ Module failed. Started:', window._moduleStarted);
-                        alert('App failed to initialize. Check console for errors.');
+                        console.warn('⚠️ Using fallback');
+                        fallbackCompleteOnboarding();
                     }
                 }, 100);
             }
@@ -9794,23 +9811,9 @@ Things to avoid..."></textarea>
         window.showQuestionnaire = function() {
             console.log('🔘 AI button clicked');
             if (window._realShowQuestionnaire) {
-                console.log('✅ Calling real showQuestionnaire');
                 window._realShowQuestionnaire();
             } else {
-                console.log('⏳ Waiting for module to load...');
-                var attempts = 0;
-                var interval = setInterval(function() {
-                    attempts++;
-                    if (window._realShowQuestionnaire) {
-                        clearInterval(interval);
-                        console.log('✅ Module loaded, calling showQuestionnaire');
-                        window._realShowQuestionnaire();
-                    } else if (attempts > 50) {
-                        clearInterval(interval);
-                        console.error('❌ Module failed. Started:', window._moduleStarted);
-                        alert('App failed to initialize. Check console for errors.');
-                    }
-                }, 100);
+                alert('AI features require the app to fully load. Use "Start from Scratch" instead.');
             }
         };
     </script>
