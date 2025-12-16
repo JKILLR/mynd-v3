@@ -27161,32 +27161,54 @@ Respond with a JSON object:
                 return [];
             }
 
+            // Ensure CodeAnalyzer.analysis is populated
+            if (!CodeAnalyzer.analysis) {
+                const cached = CodeAnalyzer.loadFromStorage();
+                if (cached?.analysis) {
+                    CodeAnalyzer.analysis = cached.analysis;
+                    CodeAnalyzer.initialized = true;
+                }
+            }
+
+            const analysisData = CodeAnalyzer.analysis;
+            if (!analysisData) {
+                console.warn('No analysis data available');
+                return [];
+            }
+
+            console.log('📊 Getting improvement candidates from', analysisData.improvements?.length || 0, 'total improvements');
+
             // Get quick wins (high impact, low effort)
-            const quickWins = CodeAnalyzer.getQuickWins(limit);
+            const quickWins = CodeAnalyzer.getQuickWins ? CodeAnalyzer.getQuickWins(limit) : [];
 
-            // Also get critical improvements
-            const analysis = CodeAnalyzer.loadFromStorage();
-            const critical = [];
+            // Also get high-priority improvements from in-memory analysis
+            const highPriority = [];
 
-            if (analysis?.results) {
-                for (const [category, result] of Object.entries(analysis.results)) {
-                    for (const improvement of result.improvements || []) {
-                        if (improvement.priority === 'critical' || improvement.priority === 'high') {
-                            critical.push({
-                                category,
-                                ...improvement,
-                                categoryWeight: CodeAnalyzer.CATEGORIES[category]?.weight || 5
-                            });
+            // Get from byPriority if available
+            if (analysisData.byPriority) {
+                const critical = analysisData.byPriority.critical || [];
+                const high = analysisData.byPriority.high || [];
+                highPriority.push(...critical, ...high);
+            }
+
+            // Also check improvements array directly
+            if (analysisData.improvements?.length > 0) {
+                for (const improvement of analysisData.improvements) {
+                    if (improvement.priority === 'critical' || improvement.priority === 'high') {
+                        if (!highPriority.some(h => h.title === improvement.title)) {
+                            highPriority.push(improvement);
                         }
                     }
                 }
             }
 
+            console.log('📊 Found', quickWins.length, 'quick wins and', highPriority.length, 'high priority items');
+
             // Combine and dedupe
-            const all = [...quickWins, ...critical];
+            const all = [...quickWins, ...highPriority];
             const seen = new Set();
             const unique = all.filter(item => {
-                const key = item.title + item.category;
+                const key = item.title + (item.category || '');
                 if (seen.has(key)) return false;
                 seen.add(key);
                 return true;
@@ -27201,7 +27223,9 @@ Respond with a JSON object:
                 return (b.categoryWeight || 5) - (a.categoryWeight || 5);
             });
 
-            return unique.slice(0, limit);
+            const candidates = unique.slice(0, limit);
+            console.log('📊 Returning', candidates.length, 'candidates:', candidates.map(c => c.title));
+            return candidates;
         },
 
         // ─────────────────────────────────────────────────────────────────
@@ -37948,26 +37972,56 @@ Respond with JSON only:`;
 
         // Analyze & Generate button
         document.getElementById('self-improve-analyze-btn')?.addEventListener('click', async () => {
+            console.log('🔧 Analyze & Generate button clicked');
             const btn = document.getElementById('self-improve-analyze-btn');
+            if (!btn) {
+                console.error('Button element not found');
+                return;
+            }
             btn.disabled = true;
             btn.innerHTML = '<span style="margin-right: 6px;">⏳</span>Analyzing...';
 
             try {
-                // Make sure CodeAnalyzer has run
-                if (typeof CodeAnalyzer !== 'undefined' && !CodeAnalyzer.loadFromStorage()) {
-                    showToast('Running code analysis first...', 'info');
-                    await CodeAnalyzer.analyze();
+                // Check for Claude API key first
+                const apiKey = localStorage.getItem('claude_api_key');
+                if (!apiKey) {
+                    showToast('Please set your Claude API key in Settings first', 'warning');
+                    return;
+                }
+
+                // Make sure CodeAnalyzer has analyzed (check in-memory state, not just storage)
+                if (typeof CodeAnalyzer !== 'undefined') {
+                    if (!CodeAnalyzer.analysis) {
+                        // Try to load from storage first
+                        const cached = CodeAnalyzer.loadFromStorage();
+                        if (cached && cached.analysis) {
+                            CodeAnalyzer.analysis = cached.analysis;
+                            CodeAnalyzer.initialized = true;
+                            console.log('📊 Loaded CodeAnalyzer from storage');
+                        } else {
+                            showToast('Running code analysis first...', 'info');
+                            await CodeAnalyzer.analyze();
+                        }
+                    }
                 }
 
                 // Run improvement cycle
+                console.log('🔧 Starting improvement cycle...');
                 const results = await SelfImprover.runImprovementCycle({ maxPatches: 3 });
+                console.log('🔧 Improvement cycle results:', results);
 
                 if (results.generated > 0) {
                     showToast(`Generated ${results.generated} improvement patches!`, 'success');
                 } else if (results.failed > 0) {
-                    showToast(`Analysis complete but patch generation failed`, 'warning');
+                    showToast(`Analysis complete but patch generation failed (check console)`, 'warning');
                 } else {
-                    showToast('No improvements identified at this time', 'info');
+                    // Provide more detail about why no improvements were found
+                    const analysis = CodeAnalyzer?.analysis;
+                    if (analysis?.improvements?.length > 0) {
+                        showToast(`Found ${analysis.improvements.length} improvements but none match quick-win criteria. Try manually selecting from Evolution Journal.`, 'info');
+                    } else {
+                        showToast('No improvements identified at this time', 'info');
+                    }
                 }
 
                 updateSelfImproverUI();
