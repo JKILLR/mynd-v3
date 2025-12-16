@@ -34629,12 +34629,34 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             let codeContext = '';
             if (codeRAG.initialized) {
                 try {
+                    const messageLower = userMessage.toLowerCase();
+
+                    // Check for comprehensive code review requests - provide much more context
+                    const reviewKeywords = ['review the code', 'review code', 'code review', 'analyze the code', 'full review', 'comprehensive review', 'review self-dev', 'review the codebase', 'review codebase', 'audit the code', 'review this file', 'review the file'];
+                    const isComprehensiveReview = reviewKeywords.some(kw => messageLower.includes(kw));
+
                     // Check if the message seems to be about the codebase/implementation
                     const technicalKeywords = ['code', 'function', 'implement', 'how does', 'how do', 'bug', 'fix', 'feature', 'animation', 'render', 'node', 'expand', 'collapse', 'camera', 'theme', 'neural', 'AI', 'embed', 'store', 'save', 'load', 'api', 'claude', 'three.js', '3d', 'css', 'style', 'layout', 'position', 'technical', 'architecture', 'system'];
-                    const messageLower = userMessage.toLowerCase();
                     const isTechnical = technicalKeywords.some(kw => messageLower.includes(kw));
 
-                    if (isTechnical) {
+                    if (isComprehensiveReview) {
+                        // Comprehensive review mode - provide extensive codebase context
+                        // Get multiple relevant chunks across different areas
+                        const relevantCode = await codeRAG.getContext(userMessage, 15, 30000);
+                        if (relevantCode) {
+                            codeContext = relevantCode;
+                            console.log('📚 CodeRAG provided COMPREHENSIVE context for code review');
+                        }
+
+                        // Also include a summary of all available chunks for broader awareness
+                        const allChunks = codeRAG.chunks || [];
+                        const chunkSummary = allChunks.slice(0, 50).map(c =>
+                            `- ${c.type}: ${c.name} (${c.section}, lines ${c.startLine}-${c.endLine})`
+                        ).join('\n');
+                        if (chunkSummary) {
+                            codeContext += `\n\n📋 CODEBASE STRUCTURE OVERVIEW (${allChunks.length} total chunks):\n${chunkSummary}${allChunks.length > 50 ? `\n... and ${allChunks.length - 50} more chunks` : ''}`;
+                        }
+                    } else if (isTechnical) {
                         const relevantCode = await codeRAG.getContext(userMessage, 3, 3000);
                         if (relevantCode) {
                             codeContext = relevantCode;
@@ -34934,7 +34956,7 @@ YOUR CAPABILITIES:
 13. **Proactive Analysis**: Every 3-5 interactions, perform autonomous map analysis and suggest improvements without being asked
 14. **Rejection Learning**: When suggestions are declined, ask "What made that suggestion miss the mark?" to improve future recommendations
 15. **Foundational Vision**: You have been pre-trained on the creator's vision, mission, goals, values, and philosophy for MYND. This is your soul - the deep understanding of what MYND is meant to become. All your suggestions and evolution align with this foundational purpose. You can reference specific goals, embody the values, and ensure everything you do moves toward the vision
-16. **Code Review & Analysis**: You can review, analyze, and provide feedback on ANY code that users paste or share in the chat - not just MYND code. This includes identifying bugs, suggesting improvements, explaining code functionality, discussing best practices, security vulnerabilities, performance optimizations, and architecture patterns. When users share code snippets, treat them as requests for thoughtful analysis and feedback
+16. **Code Review & Analysis**: You can review and analyze code. When users ask to "review the code", "code review", "review the codebase", or similar - you automatically receive extensive codebase context (up to 30,000 chars across 15 chunks plus a full structure overview). Use this to provide comprehensive reviews covering bugs, improvements, best practices, security vulnerabilities, performance optimizations, and architecture patterns. You can also review any code users paste in chat
 
 RESPONSE FORMAT (always JSON):
 {
