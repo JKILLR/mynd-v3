@@ -27218,53 +27218,36 @@ Respond with a JSON object:
             console.log('📊 Getting improvement candidates from', analysisData.improvements?.length || 0, 'total improvements');
 
             // Get quick wins (high impact, low effort)
-            const quickWins = CodeAnalyzer.getQuickWins ? CodeAnalyzer.getQuickWins(limit) : [];
+            const quickWins = CodeAnalyzer.getQuickWins ? CodeAnalyzer.getQuickWins() : [];
 
-            // Also get high-priority improvements from in-memory analysis
-            const highPriority = [];
-
-            // Get from byPriority if available
-            if (analysisData.byPriority) {
-                const critical = analysisData.byPriority.critical || [];
-                const high = analysisData.byPriority.high || [];
-                highPriority.push(...critical, ...high);
-            }
-
-            // Also check improvements array directly
-            if (analysisData.improvements?.length > 0) {
-                for (const improvement of analysisData.improvements) {
-                    if (improvement.priority === 'critical' || improvement.priority === 'high') {
-                        if (!highPriority.some(h => h.title === improvement.title)) {
-                            highPriority.push(improvement);
-                        }
-                    }
-                }
-            }
-
-            console.log('📊 Found', quickWins.length, 'quick wins and', highPriority.length, 'high priority items');
-
-            // Combine and dedupe
-            const all = [...quickWins, ...highPriority];
+            // Collect improvements by priority tier
+            const candidates = [];
             const seen = new Set();
-            const unique = all.filter(item => {
-                const key = item.title + (item.category || '');
-                if (seen.has(key)) return false;
-                seen.add(key);
-                return true;
-            });
 
-            // Sort by priority
-            unique.sort((a, b) => {
-                const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
-                const pa = priorityOrder[a.priority] ?? 2;
-                const pb = priorityOrder[b.priority] ?? 2;
-                if (pa !== pb) return pa - pb;
-                return (b.categoryWeight || 5) - (a.categoryWeight || 5);
-            });
+            const addUnique = (improvement) => {
+                const key = improvement.title + (improvement.category || '');
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    candidates.push(improvement);
+                }
+            };
 
-            const candidates = unique.slice(0, limit);
-            console.log('📊 Returning', candidates.length, 'candidates:', candidates.map(c => c.title));
-            return candidates;
+            // First, add quick wins
+            quickWins.forEach(addUnique);
+
+            // Then add by priority: critical, high, medium, low
+            if (analysisData.improvements?.length > 0) {
+                // Sort by priorityScore (already calculated during analysis)
+                const sorted = [...analysisData.improvements].sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0));
+                sorted.forEach(addUnique);
+            }
+
+            console.log('📊 Found', quickWins.length, 'quick wins,', candidates.length, 'total candidates');
+
+            // Return the top candidates by priority score
+            const result = candidates.slice(0, limit);
+            console.log('📊 Returning', result.length, 'candidates:', result.map(c => c.title));
+            return result;
         },
 
         // ─────────────────────────────────────────────────────────────────
