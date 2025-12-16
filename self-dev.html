@@ -17193,6 +17193,150 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
             }
         }
 
+        // ═══════════════════════════════════════════════════════════════════
+        // KNOWLEDGE DISTILLATION: Train from Claude's captured predictions
+        // ═══════════════════════════════════════════════════════════════════
+        // Uses soft labels with temperature scaling for better knowledge transfer
+
+        async trainWithTeacherExamples(examples, options = {}) {
+            if (!this.categoryModel || !this.encoder || this.isTraining) {
+                console.log('Cannot train with teacher examples: model not ready or already training');
+                return false;
+            }
+
+            const {
+                useSoftLabels = true,
+                temperature = 2.0,
+                epochs = 10,
+                learningRate = 0.001
+            } = options;
+
+            if (examples.length < 3) {
+                console.log('Not enough teacher examples to train');
+                return false;
+            }
+
+            console.log(`🎓 Distillation training with ${examples.length} teacher examples...`);
+            this.isTraining = true;
+
+            try {
+                const inputs = [];
+                const targets = [];
+                const sampleWeights = [];
+
+                for (const ex of examples) {
+                    if (!ex.embedding || ex.embedding.length !== 512) continue;
+
+                    inputs.push(ex.embedding);
+
+                    // Use soft labels if available and enabled
+                    if (useSoftLabels && ex.softLabels && Object.keys(ex.softLabels).length > 1) {
+                        // Apply temperature scaling to create softer targets
+                        const softTarget = new Array(this.categories.length).fill(0);
+                        let totalProb = 0;
+
+                        // First pass: collect raw probabilities
+                        const rawProbs = [];
+                        for (let i = 0; i < this.categories.length; i++) {
+                            const cat = this.categories[i];
+                            const prob = ex.softLabels[cat] || 0;
+                            rawProbs.push(prob);
+                            totalProb += prob;
+                        }
+
+                        // Apply temperature scaling with softmax
+                        if (totalProb > 0) {
+                            const logits = rawProbs.map(p => Math.log(Math.max(p, 1e-10)));
+                            const scaledLogits = logits.map(l => l / temperature);
+                            const maxLogit = Math.max(...scaledLogits);
+                            const expLogits = scaledLogits.map(l => Math.exp(l - maxLogit));
+                            const sumExp = expLogits.reduce((a, b) => a + b, 0);
+
+                            for (let i = 0; i < this.categories.length; i++) {
+                                softTarget[i] = expLogits[i] / sumExp;
+                            }
+                        } else {
+                            // Fallback to hard label
+                            const catIndex = this.categories.indexOf(ex.category);
+                            if (catIndex >= 0) softTarget[catIndex] = 1;
+                        }
+
+                        targets.push(softTarget);
+                    } else {
+                        // Hard label
+                        const target = new Array(this.categories.length).fill(0);
+                        const catIndex = this.categories.indexOf(ex.category);
+                        if (catIndex >= 0) {
+                            target[catIndex] = 1;
+                        } else {
+                            continue; // Skip unknown category
+                        }
+                        targets.push(target);
+                    }
+
+                    // Weight by quality score
+                    sampleWeights.push(ex.quality || 0.5);
+                }
+
+                if (inputs.length < 3) {
+                    console.log('Not enough valid teacher examples after filtering');
+                    this.isTraining = false;
+                    return false;
+                }
+
+                // Create tensors
+                const xs = tf.tensor2d(inputs);
+                const ys = tf.tensor2d(targets);
+                const weights = tf.tensor1d(sampleWeights);
+
+                // Use KL divergence for soft labels, categorical crossentropy for hard labels
+                const lossFunction = useSoftLabels ? 'categoricalCrossentropy' : 'categoricalCrossentropy';
+
+                // Temporarily set a lower learning rate for distillation
+                const originalLR = CONFIG.NEURAL_NET.learningRate;
+                this.categoryModel.optimizer.learningRate = learningRate;
+
+                console.log(`🎓 Training with ${inputs.length} examples, ${epochs} epochs...`);
+
+                await this.categoryModel.fit(xs, ys, {
+                    epochs,
+                    batchSize: Math.min(32, inputs.length),
+                    shuffle: true,
+                    verbose: 0,
+                    sampleWeight: weights,
+                    callbacks: {
+                        onEpochEnd: (epoch, logs) => {
+                            if (epoch % 2 === 0) {
+                                console.log(`🎓 Distillation epoch ${epoch + 1}/${epochs}: loss=${logs.loss?.toFixed(4)}`);
+                            }
+                        }
+                    }
+                });
+
+                // Restore original learning rate
+                this.categoryModel.optimizer.learningRate = originalLR;
+
+                // Cleanup
+                xs.dispose();
+                ys.dispose();
+                weights.dispose();
+
+                // Save updated model
+                await this.saveModels();
+
+                console.log(`✓ Distillation training complete (${inputs.length} examples, ${epochs} epochs)`);
+                this.emit('onDistillationComplete', { examples: inputs.length, epochs });
+                this.isTraining = false;
+
+                return true;
+
+            } catch (error) {
+                console.error('Distillation training error:', error);
+                this.isTraining = false;
+                return false;
+            }
+        }
+
         // Predict the best category for new text
         async predictCategory(text) {
             if (!this.categoryModel || !this.encoder) return null;
@@ -17823,9 +17967,22 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                             parentLabel: node.label,
                             children: suggestions.map(s => ({
                                 label: s.label || s,
-                                confidence: s.confidence || 0.8
+                                confidence: s.confidence || 0.8,
+                                reasoning: s.reasoning || null
                             })),
-                            context: pathStr
+                            context: pathStr,
+                            existingChildren: existingChildren
+                        }, {
+                            // Rich context for better learning
+                            parentLabel: node.label,
+                            pathContext: pathStr,
+                            userProfile: profileInsights ? { summary: profileInsights } : null,
+                            semanticContext: semanticContext,
+                            modelPredictions: mlSuggestions ? mlSuggestions.map(s => ({
+                                label: s.label || s,
+                                confidence: s.score || s.confidence || 0.5,
+                                source: s.source || 'ml'
+                            })) : null
                         });
                     }
 
@@ -17922,10 +18079,25 @@ Return as JSON:
 
                     // Capture Claude's prediction as teacher knowledge for distillation
                     if (typeof TeacherKnowledge !== 'undefined' && result.category) {
+                        // Convert related concepts to alternatives with lower confidence
+                        const alternatives = (result.relatedConcepts || [])
+                            .filter(c => this.categories.includes(c) && c !== result.category)
+                            .map(c => ({ category: c, confidence: 0.2 }));
+
                         TeacherKnowledge.capture('category', text, {
                             category: result.category,
                             confidence: result.confidence || 0.8,
-                            reasoning: result.reasoning
+                            reasoning: result.reasoning,
+                            alternatives,
+                            suggestedParent: result.suggestedParent,
+                            relatedConcepts: result.relatedConcepts
+                        }, {
+                            // Rich context for better learning
+                            categories: this.categories,
+                            modelPredictions: categoryPredictions ? categoryPredictions.slice(0, 5).map(p => ({
+                                category: p.category,
+                                confidence: p.confidence || p.probability
+                            })) : null
                         });
                     }
 
@@ -26855,100 +27027,619 @@ Respond with a JSON object:
     // ═══════════════════════════════════════════════════════════════════
     // Captures Claude's predictions as "soft targets" for training the local model
     // This allows the local neural network to learn from Claude's reasoning
+    // ═══════════════════════════════════════════════════════════════════
+    // ENHANCED TEACHER KNOWLEDGE - Advanced Knowledge Distillation System
+    // Captures Claude's predictions with soft labels, reasoning, and quality scores
+    // Uses IndexedDB for large-scale storage (10K+ examples)
+    // ═══════════════════════════════════════════════════════════════════
     const TeacherKnowledge = {
-        STORAGE_KEY: 'mynd_teacher_knowledge',
-        MAX_EXAMPLES: 500, // Keep last 500 teacher examples
+        DB_NAME: 'mynd_teacher_knowledge',
+        DB_VERSION: 2,
+        STORE_NAME: 'teacher_examples',
+        STATS_STORE: 'distillation_stats',
+        MAX_EXAMPLES: 10000, // 20x more than before
+        DISTILLATION_TEMPERATURE: 2.0, // Temperature for soft label distillation
+        MIN_QUALITY_THRESHOLD: 0.3, // Minimum quality score to use for training
 
-        // Store a teacher example (Claude's prediction)
-        capture(type, input, prediction) {
-            const example = {
-                type,           // 'category', 'children', 'connection'
-                input,          // The input text/context
-                prediction,     // Claude's prediction with confidence
-                timestamp: Date.now()
-            };
+        db: null,
+        initialized: false,
+        pendingWrites: [],
+        writeTimer: null,
 
+        // Initialize IndexedDB
+        async init() {
+            if (this.db) return this.db;
+
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
+
+                request.onerror = () => {
+                    console.error('Failed to open TeacherKnowledge DB:', request.error);
+                    reject(request.error);
+                };
+
+                request.onsuccess = () => {
+                    this.db = request.result;
+                    this.initialized = true;
+                    console.log('✓ TeacherKnowledge IndexedDB initialized (10K capacity)');
+                    resolve(this.db);
+                };
+
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+
+                    // Main store for teacher examples
+                    if (!db.objectStoreNames.contains(this.STORE_NAME)) {
+                        const store = db.createObjectStore(this.STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                        store.createIndex('type', 'type', { unique: false });
+                        store.createIndex('timestamp', 'timestamp', { unique: false });
+                        store.createIndex('quality', 'quality', { unique: false });
+                        console.log('✓ Created TeacherKnowledge store with indexes');
+                    }
+
+                    // Stats store for tracking distillation metrics
+                    if (!db.objectStoreNames.contains(this.STATS_STORE)) {
+                        db.createObjectStore(this.STATS_STORE, { keyPath: 'id' });
+                        console.log('✓ Created distillation stats store');
+                    }
+                };
+            });
+        },
+
+        // Calculate quality score based on confidence, user feedback, and context richness
+        calculateQuality(prediction, type) {
+            let quality = 0.5; // Base quality
+
+            // Confidence contributes up to 0.3
+            const confidence = prediction.confidence || 0.5;
+            quality += confidence * 0.3;
+
+            // Reasoning presence adds 0.1
+            if (prediction.reasoning && prediction.reasoning.length > 20) {
+                quality += 0.1;
+            }
+
+            // Soft labels (probability distribution) adds 0.1
+            if (prediction.softLabels && Object.keys(prediction.softLabels).length > 1) {
+                quality += 0.1;
+            }
+
+            // Type-specific bonuses
+            if (type === 'category' && prediction.alternatives && prediction.alternatives.length > 0) {
+                quality += 0.05;
+            }
+            if (type === 'children' && prediction.children && prediction.children.length >= 2) {
+                quality += 0.05;
+            }
+
+            return Math.min(1.0, quality);
+        },
+
+        // Apply temperature scaling for soft labels (knowledge distillation)
+        applySoftmax(logits, temperature = this.DISTILLATION_TEMPERATURE) {
+            const scaledLogits = logits.map(l => l / temperature);
+            const maxLogit = Math.max(...scaledLogits);
+            const expLogits = scaledLogits.map(l => Math.exp(l - maxLogit));
+            const sumExp = expLogits.reduce((a, b) => a + b, 0);
+            return expLogits.map(e => e / sumExp);
+        },
+
+        // Create soft labels from Claude's prediction
+        createSoftLabels(prediction, type, categories = []) {
+            const softLabels = {};
+
+            if (type === 'category') {
+                // If Claude provided alternatives with confidence, use those
+                if (prediction.alternatives && prediction.alternatives.length > 0) {
+                    // Primary category gets highest weight
+                    softLabels[prediction.category] = prediction.confidence || 0.7;
+
+                    // Distribute remaining probability among alternatives
+                    const remaining = 1 - (prediction.confidence || 0.7);
+                    prediction.alternatives.forEach((alt, i) => {
+                        softLabels[alt.category || alt] = alt.confidence || (remaining / (prediction.alternatives.length + 1));
+                    });
+                } else if (categories.length > 0) {
+                    // Create soft distribution based on primary confidence
+                    const primary = prediction.category;
+                    const primaryConf = prediction.confidence || 0.8;
+                    softLabels[primary] = primaryConf;
+
+                    // Distribute remaining among other categories (uniform)
+                    const others = categories.filter(c => c !== primary);
+                    const otherProb = (1 - primaryConf) / Math.max(1, others.length);
+                    others.forEach(c => {
+                        softLabels[c] = otherProb;
+                    });
+                } else {
+                    softLabels[prediction.category] = prediction.confidence || 0.8;
+                }
+            } else if (type === 'children') {
+                // For children suggestions, create distribution over suggestions
+                if (prediction.children && prediction.children.length > 0) {
+                    prediction.children.forEach(child => {
+                        const label = child.label || child;
+                        softLabels[label] = child.confidence || (1 / prediction.children.length);
+                    });
+                }
+            } else if (type === 'connection') {
+                // For connections, weight by strength
+                if (prediction.connections) {
+                    prediction.connections.forEach(conn => {
+                        softLabels[conn.target || conn] = conn.strength || 0.5;
+                    });
+                }
+            }
+
+            return softLabels;
+        },
+
+        // Capture a teacher example with enhanced data
+        async capture(type, input, prediction, context = {}) {
             try {
-                const stored = this.getAll();
-                stored.push(example);
+                await this.init();
 
-                // Keep only the most recent examples
-                while (stored.length > this.MAX_EXAMPLES) stored.shift();
+                // Create soft labels
+                const softLabels = this.createSoftLabels(prediction, type, context.categories || []);
 
-                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(stored));
-                console.log(`📚 Teacher knowledge captured: ${type}`);
+                // Calculate quality score
+                const quality = this.calculateQuality(prediction, type);
 
+                const example = {
+                    type,                           // 'category', 'children', 'connection', 'expansion'
+                    input,                          // The input text
+                    prediction,                     // Claude's raw prediction
+                    softLabels,                     // Temperature-scaled probability distribution
+                    reasoning: prediction.reasoning || null,  // Claude's explanation
+                    quality,                        // Quality score for training weight
+                    context: {                      // Rich context for better learning
+                        parentLabel: context.parentLabel || null,
+                        pathContext: context.pathContext || null,
+                        existingCategories: context.categories || [],
+                        userProfile: context.userProfile || null,
+                        modelPredictions: context.modelPredictions || null // Local model's predictions for comparison
+                    },
+                    timestamp: Date.now(),
+                    used: false,                    // Track if used for training
+                    feedbackReceived: false         // Track if user gave feedback
+                };
+
+                // Batch writes for efficiency
+                this.pendingWrites.push(example);
+                this._scheduleBatchWrite();
+
+                console.log(`📚 Teacher knowledge captured: ${type} (quality: ${quality.toFixed(2)})`);
                 return true;
+
             } catch (e) {
-                console.warn('Failed to store teacher knowledge:', e);
+                console.warn('Failed to capture teacher knowledge:', e);
+                // Fallback to localStorage for critical data
+                this._localStorageFallback(type, input, prediction);
                 return false;
             }
         },
 
-        // Get all teacher examples
-        getAll() {
+        // Batch write pending examples
+        _scheduleBatchWrite() {
+            if (this.writeTimer) return;
+
+            this.writeTimer = setTimeout(async () => {
+                const toWrite = [...this.pendingWrites];
+                this.pendingWrites = [];
+                this.writeTimer = null;
+
+                if (toWrite.length === 0) return;
+
+                try {
+                    await this.init();
+                    const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
+                    const store = transaction.objectStore(this.STORE_NAME);
+
+                    for (const example of toWrite) {
+                        store.add(example);
+                    }
+
+                    await new Promise((resolve, reject) => {
+                        transaction.oncomplete = resolve;
+                        transaction.onerror = () => reject(transaction.error);
+                    });
+
+                    // Prune if over limit
+                    await this._pruneIfNeeded();
+
+                } catch (e) {
+                    console.warn('Batch write failed:', e);
+                }
+            }, 1000); // Batch writes every second
+        },
+
+        // Prune old/low-quality examples if over limit
+        async _pruneIfNeeded() {
             try {
-                return JSON.parse(localStorage.getItem(this.STORAGE_KEY) || '[]');
+                const count = await this.getCount();
+                if (count <= this.MAX_EXAMPLES) return;
+
+                const toRemove = count - this.MAX_EXAMPLES + 100; // Remove 100 extra for buffer
+
+                const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(this.STORE_NAME);
+                const index = store.index('quality');
+
+                // Remove lowest quality examples first
+                const request = index.openCursor();
+                let removed = 0;
+
+                request.onsuccess = (event) => {
+                    const cursor = event.target.result;
+                    if (cursor && removed < toRemove) {
+                        store.delete(cursor.primaryKey);
+                        removed++;
+                        cursor.continue();
+                    }
+                };
+
+                await new Promise((resolve, reject) => {
+                    transaction.oncomplete = () => {
+                        console.log(`📚 Pruned ${removed} low-quality teacher examples`);
+                        resolve();
+                    };
+                    transaction.onerror = () => reject(transaction.error);
+                });
+
+            } catch (e) {
+                console.warn('Prune failed:', e);
+            }
+        },
+
+        // LocalStorage fallback for when IndexedDB fails
+        _localStorageFallback(type, input, prediction) {
+            try {
+                const key = 'mynd_teacher_fallback';
+                const stored = JSON.parse(localStorage.getItem(key) || '[]');
+                stored.push({ type, input, prediction: prediction.category || prediction, timestamp: Date.now() });
+                while (stored.length > 100) stored.shift();
+                localStorage.setItem(key, JSON.stringify(stored));
+            } catch (e) {}
+        },
+
+        // Get count of stored examples
+        async getCount() {
+            try {
+                await this.init();
+                return new Promise((resolve) => {
+                    const transaction = this.db.transaction([this.STORE_NAME], 'readonly');
+                    const store = transaction.objectStore(this.STORE_NAME);
+                    const request = store.count();
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => resolve(0);
+                });
+            } catch (e) {
+                return 0;
+            }
+        },
+
+        // Get examples by type with optional quality filter
+        async getByType(type, minQuality = 0) {
+            try {
+                await this.init();
+                return new Promise((resolve) => {
+                    const transaction = this.db.transaction([this.STORE_NAME], 'readonly');
+                    const store = transaction.objectStore(this.STORE_NAME);
+                    const index = store.index('type');
+                    const request = index.getAll(type);
+
+                    request.onsuccess = () => {
+                        let results = request.result || [];
+                        if (minQuality > 0) {
+                            results = results.filter(ex => ex.quality >= minQuality);
+                        }
+                        resolve(results);
+                    };
+                    request.onerror = () => resolve([]);
+                });
             } catch (e) {
                 return [];
             }
         },
 
-        // Get teacher examples by type
-        getByType(type) {
-            return this.getAll().filter(ex => ex.type === type);
-        },
+        // Get high-quality training examples for a specific type
+        async getTrainingExamples(type, neuralNet, options = {}) {
+            const minQuality = options.minQuality || this.MIN_QUALITY_THRESHOLD;
+            const maxExamples = options.maxExamples || 500;
+            const useTemperature = options.useTemperature !== false;
 
-        // Get teacher examples for training (with embeddings if available)
-        async getTrainingExamples(type, neuralNet) {
-            const examples = this.getByType(type);
+            const examples = await this.getByType(type, minQuality);
             if (examples.length === 0) return [];
 
+            // Sort by quality and recency
+            examples.sort((a, b) => {
+                const qualityDiff = b.quality - a.quality;
+                if (Math.abs(qualityDiff) > 0.1) return qualityDiff;
+                return b.timestamp - a.timestamp;
+            });
+
+            const selected = examples.slice(0, maxExamples);
             const trainingExamples = [];
 
-            for (const ex of examples) {
-                if (type === 'category' && ex.prediction?.category) {
-                    // Get embedding for the input text
-                    const embedding = await neuralNet.getEmbedding(ex.input);
-                    if (embedding) {
-                        trainingExamples.push({
-                            embedding,
-                            category: ex.prediction.category,
-                            confidence: ex.prediction.confidence || 0.8,
-                            isTeacher: true // Mark as teacher example
-                        });
+            for (const ex of selected) {
+                try {
+                    if (type === 'category' && ex.prediction?.category) {
+                        // Get embedding for the input text
+                        const embedding = await neuralNet.getEmbedding(ex.input);
+                        if (embedding) {
+                            trainingExamples.push({
+                                embedding,
+                                category: ex.prediction.category,
+                                confidence: ex.prediction.confidence || 0.8,
+                                softLabels: useTemperature ? ex.softLabels : null,
+                                quality: ex.quality,
+                                reasoning: ex.reasoning,
+                                isTeacher: true
+                            });
+                        }
+                    } else if (type === 'children' && ex.prediction?.children) {
+                        const embedding = await neuralNet.getEmbedding(ex.input);
+                        if (embedding) {
+                            trainingExamples.push({
+                                embedding,
+                                parentLabel: ex.context?.parentLabel || ex.input,
+                                children: ex.prediction.children,
+                                softLabels: ex.softLabels,
+                                quality: ex.quality,
+                                context: ex.context?.pathContext,
+                                isTeacher: true
+                            });
+                        }
+                    } else if (type === 'connection') {
+                        const embedding = await neuralNet.getEmbedding(ex.input);
+                        if (embedding) {
+                            trainingExamples.push({
+                                embedding,
+                                connections: ex.prediction.connections || ex.prediction,
+                                softLabels: ex.softLabels,
+                                quality: ex.quality,
+                                isTeacher: true
+                            });
+                        }
                     }
+                } catch (e) {
+                    console.warn('Failed to process training example:', e);
                 }
             }
 
             return trainingExamples;
         },
 
-        // Clear old examples
-        prune(maxAge = 7 * 24 * 60 * 60 * 1000) { // Default: 7 days
-            const cutoff = Date.now() - maxAge;
-            const stored = this.getAll();
-            const fresh = stored.filter(ex => ex.timestamp > cutoff);
+        // Mark examples as used for training
+        async markAsUsed(ids) {
+            try {
+                await this.init();
+                const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(this.STORE_NAME);
 
-            if (fresh.length < stored.length) {
-                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(fresh));
-                console.log(`📚 Pruned ${stored.length - fresh.length} old teacher examples`);
+                for (const id of ids) {
+                    const request = store.get(id);
+                    request.onsuccess = () => {
+                        const example = request.result;
+                        if (example) {
+                            example.used = true;
+                            example.usedAt = Date.now();
+                            store.put(example);
+                        }
+                    };
+                }
+
+                await new Promise((resolve) => {
+                    transaction.oncomplete = resolve;
+                    transaction.onerror = resolve;
+                });
+            } catch (e) {}
+        },
+
+        // Update quality based on user feedback
+        async updateQualityFromFeedback(type, input, wasAccepted) {
+            try {
+                await this.init();
+                const examples = await this.getByType(type);
+
+                // Find matching example
+                const match = examples.find(ex => ex.input === input);
+                if (!match) return;
+
+                // Adjust quality based on feedback
+                const adjustment = wasAccepted ? 0.1 : -0.15;
+                match.quality = Math.max(0, Math.min(1, match.quality + adjustment));
+                match.feedbackReceived = true;
+                match.feedbackWasPositive = wasAccepted;
+
+                const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(this.STORE_NAME);
+                store.put(match);
+
+                await new Promise((resolve) => {
+                    transaction.oncomplete = resolve;
+                    transaction.onerror = resolve;
+                });
+
+                console.log(`📚 Updated teacher example quality: ${match.quality.toFixed(2)} (${wasAccepted ? 'positive' : 'negative'} feedback)`);
+
+            } catch (e) {
+                console.warn('Failed to update quality:', e);
             }
         },
 
-        // Get stats
-        getStats() {
-            const all = this.getAll();
-            const byType = {};
-            for (const ex of all) {
-                byType[ex.type] = (byType[ex.type] || 0) + 1;
-            }
-            return {
-                total: all.length,
-                byType,
-                oldestTimestamp: all[0]?.timestamp,
-                newestTimestamp: all[all.length - 1]?.timestamp
+        // Perform batch distillation training
+        async runDistillation(neuralNet, options = {}) {
+            const types = options.types || ['category', 'children', 'connection'];
+            const results = {
+                success: false,
+                trained: {},
+                errors: []
             };
+
+            console.log('🎓 Starting knowledge distillation...');
+
+            for (const type of types) {
+                try {
+                    const examples = await this.getTrainingExamples(type, neuralNet, {
+                        minQuality: options.minQuality || 0.4,
+                        maxExamples: options.maxExamples || 300,
+                        useTemperature: true
+                    });
+
+                    if (examples.length < 5) {
+                        console.log(`📚 Skipping ${type}: only ${examples.length} examples`);
+                        continue;
+                    }
+
+                    console.log(`📚 Distilling ${examples.length} ${type} examples...`);
+
+                    // Train with soft labels using temperature-scaled targets
+                    if (type === 'category' && neuralNet.trainWithTeacherExamples) {
+                        const trained = await neuralNet.trainWithTeacherExamples(examples, {
+                            useSoftLabels: true,
+                            temperature: this.DISTILLATION_TEMPERATURE,
+                            epochs: options.epochs || 10,
+                            learningRate: options.learningRate || 0.001
+                        });
+                        results.trained[type] = { count: examples.length, success: trained };
+                    }
+
+                    // Mark examples as used
+                    const ids = examples.map(ex => ex.id).filter(id => id);
+                    if (ids.length > 0) {
+                        await this.markAsUsed(ids);
+                    }
+
+                } catch (e) {
+                    console.error(`Distillation error for ${type}:`, e);
+                    results.errors.push({ type, error: e.message });
+                }
+            }
+
+            results.success = Object.keys(results.trained).length > 0;
+
+            // Update stats
+            await this._updateDistillationStats(results);
+
+            console.log('🎓 Distillation complete:', results);
+            return results;
+        },
+
+        // Track distillation statistics
+        async _updateDistillationStats(results) {
+            try {
+                await this.init();
+                const transaction = this.db.transaction([this.STATS_STORE], 'readwrite');
+                const store = transaction.objectStore(this.STATS_STORE);
+
+                const request = store.get('distillation_history');
+                request.onsuccess = () => {
+                    const history = request.result?.data || [];
+                    history.push({
+                        timestamp: Date.now(),
+                        results: {
+                            trained: results.trained,
+                            errors: results.errors.length
+                        }
+                    });
+
+                    // Keep last 100 runs
+                    while (history.length > 100) history.shift();
+
+                    store.put({ id: 'distillation_history', data: history });
+                };
+
+                await new Promise((resolve) => {
+                    transaction.oncomplete = resolve;
+                    transaction.onerror = resolve;
+                });
+            } catch (e) {}
+        },
+
+        // Get comprehensive stats
+        async getStats() {
+            try {
+                await this.init();
+                const stats = {
+                    total: 0,
+                    byType: {},
+                    byQuality: { high: 0, medium: 0, low: 0 },
+                    used: 0,
+                    withFeedback: 0,
+                    averageQuality: 0
+                };
+
+                return new Promise((resolve) => {
+                    const transaction = this.db.transaction([this.STORE_NAME], 'readonly');
+                    const store = transaction.objectStore(this.STORE_NAME);
+                    const request = store.getAll();
+
+                    request.onsuccess = () => {
+                        const all = request.result || [];
+                        stats.total = all.length;
+
+                        let qualitySum = 0;
+                        for (const ex of all) {
+                            stats.byType[ex.type] = (stats.byType[ex.type] || 0) + 1;
+
+                            if (ex.quality >= 0.7) stats.byQuality.high++;
+                            else if (ex.quality >= 0.4) stats.byQuality.medium++;
+                            else stats.byQuality.low++;
+
+                            if (ex.used) stats.used++;
+                            if (ex.feedbackReceived) stats.withFeedback++;
+                            qualitySum += ex.quality || 0;
+                        }
+
+                        stats.averageQuality = all.length > 0 ? qualitySum / all.length : 0;
+                        stats.oldestTimestamp = all[0]?.timestamp;
+                        stats.newestTimestamp = all[all.length - 1]?.timestamp;
+
+                        resolve(stats);
+                    };
+                    request.onerror = () => resolve(stats);
+                });
+            } catch (e) {
+                return { total: 0, byType: {}, error: e.message };
+            }
+        },
+
+        // Export for analysis
+        async export() {
+            try {
+                await this.init();
+                return new Promise((resolve) => {
+                    const transaction = this.db.transaction([this.STORE_NAME], 'readonly');
+                    const store = transaction.objectStore(this.STORE_NAME);
+                    const request = store.getAll();
+
+                    request.onsuccess = () => resolve(request.result || []);
+                    request.onerror = () => resolve([]);
+                });
+            } catch (e) {
+                return [];
+            }
+        },
+
+        // Clear all data
+        async clear() {
+            try {
+                await this.init();
+                const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(this.STORE_NAME);
+                store.clear();
+
+                await new Promise((resolve) => {
+                    transaction.oncomplete = resolve;
+                    transaction.onerror = resolve;
+                });
+
+                console.log('📚 TeacherKnowledge cleared');
+                return true;
+            } catch (e) {
+                return false;
+            }
         }
     };
 
@@ -27061,6 +27752,23 @@ Respond with a JSON object:
             neuralNet.learnFromFeedback(feedback).catch(err => {
                 console.warn('Online learning failed:', err);
             });
+
+            // Update TeacherKnowledge quality based on this feedback
+            // This helps prioritize high-quality teacher examples for future distillation
+            if (typeof TeacherKnowledge !== 'undefined' && TeacherKnowledge.updateQualityFromFeedback) {
+                const inputText = feedback.context?.nodeLabel || feedback.context?.nodeText;
+                const wasAccepted = feedback.action === 'accepted';
+
+                if (inputText && feedback.type) {
+                    TeacherKnowledge.updateQualityFromFeedback(
+                        feedback.type,
+                        inputText,
+                        wasAccepted
+                    ).catch(err => {
+                        console.warn('Failed to update teacher knowledge quality:', err);
+                    });
+                }
+            }
         },
 
         // Check if incremental learning should be triggered
@@ -27119,6 +27827,19 @@ Respond with a JSON object:
 
                 if (result) {
                     console.log('✓ Incremental learning complete');
+
+                    // After regular training, also run distillation if we have enough teacher examples
+                    if (typeof TeacherKnowledge !== 'undefined' && TeacherKnowledge.runDistillation) {
+                        const stats = await TeacherKnowledge.getStats();
+                        if (stats.total >= 20 && stats.byQuality?.high >= 5) {
+                            console.log('🎓 Running knowledge distillation...');
+                            await TeacherKnowledge.runDistillation(neuralNet, {
+                                minQuality: 0.5,
+                                maxExamples: 200,
+                                epochs: 5
+                            });
+                        }
+                    }
                 } else {
                     console.log('⚠ Incremental learning skipped (not enough data)');
                 }
@@ -35161,12 +35882,12 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                                 { name: 'ConceptAbstractor', start: 13892, end: 14466 },
                                 { name: 'MetaLearner', start: 14468, end: 14959 },
                                 { name: 'Neural Training Worker', start: 15371, end: 15602 },
-                                { name: 'Embedding Worker', start: 15604, end: 15667 },
-                                { name: 'PersonalNeuralNet (Core)', start: 15669, end: 18214 },
-                                { name: 'Cognitive Graph Transformer', start: 18216, end: 19813 },
-                                { name: 'WebGPU Compute Engine', start: 20978, end: 21760 },
-                                { name: 'TeacherKnowledge (Distillation)', start: 26510, end: 26610 },
-                                { name: 'AIFeedback System', start: 26612, end: 27100 }
+                                { name: 'Embedding Worker', start: 15604, end: 15669 },
+                                { name: 'PersonalNeuralNet (Core + Distillation)', start: 15671, end: 18386 },
+                                { name: 'Cognitive Graph Transformer', start: 18388, end: 19950 },
+                                { name: 'WebGPU Compute Engine', start: 21163, end: 21945 },
+                                { name: 'TeacherKnowledge (Enhanced Distillation)', start: 27026, end: 27645 },
+                                { name: 'AIFeedback System', start: 27647, end: 28180 }
                             ];
 
                             loadedSourceContext += `\n🧠 ML/LEARNING SYSTEM REVIEW MODE\n`;
