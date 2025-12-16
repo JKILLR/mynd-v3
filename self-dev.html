@@ -7542,7 +7542,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND V.4.0.3</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND V.4.0.4</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -9764,6 +9764,27 @@ Things to avoid..."></textarea>
     </script>
 
     <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+
+    <!-- Global onboarding functions (available immediately for inline onclick) -->
+    <script>
+        // These will be replaced by the real implementations once the module loads
+        window._onboardingQueue = [];
+        window.createBasicMapStructure = function() {
+            if (window._realCreateBasicMapStructure) {
+                window._realCreateBasicMapStructure();
+            } else {
+                window._onboardingQueue.push('scratch');
+            }
+        };
+        window.showQuestionnaire = function() {
+            if (window._realShowQuestionnaire) {
+                window._realShowQuestionnaire();
+            } else {
+                window._onboardingQueue.push('ai');
+            }
+        };
+    </script>
+
     <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -42002,10 +42023,22 @@ Replace placeholder labels with real content from user's answers. MUST have exac
         completeOnboarding();
     }
 
-    // Make onboarding functions globally accessible
+    // Make onboarding functions globally accessible (connect to stubs)
+    window._realCreateBasicMapStructure = createBasicMapStructure;
+    window._realShowQuestionnaire = showQuestionnaire;
     window.createBasicMapStructure = createBasicMapStructure;
     window.showQuestionnaire = showQuestionnaire;
     window.completeOnboarding = completeOnboarding;
+
+    // Process any queued calls from before module loaded
+    if (window._onboardingQueue && window._onboardingQueue.length > 0) {
+        console.log('📋 Processing queued onboarding actions:', window._onboardingQueue);
+        window._onboardingQueue.forEach(action => {
+            if (action === 'scratch') createBasicMapStructure();
+            else if (action === 'ai') showQuestionnaire();
+        });
+        window._onboardingQueue = [];
+    }
 
     // AI-Assisted Setup choice - use class selector for clarity
     console.log('🔧 Attaching onboarding button handlers...');
