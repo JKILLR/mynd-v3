@@ -37992,23 +37992,43 @@ Respond with JSON only:`;
                     return;
                 }
 
-                // Make sure CodeAnalyzer has analyzed (check in-memory state, not just storage)
+                // Initialize the full dependency chain: codeRAG -> CodePretraining -> CodeAnalyzer
+                console.log('🔧 Initializing dependency chain...');
+
+                // Step 1: Ensure codeRAG is ready (parses the source code)
+                if (typeof codeRAG !== 'undefined' && !codeRAG.initialized) {
+                    console.log('🔧 Initializing codeRAG...');
+                    showToast('Parsing source code...', 'info');
+                    await codeRAG.initialize();
+                    console.log('🔧 codeRAG initialized:', codeRAG.initialized, 'chunks:', codeRAG.chunks?.length || 0);
+                }
+
+                // Step 2: Ensure CodePretraining is ready (builds knowledge from codeRAG)
+                if (typeof CodePretraining !== 'undefined' && !CodePretraining.initialized) {
+                    console.log('🔧 Initializing CodePretraining...');
+                    showToast('Building code knowledge...', 'info');
+                    await CodePretraining.initialize();
+                    console.log('🔧 CodePretraining initialized:', CodePretraining.initialized);
+                    console.log('🔧 Knowledge functions:', Object.keys(CodePretraining.knowledge?.functions || {}).length);
+                }
+
+                // Step 3: Run CodeAnalyzer (finds improvements from knowledge)
                 console.log('🔧 Checking CodeAnalyzer...');
                 if (typeof CodeAnalyzer !== 'undefined') {
                     console.log('🔧 CodeAnalyzer.analysis exists:', !!CodeAnalyzer.analysis);
-                    if (!CodeAnalyzer.analysis) {
+                    if (!CodeAnalyzer.analysis || CodeAnalyzer.analysis.improvements?.length === 0) {
                         // Try to load from storage first
                         const cached = CodeAnalyzer.loadFromStorage();
-                        console.log('🔧 Loaded from storage:', !!cached?.analysis);
-                        if (cached && cached.analysis) {
+                        console.log('🔧 Loaded from storage:', !!cached?.analysis, 'improvements:', cached?.analysis?.improvements?.length || 0);
+                        if (cached && cached.analysis && cached.analysis.improvements?.length > 0) {
                             CodeAnalyzer.analysis = cached.analysis;
                             CodeAnalyzer.initialized = true;
-                            console.log('📊 Loaded CodeAnalyzer from storage');
+                            console.log('📊 Loaded CodeAnalyzer from storage with', cached.analysis.improvements.length, 'improvements');
                         } else {
-                            showToast('Running code analysis first...', 'info');
+                            showToast('Analyzing code for improvements...', 'info');
                             console.log('🔧 Running CodeAnalyzer.analyze()...');
                             await CodeAnalyzer.analyze();
-                            console.log('🔧 CodeAnalyzer.analyze() complete');
+                            console.log('🔧 CodeAnalyzer.analyze() complete, improvements:', CodeAnalyzer.analysis?.improvements?.length || 0);
                         }
                     }
                 } else {
