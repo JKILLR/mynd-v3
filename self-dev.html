@@ -7542,7 +7542,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND V.4.0.8</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND V.4.0.9</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -9767,6 +9767,17 @@ Things to avoid..."></textarea>
 
     <!-- Global onboarding functions (available immediately for inline onclick) -->
     <script>
+        // Check if already onboarded - hide overlay immediately (before module loads)
+        (function() {
+            if (localStorage.getItem('mynd-onboarded-v17')) {
+                console.log('✅ Already onboarded, hiding overlay');
+                document.addEventListener('DOMContentLoaded', function() {
+                    var overlay = document.getElementById('onboarding-overlay');
+                    if (overlay) overlay.style.display = 'none';
+                });
+            }
+        })();
+
         // Fallback that works without the module - creates basic data and reloads
         function fallbackCompleteOnboarding() {
             console.log('🔄 Using fallback onboarding completion');
