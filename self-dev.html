@@ -37983,26 +37983,36 @@ Respond with JSON only:`;
 
             try {
                 // Check for Claude API key first
+                console.log('🔧 Checking for API key...');
                 const apiKey = localStorage.getItem('claude_api_key');
+                console.log('🔧 API key present:', !!apiKey);
                 if (!apiKey) {
+                    console.warn('🔧 No API key found - aborting');
                     showToast('Please set your Claude API key in Settings first', 'warning');
                     return;
                 }
 
                 // Make sure CodeAnalyzer has analyzed (check in-memory state, not just storage)
+                console.log('🔧 Checking CodeAnalyzer...');
                 if (typeof CodeAnalyzer !== 'undefined') {
+                    console.log('🔧 CodeAnalyzer.analysis exists:', !!CodeAnalyzer.analysis);
                     if (!CodeAnalyzer.analysis) {
                         // Try to load from storage first
                         const cached = CodeAnalyzer.loadFromStorage();
+                        console.log('🔧 Loaded from storage:', !!cached?.analysis);
                         if (cached && cached.analysis) {
                             CodeAnalyzer.analysis = cached.analysis;
                             CodeAnalyzer.initialized = true;
                             console.log('📊 Loaded CodeAnalyzer from storage');
                         } else {
                             showToast('Running code analysis first...', 'info');
+                            console.log('🔧 Running CodeAnalyzer.analyze()...');
                             await CodeAnalyzer.analyze();
+                            console.log('🔧 CodeAnalyzer.analyze() complete');
                         }
                     }
+                } else {
+                    console.warn('🔧 CodeAnalyzer is undefined!');
                 }
 
                 // Run improvement cycle
