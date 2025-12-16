@@ -7542,7 +7542,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND V.4.0.5</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND V.4.0.6</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -9785,8 +9785,8 @@ Things to avoid..."></textarea>
                         window._realCreateBasicMapStructure();
                     } else if (attempts > 50) {
                         clearInterval(interval);
-                        console.error('❌ Module failed to load');
-                        alert('App is still loading. Please wait a moment and try again.');
+                        console.error('❌ Module failed. Started:', window._moduleStarted);
+                        alert('App failed to initialize. Check console for errors.');
                     }
                 }, 100);
             }
@@ -9807,8 +9807,8 @@ Things to avoid..."></textarea>
                         window._realShowQuestionnaire();
                     } else if (attempts > 50) {
                         clearInterval(interval);
-                        console.error('❌ Module failed to load');
-                        alert('App is still loading. Please wait a moment and try again.');
+                        console.error('❌ Module failed. Started:', window._moduleStarted);
+                        alert('App failed to initialize. Check console for errors.');
                     }
                 }, 100);
             }
@@ -9818,6 +9818,9 @@ Things to avoid..."></textarea>
     <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    console.log('📦 Main module starting, THREE.js imported');
+    window._moduleStarted = true;
 
     // CONFIG is now loaded from js/config.js
 
