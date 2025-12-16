@@ -47221,6 +47221,74 @@ Summary:`
     // Run share handler after a short delay to ensure app is ready
     setTimeout(handleShareTarget, 100);
 
+    // ═══════════════════════════════════════════════════════════════════
+    // FAILSAFE: Ensure onboarding button handlers are attached
+    // ═══════════════════════════════════════════════════════════════════
+    setTimeout(() => {
+        console.log('🔧 Failsafe: Attaching onboarding handlers...');
+
+        const scratchBtn = document.querySelector('#onboarding-overlay .onboarding-choice.scratch');
+        const aiBtn = document.querySelector('#onboarding-overlay .onboarding-choice.ai');
+        const loadBtn = document.querySelector('#onboarding-overlay .onboarding-choice.load');
+
+        if (scratchBtn && !scratchBtn._handlerAttached) {
+            scratchBtn._handlerAttached = true;
+            scratchBtn.onclick = () => {
+                console.log('Start from Scratch clicked (failsafe)');
+                const mapName = document.getElementById('onboarding-name')?.value?.trim() || 'My Mind';
+                if (typeof createBasicMapStructure === 'function') {
+                    createBasicMapStructure();
+                } else {
+                    console.error('createBasicMapStructure not found');
+                }
+            };
+            console.log('✓ Scratch button handler attached');
+        }
+
+        if (aiBtn && !aiBtn._handlerAttached) {
+            aiBtn._handlerAttached = true;
+            aiBtn.onclick = async () => {
+                console.log('AI Assist clicked (failsafe)');
+                const mapName = document.getElementById('onboarding-name')?.value?.trim() || 'My Mind';
+
+                let isAuthenticated = false;
+                if (typeof supabase !== 'undefined' && supabase !== null) {
+                    try {
+                        const { data } = await supabase.auth.getSession();
+                        isAuthenticated = !!data?.session;
+                    } catch (e) {}
+                }
+
+                if (!isAuthenticated) {
+                    if (typeof showToast === 'function') showToast('Sign in for AI features', 'info');
+                    document.getElementById('auth-modal')?.classList.add('active');
+                } else {
+                    if (typeof showQuestionnaire === 'function') showQuestionnaire();
+                }
+            };
+            console.log('✓ AI button handler attached');
+        }
+
+        if (loadBtn && !loadBtn._handlerAttached) {
+            loadBtn._handlerAttached = true;
+            loadBtn.onclick = async () => {
+                console.log('Load Saved Map clicked (failsafe)');
+
+                let isAuthenticated = false;
+                if (typeof SupabaseAuth !== 'undefined') {
+                    isAuthenticated = SupabaseAuth.isLoggedIn();
+                }
+
+                if (!isAuthenticated) {
+                    if (typeof showAuthModal === 'function') showAuthModal(true);
+                } else {
+                    if (typeof showSavedMapsModal === 'function') await showSavedMapsModal();
+                }
+            };
+            console.log('✓ Load button handler attached');
+        }
+    }, 500);
+
     </script>
 </body>
 </html>
