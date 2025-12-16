@@ -35521,8 +35521,8 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 console.error('Failed to parse AI response:', e, responseText);
             }
             
-            // Fallback - try to extract just the message if JSON parsing failed
-            return { message: responseText.substring(0, 500), actions: [], suggestions: [] };
+            // Fallback - return full response if JSON parsing failed
+            return { message: responseText, actions: [], suggestions: [] };
         },
         
         async executeActions(actions) {
