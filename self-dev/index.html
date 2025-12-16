@@ -1,0 +1,2149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MYND Self Developer — Build Your Mind</title>
+    <meta name="theme-color" content="#0a0a0f">
+
+    <!-- PWA Manifest & Icons -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Main Stylesheet -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<!-- Ambient Background -->
+    <div id="ambient-bg">
+        <div class="nebula nebula-1"></div>
+        <div class="nebula nebula-2"></div>
+        <div class="nebula nebula-3"></div>
+    </div>
+    <div id="particle-bg"></div>
+
+    <!-- 3D Canvas -->
+    <div id="canvas-container" role="application" aria-label="3D mind map visualization - use mouse to rotate, scroll to zoom"></div>
+
+    <!-- Focus Mode Overlay -->
+    <div id="focus-overlay"></div>
+
+    <!-- Loading -->
+    <div id="loading">
+        <div class="loader">
+            <div class="loader-spinner"></div>
+            <div class="loader-text">Loading your mind...</div>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div id="header">
+        <div class="brand">
+            <div class="brand-logo">M</div>
+            <div class="brand-text">
+                <h1>MYND</h1>
+                <p>Mind Architect</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Version indicator for testing -->
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND v3.31</div>
+
+    <!-- Mobile Header (replaces header and top-controls on mobile) -->
+    <div id="mobile-header">
+        <!-- Top: Small centered MYND branding -->
+        <div class="mobile-header-brand" id="mobile-brand-btn">
+            <div class="mobile-brand-logo">M</div>
+            <span class="mobile-brand-text">MYND</span>
+        </div>
+
+        <!-- Search bar pill with integrated controls -->
+        <div class="mobile-search-bar">
+            <!-- Left: Menu button (circle) -->
+            <button class="mobile-search-menu" id="mobile-menu-btn" aria-label="Menu">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="4" y1="6" x2="20" y2="6"/>
+                    <line x1="4" y1="12" x2="20" y2="12"/>
+                    <line x1="4" y1="18" x2="20" y2="18"/>
+                </svg>
+            </button>
+
+            <!-- Center: Search input -->
+            <input type="text" class="mobile-search-input" id="mobile-search-input" placeholder="Search Nodes..." autocomplete="off" />
+
+            <!-- Right: User avatar (circle) -->
+            <button class="mobile-search-user" id="mobile-user-btn" aria-label="Account">
+                <div class="mobile-user-avatar" id="mobile-user-avatar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                </div>
+                <div class="mobile-sync-indicator" id="mobile-sync-indicator"></div>
+            </button>
+        </div>
+    </div>
+
+    <!-- Floating Action Buttons (right side, below search bar) -->
+    <div id="mobile-floating-actions">
+        <button class="mobile-fab" id="mobile-undo-btn" aria-label="Undo" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
+            </svg>
+        </button>
+        <button class="mobile-fab goal-fab" id="mobile-goal-btn" aria-label="Create Goal">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <circle cx="12" cy="12" r="6"/>
+                <circle cx="12" cy="12" r="2"/>
+            </svg>
+        </button>
+        <button class="mobile-fab" id="mobile-theme-btn" aria-label="Theme">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="4"/>
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Mobile Zoom Slider (minimal scrollbar style) -->
+    <div id="mobile-zoom-slider">
+        <div class="zoom-thumb" id="mobile-zoom-thumb"></div>
+    </div>
+
+    <!-- Top Controls -->
+    <div id="top-controls">
+        <div id="user-account-wrapper">
+            <button class="icon-btn" id="user-account-btn" title="Account" aria-label="Account">
+                <div class="user-avatar" id="user-avatar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                </div>
+                <div id="sync-indicator" title="Offline mode"></div>
+            </button>
+        </div>
+        <button class="icon-btn" id="theme-btn" title="Theme" aria-label="Change color theme">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        </button>
+        <button class="icon-btn" id="menu-btn" title="Menu" aria-label="Open menu">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <button class="icon-btn goal-btn" id="goal-btn" title="Create Goal" aria-label="Create a new goal">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+        </button>
+        <button class="icon-btn" id="undo-btn" title="Undo" aria-label="Undo last action" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+        </button>
+    </div>
+
+    <!-- User Dropdown (outside top-controls for mobile visibility) -->
+    <div id="user-dropdown">
+        <!-- Logged in state -->
+        <div id="user-dropdown-loggedin" style="display: none;">
+            <div class="user-dropdown-header">
+                <div class="user-dropdown-email" id="user-dropdown-email">user@email.com</div>
+                <button class="user-dropdown-signout" id="user-dropdown-signout">Sign out</button>
+            </div>
+
+            <div class="user-dropdown-section self-dev-hide">
+                <div class="user-dropdown-section-title">Your Maps</div>
+                <div class="user-maps-list" id="user-maps-list">
+                    <!-- Maps loaded dynamically -->
+                </div>
+            </div>
+
+            <div class="user-dropdown-actions">
+                <button class="user-dropdown-action self-dev-hide" id="user-action-new">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    New Map
+                </button>
+                <button class="user-dropdown-action" id="user-action-import">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Import Map
+                </button>
+                <button class="user-dropdown-action" id="user-action-export">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    Export Map
+                </button>
+            </div>
+
+            <div class="user-dropdown-sync self-dev-hide" id="user-dropdown-sync">
+                <span class="user-dropdown-sync-dot synced"></span>
+                <span id="user-sync-status">Synced</span>
+            </div>
+        </div>
+
+        <!-- Logged out state -->
+        <div id="user-dropdown-loggedout">
+            <div class="user-dropdown-offline">
+                <div class="user-dropdown-offline-text">
+                    Sign in to save your maps to the cloud and access them anywhere
+                </div>
+                <button class="user-dropdown-signin" id="user-dropdown-signin">Sign In</button>
+            </div>
+
+            <div class="user-dropdown-actions">
+                <button class="user-dropdown-action" id="user-action-import-offline">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Import Map
+                </button>
+                <button class="user-dropdown-action" id="user-action-export-offline">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    Export Map
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Theme Picker -->
+    <div id="theme-picker">
+        <div class="theme-option" data-theme="sandstone">
+            <div class="theme-preview"><span style="background:#C4978A"></span><span style="background:#F9F7F0"></span></div>
+            <span class="theme-name">Sandstone</span>
+        </div>
+        <div class="theme-option active" data-theme="coral">
+            <div class="theme-preview"><span style="background:#E87D7D"></span><span style="background:#FFFFFF"></span></div>
+            <span class="theme-name">Coral</span>
+        </div>
+        <div class="theme-option" data-theme="ember">
+            <div class="theme-preview"><span style="background:#E87830"></span><span style="background:#FAF6F0"></span></div>
+            <span class="theme-name">Ember</span>
+        </div>
+        <div class="theme-option" data-theme="frost">
+            <div class="theme-preview"><span style="background:#5B8DEF"></span><span style="background:#E8ECF0"></span></div>
+            <span class="theme-name">Frost</span>
+        </div>
+        <div class="theme-option" data-theme="obsidian">
+            <div class="theme-preview"><span style="background:#8B5CF6"></span><span style="background:#0A0A0C"></span></div>
+            <span class="theme-name">Obsidian</span>
+        </div>
+    </div>
+
+    <!-- Menu Dropdown -->
+    <div id="menu-dropdown">
+        <div class="menu-item" id="menu-search">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Search
+        </div>
+        <div class="menu-item" id="menu-shortcuts">
+            <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h8M6 16h.01M10 16h.01M14 16h.01M18 16h.01"/></svg>
+            Shortcuts
+        </div>
+        <div class="menu-item" id="menu-settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Settings
+        </div>
+        <div class="menu-divider self-dev-hide"></div>
+        <div class="menu-item self-dev-hide" id="menu-new">
+            <svg viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            New Map
+        </div>
+        <div class="menu-item self-dev-hide" id="menu-save">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Save Map
+        </div>
+        <div class="menu-item self-dev-hide" id="menu-load">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Load Map
+        </div>
+        <div class="menu-item" id="menu-import-notes">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <path d="M8 13h2"/>
+                <path d="M8 17h2"/>
+                <path d="M14 13h2"/>
+                <path d="M14 17h2"/>
+            </svg>
+            Import Notes
+        </div>
+        <div class="menu-divider"></div>
+        <div class="menu-item" id="menu-help">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Help
+        </div>
+    </div>
+
+    <!-- Depth Indicator -->
+    <div id="depth-indicator">
+        <div class="depth-back" id="depth-back">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </div>
+        <div class="depth-path" id="depth-path"></div>
+    </div>
+
+    <!-- Side Panel -->
+    <button id="toolbar-toggle" onclick="document.getElementById('side-panel').classList.toggle('collapsed'); this.classList.toggle('active')">☰</button>
+    <div id="side-panel" role="toolbar" aria-label="Mind map controls">
+        <div class="side-btn" id="btn-home" title="Reset View" role="button" aria-label="Reset camera to home view">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            <span class="side-btn-label">Home</span>
+        </div>
+        <div class="side-btn" id="btn-expand" title="Expand All" role="button" aria-label="Expand all nodes">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+            <span class="side-btn-label">Expand</span>
+        </div>
+        <div class="side-btn" id="btn-collapse" title="Collapse All" role="button" aria-label="Collapse all nodes">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/></svg>
+            <span class="side-btn-label">Collapse</span>
+        </div>
+        <div class="side-btn active" id="btn-autocam" title="Toggle Auto Camera" role="button" aria-label="Toggle automatic camera movement" aria-pressed="true">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            <span class="side-btn-label">Auto Cam</span>
+        </div>
+        <div class="side-divider" role="separator"></div>
+        <div class="side-btn" id="btn-add" title="Add Node" role="button" aria-label="Add new node">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span class="side-btn-label">Add</span>
+        </div>
+        <div class="side-btn" id="btn-link" title="Add Link" role="button" aria-label="Add link from URL">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            <span class="side-btn-label">Link</span>
+        </div>
+        <div class="side-btn" id="btn-move" title="Move Mode" role="button" aria-label="Toggle move mode for dragging nodes">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+            <span class="side-btn-label">Move</span>
+        </div>
+        <div class="side-btn ai-feature" id="btn-voice" title="Voice Memo - Quick AI command" role="button" aria-label="Voice memo">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="3"/>
+                <circle cx="12" cy="12" r="7" opacity="0.5"/>
+                <circle cx="12" cy="12" r="10" opacity="0.25"/>
+            </svg>
+            <span class="side-btn-label">Memo</span>
+        </div>
+        <div class="side-btn ai-feature" id="btn-chat" title="AI Chat - Ongoing conversation" role="button" aria-label="Open AI chat panel">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M15 5h4a2 2 0 012 2v6a2 2 0 01-2 2h-1l-3 3v-3h-2a2 2 0 01-2-2V7a2 2 0 012-2z"/>
+                <path d="M9 13H5a2 2 0 01-2-2V5a2 2 0 012-2h8a2 2 0 012 2v1" opacity="0.5"/>
+            </svg>
+            <span class="side-btn-label">Chat</span>
+        </div>
+        <div class="side-btn ai-feature" id="btn-neural" title="Personal Neural Network" role="button" aria-label="Open neural network panel">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="12" rx="10" ry="4"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(120 12 12)"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
+            <span class="side-btn-label">Neural</span>
+        </div>
+        <!-- Close button for mobile -->
+        <div class="side-btn toolbar-close" id="btn-toolbar-close" onclick="document.getElementById('side-panel').classList.add('collapsed'); document.getElementById('toolbar-toggle').classList.remove('active')" title="Close" role="button" aria-label="Close toolbar">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            <span class="side-btn-label">Close</span>
+        </div>
+    </div>
+
+    <!-- Voice Memo Indicator -->
+    <div id="voice-backdrop"></div>
+
+    <!-- Canvas Drop Overlay for drag/drop files -->
+    <div class="canvas-drop-overlay" id="canvas-drop-overlay">
+        <div class="canvas-drop-content">
+            <svg viewBox="0 0 24 24" stroke-width="1.5">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+            </svg>
+            <h3>Drop to attach</h3>
+            <p id="canvas-drop-target">Will be added to selected node</p>
+        </div>
+    </div>
+
+    <!-- Lightbox for viewing attachments -->
+    <div class="lightbox-overlay" id="lightbox-overlay">
+        <button class="lightbox-close" id="lightbox-close">&times;</button>
+        <img class="lightbox-content" id="lightbox-image" src="" alt="">
+        <div class="lightbox-info">
+            <div class="filename" id="lightbox-filename"></div>
+            <div class="description" id="lightbox-description"></div>
+        </div>
+    </div>
+
+    <div id="voice-indicator">
+        <div class="voice-mode-toggle">
+            <button class="voice-mode-btn active" id="voice-mode-speak" title="Speak">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            </button>
+            <button class="voice-mode-btn" id="voice-mode-type" title="Type">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="10" y2="8"/><line x1="14" y1="8" x2="14" y2="8"/><line x1="18" y1="8" x2="18" y2="8"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="6" y1="16" x2="18" y2="16"/></svg>
+            </button>
+        </div>
+        <div class="voice-icon" id="voice-icon">
+            <svg id="voice-icon-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            <svg id="voice-icon-brain" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4c0 .74.2 1.43.56 2.02A4 4 0 0 0 6 12c0 1.2.52 2.27 1.35 3A4 4 0 0 0 6 18a4 4 0 0 0 4 4h.09c.49 0 .97-.07 1.41-.2"/><path d="M12 2a4 4 0 0 1 4 4c0 .74-.2 1.43-.56 2.02A4 4 0 0 1 18 12c0 1.2-.52 2.27-1.35 3A4 4 0 0 1 18 18a4 4 0 0 1-4 4h-.09c-.49 0-.97-.07-1.41-.2"/><path d="M12 2v20"/><path d="M9 10h6"/><path d="M9 14h6"/></svg>
+        </div>
+        <div class="voice-status" id="voice-status">Listening...</div>
+        <div class="voice-transcript" id="voice-transcript">Say something...</div>
+        <div class="voice-text-input-wrapper" id="voice-text-wrapper" style="display: none;">
+            <textarea id="voice-text-input" placeholder="Describe what you want to add or do..." rows="3"></textarea>
+            <button class="voice-text-submit" id="voice-text-submit">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                Send
+            </button>
+        </div>
+        <div class="voice-hint" id="voice-hint">Tap anywhere or press Escape to cancel</div>
+        <button class="voice-cancel" id="voice-cancel">Cancel</button>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="api-key-modal">
+        <div class="api-key-content">
+            <div class="api-key-title">Settings</div>
+
+            <!-- File Storage Section (Self Developer Mode Only) -->
+            <div id="file-storage-section" style="margin-bottom: 20px; display: none;">
+                <div style="font-size: 12px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">
+                    <span style="margin-right: 6px;">📁</span>Local File Storage
+                </div>
+                <div class="api-key-desc">Save everything (map, neural data, vision) to a file on your computer. Auto-saves after changes.</div>
+
+                <div id="file-storage-status" style="
+                    margin-top: 10px;
+                    padding: 12px;
+                    border-radius: 8px;
+                    background: var(--bg-secondary);
+                    border: 1px solid var(--glass-border);
+                ">
+                    <div id="file-storage-info" style="font-size: 12px; color: var(--text-secondary);">
+                        No save location set - data saved to browser only
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-top: 10px;">
+                    <button class="api-key-btn primary" id="file-pick-location-btn" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        Set Save Location
+                    </button>
+                    <button class="api-key-btn secondary" id="file-open-btn" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        Open File
+                    </button>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <button class="api-key-btn secondary" id="file-save-now-btn" style="flex: 1;" disabled>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                            <polyline points="17 21 17 13 7 13 7 21"/>
+                            <polyline points="7 3 7 8 15 8"/>
+                        </svg>
+                        Save Now
+                    </button>
+                    <label style="flex: 1; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary);">
+                        <input type="checkbox" id="file-auto-save-toggle" checked style="margin: 0;">
+                        Auto-save enabled
+                    </label>
+                </div>
+                <div id="file-not-supported" style="display: none; margin-top: 10px; padding: 10px; background: rgba(220, 38, 38, 0.1); border-radius: 8px; font-size: 12px; color: #dc2626;">
+                    ⚠️ File System API not supported in this browser. Use Chrome or Edge for local file storage.
+                </div>
+            </div>
+
+            <!-- Self-Improver Section (Self Developer Mode Only) -->
+            <div id="self-improver-section" style="margin-bottom: 20px; display: none;">
+                <div style="font-size: 12px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">
+                    <span style="margin-right: 6px;">🔧</span>Self-Improvement Engine
+                </div>
+                <div class="api-key-desc">MYND can analyze its own code and generate improvement patches. Review and apply changes with your approval.</div>
+
+                <div id="self-improver-status" style="
+                    margin-top: 10px;
+                    padding: 12px;
+                    border-radius: 8px;
+                    background: var(--bg-secondary);
+                    border: 1px solid var(--glass-border);
+                ">
+                    <div id="self-improver-info" style="font-size: 12px; color: var(--text-secondary);">
+                        Ready to analyze and improve
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-top: 10px;">
+                    <button class="api-key-btn primary" id="self-improve-analyze-btn" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+                        </svg>
+                        Analyze & Generate Patches
+                    </button>
+                    <button class="api-key-btn secondary" id="self-improve-pick-file-btn" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        Select Source File
+                    </button>
+                </div>
+
+                <!-- Pending Patches List -->
+                <div id="self-improver-patches" style="margin-top: 12px; display: none;">
+                    <div style="font-size: 11px; font-weight: 500; color: var(--text-muted); margin-bottom: 8px;">PENDING PATCHES</div>
+                    <div id="self-improver-patches-list" style="max-height: 200px; overflow-y: auto;"></div>
+                </div>
+
+                <!-- Diff Viewer -->
+                <div id="self-improver-diff" style="margin-top: 12px; display: none;">
+                    <div style="font-size: 11px; font-weight: 500; color: var(--text-muted); margin-bottom: 8px;">
+                        DIFF PREVIEW: <span id="diff-patch-title"></span>
+                    </div>
+                    <div id="diff-viewer" style="
+                        max-height: 300px;
+                        overflow: auto;
+                        background: var(--bg-deep);
+                        border: 1px solid var(--glass-border);
+                        border-radius: 8px;
+                        font-family: var(--font-mono);
+                        font-size: 11px;
+                        line-height: 1.4;
+                    "></div>
+                    <div style="display: flex; gap: 8px; margin-top: 10px;">
+                        <button class="api-key-btn primary" id="diff-apply-btn" style="flex: 1; background: #16a34a; border-color: #16a34a;">
+                            ✓ Apply Patch
+                        </button>
+                        <button class="api-key-btn secondary" id="diff-export-btn" style="flex: 1;">
+                            ↓ Export .patch
+                        </button>
+                        <button class="api-key-btn secondary" id="diff-reject-btn" style="flex: 1; background: rgba(220, 38, 38, 0.1); border-color: rgba(220, 38, 38, 0.3); color: #dc2626;">
+                            ✗ Reject
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Vision Document Section (Self Developer Mode Only) -->
+            <div id="vision-settings-section" style="margin-bottom: 20px; display: none;">
+                <div style="font-size: 12px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">Vision Document</div>
+                <div class="api-key-desc">Pre-train MYND on your goals, values, and vision. This document guides all AI suggestions.</div>
+                <!-- Hidden textarea for backwards compatibility -->
+                <textarea id="vision-document-editor" style="display: none;"></textarea>
+                <!-- Preview box that opens the modal -->
+                <div id="vision-preview-box" style="
+                    width: 100%;
+                    height: 80px;
+                    padding: 12px;
+                    margin-top: 10px;
+                    border: 1px solid var(--glass-border);
+                    border-radius: 8px;
+                    background: var(--bg-secondary);
+                    color: var(--text-secondary);
+                    font-family: var(--font-mono);
+                    font-size: 11px;
+                    line-height: 1.4;
+                    overflow: hidden;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    position: relative;
+                ">
+                    <div id="vision-preview-text" style="white-space: pre-wrap; overflow: hidden; height: 100%;"></div>
+                    <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 30px; background: linear-gradient(transparent, var(--bg-secondary)); pointer-events: none;"></div>
+                </div>
+                <button class="api-key-btn primary" id="vision-expand-btn" style="width: 100%; margin-top: 10px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                        <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+                    </svg>
+                    Edit Vision Document
+                </button>
+                <div id="vision-status" style="font-size: 11px; color: var(--text-muted); margin-top: 8px;"></div>
+            </div>
+
+            <!-- Neural Network Section -->
+            <div style="margin-bottom: 20px;">
+                <div style="font-size: 12px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">Neural Network</div>
+                <div class="api-key-desc" id="neural-stats-settings">The neural network learns from your mind map to provide intelligent suggestions and organization.</div>
+                <div style="display: flex; gap: 8px; margin-top: 10px;">
+                    <button class="api-key-btn primary" id="neural-train-settings-btn" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M12 2v4m0 12v4m-8-10H2m20 0h-2m-3.5-6.5L17 7m-10 0l-1.5-1.5M17 17l1.5 1.5M7 17l-1.5 1.5"/>
+                        </svg>
+                        Train on My Map
+                    </button>
+                    <button class="api-key-btn secondary" id="neural-reset-settings-btn" style="flex: 1; background: rgba(220, 38, 38, 0.1); border-color: rgba(220, 38, 38, 0.3); color: #dc2626;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+                        </svg>
+                        Reset
+                    </button>
+                </div>
+            </div>
+
+            <div class="api-key-buttons">
+                <button class="api-key-btn secondary" id="api-key-cancel">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Notes Modal -->
+    <div id="import-notes-modal">
+        <div class="import-notes-content">
+            <div class="import-notes-header">
+                <h2>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <path d="M12 18v-6"/>
+                        <path d="M9 15l3-3 3 3"/>
+                    </svg>
+                    Import Notes
+                </h2>
+                <button class="import-notes-close" id="import-notes-close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+                        <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <p class="import-notes-desc">
+                Upload a photo of your handwritten notes, a screenshot, or paste text. AI will analyze and organize your notes into a structured mind map.
+            </p>
+
+            <!-- Main input area (hidden when processing) -->
+            <div id="import-notes-input">
+                <!-- Drag & Drop Zone -->
+                <div class="import-notes-dropzone" id="import-notes-dropzone">
+                    <input type="file" id="import-notes-file" accept="image/*,.pdf,.txt,.md" style="display:none">
+                    <svg class="import-notes-dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <div class="import-notes-dropzone-text">Drop image or file here, or click to browse</div>
+                    <div class="import-notes-dropzone-hint">Supports: Images, PDF, Text files</div>
+                </div>
+
+                <!-- Preview -->
+                <div class="import-notes-preview" id="import-notes-preview">
+                    <div class="import-notes-preview-label">Preview</div>
+                    <img class="import-notes-preview-image" id="import-notes-preview-image" src="" alt="Preview">
+                    <div class="import-notes-preview-file" id="import-notes-preview-file" style="display:none">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        <div class="import-notes-preview-file-info">
+                            <div class="import-notes-preview-file-name" id="import-notes-file-name"></div>
+                            <div class="import-notes-preview-file-size" id="import-notes-file-size"></div>
+                        </div>
+                        <button class="import-notes-preview-remove" id="import-notes-remove">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;">
+                                <path d="M18 6L6 18M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="import-notes-or">or</div>
+
+                <!-- Text Input -->
+                <textarea class="import-notes-textarea" id="import-notes-text" placeholder="Paste your notes here...&#10;&#10;Example:&#10;- Project ideas&#10;  - Mobile app&#10;  - Website redesign&#10;- Tasks&#10;  - Call client&#10;  - Review proposal"></textarea>
+
+                <!-- Options -->
+                <div class="import-notes-options">
+                    <label class="import-notes-option">
+                        <input type="checkbox" id="import-notes-smart-placement" checked>
+                        <span>Smart placement (match to existing nodes using AI + neural net)</span>
+                    </label>
+                    <label class="import-notes-option" style="margin-top: 8px;">
+                        <input type="checkbox" id="import-notes-add-selected">
+                        <span>Add new categories under selected node</span>
+                    </label>
+                </div>
+
+                <!-- Actions -->
+                <div class="import-notes-actions">
+                    <button class="import-notes-btn secondary" id="import-notes-cancel">Cancel</button>
+                    <button class="import-notes-btn primary" id="import-notes-analyze" disabled>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+                            <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/>
+                        </svg>
+                        Analyze with AI
+                    </button>
+                </div>
+            </div>
+
+            <!-- Processing -->
+            <div class="import-notes-processing" id="import-notes-processing">
+                <div class="import-notes-spinner"></div>
+                <div class="import-notes-processing-text" id="import-notes-processing-text">Analyzing your notes...</div>
+            </div>
+
+            <!-- Result Preview -->
+            <div class="import-notes-result" id="import-notes-result">
+                <div class="import-notes-result-header">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                    Structure Found
+                </div>
+                <div class="import-notes-result-tree" id="import-notes-result-tree"></div>
+            </div>
+
+            <!-- Result Actions (hidden until result ready) -->
+            <div class="import-notes-actions" id="import-notes-result-actions" style="display:none">
+                <button class="import-notes-btn secondary" id="import-notes-retry">Try Again</button>
+                <button class="import-notes-btn primary" id="import-notes-create">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    Add to Map
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vision Document Modal -->
+    <div id="vision-doc-modal" class="vision-doc-modal-overlay">
+        <div class="vision-doc-modal-content">
+            <div class="vision-doc-modal-header">
+                <h2>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 16v-4"/>
+                        <path d="M12 8h.01"/>
+                    </svg>
+                    Vision Document
+                </h2>
+                <button class="vision-doc-modal-close" id="vision-doc-close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+                        <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <p class="vision-doc-modal-desc">
+                Pre-train MYND on your goals, values, and vision. This document guides all AI suggestions and helps MYND understand your purpose.
+            </p>
+            <textarea id="vision-doc-modal-editor" class="vision-doc-modal-textarea" placeholder="# MYND Vision Document
+
+## Mission
+What is the core purpose of MYND?
+
+## Values
+- Value 1
+- Value 2
+
+## Goals
+- Short-term goals
+- Long-term goals
+
+## Philosophy
+The guiding principles...
+
+## Anti-patterns
+Things to avoid..."></textarea>
+            <div class="vision-doc-modal-actions">
+                <button class="vision-doc-modal-btn secondary" id="vision-doc-reset">Reset to Default</button>
+                <button class="vision-doc-modal-btn secondary" id="vision-doc-cancel">Cancel</button>
+                <button class="vision-doc-modal-btn primary" id="vision-doc-save">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                        <polyline points="17 21 17 13 7 13 7 21"/>
+                        <polyline points="7 3 7 8 15 8"/>
+                    </svg>
+                    Save Vision
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auth Modal -->
+    <div id="auth-modal">
+        <div class="auth-content" style="position: relative;">
+            <button class="auth-close" id="auth-close">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
+                    <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+            </button>
+
+            <div class="auth-header">
+                <div class="auth-logo">M</div>
+                <div class="auth-title" id="auth-title">Welcome to MYND</div>
+                <div class="auth-subtitle" id="auth-subtitle">Sign in to save and sync your mind maps across devices</div>
+            </div>
+
+            <div class="auth-error" id="auth-error"></div>
+
+            <!-- Google Sign In -->
+            <button class="auth-btn google" id="auth-google">
+                <svg viewBox="0 0 24 24" style="width:18px;height:18px;">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Continue with Google
+            </button>
+
+            <div class="auth-divider">or</div>
+
+            <!-- Email Form -->
+            <form id="auth-form">
+                <input type="email" class="auth-input" id="auth-email" placeholder="Email address" required>
+                <input type="password" class="auth-input" id="auth-password" placeholder="Password" required>
+                <button type="submit" class="auth-btn primary" id="auth-submit">Sign In</button>
+            </form>
+
+            <button class="auth-btn secondary" id="auth-forgot">Forgot password?</button>
+
+            <div class="auth-toggle">
+                <span id="auth-toggle-text">Don't have an account?</span>
+                <a id="auth-toggle-link">Sign up</a>
+            </div>
+
+            <!-- Skip option for offline use -->
+            <div style="margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--glass-border);">
+                <button class="auth-btn secondary" id="auth-skip" style="width: 100%; background: transparent; border: 1px dashed var(--glass-border);">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:8px;">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                    Skip for now — build without saving
+                </button>
+                <p style="font-size: 11px; color: var(--text-muted); text-align: center; margin-top: var(--space-2);">
+                    Your map won't be saved if you close the browser
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Capture -->
+    <div id="quick-capture">
+        <div class="quick-capture-wrapper">
+            <input type="text" id="quick-input" placeholder="What's on your mind?" autocomplete="off">
+            <button class="quick-btn secondary" id="quick-link" title="Add Link" aria-label="Add link from URL">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            </button>
+            <button class="quick-btn primary" id="quick-add">
+                Add
+            </button>
+        </div>
+    </div>
+
+    <!-- Link Modal -->
+    <div id="link-modal" class="modal-overlay">
+        <div class="link-modal-content">
+            <div class="link-modal-header">
+                <h3>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;vertical-align:middle;margin-right:8px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    Add Link
+                </h3>
+                <button class="link-modal-close" id="link-modal-close" aria-label="Close">×</button>
+            </div>
+
+            <div class="link-input-group">
+                <label for="link-url">Paste URL</label>
+                <input type="url" id="link-url" placeholder="https://..." autocomplete="off">
+                <button class="link-fetch-btn" id="link-fetch">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M21 12a9 9 0 1 1-9-9"/><polyline points="21 3 21 9 15 9"/></svg>
+                    Fetch
+                </button>
+            </div>
+
+            <div class="link-preview" id="link-preview" style="display:none;">
+                <div class="link-preview-loading" id="link-preview-loading">
+                    <div class="loading-spinner"></div>
+                    Fetching link info...
+                </div>
+                <div class="link-preview-content" id="link-preview-content" style="display:none;">
+                    <img class="link-preview-image" id="link-preview-image" alt="">
+                    <div class="link-preview-info">
+                        <input type="text" class="link-preview-title" id="link-preview-title" placeholder="Title">
+                        <textarea class="link-preview-description" id="link-preview-description" placeholder="Description (optional)" rows="2"></textarea>
+                        <div class="link-preview-source" id="link-preview-source"></div>
+                        <div class="link-transcript-status" id="link-transcript-status" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="link-category" id="link-category" style="display:none;">
+                <label>AI Suggested Placement</label>
+                <div class="link-category-suggestion" id="link-category-suggestion">
+                    <span class="link-category-name" id="link-category-name">Loading...</span>
+                    <span class="link-category-confidence" id="link-category-confidence"></span>
+                </div>
+                <div class="link-category-alt" id="link-category-alt"></div>
+            </div>
+
+            <div class="link-modal-actions">
+                <button class="link-btn secondary" id="link-cancel">Cancel</button>
+                <button class="link-btn primary" id="link-add" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Add to Map
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Panel -->
+    <div id="info-panel">
+        <div class="info-header">
+            <div class="info-color" id="info-color">
+                <div class="info-color-picker" id="info-color-picker"></div>
+            </div>
+            <div class="info-title-area">
+                <input type="text" id="info-title" value="Node Title" />
+                <div id="info-meta">
+                    <span id="info-children">0 children</span>
+                    <span id="info-source"></span>
+                </div>
+            </div>
+            <button class="info-expand-toggle" id="info-expand-toggle" aria-label="Expand panel">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="expand-icon"><polyline points="6 15 12 9 18 15"/></svg>
+            </button>
+            <div class="info-close" id="info-close">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </div>
+        </div>
+
+        <!-- Expanded Section -->
+        <div class="info-expanded" id="info-expanded">
+            <!-- Description -->
+            <div class="info-section">
+                <div class="info-section-header">
+                    <label class="info-section-label">Description</label>
+                    <button class="context-question-btn" id="context-question-btn" title="Help me understand this better">
+                        <span>?</span>
+                    </button>
+                </div>
+                <textarea id="info-description" placeholder="Add a description..." rows="2"></textarea>
+                <!-- Context Question Popover -->
+                <div class="context-question-popover" id="context-question-popover">
+                    <div class="context-question-text" id="context-question-text"></div>
+                    <div class="context-question-input-wrapper">
+                        <input type="text" id="context-question-input" placeholder="Type your answer..." autocomplete="off">
+                        <button class="context-question-submit" id="context-question-submit">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Path to Node -->
+            <div class="info-section" id="info-path-section">
+                <label class="info-section-label">Path</label>
+                <div class="info-path" id="info-path"></div>
+            </div>
+
+            <!-- Add Link (creates child node with link) -->
+            <div class="info-section" id="info-add-link-section" style="display: none;">
+                <label class="info-section-label">Add Child Link</label>
+                <div class="info-add-link">
+                    <input type="url" class="info-add-link-input" id="info-add-link-input" placeholder="Paste URL...">
+                    <button class="info-add-link-btn" id="info-add-link-btn" title="Add link as child node">
+                        <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Link Info (if this node has a link) -->
+            <div class="info-section" id="info-link-section" style="display: none;">
+                <label class="info-section-label">Linked Content</label>
+                <div class="info-link-card" id="info-link-card">
+                    <img class="info-link-thumbnail" id="info-link-thumbnail" alt="" style="display: none;">
+                    <div class="info-link-details">
+                        <a href="#" id="info-link-full-url" target="_blank" rel="noopener noreferrer">
+                            <img class="info-link-favicon-small" id="info-link-favicon-small" src="" alt="">
+                            <span id="info-link-full-domain"></span>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;opacity:0.5;flex-shrink:0;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        </a>
+                        <div class="info-link-meta" id="info-link-meta"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transcript Section (if this node has a transcript) -->
+            <div class="info-section" id="info-transcript-section" style="display: none;">
+                <label class="info-section-label">
+                    <span style="display: flex; align-items: center; gap: 6px;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;opacity:0.7;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                        Transcript
+                    </span>
+                    <span class="info-transcript-chars" id="info-transcript-chars"></span>
+                </label>
+                <div class="info-transcript-wrapper">
+                    <div class="info-transcript-preview" id="info-transcript-preview"></div>
+                    <button class="info-transcript-toggle" id="info-transcript-toggle">Show full transcript</button>
+                </div>
+                <div class="info-transcript-full" id="info-transcript-full" style="display: none;">
+                    <div class="info-transcript-text" id="info-transcript-text"></div>
+                </div>
+            </div>
+
+            <!-- Node Metadata -->
+            <div class="info-section info-metadata">
+                <div class="info-meta-item" id="info-created-section" style="display: none;">
+                    <span class="info-meta-label">Created</span>
+                    <span class="info-meta-value" id="info-created"></span>
+                </div>
+                <div class="info-meta-item" id="info-added-by-section">
+                    <span class="info-meta-label">Added by</span>
+                    <span class="info-meta-value" id="info-added-by">You</span>
+                </div>
+            </div>
+
+            <!-- Attachments Section -->
+            <div class="info-attachments" id="info-attachments">
+                <div class="attachments-header">
+                    <span class="attachments-title">Attachments</span>
+                    <button class="attachment-add-btn" id="attachment-add-btn">
+                        <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        Add
+                    </button>
+                </div>
+                <div class="attachments-grid" id="attachments-grid"></div>
+                <div class="attachments-dropzone" id="attachments-dropzone">
+                    <svg viewBox="0 0 24 24" stroke-width="1.5">
+                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                    </svg>
+                    <div>Drop files here or paste</div>
+                    <div style="font-size: 9px; opacity: 0.7;">Images & PDFs supported</div>
+                </div>
+                <input type="file" id="attachment-file-input" accept="image/*,.pdf" multiple style="display: none;">
+            </div>
+        </div>
+
+        <div class="info-link" id="info-link" style="display: none;">
+            <a href="#" id="info-link-url" target="_blank" rel="noopener noreferrer">
+                <img id="info-link-favicon" src="" alt="">
+                <span id="info-link-domain"></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;opacity:0.5;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            </a>
+        </div>
+        <div class="info-slider">
+            <span class="info-slider-label">Importance</span>
+            <div class="info-slider-wrapper">
+                <input type="range" id="info-importance" min="0.5" max="2" step="0.1" value="1" />
+            </div>
+        </div>
+        <div class="info-actions" role="group" aria-label="Node actions">
+            <button class="info-action danger" id="action-delete" aria-label="Delete this node">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                Delete
+            </button>
+            <button class="info-action secondary" id="action-dive" aria-label="Dive into this node">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="8 12 12 16 16 12"/><line x1="12" y1="8" x2="12" y2="16"/></svg>
+                Dive
+            </button>
+            <button class="info-action secondary" id="action-organize" aria-label="Organize children by type" style="display: none;">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                Organize
+            </button>
+            <button class="info-action ai" id="action-brainstorm" aria-label="AI brainstorm ideas for this node">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+                Brainstorm
+            </button>
+            <button class="info-action primary" id="action-add" aria-label="Add a child node">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Child
+            </button>
+        </div>
+    </div>
+
+    <!-- Keyboard Hints -->
+    <div id="keyboard-hints">
+        <div class="key-hint"><kbd>←→</kbd> Siblings</div>
+        <div class="key-hint"><kbd>⇧←→</kbd> Reorder</div>
+        <div class="key-hint"><kbd>↑↓</kbd> Parent/Child</div>
+        <div class="key-hint"><kbd>Space</kbd> Expand</div>
+        <div class="key-hint"><kbd>?</kbd> Help</div>
+    </div>
+
+    <!-- Spotlight Search -->
+    <div id="spotlight-overlay">
+        <div class="spotlight-container">
+            <div class="spotlight-input-wrapper">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="spotlight-input" placeholder="Search nodes, commands, or type to create..." autocomplete="off">
+                <span class="spotlight-hint">esc</span>
+            </div>
+            <div class="spotlight-results" id="spotlight-results">
+                <div class="spotlight-section">
+                    <div class="spotlight-section-title">Quick Actions</div>
+                    <div class="spotlight-item" data-action="new-node">
+                        <div class="spotlight-item-icon" style="background: var(--accent);">+</div>
+                        <div class="spotlight-item-content">
+                            <div class="spotlight-item-title">Create New Node</div>
+                            <div class="spotlight-item-subtitle">Add a new thought to your map</div>
+                        </div>
+                        <div class="spotlight-item-shortcut"><kbd>Tab</kbd></div>
+                    </div>
+                    <div class="spotlight-item" data-action="brainstorm">
+                        <div class="spotlight-item-icon" style="background: linear-gradient(135deg, var(--purple), var(--pink));">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                                <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                            </svg>
+                        </div>
+                        <div class="spotlight-item-content">
+                            <div class="spotlight-item-title">AI Brainstorm</div>
+                            <div class="spotlight-item-subtitle">Generate ideas for selected node</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="spotlight-section" id="spotlight-nodes-section">
+                    <div class="spotlight-section-title">Nodes</div>
+                    <div id="spotlight-nodes-list"></div>
+                </div>
+            </div>
+            <div class="spotlight-footer">
+                <div class="spotlight-footer-hint"><kbd>↑↓</kbd> Navigate</div>
+                <div class="spotlight-footer-hint"><kbd>↵</kbd> Select</div>
+                <div class="spotlight-footer-hint"><kbd>esc</kbd> Close</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Radial Menu -->
+    <div id="radial-menu">
+        <div class="radial-toggle">
+            <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+        </div>
+        <div class="radial-item" data-action="add" title="Add Child">
+            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </div>
+        <div class="radial-item" data-action="edit" title="Edit">
+            <svg viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+        </div>
+        <div class="radial-item" data-action="dive" title="Dive In">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="8 12 12 16 16 12"/><line x1="12" y1="8" x2="12" y2="16"/></svg>
+        </div>
+        <div class="radial-item" data-action="brainstorm" title="AI Brainstorm">
+            <svg viewBox="0 0 24 24"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+        </div>
+        <div class="radial-item" data-action="delete" title="Delete">
+            <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modal-title">Add Node</h2>
+                <p class="modal-subtitle" id="modal-subtitle">Create a new thought</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Name</label>
+                <input type="text" class="form-input" id="input-name" placeholder="What's this thought about?">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Description (optional)</label>
+                <textarea class="form-input" id="input-desc" placeholder="Add more details..."></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Color</label>
+                <div class="color-grid" id="color-grid"></div>
+            </div>
+            <div class="modal-actions">
+                <button class="modal-btn cancel" id="modal-cancel">Cancel</button>
+                <button class="modal-btn submit" id="modal-submit">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Custom Confirm Modal -->
+    <div id="confirm-modal" class="confirm-modal-overlay">
+        <div class="confirm-modal">
+            <div class="confirm-modal-icon" id="confirm-modal-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                </svg>
+            </div>
+            <div class="confirm-modal-title" id="confirm-modal-title">Confirm Action</div>
+            <div class="confirm-modal-message" id="confirm-modal-message">Are you sure?</div>
+            <div class="confirm-modal-actions">
+                <button class="confirm-btn confirm-btn-cancel" id="confirm-modal-cancel">Cancel</button>
+                <button class="confirm-btn confirm-btn-confirm" id="confirm-modal-confirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Goal Creation Wizard -->
+    <div id="goal-wizard">
+        <div class="goal-wizard-content">
+            <button class="goal-wizard-close" id="goal-wizard-close">×</button>
+
+            <div class="goal-wizard-header">
+                <div class="goal-wizard-icon">✨</div>
+                <h2 class="goal-wizard-title">Create Your Vision</h2>
+                <p class="goal-wizard-subtitle">Let's turn your dream into reality</p>
+            </div>
+
+            <!-- Progress Indicator -->
+            <div class="goal-wizard-progress">
+                <div class="goal-wizard-step active" data-step="1"></div>
+                <div class="goal-wizard-step" data-step="2"></div>
+                <div class="goal-wizard-step" data-step="3"></div>
+                <div class="goal-wizard-step" data-step="4"></div>
+            </div>
+
+            <!-- Step Contents -->
+            <div class="goal-wizard-steps">
+                <!-- Step 1: The Dream -->
+                <div class="goal-wizard-step-content active" data-step="1">
+                    <p class="goal-wizard-question">What do you want to manifest?</p>
+                    <p class="goal-wizard-hint">Dream big. Describe your ideal outcome.</p>
+                    <input type="text" class="goal-wizard-input" id="goal-desire"
+                           placeholder="I want to..." autofocus>
+                </div>
+
+                <!-- Step 2: The Why -->
+                <div class="goal-wizard-step-content" data-step="2">
+                    <p class="goal-wizard-question">Why does this matter to you?</p>
+                    <p class="goal-wizard-hint">Connect to your deeper motivation. This fuels your journey.</p>
+                    <textarea class="goal-wizard-input" id="goal-why"
+                              placeholder="This matters because..."></textarea>
+                </div>
+
+                <!-- Step 3: Success Criteria -->
+                <div class="goal-wizard-step-content" data-step="3">
+                    <p class="goal-wizard-question">How will you know you've achieved it?</p>
+                    <p class="goal-wizard-hint">Be specific. What does success look like?</p>
+                    <textarea class="goal-wizard-input" id="goal-success"
+                              placeholder="I'll know I've succeeded when..."></textarea>
+
+                    <p class="goal-wizard-question" style="margin-top: var(--space-5);">Priority</p>
+                    <div class="goal-priority-selector">
+                        <div class="goal-priority-option" data-priority="high">
+                            <div class="goal-priority-label">🔥 High</div>
+                            <div class="goal-priority-desc">Top focus</div>
+                        </div>
+                        <div class="goal-priority-option selected" data-priority="medium">
+                            <div class="goal-priority-label">⭐ Medium</div>
+                            <div class="goal-priority-desc">Important</div>
+                        </div>
+                        <div class="goal-priority-option" data-priority="low">
+                            <div class="goal-priority-label">🌱 Low</div>
+                            <div class="goal-priority-desc">Someday</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 4: Summary -->
+                <div class="goal-wizard-step-content" data-step="4">
+                    <p class="goal-wizard-question">Your Vision</p>
+                    <p class="goal-wizard-hint">Review your goal before manifesting it.</p>
+
+                    <div class="goal-summary">
+                        <div class="goal-summary-item">
+                            <div class="goal-summary-label">Dream</div>
+                            <div class="goal-summary-value" id="summary-desire">-</div>
+                        </div>
+                        <div class="goal-summary-item">
+                            <div class="goal-summary-label">Why It Matters</div>
+                            <div class="goal-summary-value" id="summary-why">-</div>
+                        </div>
+                        <div class="goal-summary-item">
+                            <div class="goal-summary-label">Success Looks Like</div>
+                            <div class="goal-summary-value" id="summary-success">-</div>
+                        </div>
+                        <div class="goal-summary-item">
+                            <div class="goal-summary-label">Priority</div>
+                            <div class="goal-summary-value" id="summary-priority">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="goal-wizard-actions">
+                <button class="goal-wizard-btn secondary" id="goal-wizard-back" style="display: none;">Back</button>
+                <button class="goal-wizard-btn primary" id="goal-wizard-next">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Neural Network Panel -->
+    <div id="neural-panel">
+        <div class="neural-header">
+            <div class="neural-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2a4 4 0 0 0-4 4c0 .74.2 1.43.56 2.02A4 4 0 0 0 6 12c0 1.2.52 2.27 1.35 3A4 4 0 0 0 6 18a4 4 0 0 0 4 4c.74 0 1.43-.2 2-.56A4 4 0 0 0 16 22a4 4 0 0 0 4-4c0-1.2-.52-2.27-1.35-3A4 4 0 0 0 20 12a4 4 0 0 0-2.56-3.98c.36-.59.56-1.28.56-2.02a4 4 0 0 0-4-4"/>
+                    <circle cx="12" cy="12" r="2"/>
+                </svg>
+                Your Neural Net
+            </div>
+            <div class="neural-close" id="neural-close">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </div>
+        </div>
+
+        <div class="neural-status">
+            <div class="neural-status-row" style="padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--bg-tertiary);">
+                <span style="display: flex; align-items: center; gap: 6px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                        <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+                        <line x1="12" y1="2" x2="12" y2="12"/>
+                    </svg>
+                    Auto-Training
+                </span>
+                <label class="toggle-switch" style="margin: 0;">
+                    <input type="checkbox" id="neural-training-toggle">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="neural-status-row">
+                <span>Status</span>
+                <span class="neural-status-value" id="neural-status-text">Initializing...</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Learned Categories</span>
+                <span class="neural-status-value" id="neural-category-count">0</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Expansion Patterns</span>
+                <span class="neural-status-value" id="neural-pattern-count">0</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Cached Embeddings</span>
+                <span class="neural-status-value" id="neural-embedding-count">0</span>
+            </div>
+            <div class="neural-progress" id="neural-progress" style="display: none;">
+                <div class="neural-progress-bar" id="neural-progress-bar"></div>
+            </div>
+        </div>
+
+        <!-- Train Button (shows when not ready) -->
+        <button class="neural-btn" id="neural-train-panel-btn" style="margin-top: 8px; background: linear-gradient(135deg, #f59e0b, #fbbf24);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                <path d="M12 2v4m0 12v4m-8-10H2m20 0h-2m-3.5-6.5L17 7m-10 0l-1.5-1.5M17 17l1.5 1.5M7 17l-1.5 1.5"/>
+            </svg>
+            Train on My Map
+        </button>
+
+        <!-- Preference Learning Stats -->
+        <div class="neural-status" id="neural-preference-stats" style="margin-top: 12px; border-top: 1px solid var(--bg-tertiary); padding-top: 12px;">
+            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                </svg>
+                Preference Learning
+            </div>
+            <div class="neural-status-row">
+                <span>Suggestions Accepted</span>
+                <span class="neural-status-value" id="pref-accepted-count">0</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Suggestions Ignored</span>
+                <span class="neural-status-value" id="pref-ignored-count">0</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Acceptance Rate</span>
+                <span class="neural-status-value" id="pref-acceptance-rate">—</span>
+            </div>
+            <div class="neural-status-row" id="pref-style-row" style="display: none;">
+                <span>Style Preference</span>
+                <span class="neural-status-value" id="pref-style">—</span>
+            </div>
+        </div>
+
+        <!-- Incremental Learning Stats -->
+        <div class="neural-status" id="neural-incremental-stats" style="margin-top: 12px; border-top: 1px solid var(--bg-tertiary); padding-top: 12px;">
+            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                    <path d="M23 6l-9.5 9.5-5-5L1 18"/>
+                    <path d="M17 6h6v6"/>
+                </svg>
+                Live Learning
+            </div>
+            <div class="neural-status-row">
+                <span>Pattern Weights</span>
+                <span class="neural-status-value" id="incr-pattern-weights">0</span>
+            </div>
+            <div class="neural-status-row">
+                <span>High Confidence</span>
+                <span class="neural-status-value" id="incr-high-confidence">0</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Avg Weight</span>
+                <span class="neural-status-value" id="incr-avg-weight">—</span>
+            </div>
+            <div class="neural-status-row" id="incr-pending-row" style="display: none;">
+                <span>Pending Embeddings</span>
+                <span class="neural-status-value" id="incr-pending">0</span>
+            </div>
+        </div>
+
+        <!-- Semantic Memory Stats -->
+        <div class="neural-status" id="neural-memory-stats" style="margin-top: 12px; border-top: 1px solid var(--bg-tertiary); padding-top: 12px;">
+            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                    <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/>
+                    <path d="M12 6v6l4 2"/>
+                </svg>
+                Semantic Memory
+            </div>
+            <div class="neural-status-row">
+                <span>Total Memories</span>
+                <span class="neural-status-value" id="mem-total-count">0</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Important</span>
+                <span class="neural-status-value" id="mem-important-count">0</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Avg Importance</span>
+                <span class="neural-status-value" id="mem-avg-importance">—</span>
+            </div>
+        </div>
+
+        <!-- User Profile Stats -->
+        <div class="neural-status" id="neural-profile-stats" style="margin-top: 12px; border-top: 1px solid var(--bg-tertiary); padding-top: 12px;">
+            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                </svg>
+                User Profile
+            </div>
+            <div class="neural-status-row">
+                <span>Nodes Tracked</span>
+                <span class="neural-status-value" id="profile-nodes-count">0</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Preferred Depth</span>
+                <span class="neural-status-value" id="profile-depth">—</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Naming Style</span>
+                <span class="neural-status-value" id="profile-naming-style">—</span>
+            </div>
+            <div class="neural-status-row" id="profile-focus-row" style="display: none;">
+                <span>Focus Areas</span>
+                <span class="neural-status-value" id="profile-focus">—</span>
+            </div>
+            <div class="neural-status-row" id="profile-peak-row" style="display: none;">
+                <span>Peak Hours</span>
+                <span class="neural-status-value" id="profile-peak-hours">—</span>
+            </div>
+        </div>
+
+        <!-- Cognitive Graph Transformer Stats -->
+        <div class="neural-status" id="neural-cgt-stats" style="margin-top: 12px; border-top: 1px solid var(--bg-tertiary); padding-top: 12px;">
+            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                    <path d="M2 12h20"/>
+                </svg>
+                Cognitive Graph (Advanced)
+            </div>
+            <div class="neural-status-row">
+                <span>Graph Embeddings</span>
+                <span class="neural-status-value" id="cgt-embeddings">0</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Actions Tracked</span>
+                <span class="neural-status-value" id="cgt-actions">0</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Action Patterns</span>
+                <span class="neural-status-value" id="cgt-patterns">0</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Cognitive State</span>
+                <span class="neural-status-value" id="cgt-state">—</span>
+            </div>
+            <div class="neural-status-row" id="cgt-insight-row" style="display: none;">
+                <span>Current Insight</span>
+                <span class="neural-status-value" id="cgt-insight" style="font-size: 10px; max-width: 150px; text-overflow: ellipsis; overflow: hidden;">—</span>
+            </div>
+        </div>
+
+        <!-- CGT Insights Button -->
+        <button class="neural-btn" id="cgt-insights-btn" style="margin-top: 12px; background: linear-gradient(135deg, var(--accent), var(--accent-light));">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+            Get AI Insights
+        </button>
+
+        <!-- Style Fingerprint Section (Phase 4) -->
+        <div class="neural-status" id="neural-style-stats" style="margin-top: 12px; border-top: 1px solid var(--bg-tertiary); padding-top: 12px;">
+            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                </svg>
+                Your Thinking Style
+            </div>
+            <div class="neural-status-row">
+                <span>Style Traits</span>
+                <span class="neural-status-value" id="style-traits" style="font-size: 10px; max-width: 140px; text-overflow: ellipsis; overflow: hidden;">Learning...</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Learned Patterns</span>
+                <span class="neural-status-value" id="style-patterns">0</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Structure Memory</span>
+                <span class="neural-status-value" id="style-memories">0</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Style Confidence</span>
+                <span class="neural-status-value" id="style-confidence">—</span>
+            </div>
+        </div>
+
+        <!-- Transfer Suggestions Button -->
+        <button class="neural-btn" id="transfer-suggest-btn" style="margin-top: 12px; background: linear-gradient(135deg, #8b5cf6, #a78bfa);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+            </svg>
+            Get Pattern Suggestions
+        </button>
+
+        <!-- Semantic Engine Section (Real Transformers.js) -->
+        <div class="neural-status" id="neural-semantic-stats" style="margin-top: 12px; border-top: 1px solid var(--bg-tertiary); padding-top: 12px;">
+            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 6v6l4 2"/>
+                </svg>
+                Semantic Engine
+                <span style="font-size: 9px; background: rgba(34, 197, 94, 0.2); color: #22c55e; padding: 1px 4px; border-radius: 3px;">REAL AI</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Model</span>
+                <span class="neural-status-value" id="semantic-model" style="font-size: 9px;">Not loaded</span>
+            </div>
+            <div class="neural-status-row" id="semantic-progress-row" style="display: none;">
+                <span>Loading</span>
+                <span class="neural-status-value" id="semantic-progress">0%</span>
+            </div>
+            <div class="neural-status-row" id="semantic-embeddings-row" style="display: none;">
+                <span>Embeddings</span>
+                <span class="neural-status-value" id="semantic-embeddings">0</span>
+            </div>
+            <div class="neural-status-row" id="semantic-inference-row" style="display: none;">
+                <span>Avg Inference</span>
+                <span class="neural-status-value" id="semantic-inference">—</span>
+            </div>
+        </div>
+
+        <!-- Semantic Features Buttons -->
+        <button class="neural-btn" id="semantic-load-btn" style="margin-top: 8px; background: linear-gradient(135deg, #10b981, #34d399);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 6v6l4 2"/>
+            </svg>
+            Load Semantic Model (22MB)
+        </button>
+
+        <button class="neural-btn" id="semantic-cluster-btn" style="margin-top: 4px; background: linear-gradient(135deg, #8b5cf6, #a78bfa); display: none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                <circle cx="6" cy="6" r="3"/>
+                <circle cx="18" cy="6" r="3"/>
+                <circle cx="12" cy="18" r="3"/>
+            </svg>
+            Detect Topic Clusters
+        </button>
+
+        <button class="neural-btn" id="semantic-holes-btn" style="margin-top: 4px; background: linear-gradient(135deg, #f59e0b, #fbbf24); display: none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44"/>
+                <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44"/>
+            </svg>
+            Find Hidden Connections
+        </button>
+
+        <!-- GPU Compute Section -->
+        <div class="neural-status" id="neural-gpu-stats" style="margin-top: 12px; border-top: 1px solid var(--bg-tertiary); padding-top: 12px;">
+            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                    <rect x="4" y="4" width="16" height="16" rx="2"/>
+                    <rect x="9" y="9" width="6" height="6"/>
+                </svg>
+                GPU Compute
+            </div>
+            <div class="neural-status-row">
+                <span>WebGPU</span>
+                <span class="neural-status-value" id="gpu-status" style="font-size: 10px;">Checking...</span>
+            </div>
+            <div class="neural-status-row" id="gpu-ops-row" style="display: none;">
+                <span>Operations</span>
+                <span class="neural-status-value" id="gpu-ops-count">0</span>
+            </div>
+            <div class="neural-status-row" id="gpu-time-row" style="display: none;">
+                <span>Avg Time</span>
+                <span class="neural-status-value" id="gpu-avg-time">—</span>
+            </div>
+        </div>
+
+        <!-- Benchmark Button -->
+        <button class="neural-btn" id="gpu-benchmark-btn" style="margin-top: 8px; background: linear-gradient(135deg, #06b6d4, #22d3ee); font-size: 11px; padding: 8px 12px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+            Run GPU Benchmark
+        </button>
+
+        <!-- Relationship Types Stats -->
+        <div class="neural-status" id="neural-relationship-stats" style="margin-top: 12px; border-top: 1px solid var(--bg-tertiary); padding-top: 12px;">
+            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                    <path d="M4 6h16M4 12h16M4 18h7"/>
+                    <circle cx="18" cy="18" r="3"/>
+                </svg>
+                Relationship Types
+            </div>
+            <div class="neural-status-row">
+                <span>Classified</span>
+                <span class="neural-status-value" id="rel-classified-count">0</span>
+            </div>
+            <div class="neural-status-row" id="rel-dominant-row" style="display: none;">
+                <span>Dominant</span>
+                <span class="neural-status-value" id="rel-dominant-type">—</span>
+            </div>
+            <div class="neural-status-row" id="rel-transfer-row" style="display: none;">
+                <span>Transfer Ready</span>
+                <span class="neural-status-value" id="rel-transfer-count">0</span>
+            </div>
+        </div>
+
+        <!-- Concept Abstraction Stats -->
+        <div class="neural-status" id="neural-concept-stats" style="margin-top: 12px; border-top: 1px solid var(--bg-tertiary); padding-top: 12px;">
+            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                    <circle cx="12" cy="12" r="3"/>
+                    <circle cx="12" cy="12" r="8" stroke-dasharray="4 2"/>
+                </svg>
+                Concept Abstraction
+            </div>
+            <div class="neural-status-row">
+                <span>Schemas</span>
+                <span class="neural-status-value" id="concept-schemas">0</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Clusters</span>
+                <span class="neural-status-value" id="concept-clusters">0</span>
+            </div>
+            <div class="neural-status-row" id="concept-hierarchy-row" style="display: none;">
+                <span>Hierarchies</span>
+                <span class="neural-status-value" id="concept-hierarchies">0</span>
+            </div>
+            <div class="neural-status-row" id="concept-transfers-row" style="display: none;">
+                <span>Transfers Applied</span>
+                <span class="neural-status-value" id="concept-transfers">0</span>
+            </div>
+        </div>
+
+        <!-- Meta-Learner Stats (How You Think) -->
+        <div class="neural-status" id="neural-meta-stats" style="margin-top: 12px; border-top: 1px solid var(--bg-tertiary); padding-top: 12px;">
+            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                    <path d="M12 2a8 8 0 0 1 8 8c0 3-2 5.5-4 7l-1 4H9l-1-4c-2-1.5-4-4-4-7a8 8 0 0 1 8-8z"/>
+                    <path d="M9 22h6"/>
+                </svg>
+                Thinking Patterns
+            </div>
+            <div class="neural-status-row">
+                <span>Building Style</span>
+                <span class="neural-status-value" id="meta-building-style">Learning...</span>
+            </div>
+            <div class="neural-status-row">
+                <span>Decision Speed</span>
+                <span class="neural-status-value" id="meta-decision-speed">Learning...</span>
+            </div>
+            <div class="neural-status-row" id="meta-rhythm-row" style="display: none;">
+                <span>Work Rhythm</span>
+                <span class="neural-status-value" id="meta-rhythm">—</span>
+            </div>
+            <div class="neural-status-row" id="meta-selectivity-row" style="display: none;">
+                <span>Selectivity</span>
+                <span class="neural-status-value" id="meta-selectivity">—</span>
+            </div>
+            <div class="neural-status-row" id="meta-sessions-row" style="display: none;">
+                <span>Sessions Analyzed</span>
+                <span class="neural-status-value" id="meta-sessions">0</span>
+            </div>
+        </div>
+
+        <!-- Meta-Learner Insights -->
+        <div id="meta-insights-section" style="display: none; margin-top: 12px; border-top: 1px solid var(--bg-tertiary); padding-top: 12px;">
+            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">Your Strengths</div>
+            <div id="meta-strengths" style="display: flex; flex-wrap: wrap; gap: 4px;"></div>
+        </div>
+
+        <div class="neural-categories" id="neural-categories" style="display: none;">
+            <div class="neural-categories-title">Learned Categories</div>
+            <div class="neural-category-list" id="neural-category-list"></div>
+        </div>
+
+        <div class="neural-actions">
+            <button class="neural-btn primary" id="neural-smart-suggest-btn" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+                Smart Expand Selected
+            </button>
+            <button class="neural-btn secondary" id="neural-suggest-btn" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r="0.5"/>
+                </svg>
+                Find Related Nodes
+            </button>
+        </div>
+
+        <div class="neural-suggestions" id="neural-suggestions" style="display: none;">
+            <div class="neural-suggestions-title">AI Suggestions <span id="neural-suggestions-for" style="font-weight: 400; color: var(--text-secondary);"></span></div>
+            <div id="neural-suggestions-list"></div>
+        </div>
+    </div>
+
+    <!-- AI Chat Panel -->
+    <div id="ai-chat-panel">
+        <!-- Slide toggle on left edge -->
+        <button class="chat-slide-toggle" id="chat-slide-toggle" title="Toggle chat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="15 18 9 12 15 6"/>
+            </svg>
+        </button>
+
+        <div class="chat-header">
+            <div class="chat-header-left">
+                <button class="chat-header-btn chat-mobile-close" id="chat-mobile-close" title="Close chat">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 18 9 12 15 6"/>
+                    </svg>
+                </button>
+                <span class="chat-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/>
+                    </svg>
+                </span>
+                <span class="chat-title">MYND Chat</span>
+            </div>
+            <div class="chat-header-actions">
+                <button class="chat-header-btn" id="chat-tts-toggle" title="Voice responses ON">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                    </svg>
+                </button>
+                <button class="chat-header-btn" id="chat-clear" title="Clear conversation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="chat-messages" id="chat-messages">
+            <div class="chat-welcome">
+                <div class="chat-welcome-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/>
+                    </svg>
+                </div>
+                <div class="chat-welcome-title">Your cognitive companion</div>
+                <div class="chat-welcome-text">
+                    I'm here to help you think better — capturing ideas, surfacing connections, and turning thoughts into action.
+                </div>
+                <div class="chat-welcome-examples">
+                    <button class="chat-example-btn">Help me think through my goals</button>
+                    <button class="chat-example-btn">What patterns do you see in my map?</button>
+                    <button class="chat-example-btn">I have a vague idea I want to explore...</button>
+                    <button class="chat-example-btn">What am I missing?</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-suggestions" id="chat-suggestions" style="display: none;">
+            <!-- Quick reply suggestions appear here -->
+        </div>
+
+        <div class="chat-input-area">
+            <div class="chat-input-container">
+                <textarea
+                    id="chat-input"
+                    placeholder="Ask me anything..."
+                    rows="1"
+                    aria-label="Chat message"
+                ></textarea>
+                <button class="chat-voice-btn" id="chat-voice-btn" title="Voice input">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+                        <path d="M19 10v2a7 7 0 01-14 0v-2"/>
+                        <line x1="12" y1="19" x2="12" y2="23"/>
+                        <line x1="8" y1="23" x2="16" y2="23"/>
+                    </svg>
+                </button>
+                <button class="chat-send-btn" id="chat-send-btn" title="Send message" disabled>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="22" y1="2" x2="11" y2="13"/>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                </button>
+
+                <!-- Voice recording overlay -->
+                <div class="chat-voice-overlay" id="chat-voice-overlay">
+                    <div class="chat-voice-indicator">
+                        <div class="chat-voice-bars">
+                            <div class="chat-voice-bar"></div>
+                            <div class="chat-voice-bar"></div>
+                            <div class="chat-voice-bar"></div>
+                            <div class="chat-voice-bar"></div>
+                            <div class="chat-voice-bar"></div>
+                        </div>
+                        <span class="chat-voice-status recording" id="chat-voice-status">Listening...</span>
+                    </div>
+                    <button class="chat-voice-cancel" id="chat-voice-cancel">Cancel</button>
+                </div>
+            </div>
+            <div class="chat-input-hint">
+                <span class="chat-hint-key">Enter</span> to send · <span class="chat-hint-key">Shift+Enter</span> for new line
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden file input -->
+    <input type="file" id="file-input" accept=".json" style="display: none;">
+
+    <!-- Mobile Bottom Sheet (Input-First UI) -->
+    <div id="mobile-bottom-sheet">
+        <!-- Mini Map Toolbar (floats above sheet when toggled) -->
+        <div class="sheet-mini-toolbar" id="sheet-mini-toolbar">
+            <button class="sheet-mini-toolbar-btn" data-action="expand-all">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="1"/>
+                    <circle cx="12" cy="5" r="1"/>
+                    <circle cx="12" cy="19" r="1"/>
+                    <circle cx="19" cy="12" r="1"/>
+                    <circle cx="5" cy="12" r="1"/>
+                </svg>
+                Expand
+            </button>
+            <button class="sheet-mini-toolbar-btn" data-action="collapse-all">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                </svg>
+                Collapse
+            </button>
+            <button class="sheet-mini-toolbar-btn" id="mini-autocam-btn" data-action="auto-cam">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 7l-7 5 7 5V7z"/>
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                </svg>
+                Auto Cam
+            </button>
+        </div>
+
+        <!-- Drag Handle -->
+        <div class="sheet-drag-handle" id="sheet-drag-handle"></div>
+
+        <!-- Mini Toolbar Toggle (right side) -->
+        <button class="sheet-map-toggle" id="sheet-map-toggle" title="Map controls">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+            </svg>
+        </button>
+
+        <!-- Quick Actions - Visible when collapsed -->
+        <div class="sheet-quick-actions">
+            <button class="sheet-quick-btn" data-action="add-node">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                <span>Add</span>
+            </button>
+            <button class="sheet-quick-btn teal" data-action="open-chat">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/>
+                </svg>
+                <span>Chat</span>
+            </button>
+            <button class="sheet-quick-btn voice-btn" id="sheet-quick-voice" data-action="voice">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+                <span>Voice</span>
+            </button>
+            <button class="sheet-quick-btn orange" data-action="memo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+                <span>Memo</span>
+            </button>
+            <button class="sheet-quick-btn purple" data-action="neural">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <ellipse cx="12" cy="12" rx="10" ry="4"/>
+                    <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(60 12 12)"/>
+                    <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(120 12 12)"/>
+                </svg>
+                <span>Neural</span>
+            </button>
+        </div>
+
+        <!-- Quick Input Header -->
+        <div class="sheet-header">
+            <div class="sheet-input-container">
+                <button class="sheet-voice-btn" id="sheet-voice-btn" title="Voice input">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                        <line x1="12" y1="19" x2="12" y2="23"/>
+                        <line x1="8" y1="23" x2="16" y2="23"/>
+                    </svg>
+                </button>
+                <input type="text" class="sheet-text-input" id="sheet-text-input" placeholder="What's on your mind?">
+                <button class="sheet-send-btn" id="sheet-send-btn" disabled title="Send">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="22" y1="2" x2="11" y2="13"/>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="sheet-tabs">
+            <button class="sheet-tab active" data-tab="chat">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/>
+                </svg>
+                Chat
+            </button>
+            <button class="sheet-tab" data-tab="recent">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                Recent
+            </button>
+            <button class="sheet-tab" data-tab="tools">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+                </svg>
+                Tools
+            </button>
+            <button class="sheet-tab" data-tab="map">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <circle cx="12" cy="12" r="3"/>
+                </svg>
+                Map
+            </button>
+        </div>
+
+        <!-- Tab Contents -->
+        <!-- Chat Tab -->
+        <div class="sheet-content active" id="sheet-content-chat">
+            <div class="sheet-chat-messages" id="sheet-chat-messages">
+                <div class="sheet-chat-welcome">
+                    <div class="sheet-chat-welcome-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/>
+                        </svg>
+                    </div>
+                    <h3>Your cognitive companion</h3>
+                    <p>Capture ideas, build your mind map, and let AI help organize your thoughts.</p>
+                    <div class="sheet-suggestions">
+                        <button class="sheet-suggestion">Add a new idea</button>
+                        <button class="sheet-suggestion">What patterns do you see?</button>
+                        <button class="sheet-suggestion">Help me brainstorm</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Tab -->
+        <div class="sheet-content" id="sheet-content-recent">
+            <div class="sheet-recent-list" id="sheet-recent-list">
+                <div class="sheet-recent-empty">
+                    <p>No recent captures yet.</p>
+                    <p style="margin-top: 8px; font-size: 12px;">Use voice or text to add thoughts!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tools Tab -->
+        <div class="sheet-content" id="sheet-content-tools">
+            <div class="sheet-tools-grid">
+                <div class="sheet-tool" data-action="add-node">
+                    <div class="sheet-tool-icon accent">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"/>
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                    </div>
+                    <span class="sheet-tool-label">Add Node</span>
+                </div>
+                <div class="sheet-tool" data-action="add-link">
+                    <div class="sheet-tool-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                        </svg>
+                    </div>
+                    <span class="sheet-tool-label">Add Link</span>
+                </div>
+                <div class="sheet-tool" data-action="neural">
+                    <div class="sheet-tool-icon purple">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <ellipse cx="12" cy="12" rx="10" ry="4"/>
+                            <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(60 12 12)"/>
+                            <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(120 12 12)"/>
+                        </svg>
+                    </div>
+                    <span class="sheet-tool-label">Neural</span>
+                </div>
+                <div class="sheet-tool" data-action="focus">
+                    <div class="sheet-tool-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                    </div>
+                    <span class="sheet-tool-label">Overview</span>
+                </div>
+                <div class="sheet-tool" data-action="export">
+                    <div class="sheet-tool-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                    </div>
+                    <span class="sheet-tool-label">Export</span>
+                </div>
+                <div class="sheet-tool" data-action="import-notes">
+                    <div class="sheet-tool-icon accent">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <path d="M12 18v-6"/>
+                            <path d="M9 15l3-3 3 3"/>
+                        </svg>
+                    </div>
+                    <span class="sheet-tool-label">Import Notes</span>
+                </div>
+                <div class="sheet-tool" data-action="settings">
+                    <div class="sheet-tool-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="4" y1="21" x2="4" y2="14"/>
+                            <line x1="4" y1="10" x2="4" y2="3"/>
+                            <line x1="12" y1="21" x2="12" y2="12"/>
+                            <line x1="12" y1="8" x2="12" y2="3"/>
+                            <line x1="20" y1="21" x2="20" y2="16"/>
+                            <line x1="20" y1="12" x2="20" y2="3"/>
+                            <line x1="1" y1="14" x2="7" y2="14"/>
+                            <line x1="9" y1="8" x2="15" y2="8"/>
+                            <line x1="17" y1="16" x2="23" y2="16"/>
+                        </svg>
+                    </div>
+                    <span class="sheet-tool-label">Settings</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map Tab -->
+        <div class="sheet-content" id="sheet-content-map">
+            <div class="sheet-map-controls">
+                <div class="sheet-map-info">
+                    <p>Tap the map to interact. Use gestures to navigate:</p>
+                    <p style="margin-top: 8px; font-size: 12px; color: var(--text-tertiary);">
+                        • One finger: rotate<br>
+                        • Two fingers: pan & zoom<br>
+                        • Tap node: select
+                    </p>
+                </div>
+                <div class="sheet-map-actions">
+                    <button class="sheet-map-btn" data-action="home">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                            <polyline points="9 22 9 12 15 12 15 22"/>
+                        </svg>
+                        Reset View
+                    </button>
+                    <button class="sheet-map-btn" data-action="expand-all">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="1"/>
+                            <circle cx="12" cy="5" r="1"/>
+                            <circle cx="12" cy="19" r="1"/>
+                            <circle cx="19" cy="12" r="1"/>
+                            <circle cx="5" cy="12" r="1"/>
+                        </svg>
+                        Expand All
+                    </button>
+                    <button class="sheet-map-btn" data-action="collapse-all">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                        Collapse
+                    </button>
+                    <button class="sheet-map-btn" data-action="auto-cam">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 7l-7 5 7 5V7z"/>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                        </svg>
+                        Auto Cam
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- External Scripts -->
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- MYND Configuration & Modules -->
+    <script src="js/config.js"></script>
+    <script src="js/goal-system.js"></script>
+
+    <!-- SELF DEVELOPER MODE: Embedded MYND Map Data -->
+    <script src="mynd-app-data.js"></script>
+    <script>
+        // Self Developer Mode - Restricted access version
+        const SELF_DEVELOPER_MODE = true;
+        const SELF_DEV_STORAGE_KEY = 'mynd_self_dev_data';
+    </script>
+
+    <!-- Three.js Import Map -->
+    <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+
+    <!-- Main Application Module -->
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
