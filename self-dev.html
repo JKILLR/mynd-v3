@@ -42003,7 +42003,9 @@ Replace placeholder labels with real content from user's answers. MUST have exac
     }
 
     // AI-Assisted Setup choice - use class selector for clarity
+    console.log('🔧 Attaching onboarding button handlers...');
     const aiChoiceBtn = document.querySelector('#onboarding-overlay .onboarding-choice.ai');
+    console.log('🔧 AI button found:', !!aiChoiceBtn);
     if (aiChoiceBtn) {
         aiChoiceBtn.addEventListener('click', async () => {
             console.log('AI Assist clicked');
@@ -42029,6 +42031,7 @@ Replace placeholder labels with real content from user's answers. MUST have exac
     
     // Start from Scratch choice - use class selector for clarity
     const scratchChoiceBtn = document.querySelector('#onboarding-overlay .onboarding-choice.scratch');
+    console.log('🔧 Scratch button found:', !!scratchChoiceBtn);
     if (scratchChoiceBtn) {
         scratchChoiceBtn.addEventListener('click', () => {
             console.log('Start from Scratch clicked');
