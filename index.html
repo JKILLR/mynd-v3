@@ -11827,7 +11827,10 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
             this.trimHistory();
             this.updateInsights();
             this.save();
-            
+
+            // Notify UI of preference update
+            bus.emit('preference:updated');
+
             console.log(`✓ Preference: Accepted "${label}" (${type}) under "${session.parentLabel}"`);
         }
         
@@ -11868,10 +11871,15 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
             // Cleanup
             this.pendingSuggestions.delete(this.currentSessionId);
             this.currentSessionId = null;
-            
+
             this.trimHistory();
             this.updateInsights();
             this.save();
+
+            // Notify UI of preference update if there were ignored suggestions
+            if (ignored.length > 0) {
+                bus.emit('preference:updated');
+            }
         }
         
         // Extract context features from a label
@@ -12203,10 +12211,13 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
             this.pruneMemories();
             
             console.log(`🧠 Memory stored: "${context.substring(0, 50)}..." (importance: ${importance.toFixed(2)})`);
-            
+
+            // Notify UI of memory update
+            bus.emit('memory:updated');
+
             // Debounced save
             this.scheduleSave();
-            
+
             return memory;
         }
         
@@ -29203,6 +29214,12 @@ Respond with a JSON object:
                 }
                 
                 if (neuralNet.isReady && isNeuralTrainingAllowed()) {
+                    // Set up event listeners before training so progress bar works
+                    if (typeof NeuralUI !== 'undefined' && !NeuralUI._eventListenersSetup) {
+                        NeuralUI.setupNeuralEventListeners();
+                        NeuralUI._eventListenersSetup = true;
+                    }
+
                     neuralNet.train(store).then(() => {
                         console.log('Neural net auto-trained successfully');
                         // Update UI to reflect trained status
@@ -39908,6 +39925,12 @@ showKeyboardHints();
         },
         
         setupNeuralEventListeners() {
+            // Prevent duplicate event listeners
+            if (this._eventListenersSetup) {
+                return;
+            }
+            this._eventListenersSetup = true;
+
             neuralNet.on('onTrainingStart', () => {
                 const trainBtn = document.getElementById('neural-train-settings-btn');
                 if (trainBtn) {
@@ -39945,7 +39968,22 @@ showKeyboardHints();
                 this.updateStatus();
                 showToast('Neural network trained successfully!', 'success');
             });
-            
+
+            // Update stats when incremental learning happens (e.g., accepting suggestions, creating nodes)
+            neuralNet.on('onIncrementalLearn', () => {
+                this.updateStatus();
+            });
+
+            // Update stats when preference tracking changes (suggestions accepted/ignored)
+            bus.on('preference:updated', () => {
+                this.updateStatus();
+            });
+
+            // Update stats when semantic memories are added
+            bus.on('memory:updated', () => {
+                this.updateStatus();
+            });
+
             // Auto-train on first load if no model exists but enough nodes do
             const stats = neuralNet.getStats();
             if (!stats.hasCategoryModel && !stats.hasPredictionModel) {
