@@ -26321,9 +26321,6 @@ Respond with a JSON object:
             this.pending.delete(suggestionId);
             this.store(feedback);
 
-            // Log for debugging
-                action === 'modified' ? `(chose: ${modification})` : '');
-
             // Trigger IMMEDIATE online learning (fast, single-sample update)
             if (action !== 'ignored') {
                 this.triggerOnlineLearning(feedback);
