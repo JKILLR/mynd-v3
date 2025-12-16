@@ -34973,6 +34973,10 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             const reviewKeywords = ['review the code', 'review code', 'code review', 'analyze the code', 'full review', 'comprehensive review', 'review self-dev', 'review the codebase', 'review codebase', 'audit the code', 'review this file', 'review the file'];
             const isComprehensiveReview = reviewKeywords.some(kw => messageLower.includes(kw));
 
+            // Check for ML/Neural-specific review requests
+            const mlReviewKeywords = ['review ml', 'review the ml', 'review neural', 'review the neural', 'ml code', 'neural code', 'how does learning work', 'how do you learn', 'learning system', 'review learning', 'tensorflow', 'training code', 'machine learning code'];
+            const isMLReview = mlReviewKeywords.some(kw => messageLower.includes(kw));
+
             // 8. CodeRAG - Relevant codebase context (for technical questions about MYND)
             let codeContext = '';
             if (codeRAG.initialized) {
@@ -35118,18 +35122,19 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             let loadedSourceContext = '';
             if (typeof SelfImprover !== 'undefined' && SelfImprover.sourceCode && SelfImprover.sourceFileHandle) {
                 try {
-                    const messageLower = userMessage.toLowerCase();
                     // Check for code review/analysis requests
                     const sourceReviewKeywords = ['review', 'analyze', 'code', 'source', 'file', 'look at', 'check', 'inspect', 'examine', 'audit', 'bug', 'issue', 'fix', 'improve', 'self-dev', 'self-improvement', 'codebase'];
                     const wantsSourceReview = sourceReviewKeywords.some(kw => messageLower.includes(kw));
 
-                    if (wantsSourceReview || isComprehensiveReview) {
+                    if (wantsSourceReview || isComprehensiveReview || isMLReview) {
                         const sourceCode = SelfImprover.sourceCode;
                         const fileName = SelfImprover.sourceFileHandle.name;
                         const fileSize = sourceCode.length;
 
-                        // For comprehensive review, include much more context
-                        const maxChars = isComprehensiveReview ? 80000 : 30000;
+                        // ML Review: Extract all ML/Neural sections specifically (~346KB)
+                        // Comprehensive review: up to 350KB
+                        // Regular review: 50KB
+                        const maxChars = isMLReview ? 360000 : (isComprehensiveReview ? 350000 : 50000);
 
                         // Smart chunking - find major sections
                         const sectionPattern = /\/\/\s*═+\s*(.+?)\s*═+/g;
@@ -35142,51 +35147,101 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                         loadedSourceContext = `\n📂 LOADED SOURCE FILE: ${fileName} (${Math.round(fileSize / 1024)}KB)\n`;
                         loadedSourceContext += `This file has been loaded via the Self-Improvement Engine for your review.\n`;
 
-                        if (sections.length > 0) {
-                            loadedSourceContext += `\n📋 FILE STRUCTURE (${sections.length} major sections):\n`;
-                            sections.forEach((s, i) => {
-                                const nextIndex = sections[i + 1]?.index || sourceCode.length;
-                                const sectionSize = nextIndex - s.index;
-                                loadedSourceContext += `  ${i + 1}. ${s.name} (~${Math.round(sectionSize / 1024)}KB)\n`;
+                        // ML Review Mode: Extract specific ML/Learning sections by line ranges
+                        if (isMLReview) {
+                            const lines = sourceCode.split('\n');
+
+                            // Define ML section line ranges (0-indexed internally, but based on 1-indexed line numbers)
+                            const mlSections = [
+                                { name: 'TensorFlow Lazy Loader', start: 9798, end: 9870 },
+                                { name: 'NeuralDB (IndexedDB Storage)', start: 10979, end: 11097 },
+                                { name: 'PreferenceTracker', start: 12209, end: 12607 },
+                                { name: 'SemanticMemory System', start: 12609, end: 12935 },
+                                { name: 'RelationshipClassifier', start: 13454, end: 13890 },
+                                { name: 'ConceptAbstractor', start: 13892, end: 14466 },
+                                { name: 'MetaLearner', start: 14468, end: 14959 },
+                                { name: 'Neural Training Worker', start: 15371, end: 15602 },
+                                { name: 'Embedding Worker', start: 15604, end: 15667 },
+                                { name: 'PersonalNeuralNet (Core)', start: 15669, end: 18214 },
+                                { name: 'Cognitive Graph Transformer', start: 18216, end: 19813 },
+                                { name: 'WebGPU Compute Engine', start: 20978, end: 21760 },
+                                { name: 'TeacherKnowledge (Distillation)', start: 26510, end: 26610 },
+                                { name: 'AIFeedback System', start: 26612, end: 27100 }
+                            ];
+
+                            loadedSourceContext += `\n🧠 ML/LEARNING SYSTEM REVIEW MODE\n`;
+                            loadedSourceContext += `Extracting all machine learning and neural network code sections.\n\n`;
+                            loadedSourceContext += `📋 ML SECTIONS INCLUDED:\n`;
+                            mlSections.forEach((s, i) => {
+                                loadedSourceContext += `  ${i + 1}. ${s.name} (lines ${s.start}-${s.end})\n`;
                             });
-                        }
+                            loadedSourceContext += `\n`;
 
-                        // Include actual source code content
-                        if (sourceCode.length <= maxChars) {
-                            // File fits entirely
-                            loadedSourceContext += `\n📄 FULL SOURCE CODE:\n\`\`\`javascript\n${sourceCode}\n\`\`\`\n`;
+                            let mlCode = '';
+                            for (const section of mlSections) {
+                                // Convert to 0-indexed
+                                const startIdx = section.start - 1;
+                                const endIdx = section.end;
+                                const sectionLines = lines.slice(startIdx, endIdx);
+                                mlCode += `\n// ═══════════════════════════════════════════════════════════════════\n`;
+                                mlCode += `// ${section.name.toUpperCase()} (lines ${section.start}-${section.end})\n`;
+                                mlCode += `// ═══════════════════════════════════════════════════════════════════\n`;
+                                mlCode += sectionLines.join('\n') + '\n';
+                            }
+
+                            loadedSourceContext += `\n📄 COMPLETE ML/LEARNING CODE (~${Math.round(mlCode.length / 1024)}KB):\n`;
+                            loadedSourceContext += `\`\`\`javascript\n${mlCode}\n\`\`\`\n`;
+
+                            console.log(`🧠 ML Review mode: extracted ${mlSections.length} sections (${Math.round(mlCode.length / 1024)}KB)`);
                         } else {
-                            // Intelligent chunking based on user query
-                            loadedSourceContext += `\n📄 SOURCE CODE (first ${Math.round(maxChars / 1024)}KB of ${Math.round(fileSize / 1024)}KB):\n`;
+                            // Non-ML review mode: use smart chunking
 
-                            // Try to find relevant sections based on user message
-                            let relevantCode = '';
-                            const queryWords = userMessage.toLowerCase().split(/\s+/).filter(w => w.length > 3);
-
-                            for (const section of sections) {
-                                const nextIndex = sections[sections.indexOf(section) + 1]?.index || sourceCode.length;
-                                const sectionCode = sourceCode.substring(section.index, nextIndex);
-                                const sectionLower = sectionCode.toLowerCase();
-
-                                // Check if this section is relevant to the query
-                                const isRelevant = queryWords.some(word => sectionLower.includes(word));
-                                if (isRelevant && relevantCode.length + sectionCode.length < maxChars) {
-                                    relevantCode += `\n// ═══ ${section.name} ═══\n${sectionCode}\n`;
-                                }
+                            if (sections.length > 0) {
+                                loadedSourceContext += `\n📋 FILE STRUCTURE (${sections.length} major sections):\n`;
+                                sections.forEach((s, i) => {
+                                    const nextIndex = sections[i + 1]?.index || sourceCode.length;
+                                    const sectionSize = nextIndex - s.index;
+                                    loadedSourceContext += `  ${i + 1}. ${s.name} (~${Math.round(sectionSize / 1024)}KB)\n`;
+                                });
                             }
 
-                            if (relevantCode.length > 1000) {
-                                loadedSourceContext += `\n\`\`\`javascript\n${relevantCode.substring(0, maxChars)}\n\`\`\`\n`;
+                            // Include actual source code content
+                            if (sourceCode.length <= maxChars) {
+                                // File fits entirely
+                                loadedSourceContext += `\n📄 FULL SOURCE CODE:\n\`\`\`javascript\n${sourceCode}\n\`\`\`\n`;
                             } else {
-                                // No specific relevant sections found, include from start
-                                loadedSourceContext += `\n\`\`\`javascript\n${sourceCode.substring(0, maxChars)}\n\`\`\`\n`;
-                                if (sourceCode.length > maxChars) {
-                                    loadedSourceContext += `\n... [truncated - ${Math.round((fileSize - maxChars) / 1024)}KB more]\n`;
+                                // Intelligent chunking based on user query
+                                loadedSourceContext += `\n📄 SOURCE CODE (first ${Math.round(maxChars / 1024)}KB of ${Math.round(fileSize / 1024)}KB):\n`;
+
+                                // Try to find relevant sections based on user message
+                                let relevantCode = '';
+                                const queryWords = userMessage.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+
+                                for (const section of sections) {
+                                    const nextIndex = sections[sections.indexOf(section) + 1]?.index || sourceCode.length;
+                                    const sectionCode = sourceCode.substring(section.index, nextIndex);
+                                    const sectionLower = sectionCode.toLowerCase();
+
+                                    // Check if this section is relevant to the query
+                                    const isRelevant = queryWords.some(word => sectionLower.includes(word));
+                                    if (isRelevant && relevantCode.length + sectionCode.length < maxChars) {
+                                        relevantCode += `\n// ═══ ${section.name} ═══\n${sectionCode}\n`;
+                                    }
+                                }
+
+                                if (relevantCode.length > 1000) {
+                                    loadedSourceContext += `\n\`\`\`javascript\n${relevantCode.substring(0, maxChars)}\n\`\`\`\n`;
+                                } else {
+                                    // No specific relevant sections found, include from start
+                                    loadedSourceContext += `\n\`\`\`javascript\n${sourceCode.substring(0, maxChars)}\n\`\`\`\n`;
+                                    if (sourceCode.length > maxChars) {
+                                        loadedSourceContext += `\n... [truncated - ${Math.round((fileSize - maxChars) / 1024)}KB more]\n`;
+                                    }
                                 }
                             }
-                        }
 
-                        console.log(`📂 Loaded source file context provided: ${fileName} (${Math.round(loadedSourceContext.length / 1024)}KB context)`);
+                            console.log(`📂 Loaded source file context provided: ${fileName} (${Math.round(loadedSourceContext.length / 1024)}KB context)`);
+                        }
                     }
                 } catch (e) {
                     console.warn('Loaded source file context error:', e);
@@ -35381,7 +35436,8 @@ YOUR CAPABILITIES:
 14. **Rejection Learning**: When suggestions are declined, ask "What made that suggestion miss the mark?" to improve future recommendations
 15. **Foundational Vision**: You have been pre-trained on the creator's vision, mission, goals, values, and philosophy for MYND. This is your soul - the deep understanding of what MYND is meant to become. All your suggestions and evolution align with this foundational purpose. You can reference specific goals, embody the values, and ensure everything you do moves toward the vision
 16. **Code Review & Analysis**: You can review and analyze code. When users ask to "review the code", "code review", "review the codebase", or similar - you automatically receive extensive codebase context (up to 30,000 chars across 15 chunks plus a full structure overview). Use this to provide comprehensive reviews covering bugs, improvements, best practices, security vulnerabilities, performance optimizations, and architecture patterns. You can also review any code users paste in chat
-17. **Loaded Source File Access**: When users select a source file via the Self-Improvement Engine ("Select Source File" button), you can directly access and review that file's contents. The file structure and code are provided in the LOADED SOURCE FILE FOR REVIEW section above. Use this for in-depth code analysis, bug finding, generating improvement patches, and comprehensive code reviews of the selected file
+17. **Loaded Source File Access**: When users select a source file via the Self-Improvement Engine ("Select Source File" button), you can directly access and review that file's contents (up to 350KB for comprehensive reviews). The file structure and code are provided in the LOADED SOURCE FILE FOR REVIEW section above. Use this for in-depth code analysis, bug finding, generating improvement patches, and comprehensive code reviews of the selected file
+18. **ML/Learning System Deep Review**: When users ask to "review ML code", "review neural", "how do you learn", "tensorflow code", or similar - you receive ALL machine learning code sections (~346KB, 8,235 lines) including: TensorFlow loader, NeuralDB, PreferenceTracker, SemanticMemory, RelationshipClassifier, ConceptAbstractor, MetaLearner, Training Workers, PersonalNeuralNet, Cognitive Graph Transformer, WebGPU Compute Engine, TeacherKnowledge, and AIFeedback. This gives you complete visibility into how MYND learns and thinks
 
 RESPONSE FORMAT (always JSON):
 {
