@@ -1,6 +1,6 @@
-# MYND Self Developer - Refactored Version
+# Meta Mynd - Developer Version
 
-This is the refactored version of self-dev.html, split into separate files for better maintainability.
+The developer version of MYND, refactored into separate files for better maintainability.
 
 ## Directory Structure
 
@@ -102,7 +102,7 @@ Contains:
 
 ## Version
 
-Meta MYND v3.31 (Refactored)
+**Meta Mynd V5.0.1** (Developer Version)
 
 ## Notes
 
