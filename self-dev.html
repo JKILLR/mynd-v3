@@ -7430,8 +7430,8 @@
         </div>
     </div>
 
-    <!-- Onboarding -->
-    <div id="onboarding-overlay" style="display: flex;">
+    <!-- Onboarding - DISABLED for Self Developer Mode -->
+    <div id="onboarding-overlay" style="display: none;">
         <!-- User avatar for login access -->
         <button class="onboarding-avatar" id="onboarding-avatar" aria-label="Sign in or view account">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -7525,7 +7525,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND v3.28</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND v3.29</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -40226,10 +40226,18 @@ Replace placeholder labels with real content from user's answers. MUST have exac
     // ═══════════════════════════════════════════════════════════════════
     async function init() {
         try {
+            // Self Developer Mode: Skip onboarding entirely
+            if (typeof SELF_DEVELOPER_MODE !== 'undefined' && SELF_DEVELOPER_MODE) {
+                localStorage.setItem(CONFIG.ONBOARDING_KEY, 'true');
+                const overlay = document.getElementById('onboarding-overlay');
+                if (overlay) overlay.style.display = 'none';
+            }
+
             // Check onboarding first - hide overlay immediately if already completed
             const onboarded = localStorage.getItem(CONFIG.ONBOARDING_KEY);
             if (onboarded) {
-                document.getElementById('onboarding-overlay').style.display = 'none';
+                const overlay = document.getElementById('onboarding-overlay');
+                if (overlay) overlay.style.display = 'none';
             }
 
             // Initialize Supabase (if configured)
