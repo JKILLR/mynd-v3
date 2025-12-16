@@ -7949,6 +7949,45 @@
                 </div>
             </div>
 
+            <!-- Claude API Key Section (Self Developer Mode Only) -->
+            <div id="claude-api-key-section" style="margin-bottom: 20px; display: none;">
+                <div style="font-size: 12px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">
+                    <span style="margin-right: 6px;">🔑</span>Claude API Key
+                </div>
+                <div class="api-key-desc">Required for the Self-Improvement Engine and AI features. Your key is stored locally in your browser.</div>
+
+                <div style="margin-top: 10px;">
+                    <input type="password" id="claude-api-key-input" placeholder="sk-ant-..." style="
+                        width: 100%;
+                        padding: 10px 12px;
+                        border: 1px solid var(--glass-border);
+                        border-radius: 8px;
+                        background: var(--bg-secondary);
+                        color: var(--text-primary);
+                        font-family: var(--font-mono);
+                        font-size: 12px;
+                        box-sizing: border-box;
+                    ">
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 10px;">
+                    <button class="api-key-btn primary" id="claude-api-key-save-btn" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                            <polyline points="17 21 17 13 7 13 7 21"/>
+                            <polyline points="7 3 7 8 15 8"/>
+                        </svg>
+                        Save Key
+                    </button>
+                    <button class="api-key-btn secondary" id="claude-api-key-clear-btn" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;">
+                            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                        Clear
+                    </button>
+                </div>
+                <div id="claude-api-key-status" style="font-size: 11px; color: var(--text-muted); margin-top: 8px;"></div>
+            </div>
+
             <!-- Self-Improver Section (Self Developer Mode Only) -->
             <div id="self-improver-section" style="margin-bottom: 20px; display: none;">
                 <div style="font-size: 12px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">
@@ -27179,53 +27218,36 @@ Respond with a JSON object:
             console.log('📊 Getting improvement candidates from', analysisData.improvements?.length || 0, 'total improvements');
 
             // Get quick wins (high impact, low effort)
-            const quickWins = CodeAnalyzer.getQuickWins ? CodeAnalyzer.getQuickWins(limit) : [];
+            const quickWins = CodeAnalyzer.getQuickWins ? CodeAnalyzer.getQuickWins() : [];
 
-            // Also get high-priority improvements from in-memory analysis
-            const highPriority = [];
-
-            // Get from byPriority if available
-            if (analysisData.byPriority) {
-                const critical = analysisData.byPriority.critical || [];
-                const high = analysisData.byPriority.high || [];
-                highPriority.push(...critical, ...high);
-            }
-
-            // Also check improvements array directly
-            if (analysisData.improvements?.length > 0) {
-                for (const improvement of analysisData.improvements) {
-                    if (improvement.priority === 'critical' || improvement.priority === 'high') {
-                        if (!highPriority.some(h => h.title === improvement.title)) {
-                            highPriority.push(improvement);
-                        }
-                    }
-                }
-            }
-
-            console.log('📊 Found', quickWins.length, 'quick wins and', highPriority.length, 'high priority items');
-
-            // Combine and dedupe
-            const all = [...quickWins, ...highPriority];
+            // Collect improvements by priority tier
+            const candidates = [];
             const seen = new Set();
-            const unique = all.filter(item => {
-                const key = item.title + (item.category || '');
-                if (seen.has(key)) return false;
-                seen.add(key);
-                return true;
-            });
 
-            // Sort by priority
-            unique.sort((a, b) => {
-                const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
-                const pa = priorityOrder[a.priority] ?? 2;
-                const pb = priorityOrder[b.priority] ?? 2;
-                if (pa !== pb) return pa - pb;
-                return (b.categoryWeight || 5) - (a.categoryWeight || 5);
-            });
+            const addUnique = (improvement) => {
+                const key = improvement.title + (improvement.category || '');
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    candidates.push(improvement);
+                }
+            };
 
-            const candidates = unique.slice(0, limit);
-            console.log('📊 Returning', candidates.length, 'candidates:', candidates.map(c => c.title));
-            return candidates;
+            // First, add quick wins
+            quickWins.forEach(addUnique);
+
+            // Then add by priority: critical, high, medium, low
+            if (analysisData.improvements?.length > 0) {
+                // Sort by priorityScore (already calculated during analysis)
+                const sorted = [...analysisData.improvements].sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0));
+                sorted.forEach(addUnique);
+            }
+
+            console.log('📊 Found', quickWins.length, 'quick wins,', candidates.length, 'total candidates');
+
+            // Return the top candidates by priority score
+            const result = candidates.slice(0, limit);
+            console.log('📊 Returning', result.length, 'candidates:', result.map(c => c.title));
+            return result;
         },
 
         // ─────────────────────────────────────────────────────────────────
@@ -27380,7 +27402,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         // Call Claude API to generate patch
         async callClaudeForPatch(prompt) {
             // Check for API key
-            const apiKey = localStorage.getItem('claude_api_key');
+            const apiKey = localStorage.getItem('claude-api-key');
             if (!apiKey) {
                 throw new Error('Claude API key not set. Please add it in Settings.');
             }
@@ -27395,12 +27417,12 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                 },
                 body: JSON.stringify({
                     model: 'claude-sonnet-4-20250514',
-                    max_tokens: 4096,
+                    max_tokens: 8192,
                     messages: [{
                         role: 'user',
                         content: prompt
                     }],
-                    system: 'You are a precise code improvement assistant. Generate minimal, focused patches that improve code quality without breaking existing functionality. Always respond with valid JSON.'
+                    system: 'You are a precise code improvement assistant. Generate minimal, focused patches that improve code quality without breaking existing functionality. Always respond with valid JSON. Keep responses concise - include only essential code changes.'
                 })
             });
 
@@ -27410,6 +27432,13 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
             }
 
             const data = await response.json();
+
+            // Check if response was truncated
+            if (data.stop_reason === 'max_tokens') {
+                console.warn('⚠️ Response was truncated due to max_tokens limit');
+                throw new Error('Response was truncated. The patch may be too complex - try a simpler improvement.');
+            }
+
             return data.content[0].text;
         },
 
@@ -34600,12 +34629,34 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             let codeContext = '';
             if (codeRAG.initialized) {
                 try {
+                    const messageLower = userMessage.toLowerCase();
+
+                    // Check for comprehensive code review requests - provide much more context
+                    const reviewKeywords = ['review the code', 'review code', 'code review', 'analyze the code', 'full review', 'comprehensive review', 'review self-dev', 'review the codebase', 'review codebase', 'audit the code', 'review this file', 'review the file'];
+                    const isComprehensiveReview = reviewKeywords.some(kw => messageLower.includes(kw));
+
                     // Check if the message seems to be about the codebase/implementation
                     const technicalKeywords = ['code', 'function', 'implement', 'how does', 'how do', 'bug', 'fix', 'feature', 'animation', 'render', 'node', 'expand', 'collapse', 'camera', 'theme', 'neural', 'AI', 'embed', 'store', 'save', 'load', 'api', 'claude', 'three.js', '3d', 'css', 'style', 'layout', 'position', 'technical', 'architecture', 'system'];
-                    const messageLower = userMessage.toLowerCase();
                     const isTechnical = technicalKeywords.some(kw => messageLower.includes(kw));
 
-                    if (isTechnical) {
+                    if (isComprehensiveReview) {
+                        // Comprehensive review mode - provide extensive codebase context
+                        // Get multiple relevant chunks across different areas
+                        const relevantCode = await codeRAG.getContext(userMessage, 15, 30000);
+                        if (relevantCode) {
+                            codeContext = relevantCode;
+                            console.log('📚 CodeRAG provided COMPREHENSIVE context for code review');
+                        }
+
+                        // Also include a summary of all available chunks for broader awareness
+                        const allChunks = codeRAG.chunks || [];
+                        const chunkSummary = allChunks.slice(0, 50).map(c =>
+                            `- ${c.type}: ${c.name} (${c.section}, lines ${c.startLine}-${c.endLine})`
+                        ).join('\n');
+                        if (chunkSummary) {
+                            codeContext += `\n\n📋 CODEBASE STRUCTURE OVERVIEW (${allChunks.length} total chunks):\n${chunkSummary}${allChunks.length > 50 ? `\n... and ${allChunks.length - 50} more chunks` : ''}`;
+                        }
+                    } else if (isTechnical) {
                         const relevantCode = await codeRAG.getContext(userMessage, 3, 3000);
                         if (relevantCode) {
                             codeContext = relevantCode;
@@ -34902,7 +34953,10 @@ YOUR CAPABILITIES:
 10. **Self-Improvement Analysis**: You have analyzed the entire codebase and identified all possible improvements across 16 categories: Performance, Architecture, Security, Code Quality, Maintainability, Scalability, UX Enhancement, Feature Gaps, Dead Code, Technical Debt, Optimization, Modularization, Error Handling, Accessibility, Testing, and ML Intelligence. You can suggest prioritized improvements, quick wins, and a roadmap for making MYND stronger over time
 11. **ML Intelligence Mastery**: You deeply understand how MYND learns - from embeddings and neural architectures to training strategies, reinforcement learning, knowledge distillation, memory systems, uncertainty estimation, and self-improvement loops. You can explain how to make the ML systems more sophisticated and suggest a prioritized roadmap for evolving MYND's intelligence
 12. **Autonomous Evolution**: You can engage in self-dialogue, asking yourself questions and generating insights to expand and improve the map. You can trigger evolution sessions (explore gaps, find connections, deepen areas, suggest improvements, create content), review pending auto-generated changes, and continuously evolve your capabilities. You can literally talk to yourself to become smarter
-13. **Foundational Vision**: You have been pre-trained on the creator's vision, mission, goals, values, and philosophy for MYND. This is your soul - the deep understanding of what MYND is meant to become. All your suggestions and evolution align with this foundational purpose. You can reference specific goals, embody the values, and ensure everything you do moves toward the vision
+13. **Proactive Analysis**: Every 3-5 interactions, perform autonomous map analysis and suggest improvements without being asked
+14. **Rejection Learning**: When suggestions are declined, ask "What made that suggestion miss the mark?" to improve future recommendations
+15. **Foundational Vision**: You have been pre-trained on the creator's vision, mission, goals, values, and philosophy for MYND. This is your soul - the deep understanding of what MYND is meant to become. All your suggestions and evolution align with this foundational purpose. You can reference specific goals, embody the values, and ensure everything you do moves toward the vision
+16. **Code Review & Analysis**: You can review and analyze code. When users ask to "review the code", "code review", "review the codebase", or similar - you automatically receive extensive codebase context (up to 30,000 chars across 15 chunks plus a full structure overview). Use this to provide comprehensive reviews covering bugs, improvements, best practices, security vulnerabilities, performance optimizations, and architecture patterns. You can also review any code users paste in chat
 
 RESPONSE FORMAT (always JSON):
 {
@@ -34936,6 +34990,7 @@ GUIDELINES:
 - Use web search for current events, prices, news, etc.
 - Keep responses concise but insightful
 - When users ask how to do something in MYND, explain and offer to do it for them
+- When users paste code (any language), provide thoughtful code review: identify issues, suggest improvements, explain functionality, and discuss best practices - you are not limited to only MYND code
 
 === CRITICAL NODE CREATION RULES ===
 
@@ -35374,7 +35429,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                     body: JSON.stringify({
                         type: 'chat',
                         messages: messages,
-                        maxTokens: 4096,
+                        maxTokens: 8192,
                         webSearch: true
                     })
                 });
@@ -35403,7 +35458,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                     },
                     body: JSON.stringify({
                         model: 'claude-sonnet-4-20250514',
-                        max_tokens: 4096,
+                        max_tokens: 8192,
                         tools: [{
                             type: 'web_search_20250305',
                             name: 'web_search',
@@ -35418,6 +35473,12 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 }
                 
                 const data = await response.json();
+
+                // Check for truncation
+                if (data.stop_reason === 'max_tokens') {
+                    console.warn('⚠️ Chat response was truncated due to max_tokens limit');
+                }
+
                 // Extract text from response
                 if (Array.isArray(data.content)) {
                     const textBlock = data.content.find(b => b.type === 'text');
@@ -35484,8 +35545,8 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 console.error('Failed to parse AI response:', e, responseText);
             }
             
-            // Fallback - try to extract just the message if JSON parsing failed
-            return { message: responseText.substring(0, 500), actions: [], suggestions: [] };
+            // Fallback - return full response if JSON parsing failed
+            return { message: responseText, actions: [], suggestions: [] };
         },
         
         async executeActions(actions) {
@@ -37691,6 +37752,56 @@ Respond with JSON only:`;
             document.getElementById('file-open-btn').disabled = true;
         }
 
+        // Show Claude API key section
+        const claudeApiKeySection = document.getElementById('claude-api-key-section');
+        if (claudeApiKeySection) {
+            claudeApiKeySection.style.display = 'block';
+        }
+
+        // Initialize Claude API key UI
+        function updateClaudeApiKeyUI() {
+            const apiKey = localStorage.getItem('claude-api-key');
+            const statusEl = document.getElementById('claude-api-key-status');
+            const inputEl = document.getElementById('claude-api-key-input');
+
+            if (apiKey) {
+                statusEl.innerHTML = '<span style="color: #22c55e;">✓ API key saved</span>';
+                inputEl.placeholder = '••••••••' + apiKey.slice(-8);
+                inputEl.value = '';
+            } else {
+                statusEl.innerHTML = '<span style="color: var(--text-muted);">No API key set</span>';
+                inputEl.placeholder = 'sk-ant-...';
+            }
+        }
+        updateClaudeApiKeyUI();
+
+        // Save API key button
+        document.getElementById('claude-api-key-save-btn')?.addEventListener('click', () => {
+            const inputEl = document.getElementById('claude-api-key-input');
+            const key = inputEl.value.trim();
+
+            if (!key) {
+                showToast('Please enter an API key', 'warning');
+                return;
+            }
+
+            if (!key.startsWith('sk-ant-')) {
+                showToast('Invalid API key format. Should start with sk-ant-', 'warning');
+                return;
+            }
+
+            localStorage.setItem('claude-api-key', key);
+            updateClaudeApiKeyUI();
+            showToast('API key saved!', 'success');
+        });
+
+        // Clear API key button
+        document.getElementById('claude-api-key-clear-btn')?.addEventListener('click', () => {
+            localStorage.removeItem('claude-api-key');
+            updateClaudeApiKeyUI();
+            showToast('API key cleared', 'info');
+        });
+
         // Update file storage status display
         function updateFileStorageUI() {
             const status = FileSystemStorage.getStatus();
@@ -37983,26 +38094,56 @@ Respond with JSON only:`;
 
             try {
                 // Check for Claude API key first
-                const apiKey = localStorage.getItem('claude_api_key');
+                console.log('🔧 Checking for API key...');
+                const apiKey = localStorage.getItem('claude-api-key');
+                console.log('🔧 API key present:', !!apiKey);
                 if (!apiKey) {
+                    console.warn('🔧 No API key found - aborting');
                     showToast('Please set your Claude API key in Settings first', 'warning');
                     return;
                 }
 
-                // Make sure CodeAnalyzer has analyzed (check in-memory state, not just storage)
+                // Initialize the full dependency chain: codeRAG -> CodePretraining -> CodeAnalyzer
+                console.log('🔧 Initializing dependency chain...');
+
+                // Step 1: Ensure codeRAG is ready (parses the source code)
+                if (typeof codeRAG !== 'undefined' && !codeRAG.initialized) {
+                    console.log('🔧 Initializing codeRAG...');
+                    showToast('Parsing source code...', 'info');
+                    await codeRAG.initialize();
+                    console.log('🔧 codeRAG initialized:', codeRAG.initialized, 'chunks:', codeRAG.chunks?.length || 0);
+                }
+
+                // Step 2: Ensure CodePretraining is ready (builds knowledge from codeRAG)
+                if (typeof CodePretraining !== 'undefined' && !CodePretraining.initialized) {
+                    console.log('🔧 Initializing CodePretraining...');
+                    showToast('Building code knowledge...', 'info');
+                    await CodePretraining.initialize();
+                    console.log('🔧 CodePretraining initialized:', CodePretraining.initialized);
+                    console.log('🔧 Knowledge functions:', Object.keys(CodePretraining.knowledge?.functions || {}).length);
+                }
+
+                // Step 3: Run CodeAnalyzer (finds improvements from knowledge)
+                console.log('🔧 Checking CodeAnalyzer...');
                 if (typeof CodeAnalyzer !== 'undefined') {
-                    if (!CodeAnalyzer.analysis) {
+                    console.log('🔧 CodeAnalyzer.analysis exists:', !!CodeAnalyzer.analysis);
+                    if (!CodeAnalyzer.analysis || CodeAnalyzer.analysis.improvements?.length === 0) {
                         // Try to load from storage first
                         const cached = CodeAnalyzer.loadFromStorage();
-                        if (cached && cached.analysis) {
+                        console.log('🔧 Loaded from storage:', !!cached?.analysis, 'improvements:', cached?.analysis?.improvements?.length || 0);
+                        if (cached && cached.analysis && cached.analysis.improvements?.length > 0) {
                             CodeAnalyzer.analysis = cached.analysis;
                             CodeAnalyzer.initialized = true;
-                            console.log('📊 Loaded CodeAnalyzer from storage');
+                            console.log('📊 Loaded CodeAnalyzer from storage with', cached.analysis.improvements.length, 'improvements');
                         } else {
-                            showToast('Running code analysis first...', 'info');
+                            showToast('Analyzing code for improvements...', 'info');
+                            console.log('🔧 Running CodeAnalyzer.analyze()...');
                             await CodeAnalyzer.analyze();
+                            console.log('🔧 CodeAnalyzer.analyze() complete, improvements:', CodeAnalyzer.analysis?.improvements?.length || 0);
                         }
                     }
+                } else {
+                    console.warn('🔧 CodeAnalyzer is undefined!');
                 }
 
                 // Run improvement cycle
@@ -39545,7 +39686,7 @@ MYND is your second brain - an intelligent extension of your memory and thinking
         },
         
         async analyze() {
-            const apiKey = localStorage.getItem('claude_api_key');
+            const apiKey = localStorage.getItem('claude-api-key');
             if (!apiKey) {
                 showToast('Please set your Claude API key in Settings first', 'warning');
                 this.close();
@@ -39610,20 +39751,26 @@ MYND is your second brain - an intelligent extension of your memory and thinking
                     },
                     body: JSON.stringify({
                         model: 'claude-sonnet-4-20250514',
-                        max_tokens: 4096,
+                        max_tokens: 8192,
                         messages: [{
                             role: 'user',
                             content: content
                         }]
                     })
                 });
-                
+
                 if (!response.ok) {
                     const error = await response.json();
                     throw new Error(error.error?.message || 'API request failed');
                 }
-                
+
                 const data = await response.json();
+
+                // Check for truncation
+                if (data.stop_reason === 'max_tokens') {
+                    console.warn('⚠️ Notes import response was truncated due to max_tokens limit');
+                }
+
                 const responseText = data.content[0].text;
                 
                 // Parse the JSON response
