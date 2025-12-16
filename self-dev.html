@@ -35405,7 +35405,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                     body: JSON.stringify({
                         type: 'chat',
                         messages: messages,
-                        maxTokens: 4096,
+                        maxTokens: 8192,
                         webSearch: true
                     })
                 });
@@ -35434,7 +35434,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                     },
                     body: JSON.stringify({
                         model: 'claude-sonnet-4-20250514',
-                        max_tokens: 4096,
+                        max_tokens: 8192,
                         tools: [{
                             type: 'web_search_20250305',
                             name: 'web_search',
@@ -35449,6 +35449,12 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 }
                 
                 const data = await response.json();
+
+                // Check for truncation
+                if (data.stop_reason === 'max_tokens') {
+                    console.warn('⚠️ Chat response was truncated due to max_tokens limit');
+                }
+
                 // Extract text from response
                 if (Array.isArray(data.content)) {
                     const textBlock = data.content.find(b => b.type === 'text');
@@ -39721,20 +39727,26 @@ MYND is your second brain - an intelligent extension of your memory and thinking
                     },
                     body: JSON.stringify({
                         model: 'claude-sonnet-4-20250514',
-                        max_tokens: 4096,
+                        max_tokens: 8192,
                         messages: [{
                             role: 'user',
                             content: content
                         }]
                     })
                 });
-                
+
                 if (!response.ok) {
                     const error = await response.json();
                     throw new Error(error.error?.message || 'API request failed');
                 }
-                
+
                 const data = await response.json();
+
+                // Check for truncation
+                if (data.stop_reason === 'max_tokens') {
+                    console.warn('⚠️ Notes import response was truncated due to max_tokens limit');
+                }
+
                 const responseText = data.content[0].text;
                 
                 // Parse the JSON response
