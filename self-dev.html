@@ -7542,7 +7542,7 @@
     </div>
 
     <!-- Version indicator for testing -->
-    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND V.4.1.2</div>
+    <div id="version-indicator" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #8B5CF6, #EC4899); color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; z-index: 10000; font-family: system-ui, sans-serif;">Meta MYND V.4.1.3</div>
 
     <!-- Mobile Header (replaces header and top-controls on mobile) -->
     <div id="mobile-header">
@@ -9845,6 +9845,11 @@ Things to avoid..."></textarea>
         import * as THREE from 'three';
         console.log('🧪 Test module 2: THREE.js imported, version:', THREE.REVISION);
         window.THREE = THREE;
+    </script>
+
+    <script type="module">
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        console.log('🧪 Test module 3: OrbitControls imported');
     </script>
 
     <script type="module">
