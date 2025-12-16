@@ -27380,7 +27380,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         // Call Claude API to generate patch
         async callClaudeForPatch(prompt) {
             // Check for API key
-            const apiKey = localStorage.getItem('claude_api_key');
+            const apiKey = localStorage.getItem('claude-api-key');
             if (!apiKey) {
                 throw new Error('Claude API key not set. Please add it in Settings.');
             }
@@ -37984,7 +37984,7 @@ Respond with JSON only:`;
             try {
                 // Check for Claude API key first
                 console.log('🔧 Checking for API key...');
-                const apiKey = localStorage.getItem('claude_api_key');
+                const apiKey = localStorage.getItem('claude-api-key');
                 console.log('🔧 API key present:', !!apiKey);
                 if (!apiKey) {
                     console.warn('🔧 No API key found - aborting');
@@ -39555,7 +39555,7 @@ MYND is your second brain - an intelligent extension of your memory and thinking
         },
         
         async analyze() {
-            const apiKey = localStorage.getItem('claude_api_key');
+            const apiKey = localStorage.getItem('claude-api-key');
             if (!apiKey) {
                 showToast('Please set your Claude API key in Settings first', 'warning');
                 this.close();
