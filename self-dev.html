@@ -9720,6 +9720,15 @@ Things to avoid..."></textarea>
         console.log('🟢 Error handlers installed');
     </script>
 
+    <!-- Test module to verify module loading works -->
+    <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    console.log('🟡 Test module: THREE imported:', typeof THREE);
+    console.log('🟡 Test module: OrbitControls imported:', typeof OrbitControls);
+    console.log('🟡 Test module: COMPLETE - All imports successful');
+    </script>
+
     <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
