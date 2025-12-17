@@ -7448,7 +7448,8 @@
     </div>
     
     <!-- Onboarding -->
-    <div id="onboarding-overlay" style="display: flex;">
+    <!-- Self Developer Mode: Onboarding hidden by default since map is embedded -->
+    <div id="onboarding-overlay" style="display: none;">
         <!-- User avatar for login access -->
         <button class="onboarding-avatar" id="onboarding-avatar" aria-label="Sign in or view account">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -9689,6 +9690,19 @@ Things to avoid..."></textarea>
         // Self Developer Mode - Restricted access version
         const SELF_DEVELOPER_MODE = true;
         const SELF_DEV_STORAGE_KEY = 'mynd_self_dev_data';
+
+        // IMMEDIATELY hide onboarding in Self Developer Mode
+        // This runs before module script, so the embedded map loads directly
+        document.addEventListener('DOMContentLoaded', function() {
+            if (SELF_DEVELOPER_MODE) {
+                const overlay = document.getElementById('onboarding-overlay');
+                if (overlay) {
+                    overlay.style.display = 'none';
+                }
+                // Mark as onboarded
+                localStorage.setItem('mynd-onboarded-v17', 'true');
+            }
+        });
     </script>
 
     <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
