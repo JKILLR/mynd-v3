@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Module Test</title>
+</head>
+<body>
+    <h1>Module Test</h1>
+    <p>Check console for output...</p>
+
+    <!-- Same scripts as self-dev.html -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/goal-system.js"></script>
+    <script src="mynd-app-data.js"></script>
+    <script>
+        const SELF_DEVELOPER_MODE = true;
+        const SELF_DEV_STORAGE_KEY = 'mynd_self_dev_data';
+        console.log('Inline script ran, SELF_DEVELOPER_MODE:', SELF_DEVELOPER_MODE);
+    </script>
+
+    <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+    <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    console.log('Module loaded successfully!');
+    console.log('THREE:', typeof THREE);
+    console.log('OrbitControls:', typeof OrbitControls);
+    console.log('CONFIG:', typeof CONFIG);
+    console.log('SELF_DEVELOPER_MODE:', typeof SELF_DEVELOPER_MODE, SELF_DEVELOPER_MODE);
+    console.log('EMBEDDED_MYND_MAP:', typeof EMBEDDED_MYND_MAP);
+    </script>
+</body>
+</html>
