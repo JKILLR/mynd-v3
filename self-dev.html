@@ -42155,10 +42155,20 @@ Replace placeholder labels with real content from user's answers. MUST have exac
     // ═══════════════════════════════════════════════════════════════════
     async function init() {
         try {
-            // Check onboarding first - hide overlay immediately if already completed
-            const onboarded = localStorage.getItem(CONFIG.ONBOARDING_KEY);
-            if (onboarded) {
-                document.getElementById('onboarding-overlay').style.display = 'none';
+            // In Self Developer Mode, always skip onboarding - map is already embedded
+            if (typeof SELF_DEVELOPER_MODE !== 'undefined' && SELF_DEVELOPER_MODE) {
+                const overlay = document.getElementById('onboarding-overlay');
+                if (overlay) {
+                    overlay.style.display = 'none';
+                }
+                // Mark as onboarded so it never shows again in this mode
+                localStorage.setItem(CONFIG.ONBOARDING_KEY, 'true');
+            } else {
+                // Check onboarding first - hide overlay immediately if already completed
+                const onboarded = localStorage.getItem(CONFIG.ONBOARDING_KEY);
+                if (onboarded) {
+                    document.getElementById('onboarding-overlay').style.display = 'none';
+                }
             }
             
             // Initialize Supabase (if configured)
