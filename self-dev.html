@@ -9707,8 +9707,10 @@ Things to avoid..."></textarea>
 
     <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
     <script type="module">
+    console.log('🔵 Module script starting...');
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    console.log('🔵 THREE.js imported successfully');
 
     // CONFIG is now loaded from js/config.js
 
@@ -42169,8 +42171,11 @@ Replace placeholder labels with real content from user's answers. MUST have exac
     // ═══════════════════════════════════════════════════════════════════
     async function init() {
         try {
+            console.log('🚀 init() starting...');
+
             // In Self Developer Mode, always skip onboarding - map is already embedded
             if (typeof SELF_DEVELOPER_MODE !== 'undefined' && SELF_DEVELOPER_MODE) {
+                console.log('🚀 Self Developer Mode detected');
                 const overlay = document.getElementById('onboarding-overlay');
                 if (overlay) {
                     overlay.style.display = 'none';
@@ -42184,15 +42189,22 @@ Replace placeholder labels with real content from user's answers. MUST have exac
                     document.getElementById('onboarding-overlay').style.display = 'none';
                 }
             }
-            
+
+            console.log('🚀 Initializing Supabase...');
             // Initialize Supabase (if configured)
             initSupabase();
+            console.log('🚀 Initializing SupabaseAuth...');
             const initialUser = await SupabaseAuth.init();
-            
+            console.log('🚀 SupabaseAuth done, user:', !!initialUser);
+
+            console.log('🚀 Initializing themeManager...');
             themeManager.init();
             updateColorPickers(); // Ensure color pickers match saved theme
+            console.log('🚀 Initializing chatManager...');
             chatManager.init();
+            console.log('🚀 Initializing scene...');
             initScene();
+            console.log('🚀 Scene initialized!');
             
             // Update auth UI after scene is initialized (DOM ready)
             setTimeout(() => {
