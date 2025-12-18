@@ -4,6 +4,12 @@
  * Connects the browser app to the local Python ML server.
  * Falls back to browser TensorFlow.js if server unavailable.
  *
+ * Features:
+ *   - Text embeddings (sentence-transformers)
+ *   - Graph Transformer connection predictions
+ *   - Voice transcription (Whisper) - speak to create nodes
+ *   - Image understanding (CLIP) - drop images to describe them
+ *
  * Usage:
  *   1. Include this file in your HTML
  *   2. LocalBrain.init() on startup
@@ -22,7 +28,9 @@ const LocalBrain = {
         connected: false,
         device: 'unknown',
         lastLatency: 0,
-        fallbackMode: true
+        fallbackMode: true,
+        voiceAvailable: false,
+        visionAvailable: false
     },
 
     /**
@@ -62,6 +70,8 @@ const LocalBrain = {
                 this.status.device = health.device;
                 this.status.lastLatency = performance.now() - start;
                 this.status.fallbackMode = false;
+                this.status.voiceAvailable = !!health.voice_model;
+                this.status.visionAvailable = !!health.vision_model;
                 this.lastCheck = Date.now();
                 return true;
             }
@@ -72,6 +82,8 @@ const LocalBrain = {
         this.isAvailable = false;
         this.status.connected = false;
         this.status.fallbackMode = true;
+        this.status.voiceAvailable = false;
+        this.status.visionAvailable = false;
         this.lastCheck = Date.now();
         return false;
     },
@@ -254,6 +266,178 @@ const LocalBrain = {
         }
 
         return { nodes };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // VOICE (Whisper)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Transcribe audio to text using local Whisper model
+     * @param {Blob|ArrayBuffer} audioData - Audio data to transcribe
+     * @param {Object} options - { language: 'en', task: 'transcribe'|'translate' }
+     * @returns {Promise<{success: boolean, text?: string, error?: string}>}
+     */
+    async transcribe(audioData, options = {}) {
+        if (!this.isAvailable || !this.status.voiceAvailable) {
+            return { success: false, error: 'Voice model not available' };
+        }
+
+        try {
+            // Convert to base64
+            let base64;
+            if (audioData instanceof Blob) {
+                const buffer = await audioData.arrayBuffer();
+                base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+            } else if (audioData instanceof ArrayBuffer) {
+                base64 = btoa(String.fromCharCode(...new Uint8Array(audioData)));
+            } else {
+                return { success: false, error: 'Invalid audio data format' };
+            }
+
+            const start = performance.now();
+            const res = await fetch(`${this.serverUrl}/voice/transcribe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    audio_base64: base64,
+                    language: options.language || null,
+                    task: options.task || 'transcribe'
+                })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                this.status.lastLatency = performance.now() - start;
+
+                if (data.success) {
+                    console.log(`🎤 LocalBrain.transcribe: "${data.text}" (${data.time_ms?.toFixed(0)}ms)`);
+                }
+
+                return data;
+            }
+
+            return { success: false, error: 'Server error' };
+
+        } catch (e) {
+            console.warn('LocalBrain.transcribe failed:', e);
+            return { success: false, error: e.message };
+        }
+    },
+
+    /**
+     * Check if voice input is available
+     */
+    isVoiceAvailable() {
+        return this.isAvailable && this.status.voiceAvailable;
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // VISION (CLIP)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Describe an image using local CLIP model
+     * @param {Blob|ArrayBuffer} imageData - Image data to describe
+     * @param {Object} options - { candidateLabels: [...], topK: 5 }
+     * @returns {Promise<{success: boolean, description?: string, confidence?: number, error?: string}>}
+     */
+    async describeImage(imageData, options = {}) {
+        if (!this.isAvailable || !this.status.visionAvailable) {
+            return { success: false, error: 'Vision model not available' };
+        }
+
+        try {
+            // Convert to base64
+            let base64;
+            if (imageData instanceof Blob) {
+                const buffer = await imageData.arrayBuffer();
+                base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+            } else if (imageData instanceof ArrayBuffer) {
+                base64 = btoa(String.fromCharCode(...new Uint8Array(imageData)));
+            } else if (typeof imageData === 'string' && imageData.startsWith('data:')) {
+                // Already a data URL, extract base64 part
+                base64 = imageData.split(',')[1];
+            } else {
+                return { success: false, error: 'Invalid image data format' };
+            }
+
+            const start = performance.now();
+            const res = await fetch(`${this.serverUrl}/image/describe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    image_base64: base64,
+                    candidate_labels: options.candidateLabels || null,
+                    top_k: options.topK || 5
+                })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                this.status.lastLatency = performance.now() - start;
+
+                if (data.success) {
+                    console.log(`🖼️ LocalBrain.describeImage: "${data.description}" (${Math.round(data.confidence * 100)}% confidence, ${data.time_ms?.toFixed(0)}ms)`);
+                }
+
+                return data;
+            }
+
+            return { success: false, error: 'Server error' };
+
+        } catch (e) {
+            console.warn('LocalBrain.describeImage failed:', e);
+            return { success: false, error: e.message };
+        }
+    },
+
+    /**
+     * Generate embedding for an image (for similarity search)
+     * @param {Blob|ArrayBuffer} imageData - Image data
+     * @returns {Promise<number[]|null>}
+     */
+    async embedImage(imageData) {
+        if (!this.isAvailable || !this.status.visionAvailable) {
+            return null;
+        }
+
+        try {
+            let base64;
+            if (imageData instanceof Blob) {
+                const buffer = await imageData.arrayBuffer();
+                base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+            } else if (imageData instanceof ArrayBuffer) {
+                base64 = btoa(String.fromCharCode(...new Uint8Array(imageData)));
+            } else {
+                return null;
+            }
+
+            const res = await fetch(`${this.serverUrl}/image/embed`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image_base64: base64 })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                console.log(`🖼️ LocalBrain.embedImage: ${data.dim} dimensions (${data.time_ms?.toFixed(0)}ms)`);
+                return data.embedding;
+            }
+
+            return null;
+
+        } catch (e) {
+            console.warn('LocalBrain.embedImage failed:', e);
+            return null;
+        }
+    },
+
+    /**
+     * Check if vision/image input is available
+     */
+    isVisionAvailable() {
+        return this.isAvailable && this.status.visionAvailable;
     },
 
     /**

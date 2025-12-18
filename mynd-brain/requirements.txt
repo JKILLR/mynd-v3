@@ -18,6 +18,14 @@ transformers>=4.35.0
 # Graph Neural Networks
 torch-geometric>=2.4.0
 
+# Voice Transcription (Whisper)
+openai-whisper>=20231117
+soundfile>=0.12.1
+
+# Image Understanding (CLIP)
+open-clip-torch>=2.23.0
+pillow>=10.0.0
+
 # Utilities
 numpy>=1.24.0
 pydantic>=2.5.0
