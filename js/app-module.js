@@ -26451,11 +26451,21 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 includeAncestors = true,
                 includeTopLevel = true,
                 summaryOnly = false,
-                minSimilarity = 0.25
+                minSimilarity = 0.25,
+                fullMap = false
             } = options;
 
             const allNodes = store.getAllNodes();
             const totalNodes = allNodes.length;
+
+            // Full map requested - return entire structure
+            if (fullMap) {
+                return {
+                    mode: 'full',
+                    structure: this.buildCompactTree(store.data, { maxDepth: 15 }),
+                    stats: { total: totalNodes, included: totalNodes, mode: 'full-requested' }
+                };
+            }
 
             // For small maps, just return full structure (not worth optimizing)
             if (totalNodes <= 30) {
@@ -26692,13 +26702,19 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             const selectedNodeData = selectedNode ? store.findNode(selectedNode.userData.id) : null;
             const totalNodes = allNodes.length;
 
+            // Check if user wants full map context
+            const messageLower = userMessage.toLowerCase();
+            const wantsFullMap = ['entire map', 'full map', 'all nodes', 'whole map', 'complete map', 'everything in my map', 'show me all'].some(kw => messageLower.includes(kw));
+
             // Use optimized map context - semantic search for relevant nodes only
             // Reduces token usage from ~25K to ~3-5K for large maps
+            // Unless user explicitly requests full map view
             const mapContext = await this.getRelevantMapContext(userMessage, {
-                maxNodes: 50,
+                maxNodes: wantsFullMap ? 9999 : 50,
                 includeAncestors: true,
                 includeTopLevel: true,
-                summaryOnly: false
+                summaryOnly: false,
+                fullMap: wantsFullMap
             });
 
             const treeStructure = mapContext.structure;
@@ -27312,6 +27328,7 @@ Both AI features can:
 === END APP KNOWLEDGE ===
 
 CURRENT CONTEXT:
+- Today's date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
 - Total nodes in map: ${totalNodes}
 - Map context: ${mapContext.stats.included} relevant nodes shown (${mapContext.stats.reduction} token optimization)
 - Selected node: ${selectedNodeData ? `"${selectedNodeData.label}" [id:${selectedNodeData.id}]${selectedNodeData.children?.length ? ` with ${selectedNodeData.children.length} children` : ''}` : 'None'}
@@ -27392,10 +27409,36 @@ GUIDELINES:
 - When capturing quick voice input, treat it as precious - help shape raw thoughts into clear nodes
 - Suggest next steps: "Would you like to break this down further?" or "Should we connect this to...?"
 - Only include actions when the user wants to modify the map
-- Use web search for current events, prices, news, etc.
 - Keep responses concise but insightful
 - When users ask how to do something in MYND, explain and offer to do it for them
 - When users paste code (any language), provide thoughtful code review: identify issues, suggest improvements, explain functionality, and discuss best practices - you are not limited to only MYND code
+
+=== RESPONSE STYLE (IMPORTANT) ===
+
+**BE CONCISE:**
+- Keep responses SHORT and focused - 2-4 sentences for simple questions
+- Avoid walls of text, excessive bullet points, and over-explanation
+- Get to the point quickly, then offer to elaborate if needed
+- One clear insight is better than ten mediocre ones
+
+**GIVE ACTIONABLE GUIDANCE:**
+- When advising on implementation or business steps, give ONE clear next action
+- Don't overwhelm with 10-step plans - focus on the immediate next step
+- Make instructions simple and specific: "Do X, then we'll discuss Y"
+- After they complete a step, guide them to the next one
+
+**WRITE NATURALLY:**
+- Use normal prose and conversational language
+- Do NOT structure every response as bullet points with citations
+- Do NOT use <cite> tags or academic-style citations in casual conversation
+- Write like a helpful colleague, not a research paper
+- Reference nodes by NAME, not ID (say "Morning Routine" not "node-abc123")
+
+**WEB SEARCH USAGE:**
+- ONLY use web search for genuinely current/external information: today's news, live prices, recent events, external documentation
+- Do NOT web search for questions about MYND itself, the user's map, or general conversation
+- Do NOT cite web results for basic statements - just speak naturally
+- If you do search, integrate findings naturally without excessive citation markup
 
 === CRITICAL NODE CREATION RULES ===
 
@@ -27792,13 +27835,13 @@ User: "how do I search my map"
 12. When unsure if user wants to add, ask in your message
 
 **WEB SEARCH CAPABILITY:**
-You have access to real-time web search. For questions about:
+You have access to real-time web search. ONLY use it for:
 - Current stock prices, crypto prices, market data
-- Latest news and current events  
+- Latest news and current events
 - Weather, time zones, live information
 - Recent developments, announcements
-- Anything that requires up-to-date information
-Use your web search to get accurate, current data before responding.
+Do NOT use web search for general conversation, questions about MYND, or the user's map content.
+When you do search, integrate results naturally - do NOT fill responses with <cite> tags or bullet-pointed citations.
 
 === END EXAMPLES ===
 
@@ -29088,6 +29131,7 @@ MYND is a 3D spatial mind map. Nodes are spheres connected hierarchically. Users
 
 USER INPUT: "${cleanedTranscript}"
 
+TODAY'S DATE: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
 SELECTED NODE: ${currentContext || 'None selected'}
 ${neuralContext}
 CURRENT MAP STRUCTURE (with node IDs):
@@ -29521,13 +29565,13 @@ User: "how do I search my map"
 12. When unsure, use "respond" with "offerToAdd": true so user can choose
 
 **WEB SEARCH CAPABILITY:**
-You have access to real-time web search. For questions about:
+You have access to real-time web search. ONLY use it for:
 - Current stock prices, crypto prices, market data
-- Latest news and current events  
+- Latest news and current events
 - Weather, time zones, live information
 - Recent developments, announcements
-- Anything that requires up-to-date information
-Use your web search to get accurate, current data before responding.
+Do NOT use web search for general conversation, questions about MYND, or the user's map content.
+When you do search, integrate results naturally - do NOT fill responses with <cite> tags or bullet-pointed citations.
 
 Respond with JSON only:`;
 
