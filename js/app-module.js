@@ -1,7 +1,377 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    console.log('🔵 MAIN MODULE: Checkpoint 1 - Imports complete');
+    // ═══════════════════════════════════════════════════════════════════
+    // CORE UTILITIES - Optimization infrastructure
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * DOM Cache - Eliminates repeated getElementById calls
+     * Caches elements on first access for O(1) subsequent lookups
+     */
+    const DOMCache = {
+        _cache: new Map(),
+        _queryCache: new Map(),
+
+        get(id) {
+            if (!this._cache.has(id)) {
+                const el = document.getElementById(id);
+                if (el) this._cache.set(id, el);
+                return el;
+            }
+            return this._cache.get(id);
+        },
+
+        query(selector, parent = document) {
+            const key = `${parent === document ? 'doc' : parent.id || 'el'}:${selector}`;
+            if (!this._queryCache.has(key)) {
+                const el = parent.querySelector(selector);
+                if (el) this._queryCache.set(key, el);
+                return el;
+            }
+            return this._queryCache.get(key);
+        },
+
+        queryAll(selector, parent = document) {
+            return parent.querySelectorAll(selector);
+        },
+
+        invalidate(id) {
+            this._cache.delete(id);
+            // Also clear related query cache entries
+            for (const key of this._queryCache.keys()) {
+                if (key.includes(id)) this._queryCache.delete(key);
+            }
+        },
+
+        clear() {
+            this._cache.clear();
+            this._queryCache.clear();
+        }
+    };
+
+    /**
+     * Event Manager - Tracks all event listeners for proper cleanup
+     * Prevents memory leaks from orphaned listeners
+     */
+    const EventManager = {
+        _listeners: new Map(),
+        _nextId: 0,
+
+        add(target, event, handler, options = {}) {
+            const id = this._nextId++;
+            const wrappedHandler = options.once ? (e) => {
+                handler(e);
+                this.remove(id);
+            } : handler;
+
+            target.addEventListener(event, wrappedHandler, options);
+            this._listeners.set(id, { target, event, handler: wrappedHandler, options });
+            return id;
+        },
+
+        remove(id) {
+            const listener = this._listeners.get(id);
+            if (listener) {
+                listener.target.removeEventListener(listener.event, listener.handler, listener.options);
+                this._listeners.delete(id);
+            }
+        },
+
+        removeByTarget(target) {
+            for (const [id, listener] of this._listeners) {
+                if (listener.target === target) {
+                    this.remove(id);
+                }
+            }
+        },
+
+        removeByEvent(event) {
+            for (const [id, listener] of this._listeners) {
+                if (listener.event === event) {
+                    this.remove(id);
+                }
+            }
+        },
+
+        clear() {
+            for (const id of this._listeners.keys()) {
+                this.remove(id);
+            }
+        },
+
+        getCount() {
+            return this._listeners.size;
+        }
+    };
+
+    /**
+     * Interval Manager - Tracks all setInterval calls for cleanup
+     * Prevents orphaned intervals running indefinitely
+     */
+    const IntervalManager = {
+        _intervals: new Map(),
+        _nextId: 0,
+
+        set(callback, delay, name = null) {
+            const id = this._nextId++;
+            const intervalId = setInterval(callback, delay);
+            this._intervals.set(id, { intervalId, name, delay, callback });
+            return id;
+        },
+
+        clear(id) {
+            const interval = this._intervals.get(id);
+            if (interval) {
+                clearInterval(interval.intervalId);
+                this._intervals.delete(id);
+            }
+        },
+
+        clearByName(name) {
+            for (const [id, interval] of this._intervals) {
+                if (interval.name === name) {
+                    this.clear(id);
+                }
+            }
+        },
+
+        clearAll() {
+            for (const id of this._intervals.keys()) {
+                this.clear(id);
+            }
+        },
+
+        getCount() {
+            return this._intervals.size;
+        }
+    };
+
+    /**
+     * Timeout Manager - Tracks all setTimeout calls for cleanup
+     */
+    const TimeoutManager = {
+        _timeouts: new Map(),
+        _nextId: 0,
+
+        set(callback, delay, name = null) {
+            const id = this._nextId++;
+            const timeoutId = setTimeout(() => {
+                callback();
+                this._timeouts.delete(id);
+            }, delay);
+            this._timeouts.set(id, { timeoutId, name });
+            return id;
+        },
+
+        clear(id) {
+            const timeout = this._timeouts.get(id);
+            if (timeout) {
+                clearTimeout(timeout.timeoutId);
+                this._timeouts.delete(id);
+            }
+        },
+
+        clearAll() {
+            for (const [id, timeout] of this._timeouts) {
+                clearTimeout(timeout.timeoutId);
+            }
+            this._timeouts.clear();
+        }
+    };
+
+    /**
+     * Camera Animation System - Unified, cancelable camera animations
+     * Replaces multiple duplicate animate() functions
+     */
+    const CameraAnimator = {
+        _currentAnimation: null,
+        _rafId: null,
+
+        animate(options) {
+            const {
+                camera,
+                controls,
+                startPos,
+                endPos,
+                startTarget = null,
+                endTarget = null,
+                duration = 600,
+                easing = (t) => 1 - Math.pow(1 - t, 3), // easeOutCubic
+                onUpdate = null,
+                onComplete = null
+            } = options;
+
+            // Cancel any existing animation
+            this.cancel();
+
+            const startTime = performance.now();
+            const tempTarget = startTarget ? startTarget.clone() : null;
+
+            return new Promise((resolve) => {
+                const tick = (currentTime) => {
+                    const elapsed = currentTime - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const ease = easing(progress);
+
+                    // Update camera position
+                    camera.position.lerpVectors(startPos, endPos, ease);
+
+                    // Update controls target if specified
+                    if (startTarget && endTarget && controls) {
+                        tempTarget.lerpVectors(startTarget, endTarget, ease);
+                        controls.target.copy(tempTarget);
+                    }
+
+                    // Custom update callback
+                    if (onUpdate) onUpdate(ease, progress);
+
+                    if (progress < 1) {
+                        this._rafId = requestAnimationFrame(tick);
+                    } else {
+                        this._currentAnimation = null;
+                        this._rafId = null;
+                        if (onComplete) onComplete();
+                        resolve();
+                    }
+                };
+
+                this._currentAnimation = { camera, controls, resolve };
+                this._rafId = requestAnimationFrame(tick);
+            });
+        },
+
+        cancel() {
+            if (this._rafId) {
+                cancelAnimationFrame(this._rafId);
+                this._rafId = null;
+            }
+            if (this._currentAnimation) {
+                this._currentAnimation.resolve();
+                this._currentAnimation = null;
+            }
+        },
+
+        isAnimating() {
+            return this._currentAnimation !== null;
+        }
+    };
+
+    /**
+     * Async Utilities - Clean async patterns
+     */
+    const AsyncUtils = {
+        /**
+         * Wait for a condition to be true with timeout
+         */
+        async waitFor(condition, { timeout = 30000, interval = 100, name = 'condition' } = {}) {
+            const startTime = Date.now();
+            while (Date.now() - startTime < timeout) {
+                if (condition()) return true;
+                await new Promise(r => setTimeout(r, interval));
+            }
+            console.warn(`AsyncUtils.waitFor: Timeout waiting for ${name}`);
+            return false;
+        },
+
+        /**
+         * Debounce a function
+         */
+        debounce(fn, delay) {
+            let timeoutId;
+            return (...args) => {
+                clearTimeout(timeoutId);
+                timeoutId = setTimeout(() => fn(...args), delay);
+            };
+        },
+
+        /**
+         * Throttle a function
+         */
+        throttle(fn, limit) {
+            let inThrottle;
+            return (...args) => {
+                if (!inThrottle) {
+                    fn(...args);
+                    inThrottle = true;
+                    setTimeout(() => inThrottle = false, limit);
+                }
+            };
+        }
+    };
+
+    /**
+     * Activity Tracker - Centralized user activity monitoring
+     * Prevents duplicate activity listeners across the codebase
+     */
+    const ActivityTracker = {
+        _lastActivity: Date.now(),
+        _initialized: false,
+        _throttledUpdate: null,
+
+        init() {
+            if (this._initialized) return;
+            this._initialized = true;
+
+            const updateActivity = () => {
+                this._lastActivity = Date.now();
+            };
+
+            // Use throttled mousemove to avoid performance issues
+            this._throttledUpdate = AsyncUtils.throttle(updateActivity, 5000);
+
+            EventManager.add(document, 'click', updateActivity);
+            EventManager.add(document, 'keydown', updateActivity);
+            EventManager.add(document, 'keypress', updateActivity);
+            EventManager.add(document, 'touchstart', updateActivity);
+            EventManager.add(document, 'mousemove', this._throttledUpdate);
+
+            console.log('✓ ActivityTracker initialized');
+        },
+
+        getLastActivity() {
+            return this._lastActivity;
+        },
+
+        isActive(withinMs = 120000) {
+            return Date.now() - this._lastActivity < withinMs;
+        },
+
+        getIdleTime() {
+            return Date.now() - this._lastActivity;
+        }
+    };
+
+    /**
+     * Vector3 Pool - Reuse Vector3 objects to reduce GC pressure
+     */
+    const Vector3Pool = {
+        _pool: [],
+        _maxSize: 50,
+
+        get() {
+            return this._pool.pop() || new THREE.Vector3();
+        },
+
+        release(v) {
+            if (this._pool.length < this._maxSize) {
+                v.set(0, 0, 0);
+                this._pool.push(v);
+            }
+        },
+
+        releaseAll(vectors) {
+            vectors.forEach(v => this.release(v));
+        }
+    };
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+        EventManager.clear();
+        IntervalManager.clearAll();
+        TimeoutManager.clearAll();
+        CameraAnimator.cancel();
+    });
 
     // CONFIG is now loaded from js/config.js
 
@@ -16479,29 +16849,21 @@ Respond with a JSON object:
         // IDLE & SCHEDULED EVOLUTION
         // ═══════════════════════════════════════════════════════════════════
 
-        lastActivityTime: Date.now(),
-        idleCheckInterval: null,
-        scheduledInterval: null,
+        idleCheckIntervalId: null,
+        scheduledIntervalId: null,
 
         setupIdleDetection() {
-            // Track user activity
-            const updateActivity = () => {
-                this.lastActivityTime = Date.now();
-            };
+            // Use centralized ActivityTracker instead of duplicate listeners
+            ActivityTracker.init();
 
-            document.addEventListener('click', updateActivity);
-            document.addEventListener('keypress', updateActivity);
-            document.addEventListener('touchstart', updateActivity);
-            document.addEventListener('mousemove', this.throttle(updateActivity, 5000));
-
-            // Check for idle periodically
-            this.idleCheckInterval = setInterval(() => {
+            // Check for idle periodically using IntervalManager
+            this.idleCheckIntervalId = IntervalManager.set(() => {
                 this.checkIdleEvolution();
-            }, 30000); // Check every 30 seconds
+            }, 30000, 'autonomousEvolution-idleCheck'); // Check every 30 seconds
         },
 
         async checkIdleEvolution() {
-            const idleTime = Date.now() - this.lastActivityTime;
+            const idleTime = ActivityTracker.getIdleTime();
 
             if (idleTime >= this.config.minIdleTimeMs && !this.isRunning) {
                 // User has been idle - consider auto-evolution
@@ -16517,18 +16879,19 @@ Respond with a JSON object:
         },
 
         setupScheduledEvolution() {
-            if (this.scheduledInterval) {
-                clearInterval(this.scheduledInterval);
+            // Clear existing interval if any
+            if (this.scheduledIntervalId) {
+                IntervalManager.clear(this.scheduledIntervalId);
             }
 
-            this.scheduledInterval = setInterval(() => {
+            this.scheduledIntervalId = IntervalManager.set(() => {
                 if (!this.isRunning) {
                     // Rotate through modes
                     const modes = this.config.evolutionModes;
                     const mode = modes[this.history.sessions.length % modes.length];
                     this.startSession(mode, { maxIterations: 5 });
                 }
-            }, this.config.scheduledIntervalMs);
+            }, this.config.scheduledIntervalMs, 'autonomousEvolution-scheduled');
         },
 
         // ═══════════════════════════════════════════════════════════════════
@@ -20555,20 +20918,19 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
     // ═══════════════════════════════════════════════════════════════════
     // TOAST NOTIFICATIONS
     // ═══════════════════════════════════════════════════════════════════
+
+    // Pre-defined icon map (avoid object creation on each call)
+    const TOAST_ICONS = { success: '✓', error: '✕', info: 'i' };
+
     function showToast(message, type = 'info', duration = 3000) {
-        const container = document.getElementById('toast-container');
+        const container = DOMCache.get('toast-container');
+        if (!container) return;
+
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
-        
-        const icons = {
-            success: '✓',
-            error: '✕',
-            info: 'i'
-        };
-        
-        toast.innerHTML = `<span>${icons[type] || ''}</span> ${escapeHTML(message)}`;
+        toast.innerHTML = `<span>${TOAST_ICONS[type] || ''}</span> ${escapeHTML(message)}`;
         container.appendChild(toast);
-        
+
         setTimeout(() => {
             toast.classList.add('exiting');
             setTimeout(() => toast.remove(), 300);
@@ -20585,13 +20947,16 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                 cancelText = 'Cancel',
                 danger = false
             } = options;
-            
-            const modal = document.getElementById('confirm-modal');
-            const titleEl = document.getElementById('confirm-modal-title');
-            const messageEl = document.getElementById('confirm-modal-message');
-            const iconEl = document.getElementById('confirm-modal-icon');
-            const confirmBtn = document.getElementById('confirm-modal-confirm');
-            const cancelBtn = document.getElementById('confirm-modal-cancel');
+
+            // Use cached DOM elements
+            const modal = DOMCache.get('confirm-modal');
+            const titleEl = DOMCache.get('confirm-modal-title');
+            const messageEl = DOMCache.get('confirm-modal-message');
+            const iconEl = DOMCache.get('confirm-modal-icon');
+            const confirmBtn = DOMCache.get('confirm-modal-confirm');
+            const cancelBtn = DOMCache.get('confirm-modal-cancel');
+
+            if (!modal) return resolve(false);
             
             // Set content
             titleEl.textContent = title;
@@ -22628,50 +22993,49 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
     }
 
     function updateDepthIndicator() {
-        const indicator = document.getElementById('depth-indicator');
-        const pathEl = document.getElementById('depth-path');
-        
+        // Use cached DOM elements to avoid repeated lookups
+        const indicator = DOMCache.get('depth-indicator');
+        const pathEl = DOMCache.get('depth-path');
+
+        if (!indicator || !pathEl) return;
+
         if (currentContextId === store.data.id) {
             indicator.classList.remove('active');
             return;
         }
-        
+
         const path = store.getPath(currentContextId);
         if (path.length === 0) {
             indicator.classList.remove('active');
             return;
         }
-        
+
         pathEl.innerHTML = path.map((n, i) => {
             const isLast = i === path.length - 1;
             return `<span class="depth-item ${isLast ? 'current' : ''}">${escapeHTML(n.label)}</span>` +
                    (isLast ? '' : '<span style="margin: 0 4px;">›</span>');
         }).join('');
-        
+
         indicator.classList.add('active');
     }
 
     function resetCamera() {
         const isMobile = window.innerWidth <= 768;
         const targetPos = new THREE.Vector3(0, isMobile ? 12 : 8, isMobile ? 35 : 25);
-        const startPos = camera.position.clone();
-        const duration = 600;
-        const startTime = Date.now();
-        
+
         // Reset camera target goal to origin
         cameraTargetGoal.set(0, 0, 0);
-        
-        function animate() {
-            const elapsed = Date.now() - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            const ease = easeOutCubic(progress);
-            
-            camera.position.lerpVectors(startPos, targetPos, ease);
-            controls.target.lerp(new THREE.Vector3(0, 0, 0), ease);
-            
-            if (progress < 1) requestAnimationFrame(animate);
-        }
-        animate();
+
+        // Use unified CameraAnimator
+        CameraAnimator.animate({
+            camera,
+            controls,
+            startPos: camera.position.clone(),
+            endPos: targetPos,
+            startTarget: controls.target.clone(),
+            endTarget: new THREE.Vector3(0, 0, 0),
+            duration: 600
+        });
     }
 
     function zoomToFitMap(extraZoom = 0) {
@@ -22683,28 +23047,25 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                 maxDist = Math.max(maxDist, dist);
             }
         });
-        
+
         const isMobile = window.innerWidth <= 768;
         // Zoom out enough to see all nodes plus some padding - reduced by 50% for tighter view
         const targetDist = Math.max(maxDist * (isMobile ? 1.5 : 1.25) + extraZoom, isMobile ? 25 : 15);
         const targetPos = new THREE.Vector3(0, targetDist * 0.4, targetDist);
-        const startPos = camera.position.clone();
         const duration = isMobile ? 1500 : 800; // Slower on mobile
-        const startTime = Date.now();
-        
+
         cameraTargetGoal.set(0, 0, 0);
-        
-        function animate() {
-            const elapsed = Date.now() - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            const ease = easeOutCubic(progress);
-            
-            camera.position.lerpVectors(startPos, targetPos, ease);
-            controls.target.lerp(new THREE.Vector3(0, 0, 0), ease);
-            
-            if (progress < 1) requestAnimationFrame(animate);
-        }
-        animate();
+
+        // Use unified CameraAnimator
+        CameraAnimator.animate({
+            camera,
+            controls,
+            startPos: camera.position.clone(),
+            endPos: targetPos,
+            startTarget: controls.target.clone(),
+            endTarget: new THREE.Vector3(0, 0, 0),
+            duration
+        });
     }
     
     // Expose to global scope for sheet tools
@@ -22723,29 +23084,21 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         const currentOffset = new THREE.Vector3().subVectors(camera.position, controls.target);
 
         // Fixed zoom distance for consistent node size on screen regardless of depth
-        // Set to 2 for very close zoom on all nodes
         const consistentZoomDistance = 2;
 
-        // Animate camera to look at node
-        const startTarget = controls.target.clone();
-        const startPos = camera.position.clone();
         const endTarget = nodePos.clone();
         const endPos = nodePos.clone().add(currentOffset.normalize().multiplyScalar(consistentZoomDistance));
 
-        const duration = 400;
-        const startTime = Date.now();
-
-        function animate() {
-            const elapsed = Date.now() - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            const ease = easeOutCubic(progress);
-
-            controls.target.lerpVectors(startTarget, endTarget, ease);
-            camera.position.lerpVectors(startPos, endPos, ease);
-
-            if (progress < 1) requestAnimationFrame(animate);
-        }
-        animate();
+        // Use unified CameraAnimator
+        CameraAnimator.animate({
+            camera,
+            controls,
+            startPos: camera.position.clone(),
+            endPos,
+            startTarget: controls.target.clone(),
+            endTarget,
+            duration: 400
+        });
     }
 
     function expandAll() {
@@ -37012,34 +37365,24 @@ Summary:`
             setTimeout(() => {
                 cognitiveGT.processGraph(store);
             }, 2000);
-            
-            // Periodic graph processing (every 30 seconds when active)
-            let lastActivity = Date.now();
-            document.addEventListener('click', () => lastActivity = Date.now());
-            document.addEventListener('keydown', () => lastActivity = Date.now());
-            
-            setInterval(() => {
+
+            // Periodic graph processing (every 60 seconds when active)
+            // Uses shared activity tracking from ActivityTracker
+            IntervalManager.set(() => {
                 // Only process if user has been active in last 2 minutes
                 // And not on mobile (to save battery)
                 const isMobile = window.innerWidth <= 768;
-                if (Date.now() - lastActivity < 120000 && !isMobile) {
+                if (ActivityTracker.isActive(120000) && !isMobile) {
                     cognitiveGT.processGraph(store);
                 }
-            }, 60000); // Increased from 30s to 60s
-            
+            }, 60000, 'cognitiveGT-process');
+
             // Save CGT state periodically
-            setInterval(() => {
+            IntervalManager.set(() => {
                 if (cognitiveGT.initialized) {
                     cognitiveGT.saveState();
                 }
-            }, 120000); // Increased from 60s to 120s
-            
-            // Save on page unload
-            window.addEventListener('beforeunload', () => {
-                if (cognitiveGT.initialized) {
-                    cognitiveGT.saveState();
-                }
-            });
+            }, 120000, 'cognitiveGT-save');
             
         } catch (e) {
             console.warn('CGT initialization deferred:', e.message);
@@ -37050,23 +37393,15 @@ Summary:`
     setTimeout(async () => {
         try {
             await styleTransfer.initialize();
-            
+
             // Save periodically (less frequently on mobile)
             const saveInterval = window.innerWidth <= 768 ? 300000 : 120000; // 5min mobile, 2min desktop
-            setInterval(() => {
+            IntervalManager.set(() => {
                 if (styleTransfer.initialized) {
                     styleTransfer.save();
                 }
-            }, saveInterval);
-            
-            // Save on page unload and end session
-            window.addEventListener('beforeunload', () => {
-                if (styleTransfer.initialized) {
-                    styleTransfer.endSession();
-                    styleTransfer.save();
-                }
-            });
-            
+            }, saveInterval, 'styleTransfer-save');
+
         } catch (e) {
             console.warn('StyleTransfer initialization deferred:', e.message);
         }
@@ -37092,22 +37427,16 @@ Summary:`
     // Initialize CodeRAG System (codebase understanding for AI)
     setTimeout(async () => {
         try {
-            // Wait for neuralNet to be ready (need encoder)
-            if (neuralNet.isReady || neuralNet.encoder) {
+            // Wait for neuralNet encoder with clean async pattern
+            const hasEncoder = await AsyncUtils.waitFor(
+                () => neuralNet.isReady || neuralNet.encoder,
+                { timeout: 30000, interval: 2000, name: 'neuralNet.encoder' }
+            );
+
+            if (hasEncoder) {
+                if (neuralNet.encoder) codeRAG.setEncoder(neuralNet.encoder);
                 await codeRAG.initialize();
                 console.log('📚 CodeRAG stats:', codeRAG.getStats());
-            } else {
-                // Retry after neuralNet initializes
-                const checkEncoder = setInterval(async () => {
-                    if (neuralNet.encoder) {
-                        clearInterval(checkEncoder);
-                        codeRAG.setEncoder(neuralNet.encoder);
-                        await codeRAG.initialize();
-                        console.log('📚 CodeRAG stats:', codeRAG.getStats());
-                    }
-                }, 2000);
-                // Give up after 30 seconds
-                setTimeout(() => clearInterval(checkEncoder), 30000);
             }
         } catch (e) {
             console.warn('CodeRAG initialization deferred:', e.message);
@@ -37117,21 +37446,14 @@ Summary:`
     // Initialize CodeKnowledge System (self-awareness - concept to code mapping)
     setTimeout(async () => {
         try {
-            // CodeKnowledge depends on CodeRAG being ready
-            if (codeRAG.initialized) {
+            const ready = await AsyncUtils.waitFor(
+                () => codeRAG.initialized,
+                { timeout: 60000, interval: 3000, name: 'codeRAG' }
+            );
+
+            if (ready) {
                 await codeKnowledge.initialize();
                 console.log('🧠 CodeKnowledge stats:', codeKnowledge.getStats());
-            } else {
-                // Wait for CodeRAG to be ready
-                const checkCodeRAG = setInterval(async () => {
-                    if (codeRAG.initialized) {
-                        clearInterval(checkCodeRAG);
-                        await codeKnowledge.initialize();
-                        console.log('🧠 CodeKnowledge stats:', codeKnowledge.getStats());
-                    }
-                }, 3000);
-                // Give up after 60 seconds
-                setTimeout(() => clearInterval(checkCodeRAG), 60000);
             }
         } catch (e) {
             console.warn('CodeKnowledge initialization deferred:', e.message);
@@ -37141,21 +37463,14 @@ Summary:`
     // Initialize CodePretraining System (deep pre-trained codebase understanding)
     setTimeout(async () => {
         try {
-            // CodePretraining depends on CodeRAG being ready
-            if (codeRAG.initialized) {
+            const ready = await AsyncUtils.waitFor(
+                () => codeRAG.initialized,
+                { timeout: 90000, interval: 3000, name: 'codeRAG for pretraining' }
+            );
+
+            if (ready) {
                 await CodePretraining.initialize();
                 console.log('🎓 CodePretraining stats:', CodePretraining.getStats());
-            } else {
-                // Wait for CodeRAG to be ready
-                const checkCodeRAG = setInterval(async () => {
-                    if (codeRAG.initialized) {
-                        clearInterval(checkCodeRAG);
-                        await CodePretraining.initialize();
-                        console.log('🎓 CodePretraining stats:', CodePretraining.getStats());
-                    }
-                }, 3000);
-                // Give up after 90 seconds
-                setTimeout(() => clearInterval(checkCodeRAG), 90000);
             }
         } catch (e) {
             console.warn('CodePretraining initialization deferred:', e.message);
@@ -37165,21 +37480,14 @@ Summary:`
     // Initialize CodeAnalyzer System (comprehensive self-improvement analysis)
     setTimeout(async () => {
         try {
-            // CodeAnalyzer depends on CodePretraining being ready
-            if (CodePretraining.initialized) {
+            const ready = await AsyncUtils.waitFor(
+                () => CodePretraining.initialized,
+                { timeout: 120000, interval: 3000, name: 'CodePretraining' }
+            );
+
+            if (ready) {
                 await CodeAnalyzer.initialize();
                 console.log('🔍 CodeAnalyzer stats:', CodeAnalyzer.getStats());
-            } else {
-                // Wait for CodePretraining to be ready
-                const checkCodePretraining = setInterval(async () => {
-                    if (CodePretraining.initialized) {
-                        clearInterval(checkCodePretraining);
-                        await CodeAnalyzer.initialize();
-                        console.log('🔍 CodeAnalyzer stats:', CodeAnalyzer.getStats());
-                    }
-                }, 3000);
-                // Give up after 120 seconds
-                setTimeout(() => clearInterval(checkCodePretraining), 120000);
             }
         } catch (e) {
             console.warn('CodeAnalyzer initialization deferred:', e.message);
