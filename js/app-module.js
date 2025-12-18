@@ -30897,13 +30897,21 @@ MYND is your second brain - an intelligent extension of your memory and thinking
         setTimeout(updateVisionPreview, 100);
 
         // Initialize VisionCore with stored/default vision on startup
+        // Always load the stored vision (user's custom) over any default
         setTimeout(async () => {
-            const storedVision = localStorage.getItem('mynd_vision_document') || DEFAULT_MYND_VISION;
-            if (typeof VisionCore !== 'undefined' && !VisionCore.vision?.raw) {
-                await VisionCore.setVision(storedVision);
-                console.log('🎯 Self Developer: VisionCore initialized with vision document');
+            const storedVision = localStorage.getItem('mynd_vision_document');
+            if (typeof VisionCore !== 'undefined') {
+                if (storedVision) {
+                    // User has a custom vision - always use it
+                    await VisionCore.setVision(storedVision);
+                    console.log('🎯 Self Developer: VisionCore loaded custom vision document');
+                } else if (!VisionCore.vision?.raw) {
+                    // No custom vision, use default
+                    await VisionCore.setVision(DEFAULT_MYND_VISION);
+                    console.log('🎯 Self Developer: VisionCore initialized with default vision');
+                }
             }
-        }, 3000);
+        }, 2000);
     }
 
     // ═══════════════════════════════════════════════════════════════════
