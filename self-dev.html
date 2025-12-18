@@ -6266,7 +6266,40 @@
             color: var(--text-primary);
             border-bottom-left-radius: 4px;
         }
-        
+
+        /* BAPI (Local Brain) insight messages */
+        .chat-message.bapi {
+            align-self: flex-start;
+            max-width: 95%;
+        }
+
+        .chat-message.bapi .chat-message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .chat-message.bapi .chat-message-role {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #a855f7;
+        }
+
+        .chat-message.bapi .chat-message-content {
+            padding: 12px 16px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(139, 92, 246, 0.05));
+            border: 1px solid rgba(168, 85, 247, 0.2);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .chat-message.bapi .chat-message-content strong {
+            color: #a855f7;
+        }
+
         .chat-message-time {
             font-size: 0.75rem;
             color: var(--text-muted);

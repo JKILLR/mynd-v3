@@ -353,6 +353,98 @@ const LocalBrain = {
     },
 
     // ═══════════════════════════════════════════════════════════════════
+    // CODE EMBEDDING - Parse codebase into map
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Parse the MYND codebase into map-ready nodes.
+     * Use this for MYND to analyze its own architecture.
+     * @returns {Promise<Object>} Parsed code structure
+     */
+    async parseCodebase() {
+        if (!this.isAvailable) {
+            console.log('🧠 LocalBrain.parseCodebase: Server not available');
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/code/parse`);
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🧠 Codebase parsed: ${result.stats.total_nodes} nodes (${result.stats.js_files} JS, ${result.stats.py_files} Python)`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.parseCodebase failed:', e);
+        }
+
+        return { error: 'Parse failed' };
+    },
+
+    /**
+     * Import parsed codebase as a new branch in the map.
+     * @param {Function} addChildFn - Function to add child nodes (e.g., from store)
+     * @param {string} parentId - ID of parent node to attach code tree to
+     */
+    async importCodebaseToMap(addChildFn, parentId) {
+        const result = await this.parseCodebase();
+        if (result.error) {
+            console.error('Failed to parse codebase:', result.error);
+            return { success: false, error: result.error };
+        }
+
+        // Convert parsed nodes to map format
+        const codeRoot = result.nodes.find(n => n.type === 'root');
+        if (!codeRoot) {
+            return { success: false, error: 'No root node in parsed code' };
+        }
+
+        // Recursive function to add nodes
+        let addedCount = 0;
+        const addNodes = async (nodeData, targetParentId) => {
+            const newNode = await addChildFn(targetParentId, {
+                label: nodeData.label,
+                description: nodeData.type,
+                color: this._getCodeNodeColor(nodeData.type)
+            });
+
+            addedCount++;
+
+            // Add children
+            if (nodeData.children && nodeData.children.length > 0) {
+                for (const childId of nodeData.children) {
+                    const childNode = result.nodes.find(n => n.id === childId);
+                    if (childNode) {
+                        await addNodes(childNode, newNode.id);
+                    }
+                }
+            }
+
+            return newNode;
+        };
+
+        // Start adding from code root
+        await addNodes(codeRoot, parentId);
+
+        console.log(`🧠 Imported ${addedCount} code nodes into map`);
+        return { success: true, nodesAdded: addedCount };
+    },
+
+    // Get color based on code node type
+    _getCodeNodeColor(type) {
+        const colors = {
+            'root': '#a855f7',      // Purple - code root
+            'directory': '#3b82f6', // Blue - directories
+            'file': '#22c55e',      // Green - files
+            'class': '#f59e0b',     // Orange - classes
+            'object': '#ec4899',    // Pink - objects
+            'function': '#06b6d4'   // Cyan - functions
+        };
+        return colors[type] || null;
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
     // VOICE (Whisper)
     // ═══════════════════════════════════════════════════════════════════
 

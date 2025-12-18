@@ -638,6 +638,187 @@ async def map_status():
         "last_sync": brain.map_last_sync
     }
 
+# ═══════════════════════════════════════════════════════════════════
+# CODE EMBEDDING - Parse codebase into map structure
+# ═══════════════════════════════════════════════════════════════════
+
+@app.get("/code/parse")
+async def parse_codebase():
+    """
+    Parse the MYND codebase into a map-ready structure.
+    Returns nodes for files, classes, functions that can be imported into the map.
+    This enables MYND to analyze its own architecture.
+    """
+    import re
+    import pathlib
+
+    start = time.time()
+    base_dir = pathlib.Path(__file__).parent.parent
+
+    nodes = []
+    node_id = 0
+
+    def make_id():
+        nonlocal node_id
+        node_id += 1
+        return f"code_{node_id}"
+
+    # Root node
+    root_id = make_id()
+    nodes.append({
+        "id": root_id,
+        "label": "MYND Codebase",
+        "type": "root",
+        "children": []
+    })
+
+    # Parse JavaScript files
+    js_dir_id = make_id()
+    nodes.append({
+        "id": js_dir_id,
+        "label": "JavaScript (Frontend)",
+        "type": "directory",
+        "parentId": root_id,
+        "children": []
+    })
+    nodes[0]["children"].append(js_dir_id)
+
+    js_files = list((base_dir / "js").glob("*.js"))
+    for js_file in js_files:
+        file_id = make_id()
+        content = js_file.read_text(errors='ignore')
+
+        # Extract functions
+        functions = re.findall(r'(?:function\s+(\w+)|const\s+(\w+)\s*=\s*(?:async\s+)?(?:function|\([^)]*\)\s*=>))', content)
+        function_names = [f[0] or f[1] for f in functions if f[0] or f[1]]
+
+        # Extract objects/classes
+        objects = re.findall(r'const\s+(\w+)\s*=\s*\{', content)
+
+        file_node = {
+            "id": file_id,
+            "label": js_file.name,
+            "type": "file",
+            "parentId": js_dir_id,
+            "children": [],
+            "stats": {
+                "lines": len(content.split('\n')),
+                "functions": len(function_names),
+                "objects": len(objects)
+            }
+        }
+
+        # Add function nodes (limit to avoid overwhelming)
+        for func_name in function_names[:20]:
+            func_id = make_id()
+            file_node["children"].append(func_id)
+            nodes.append({
+                "id": func_id,
+                "label": f"{func_name}()",
+                "type": "function",
+                "parentId": file_id,
+                "children": []
+            })
+
+        # Add object nodes
+        for obj_name in objects[:10]:
+            obj_id = make_id()
+            file_node["children"].append(obj_id)
+            nodes.append({
+                "id": obj_id,
+                "label": obj_name,
+                "type": "object",
+                "parentId": file_id,
+                "children": []
+            })
+
+        nodes.append(file_node)
+        # Find js_dir node and add this file
+        for n in nodes:
+            if n["id"] == js_dir_id:
+                n["children"].append(file_id)
+                break
+
+    # Parse Python files
+    py_dir_id = make_id()
+    nodes.append({
+        "id": py_dir_id,
+        "label": "Python (Backend)",
+        "type": "directory",
+        "parentId": root_id,
+        "children": []
+    })
+    nodes[0]["children"].append(py_dir_id)
+
+    py_files = list((base_dir / "mynd-brain").glob("**/*.py"))
+    for py_file in py_files:
+        file_id = make_id()
+        content = py_file.read_text(errors='ignore')
+
+        # Extract classes
+        classes = re.findall(r'class\s+(\w+)', content)
+
+        # Extract functions
+        functions = re.findall(r'def\s+(\w+)', content)
+        # Filter out private methods for cleaner output
+        public_functions = [f for f in functions if not f.startswith('_')]
+
+        relative_path = py_file.relative_to(base_dir / "mynd-brain")
+        file_node = {
+            "id": file_id,
+            "label": str(relative_path),
+            "type": "file",
+            "parentId": py_dir_id,
+            "children": [],
+            "stats": {
+                "lines": len(content.split('\n')),
+                "classes": len(classes),
+                "functions": len(public_functions)
+            }
+        }
+
+        # Add class nodes
+        for class_name in classes:
+            class_id = make_id()
+            file_node["children"].append(class_id)
+            nodes.append({
+                "id": class_id,
+                "label": class_name,
+                "type": "class",
+                "parentId": file_id,
+                "children": []
+            })
+
+        # Add function nodes (limit to top-level, non-private)
+        for func_name in public_functions[:15]:
+            func_id = make_id()
+            file_node["children"].append(func_id)
+            nodes.append({
+                "id": func_id,
+                "label": f"{func_name}()",
+                "type": "function",
+                "parentId": file_id,
+                "children": []
+            })
+
+        nodes.append(file_node)
+        for n in nodes:
+            if n["id"] == py_dir_id:
+                n["children"].append(file_id)
+                break
+
+    elapsed = (time.time() - start) * 1000
+
+    return {
+        "nodes": nodes,
+        "stats": {
+            "total_nodes": len(nodes),
+            "js_files": len(js_files),
+            "py_files": len(py_files)
+        },
+        "time_ms": elapsed
+    }
+
 @app.post("/embed", response_model=EmbedResponse)
 async def embed_text(request: EmbedRequest):
     """Generate embedding for a single text."""
