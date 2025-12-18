@@ -1699,7 +1699,160 @@
             }
         }
     };
-    
+
+    // ═══════════════════════════════════════════════════════════════════
+    // MEMORY MONITOR - Track and optimize memory usage
+    // ═══════════════════════════════════════════════════════════════════
+    const MemoryMonitor = {
+        lastCheck: null,
+        history: [],
+        maxHistory: 100,
+
+        // Get current memory stats
+        getStats() {
+            const stats = {
+                timestamp: Date.now(),
+                jsHeap: null,
+                tensorCount: 0,
+                tensorMemoryMB: 0,
+                caches: {},
+                localStorage: 0,
+                indexedDB: null
+            };
+
+            // JS Heap (Chrome only)
+            if (performance.memory) {
+                stats.jsHeap = {
+                    usedMB: Math.round(performance.memory.usedJSHeapSize / 1024 / 1024),
+                    totalMB: Math.round(performance.memory.totalJSHeapSize / 1024 / 1024),
+                    limitMB: Math.round(performance.memory.jsHeapSizeLimit / 1024 / 1024),
+                    usagePercent: Math.round((performance.memory.usedJSHeapSize / performance.memory.jsHeapSizeLimit) * 100)
+                };
+            }
+
+            // TensorFlow.js tensors
+            if (typeof tf !== 'undefined') {
+                const tfMemory = tf.memory();
+                stats.tensorCount = tfMemory.numTensors;
+                stats.tensorMemoryMB = Math.round(tfMemory.numBytes / 1024 / 1024 * 100) / 100;
+            }
+
+            // Cache sizes
+            if (typeof neuralNet !== 'undefined') {
+                stats.caches.embeddings = neuralNet.embeddings?.size || 0;
+                stats.caches.patterns = neuralNet.expansionPatterns?.size || 0;
+            }
+            if (typeof semanticMemory !== 'undefined') {
+                stats.caches.memories = semanticMemory.memories?.length || 0;
+            }
+            if (typeof SemanticSearch !== 'undefined' && SemanticSearch.embeddingCache) {
+                stats.caches.semanticEmbeddings = SemanticSearch.embeddingCache.size || 0;
+            }
+
+            // localStorage usage
+            try {
+                let total = 0;
+                for (let key in localStorage) {
+                    if (localStorage.hasOwnProperty(key)) {
+                        total += localStorage[key].length * 2; // UTF-16
+                    }
+                }
+                stats.localStorage = Math.round(total / 1024); // KB
+            } catch (e) {}
+
+            this.lastCheck = stats;
+            this.history.push(stats);
+            if (this.history.length > this.maxHistory) {
+                this.history.shift();
+            }
+
+            return stats;
+        },
+
+        // Format stats for display
+        formatStats(stats = null) {
+            const s = stats || this.getStats();
+            let output = '📊 MEMORY USAGE:\n';
+
+            if (s.jsHeap) {
+                output += `  JS Heap: ${s.jsHeap.usedMB}MB / ${s.jsHeap.limitMB}MB (${s.jsHeap.usagePercent}%)\n`;
+            }
+            if (s.tensorCount > 0) {
+                output += `  TF Tensors: ${s.tensorCount} (${s.tensorMemoryMB}MB)\n`;
+            }
+            output += `  localStorage: ${s.localStorage}KB\n`;
+            output += `  Caches: embeddings=${s.caches.embeddings || 0}, patterns=${s.caches.patterns || 0}, memories=${s.caches.memories || 0}\n`;
+
+            return output;
+        },
+
+        // Check for potential issues
+        checkHealth() {
+            const stats = this.getStats();
+            const warnings = [];
+
+            if (stats.jsHeap && stats.jsHeap.usagePercent > 80) {
+                warnings.push(`⚠️ High memory usage: ${stats.jsHeap.usagePercent}%`);
+            }
+            if (stats.tensorCount > 100) {
+                warnings.push(`⚠️ Many tensors active: ${stats.tensorCount} (possible leak)`);
+            }
+            if (stats.localStorage > 4000) {
+                warnings.push(`⚠️ localStorage near limit: ${stats.localStorage}KB`);
+            }
+
+            return { stats, warnings, healthy: warnings.length === 0 };
+        },
+
+        // Clean up to free memory
+        async cleanup() {
+            console.log('🧹 Running memory cleanup...');
+            let freed = 0;
+
+            // Dispose any leaked tensors (if TF available)
+            if (typeof tf !== 'undefined') {
+                const before = tf.memory().numTensors;
+                // Can't auto-dispose without knowing which are still needed
+                // But we can report
+                console.log(`  TF Tensors: ${before} active`);
+            }
+
+            // Clear old semantic memories (keep last 500)
+            if (typeof semanticMemory !== 'undefined' && semanticMemory.memories?.length > 500) {
+                const removed = semanticMemory.memories.length - 500;
+                semanticMemory.memories = semanticMemory.memories.slice(-500);
+                freed += removed;
+                console.log(`  Trimmed ${removed} old memories`);
+            }
+
+            // Clear embedding cache entries older than 1 hour
+            if (typeof SemanticSearch !== 'undefined' && SemanticSearch.embeddingCache) {
+                // Can't easily age-out without timestamps, but can limit size
+                if (SemanticSearch.embeddingCache.size > 1000) {
+                    const toRemove = SemanticSearch.embeddingCache.size - 1000;
+                    let count = 0;
+                    for (const key of SemanticSearch.embeddingCache.keys()) {
+                        if (count++ >= toRemove) break;
+                        SemanticSearch.embeddingCache.delete(key);
+                    }
+                    freed += toRemove;
+                    console.log(`  Cleared ${toRemove} cached embeddings`);
+                }
+            }
+
+            console.log(`🧹 Cleanup complete. Freed ~${freed} items.`);
+            return freed;
+        },
+
+        // Log to console
+        log() {
+            console.log(this.formatStats());
+        }
+    };
+
+    // Make MemoryMonitor globally accessible
+    window.MemoryMonitor = MemoryMonitor;
+
     // ═══════════════════════════════════════════════════════════════════
     // ATTACHMENT STORAGE - IndexedDB for file blobs
     // ═══════════════════════════════════════════════════════════════════
@@ -17448,7 +17601,18 @@ Respond with a JSON object:
             console.log('🎯 Initializing VisionCore...');
 
             try {
-                // Load from storage
+                // PRIORITY 1: Check for custom vision document (from vision editor)
+                // This takes precedence over cached VisionCore data
+                const customVision = localStorage.getItem('mynd_vision_document');
+                if (customVision && customVision.length > 50) {
+                    console.log('🎯 Found custom vision document, loading...');
+                    await this.setVision(customVision);
+                    this.initialized = true;
+                    console.log(`✓ VisionCore loaded CUSTOM vision: "${this.vision.title || 'Vision'}" with ${this.vision.goals.length} goals, ${this.vision.concepts.length} concepts`);
+                    return this.vision;
+                }
+
+                // PRIORITY 2: Load from VisionCore internal storage
                 const stored = this.loadFromStorage();
                 if (stored && stored.version === this.VERSION && stored.vision.raw) {
                     this.vision = stored.vision;
@@ -17457,7 +17621,7 @@ Respond with a JSON object:
                     return this.vision;
                 }
 
-                // Check if MYND-App map exists and has vision content
+                // PRIORITY 3: Check if MYND-App map exists and has vision content
                 await this.loadFromMYNDAppMap();
 
                 this.initialized = true;
@@ -17612,6 +17776,7 @@ Respond with a JSON object:
                 if (this.vision.raw) {
                     const fullEmbedding = await window.useModel.embed([this.vision.raw]);
                     this.vision.embedding = Array.from(fullEmbedding.arraySync()[0]);
+                    fullEmbedding.dispose(); // Clean up tensor
                 }
 
                 // Embed individual concepts for semantic search
@@ -17630,6 +17795,7 @@ Respond with a JSON object:
                         type: item.type,
                         embedding: Array.from(embedding.arraySync()[0])
                     });
+                    embedding.dispose(); // Clean up tensor
                 }
 
                 console.log(`🎯 Created ${this.vision.conceptEmbeddings.size} vision embeddings`);
@@ -17775,6 +17941,7 @@ Respond with a JSON object:
                 // Embed the action description
                 const actionEmbedding = await window.useModel.embed([description]);
                 const actionVec = actionEmbedding.arraySync()[0];
+                actionEmbedding.dispose(); // Clean up tensor
 
                 // Calculate cosine similarity with vision
                 const similarity = this.cosineSimilarity(actionVec, this.vision.embedding);
@@ -18664,6 +18831,26 @@ Respond with a JSON object:
             // Create semantic memory for significant feedback
             if (typeof semanticMemory !== 'undefined' && action !== 'ignored') {
                 this.createFeedbackMemory(feedback);
+            }
+
+            // === REAL-TIME CONVERSATION LEARNING ===
+            // Record this feedback in chatManager so the AI knows what it learned this session
+            if (typeof chatManager !== 'undefined' && action !== 'ignored') {
+                const detail = feedback.type === 'category'
+                    ? `${action === 'accepted' ? 'accepted' : 'rejected'} "${feedback.content?.predicted}" for "${feedback.context?.nodeLabel || 'content'}"`
+                    : `${action} ${feedback.type} suggestion`;
+
+                chatManager.recordSessionLearning('feedback', {
+                    action,
+                    type: feedback.type,
+                    detail
+                });
+
+                // Also boost pattern if accepted
+                if (action === 'accepted' && typeof neuralNet !== 'undefined') {
+                    const pattern = `${feedback.context?.parentLabel || 'parent'} → ${feedback.context?.nodeLabel || 'child'}`;
+                    chatManager.recordSessionLearning('pattern', pattern);
+                }
             }
 
             // Trigger BATCH learning if enough feedback has accumulated
@@ -26104,7 +26291,83 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         isProcessing: false,
         conversation: [], // {role: 'user'|'assistant', content: string, actions?: array, timestamp: number}
         maxHistory: 20, // Keep last 20 messages for context
-        
+
+        // Real-time conversation learning - tracks what was learned THIS session
+        sessionLearning: {
+            feedbackReceived: [],    // [{action, type, detail, timestamp}]
+            patternsLearned: [],     // What patterns were reinforced
+            preferencesUpdated: [],  // What preferences changed
+            lastUpdate: null
+        },
+
+        // Record real-time learning from this conversation
+        recordSessionLearning(type, data) {
+            const entry = {
+                type,
+                data,
+                timestamp: Date.now()
+            };
+
+            if (type === 'feedback') {
+                this.sessionLearning.feedbackReceived.push({
+                    action: data.action,
+                    feedbackType: data.type,
+                    detail: data.detail || '',
+                    timestamp: Date.now()
+                });
+            } else if (type === 'pattern') {
+                this.sessionLearning.patternsLearned.push(data);
+            } else if (type === 'preference') {
+                this.sessionLearning.preferencesUpdated.push(data);
+            }
+
+            this.sessionLearning.lastUpdate = Date.now();
+
+            // Keep only recent items (last 20)
+            if (this.sessionLearning.feedbackReceived.length > 20) {
+                this.sessionLearning.feedbackReceived.shift();
+            }
+
+            console.log(`🧠 Session learning recorded: ${type}`, data);
+        },
+
+        // Get context about what was learned in THIS conversation
+        getSessionLearningContext() {
+            const { feedbackReceived, patternsLearned } = this.sessionLearning;
+
+            if (feedbackReceived.length === 0 && patternsLearned.length === 0) {
+                return null;
+            }
+
+            let context = '\n🔄 LEARNED THIS CONVERSATION:\n';
+
+            // Recent feedback
+            if (feedbackReceived.length > 0) {
+                const recent = feedbackReceived.slice(-5);
+                recent.forEach(f => {
+                    const actionEmoji = f.action === 'accepted' ? '✓' : f.action === 'rejected' ? '✗' : '~';
+                    context += `  ${actionEmoji} ${f.feedbackType}: ${f.detail}\n`;
+                });
+            }
+
+            // Patterns learned
+            if (patternsLearned.length > 0) {
+                context += `  Patterns reinforced: ${patternsLearned.slice(-3).join(', ')}\n`;
+            }
+
+            return context;
+        },
+
+        // Clear session learning (on new conversation or page reload)
+        clearSessionLearning() {
+            this.sessionLearning = {
+                feedbackReceived: [],
+                patternsLearned: [],
+                preferencesUpdated: [],
+                lastUpdate: null
+            };
+        },
+
         init() {
             this.panel = document.getElementById('ai-chat-panel');
             this.messagesContainer = document.getElementById('chat-messages');
@@ -26328,7 +26591,35 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             
             // Save conversation
             this.saveConversation();
-            
+
+            // Store chat context in semantic memory for neural net learning
+            if (typeof semanticMemory !== 'undefined' && semanticMemory.loaded && content && content.length > 20) {
+                try {
+                    if (role === 'user') {
+                        // Store user queries as interests/topics
+                        semanticMemory.addMemory(
+                            'chat_query',
+                            `User asked about: ${content.slice(0, 300)}`,
+                            { source: 'ai_chat', type: 'query' }
+                        );
+                    } else if (role === 'assistant' && content.length > 100) {
+                        // Extract and store key insights from AI responses
+                        // Get the user's question for context
+                        const lastUserMsg = this.conversation.filter(m => m.role === 'user').slice(-1)[0];
+                        const topic = lastUserMsg ? lastUserMsg.content.slice(0, 100) : 'general';
+
+                        // Store the insight with topic context
+                        semanticMemory.addMemory(
+                            'chat_insight',
+                            `Discussion about "${topic}": ${content.slice(0, 500)}`,
+                            { source: 'ai_chat', type: 'insight', topic: topic.slice(0, 50) }
+                        );
+                    }
+                } catch (e) {
+                    console.warn('Failed to store chat memory:', e);
+                }
+            }
+
             // Render message
             this.renderMessage(message);
             
@@ -26902,6 +27193,16 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 // Feedback stats not critical
             }
 
+            // 7b. Real-time session learning (what was learned THIS conversation)
+            try {
+                const sessionLearning = this.getSessionLearningContext();
+                if (sessionLearning) {
+                    neuralContext += sessionLearning;
+                }
+            } catch (e) {
+                // Session learning not critical
+            }
+
             // Check for comprehensive code review requests (used by multiple context providers)
             const reviewKeywords = ['review the code', 'review code', 'code review', 'analyze the code', 'full review', 'comprehensive review', 'review self-dev', 'review the codebase', 'review codebase', 'audit the code', 'review this file', 'review the file'];
             const isComprehensiveReview = reviewKeywords.some(kw => messageLower.includes(kw));
@@ -27063,16 +27364,23 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
 
             // 14. VisionCore - Foundational vision, mission, goals, and values
             let visionContext = '';
-            if (VisionCore.initialized && VisionCore.vision.raw) {
-                try {
+            try {
+                // Ensure VisionCore is initialized (loads custom vision if available)
+                if (!VisionCore.initialized) {
+                    await VisionCore.initialize();
+                }
+
+                if (VisionCore.vision.raw) {
                     // Always include vision context - it's the soul of MYND
                     visionContext = VisionCore.getContext(userMessage);
                     if (visionContext) {
                         console.log('🎯 VisionCore provided foundational context');
                     }
-                } catch (e) {
-                    console.warn('VisionCore context error:', e);
+                } else {
+                    console.log('🎯 VisionCore: No vision document set');
                 }
+            } catch (e) {
+                console.warn('VisionCore context error:', e);
             }
 
             // 14. Loaded Source File - Using CodeRAG semantic search for optimized token usage
@@ -27378,7 +27686,7 @@ ${evolutionContext ? `
 AUTONOMOUS EVOLUTION (self-dialogue & auto-generation):
 ${evolutionContext}` : ''}
 ${visionContext ? `
-FOUNDATIONAL VISION (your soul & purpose):
+FOUNDATIONAL VISION (OUR shared vision - yours and your creator's):
 ${visionContext}` : ''}
 ${goalsContext ? `
 MANIFESTATION GOALS (from Goal Wizard):
@@ -35280,13 +35588,23 @@ showKeyboardHints();
                         metaLearner.trackSuggestionAccepted(label, false); // false = not Add All
                         if (parentNode) {
                             neuralNet.boostPattern(parentNode.label, label, suggestionType);
-                            
+
                             // Store semantic memory
                             semanticMemory.addMemory(
                                 'suggestion_accepted',
                                 `User accepted ${suggestionType} suggestion "${label}" under "${parentNode.label}"`,
                                 { parentLabel: parentNode.label, childLabel: label, suggestionType }
                             );
+
+                            // Real-time session learning
+                            if (typeof chatManager !== 'undefined') {
+                                chatManager.recordSessionLearning('feedback', {
+                                    action: 'accepted',
+                                    type: 'expansion',
+                                    detail: `accepted "${label}" under "${parentNode.label}"`
+                                });
+                                chatManager.recordSessionLearning('pattern', `${parentNode.label} → ${label}`);
+                            }
                         }
                         
                         buildScene();
@@ -35368,15 +35686,25 @@ showKeyboardHints();
                             metaLearner.trackSuggestionAccepted(label, true); // true = Add All
                             if (parentNode) {
                                 neuralNet.boostPattern(parentNode.label, label, suggestionType);
-                                
+
                                 // Store semantic memory
                                 semanticMemory.addMemory(
                                     'suggestion_accepted',
                                     `User accepted ${suggestionType} suggestion "${label}" under "${parentNode.label}"`,
                                     { parentLabel: parentNode.label, childLabel: label, suggestionType }
                                 );
+
+                                // Real-time session learning
+                                if (typeof chatManager !== 'undefined') {
+                                    chatManager.recordSessionLearning('feedback', {
+                                        action: 'accepted',
+                                        type: 'expansion',
+                                        detail: `accepted "${label}" under "${parentNode.label}"`
+                                    });
+                                    chatManager.recordSessionLearning('pattern', `${parentNode.label} → ${label}`);
+                                }
                             }
-                            
+
                             // Mark as added
                             el.classList.add('added');
                             el.style.opacity = '0.5';
