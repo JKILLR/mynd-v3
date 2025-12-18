@@ -3092,7 +3092,127 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
             
             console.log(`✓ Preference: Accepted "${label}" (${type}) under "${session.parentLabel}"`);
         }
-        
+
+        // ─────────────────────────────────────────────────────────────────
+        // CONVERSATION FEEDBACK - Real-time learning from chat interactions
+        // ─────────────────────────────────────────────────────────────────
+
+        // Record feedback from chat conversation (not just node suggestions)
+        recordConversationFeedback(suggestion, action, sentiment) {
+            // Initialize conversation feedback history if needed
+            if (!this.conversationFeedback) {
+                this.conversationFeedback = [];
+            }
+
+            const record = {
+                suggestion: typeof suggestion === 'string' ? suggestion : suggestion.label || String(suggestion),
+                action,           // 'accepted', 'rejected', 'ignored'
+                sentiment,        // -1 to +1 score
+                timestamp: Date.now(),
+                source: 'conversation'
+            };
+
+            this.conversationFeedback.push(record);
+
+            // Keep only last 100 conversation feedback items
+            if (this.conversationFeedback.length > 100) {
+                this.conversationFeedback.shift();
+            }
+
+            // Update style preferences based on sentiment
+            if (sentiment !== undefined) {
+                this.updateStyleFromConversation(suggestion, sentiment);
+            }
+
+            // Integrate with main insights
+            this.updateConversationInsights();
+
+            this.save();
+
+            const emoji = action === 'accepted' ? '✓' : action === 'rejected' ? '✗' : '~';
+            console.log(`${emoji} Conversation feedback: "${record.suggestion.slice(0, 50)}" (${action}, sentiment: ${sentiment?.toFixed(2) || 'N/A'})`);
+        }
+
+        // Update style preferences from conversation feedback
+        updateStyleFromConversation(suggestion, sentiment) {
+            const text = typeof suggestion === 'string' ? suggestion : suggestion.label || '';
+
+            // Detect style indicators
+            const isVerbose = text.length > 200 || text.split(' ').length > 30;
+            const isConcise = text.length < 100 && text.split(' ').length < 15;
+            const hasSteps = /step|1\.|2\.|first|then|next/i.test(text);
+
+            // Adjust style preferences based on sentiment (-1 to +1)
+            const adjustment = sentiment * 0.1; // ±10% per feedback
+
+            if (isVerbose) {
+                // User reacting to verbose content
+                this.insights.stylePreferences.prefersDescriptive += adjustment;
+            }
+            if (isConcise) {
+                // User reacting to concise content
+                this.insights.stylePreferences.prefersShortLabels += adjustment;
+            }
+            if (hasSteps) {
+                // User reacting to step-by-step content
+                this.insights.stylePreferences.prefersActionLabels += adjustment;
+            }
+
+            // Clamp all style preferences to -1 to +1
+            for (const key of Object.keys(this.insights.stylePreferences)) {
+                this.insights.stylePreferences[key] = Math.max(-1, Math.min(1, this.insights.stylePreferences[key]));
+            }
+        }
+
+        // Integrate conversation feedback into insights
+        updateConversationInsights() {
+            if (!this.conversationFeedback || this.conversationFeedback.length === 0) return;
+
+            // Calculate conversation acceptance rate
+            const recent = this.conversationFeedback.slice(-20);
+            const accepted = recent.filter(f => f.action === 'accepted').length;
+            const rejected = recent.filter(f => f.action === 'rejected').length;
+
+            this.insights.conversationAcceptanceRate = accepted / Math.max(1, accepted + rejected);
+            this.insights.conversationFeedbackCount = this.conversationFeedback.length;
+
+            // Average sentiment
+            const withSentiment = recent.filter(f => f.sentiment !== undefined);
+            if (withSentiment.length > 0) {
+                this.insights.averageConversationSentiment =
+                    withSentiment.reduce((sum, f) => sum + f.sentiment, 0) / withSentiment.length;
+            }
+        }
+
+        // Get conversation-specific insights for prompts
+        getConversationInsights() {
+            if (!this.conversationFeedback || this.conversationFeedback.length < 3) {
+                return null;
+            }
+
+            const insights = [];
+
+            // Style preferences
+            const style = this.insights.stylePreferences;
+            if (Math.abs(style.prefersDescriptive) > 0.3) {
+                insights.push(style.prefersDescriptive > 0 ? 'User prefers detailed responses' : 'User prefers brief responses');
+            }
+            if (Math.abs(style.prefersActionLabels) > 0.3) {
+                insights.push(style.prefersActionLabels > 0 ? 'User likes step-by-step guidance' : 'User prefers high-level summaries');
+            }
+
+            // Overall sentiment trend
+            if (this.insights.averageConversationSentiment !== undefined) {
+                if (this.insights.averageConversationSentiment > 0.3) {
+                    insights.push('Recent responses well-received');
+                } else if (this.insights.averageConversationSentiment < -0.3) {
+                    insights.push('Recent responses need adjustment - try different approach');
+                }
+            }
+
+            return insights.length > 0 ? insights.join('. ') + '.' : null;
+        }
+
         // Finalize pending session - mark unaccepted suggestions as ignored
         finalizePendingSession() {
             if (!this.currentSessionId) return;
@@ -7254,11 +7374,102 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
             const normalizedParent = this.normalizeLabel(parentLabel);
             const normalizedChild = this.normalizeLabel(childLabel);
             const patternKey = `${normalizedParent}→${normalizedChild}`;
-            
+
             const weight = this.patternWeights.get(patternKey);
             return weight ? weight.weight : 0.3; // Default weight
         }
-        
+
+        // ─────────────────────────────────────────────────────────────────
+        // INSTANT LEARNING - Real-time weight adjustments from conversation
+        // These methods enable immediate adaptation during chat sessions
+        // ─────────────────────────────────────────────────────────────────
+
+        // Boost patterns related to a topic/context (for positive feedback)
+        boostPatternByContext(topic, delta = 0.1) {
+            const normalizedTopic = this.normalizeLabel(topic);
+            let boosted = 0;
+
+            // Find patterns containing this topic
+            for (const [patternKey, weight] of this.patternWeights) {
+                const keyLower = patternKey.toLowerCase();
+                if (keyLower.includes(normalizedTopic) || normalizedTopic.includes(keyLower.split('→')[0])) {
+                    weight.weight = Math.min(1.0, weight.weight + delta);
+                    weight.conversationBoosts = (weight.conversationBoosts || 0) + 1;
+                    weight.lastBoostTime = Date.now();
+                    boosted++;
+                }
+            }
+
+            // Also boost expansion patterns
+            for (const [parent, children] of this.expansionPatterns) {
+                if (parent.includes(normalizedTopic)) {
+                    // Mark this expansion as recently validated
+                    if (!this.validatedExpansions) this.validatedExpansions = new Map();
+                    this.validatedExpansions.set(parent, {
+                        boostCount: (this.validatedExpansions.get(parent)?.boostCount || 0) + 1,
+                        lastBoost: Date.now()
+                    });
+                    boosted++;
+                }
+            }
+
+            if (boosted > 0) {
+                console.log(`⬆️ Boosted ${boosted} patterns related to "${topic}" (+${delta.toFixed(2)})`);
+                this.scheduleSave();
+            }
+
+            return boosted;
+        }
+
+        // Decay patterns related to a topic/context (for negative feedback)
+        decayPatternByContext(topic, delta = 0.1) {
+            const normalizedTopic = this.normalizeLabel(topic);
+            let decayed = 0;
+
+            // Find patterns containing this topic
+            for (const [patternKey, weight] of this.patternWeights) {
+                const keyLower = patternKey.toLowerCase();
+                if (keyLower.includes(normalizedTopic) || normalizedTopic.includes(keyLower.split('→')[0])) {
+                    weight.weight = Math.max(0.1, weight.weight - delta);
+                    weight.conversationDecays = (weight.conversationDecays || 0) + 1;
+                    weight.lastDecayTime = Date.now();
+                    decayed++;
+                }
+            }
+
+            if (decayed > 0) {
+                console.log(`⬇️ Decayed ${decayed} patterns related to "${topic}" (-${delta.toFixed(2)})`);
+                this.scheduleSave();
+            }
+
+            return decayed;
+        }
+
+        // Get instant learning stats for debugging/display
+        getInstantLearningStats() {
+            let totalBoosts = 0;
+            let totalDecays = 0;
+            let recentlyAdjusted = 0;
+            const now = Date.now();
+            const recentThreshold = 5 * 60 * 1000; // 5 minutes
+
+            for (const [_, weight] of this.patternWeights) {
+                totalBoosts += weight.conversationBoosts || 0;
+                totalDecays += weight.conversationDecays || 0;
+                if ((weight.lastBoostTime && now - weight.lastBoostTime < recentThreshold) ||
+                    (weight.lastDecayTime && now - weight.lastDecayTime < recentThreshold)) {
+                    recentlyAdjusted++;
+                }
+            }
+
+            return {
+                totalBoosts,
+                totalDecays,
+                recentlyAdjusted,
+                validatedExpansions: this.validatedExpansions?.size || 0
+            };
+        }
+
         // Find patterns with same relationship type for transfer learning
         findAnalogousByType(relationshipType, excludeParent, excludeChildren = [], limit = 3) {
             const analogous = [];
@@ -26380,6 +26591,278 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             };
         },
 
+        // ═══════════════════════════════════════════════════════════════════
+        // CONVERSATIONAL LEARNING - Real-time adaptation from chat feedback
+        // This is the "missing piece" - instant learning during conversations
+        // ═══════════════════════════════════════════════════════════════════
+
+        // Tracks what the AI just said/suggested for feedback correlation
+        lastAIContext: {
+            message: null,
+            suggestions: [],
+            actions: [],
+            timestamp: null,
+            topics: []
+        },
+
+        // Feedback patterns with sentiment scores (-1 to +1)
+        feedbackPatterns: {
+            // Strong positive signals
+            positive: [
+                { pattern: /\b(perfect|exactly|great|awesome|love it|that's right|correct|yes|good|helpful|thanks|thank you|brilliant|excellent|spot on)\b/i, weight: 1.0 },
+                { pattern: /\b(works|worked|working|nice|useful|makes sense)\b/i, weight: 0.7 },
+                { pattern: /^(yes|yep|yeah|yup|ok|okay|sure|got it|understood)$/i, weight: 0.5 },
+            ],
+            // Strong negative signals
+            negative: [
+                { pattern: /\b(wrong|incorrect|no|nope|not right|not quite|that's not|don't|doesn't|didn't work|bad|worse|terrible|hate|useless)\b/i, weight: -1.0 },
+                { pattern: /\b(stop|quit|cancel|never mind|forget it|not what i meant|misunderstood)\b/i, weight: -0.8 },
+                { pattern: /\b(confused|confusing|unclear|don't understand|makes no sense)\b/i, weight: -0.5 },
+            ],
+            // Correction signals (indicates need to adjust)
+            correction: [
+                { pattern: /\b(actually|instead|rather|i meant|what i meant|let me clarify|no i mean)\b/i, weight: -0.3 },
+                { pattern: /\b(try again|redo|different|another way|something else)\b/i, weight: -0.4 },
+            ],
+            // Preference expressions
+            preference: [
+                { pattern: /\bi (prefer|like|want|need|always|usually|tend to)\b/i, isPreference: true },
+                { pattern: /\b(more|less) (concise|detailed|brief|verbose|simple|complex)\b/i, isStylePreference: true },
+            ]
+        },
+
+        // Analyze user message for feedback signals
+        detectFeedback(userMessage) {
+            const result = {
+                hasFeedback: false,
+                sentiment: 0,        // -1 to +1
+                isCorrection: false,
+                isPreference: false,
+                preferenceType: null,
+                matchedPatterns: [],
+                confidence: 0
+            };
+
+            const message = userMessage.toLowerCase().trim();
+
+            // Check positive patterns
+            for (const { pattern, weight } of this.feedbackPatterns.positive) {
+                if (pattern.test(message)) {
+                    result.hasFeedback = true;
+                    result.sentiment += weight;
+                    result.matchedPatterns.push({ type: 'positive', pattern: pattern.source, weight });
+                }
+            }
+
+            // Check negative patterns
+            for (const { pattern, weight } of this.feedbackPatterns.negative) {
+                if (pattern.test(message)) {
+                    result.hasFeedback = true;
+                    result.sentiment += weight; // weight is already negative
+                    result.matchedPatterns.push({ type: 'negative', pattern: pattern.source, weight });
+                }
+            }
+
+            // Check correction patterns
+            for (const { pattern, weight } of this.feedbackPatterns.correction) {
+                if (pattern.test(message)) {
+                    result.hasFeedback = true;
+                    result.isCorrection = true;
+                    result.sentiment += weight;
+                    result.matchedPatterns.push({ type: 'correction', pattern: pattern.source, weight });
+                }
+            }
+
+            // Check preference patterns
+            for (const p of this.feedbackPatterns.preference) {
+                if (p.pattern.test(message)) {
+                    result.isPreference = true;
+                    result.preferenceType = p.isStylePreference ? 'style' : 'content';
+                    result.matchedPatterns.push({ type: 'preference', pattern: p.pattern.source });
+                }
+            }
+
+            // Normalize sentiment to -1 to +1 range
+            result.sentiment = Math.max(-1, Math.min(1, result.sentiment));
+
+            // Calculate confidence based on pattern matches and message length
+            if (result.matchedPatterns.length > 0) {
+                // Short messages with clear feedback = higher confidence
+                const lengthFactor = message.length < 50 ? 1.0 : message.length < 100 ? 0.8 : 0.6;
+                result.confidence = Math.min(1, result.matchedPatterns.length * 0.4) * lengthFactor;
+            }
+
+            return result;
+        },
+
+        // Apply instant learning from feedback
+        async applyInstantLearning(feedback, userMessage) {
+            if (!feedback.hasFeedback || feedback.confidence < 0.3) return null;
+
+            const learningResult = {
+                applied: false,
+                weightsUpdated: [],
+                contextAdjusted: false,
+                learningType: null
+            };
+
+            try {
+                // 1. Update neural pattern weights based on sentiment
+                if (this.lastAIContext.topics.length > 0 && typeof neuralNet !== 'undefined' && neuralNet.isReady) {
+                    for (const topic of this.lastAIContext.topics) {
+                        // Boost or decay pattern weights based on feedback
+                        const weightDelta = feedback.sentiment * 0.15; // ±15% max adjustment
+
+                        if (feedback.sentiment > 0.3) {
+                            // Positive feedback - boost related patterns
+                            neuralNet.boostPatternByContext(topic, weightDelta);
+                            learningResult.weightsUpdated.push({ topic, delta: weightDelta, type: 'boost' });
+                        } else if (feedback.sentiment < -0.3) {
+                            // Negative feedback - decay related patterns
+                            neuralNet.decayPatternByContext(topic, Math.abs(weightDelta));
+                            learningResult.weightsUpdated.push({ topic, delta: weightDelta, type: 'decay' });
+                        }
+                    }
+                }
+
+                // 2. Update preference tracker with conversation feedback
+                if (typeof preferenceTracker !== 'undefined' && this.lastAIContext.suggestions.length > 0) {
+                    const action = feedback.sentiment > 0 ? 'accepted' : feedback.sentiment < 0 ? 'rejected' : 'ignored';
+                    for (const suggestion of this.lastAIContext.suggestions) {
+                        preferenceTracker.recordConversationFeedback(suggestion, action, feedback.sentiment);
+                    }
+                }
+
+                // 3. Record in session learning for immediate context
+                this.recordSessionLearning('feedback', {
+                    action: feedback.sentiment > 0 ? 'positive' : feedback.sentiment < 0 ? 'negative' : 'neutral',
+                    type: 'conversation',
+                    detail: `${feedback.sentiment > 0 ? '👍' : '👎'} on: ${this.lastAIContext.message?.slice(0, 100) || 'previous response'}`,
+                    sentiment: feedback.sentiment,
+                    confidence: feedback.confidence
+                });
+
+                // 4. Extract and store preference if detected
+                if (feedback.isPreference) {
+                    const preferenceMatch = userMessage.match(/i (prefer|like|want|need|always|usually)\s+(.+?)(?:\.|$)/i);
+                    if (preferenceMatch) {
+                        const preference = preferenceMatch[2].trim();
+                        this.recordSessionLearning('preference', {
+                            type: feedback.preferenceType,
+                            value: preference,
+                            timestamp: Date.now()
+                        });
+
+                        // Store in semantic memory for long-term learning
+                        if (typeof semanticMemory !== 'undefined') {
+                            semanticMemory.addMemory(
+                                'user_preference',
+                                `User expressed preference: "${preference}"`,
+                                { source: 'conversation', type: feedback.preferenceType }
+                            );
+                        }
+                    }
+                }
+
+                // 5. Store correction patterns for future avoidance
+                if (feedback.isCorrection && this.lastAIContext.message) {
+                    if (typeof semanticMemory !== 'undefined') {
+                        semanticMemory.addMemory(
+                            'correction_received',
+                            `User corrected AI response about: ${this.lastAIContext.topics.join(', ') || 'general topic'}. User said: "${userMessage.slice(0, 200)}"`,
+                            { source: 'conversation', type: 'correction', originalResponse: this.lastAIContext.message.slice(0, 200) }
+                        );
+                    }
+                }
+
+                learningResult.applied = true;
+                learningResult.contextAdjusted = true;
+                learningResult.learningType = feedback.sentiment > 0 ? 'reinforcement' : 'correction';
+
+                console.log(`⚡ INSTANT LEARNING: ${learningResult.learningType} (sentiment: ${feedback.sentiment.toFixed(2)}, confidence: ${feedback.confidence.toFixed(2)})`);
+
+            } catch (error) {
+                console.warn('Instant learning error:', error);
+            }
+
+            return learningResult;
+        },
+
+        // Update context after AI response for feedback correlation
+        updateLastAIContext(response) {
+            this.lastAIContext = {
+                message: response.message,
+                suggestions: response.suggestions || [],
+                actions: response.actions || [],
+                timestamp: Date.now(),
+                topics: this.extractTopics(response.message)
+            };
+        },
+
+        // Extract key topics from AI response for correlation
+        extractTopics(message) {
+            if (!message) return [];
+
+            const topics = [];
+
+            // Extract quoted terms
+            const quoted = message.match(/"([^"]+)"/g);
+            if (quoted) topics.push(...quoted.map(q => q.replace(/"/g, '')));
+
+            // Extract capitalized multi-word phrases (likely node names or concepts)
+            const caps = message.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/g);
+            if (caps) topics.push(...caps);
+
+            // Extract words after "about", "regarding", "for"
+            const aboutMatch = message.match(/(?:about|regarding|for|on)\s+["']?([^"'\.,]+)/gi);
+            if (aboutMatch) {
+                aboutMatch.forEach(m => {
+                    const topic = m.replace(/^(about|regarding|for|on)\s+["']?/i, '').trim();
+                    if (topic.length > 2 && topic.length < 50) topics.push(topic);
+                });
+            }
+
+            return [...new Set(topics)].slice(0, 5);
+        },
+
+        // Get real-time learning context for next AI response
+        getInstantLearningContext() {
+            const recent = this.sessionLearning.feedbackReceived.slice(-3);
+            const patterns = this.sessionLearning.patternsLearned.slice(-3);
+            const preferences = this.sessionLearning.preferencesUpdated.slice(-2);
+
+            if (recent.length === 0 && patterns.length === 0 && preferences.length === 0) {
+                return null;
+            }
+
+            let context = '\n⚡ INSTANT LEARNING ACTIVE:\n';
+
+            // Show recent feedback signals
+            if (recent.length > 0) {
+                const signals = recent.map(f => {
+                    if (f.sentiment !== undefined) {
+                        return f.sentiment > 0 ? '✓ positive response' : '✗ needs adjustment';
+                    }
+                    return f.action === 'positive' ? '✓' : f.action === 'negative' ? '✗' : '~';
+                });
+                context += `Recent feedback: ${signals.join(', ')}\n`;
+            }
+
+            // Show learned preferences
+            if (preferences.length > 0) {
+                context += `User preferences noted: ${preferences.map(p => p.value || p.type).join(', ')}\n`;
+            }
+
+            // Show weight adjustments
+            if (patterns.length > 0) {
+                context += `Patterns reinforced: ${patterns.join(', ')}\n`;
+            }
+
+            context += 'Adjust your response style based on this real-time feedback.\n';
+
+            return context;
+        },
+
         init() {
             this.panel = document.getElementById('ai-chat-panel');
             this.messagesContainer = document.getElementById('chat-messages');
@@ -26523,27 +27006,48 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         async sendMessage() {
             const content = this.input.value.trim();
             if (!content || this.isProcessing) return;
-            
+
             // Clear input
             this.input.value = '';
             this.input.style.height = 'auto';
             this.sendBtn.disabled = true;
-            
+
             // Hide welcome if shown
             const welcome = this.messagesContainer.querySelector('.chat-welcome');
             if (welcome) welcome.style.display = 'none';
-            
+
+            // ═══════════════════════════════════════════════════════════════
+            // INSTANT LEARNING: Detect feedback BEFORE processing
+            // This enables real-time adaptation during the conversation
+            // ═══════════════════════════════════════════════════════════════
+            const feedback = this.detectFeedback(content);
+            if (feedback.hasFeedback) {
+                // Apply instant learning from user feedback
+                const learningResult = await this.applyInstantLearning(feedback, content);
+                if (learningResult?.applied) {
+                    // Show subtle learning indicator
+                    this.showLearningIndicator(learningResult.learningType);
+                }
+            }
+
             // Add user message
             this.addMessage('user', content);
-            
+
             // Show typing indicator
             this.showTyping();
-            
+
             // Process with AI
             this.isProcessing = true;
             try {
                 const response = await this.callAI(content);
                 this.hideTyping();
+
+                // ═══════════════════════════════════════════════════════════════
+                // Update context for future feedback correlation
+                // ═══════════════════════════════════════════════════════════════
+                if (response) {
+                    this.updateLastAIContext(response);
+                }
                 
                 if (response) {
                     // Debug log
@@ -26717,7 +27221,75 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             const typing = document.getElementById('chat-typing');
             if (typing) typing.remove();
         },
-        
+
+        // Show visual feedback that learning occurred
+        showLearningIndicator(learningType) {
+            // Remove any existing indicator
+            const existing = document.getElementById('chat-learning-indicator');
+            if (existing) existing.remove();
+
+            const indicator = document.createElement('div');
+            indicator.id = 'chat-learning-indicator';
+            indicator.className = 'chat-learning-indicator';
+            indicator.innerHTML = `
+                <span class="learning-icon">${learningType === 'reinforcement' ? '✓' : '↻'}</span>
+                <span class="learning-text">${learningType === 'reinforcement' ? 'Learning applied' : 'Adjusting...'}</span>
+            `;
+
+            // Add styles if not already present
+            if (!document.getElementById('learning-indicator-styles')) {
+                const style = document.createElement('style');
+                style.id = 'learning-indicator-styles';
+                style.textContent = `
+                    .chat-learning-indicator {
+                        position: absolute;
+                        top: 10px;
+                        right: 10px;
+                        background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.05));
+                        border: 1px solid rgba(34, 197, 94, 0.3);
+                        border-radius: 20px;
+                        padding: 4px 12px;
+                        font-size: 11px;
+                        color: #22c55e;
+                        display: flex;
+                        align-items: center;
+                        gap: 6px;
+                        animation: learningPulse 0.5s ease-out, learningFade 2s ease-out 1s forwards;
+                        z-index: 100;
+                    }
+                    .chat-learning-indicator.correction {
+                        background: linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(251, 191, 36, 0.05));
+                        border-color: rgba(251, 191, 36, 0.3);
+                        color: #fbbf24;
+                    }
+                    .learning-icon {
+                        font-size: 12px;
+                    }
+                    @keyframes learningPulse {
+                        0% { transform: scale(0.8); opacity: 0; }
+                        50% { transform: scale(1.1); }
+                        100% { transform: scale(1); opacity: 1; }
+                    }
+                    @keyframes learningFade {
+                        0% { opacity: 1; }
+                        100% { opacity: 0; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            if (learningType === 'correction') {
+                indicator.classList.add('correction');
+            }
+
+            this.panel.appendChild(indicator);
+
+            // Remove after animation
+            setTimeout(() => indicator.remove(), 3000);
+
+            console.log(`⚡ Visual learning indicator shown: ${learningType}`);
+        },
+
         showSuggestions(suggestions) {
             this.suggestionsContainer.innerHTML = suggestions.map(s => 
                 `<button class="chat-suggestion-btn">${escapeHTML(s)}</button>`
@@ -27213,6 +27785,26 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 }
             } catch (e) {
                 // Session learning not critical
+            }
+
+            // 7c. Instant learning context (what was JUST learned from feedback)
+            try {
+                const instantLearning = this.getInstantLearningContext();
+                if (instantLearning) {
+                    neuralContext += instantLearning;
+                }
+            } catch (e) {
+                // Instant learning not critical
+            }
+
+            // 7d. Conversation-specific preferences from preferenceTracker
+            try {
+                const conversationInsights = preferenceTracker.getConversationInsights?.();
+                if (conversationInsights) {
+                    neuralContext += `\nConversation style: ${conversationInsights}\n`;
+                }
+            } catch (e) {
+                // Conversation insights not critical
             }
 
             // Check for comprehensive code review requests (used by multiple context providers)
