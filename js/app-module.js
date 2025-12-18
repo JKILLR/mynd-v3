@@ -23409,14 +23409,19 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         });
         
         updateDepthIndicator();
-        
+
         // Mark labels for declutter recalculation
         LabelSystem.markDirty();
-        
+
         // Request a render for the new scene
         AnimationController.requestRender();
+
+        // Sync full map to BAPI (Local Brain) for full context awareness
+        if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+            LocalBrain.syncMap(store.data).catch(e => console.warn('BAPI sync failed:', e));
+        }
     }
-    
+
     // Smoothly update node positions without rebuilding scene
     function updateNodePositions() {
         const contextNode = store.findNode(currentContextId);

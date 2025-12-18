@@ -269,6 +269,90 @@ const LocalBrain = {
     },
 
     // ═══════════════════════════════════════════════════════════════════
+    // BAPI - Full Map Awareness
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Sync the full map to BAPI's context window.
+     * Call this on map load and after significant changes.
+     * @param {Object} mapData - The full map data (store.data or array format)
+     * @returns {Promise<{synced: number, time_ms: number}>}
+     */
+    async syncMap(mapData) {
+        if (!this.isAvailable) {
+            console.log('🧠 LocalBrain.syncMap: Server not available');
+            return { synced: 0, time_ms: 0 };
+        }
+
+        try {
+            const formattedMap = this._formatMapForServer(mapData);
+            const start = performance.now();
+
+            const res = await fetch(`${this.serverUrl}/map/sync`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formattedMap)
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🧠 BAPI synced: ${result.synced} nodes in ${result.time_ms.toFixed(0)}ms`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.syncMap failed:', e);
+        }
+
+        return { synced: 0, time_ms: 0 };
+    },
+
+    /**
+     * Get BAPI's analysis of the current map.
+     * Returns observations about missing connections, important nodes, etc.
+     * @returns {Promise<Object>} Analysis results
+     */
+    async analyze() {
+        if (!this.isAvailable) {
+            console.log('🧠 LocalBrain.analyze: Server not available');
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/map/analyze`);
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🧠 BAPI analysis: ${result.observations?.length || 0} observations`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.analyze failed:', e);
+        }
+
+        return { error: 'Analysis failed' };
+    },
+
+    /**
+     * Get current map sync status
+     */
+    async getMapStatus() {
+        if (!this.isAvailable) {
+            return { synced: false, node_count: 0 };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/map/status`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getMapStatus failed:', e);
+        }
+
+        return { synced: false, node_count: 0 };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
     // VOICE (Whisper)
     // ═══════════════════════════════════════════════════════════════════
 
