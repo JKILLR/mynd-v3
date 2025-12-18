@@ -802,7 +802,8 @@ async def parse_codebase():
     })
     nodes[0]["children"].append(py_dir_id)
 
-    py_files = list((base_dir / "mynd-brain").glob("**/*.py"))
+    py_files = [f for f in (base_dir / "mynd-brain").glob("**/*.py")
+                 if not any(skip in f.parts for skip in ('venv', '__pycache__', 'node_modules', '.git', 'env', '.env'))]
     for py_file in py_files:
         file_id = make_id()
         content = py_file.read_text(errors='ignore')
