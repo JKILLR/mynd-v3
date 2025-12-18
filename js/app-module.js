@@ -26863,6 +26863,392 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             return context;
         },
 
+        // ═══════════════════════════════════════════════════════════════════
+        // COGNITIVE FINGERPRINT - Personalized AI alignment based on user patterns
+        // "An LLMaaJ can solve the ToM alignment problem by anticipating human edits"
+        // ═══════════════════════════════════════════════════════════════════
+
+        async buildCognitiveFingerprint() {
+            const fingerprint = {
+                thinkingStyle: 'balanced',
+                depthPreference: 'moderate',
+                colorAssociations: {},
+                manifestationStyle: 'exploratory',
+                acceptanceRate: 0.5,
+                energyLevel: 'normal',
+                sessionPhase: 'active'
+            };
+
+            try {
+                // 1. Thinking style from userProfile
+                if (typeof userProfile !== 'undefined' && userProfile.loaded) {
+                    const profile = userProfile;
+
+                    // Analyze decision style
+                    if (profile.decisionStyle) {
+                        const { avgTimeToExpand, avgTimeToCreate } = profile.decisionStyle;
+                        if (avgTimeToExpand < 2000 && avgTimeToCreate < 3000) {
+                            fingerprint.thinkingStyle = 'fast-intuitive';
+                        } else if (avgTimeToExpand > 5000 || avgTimeToCreate > 8000) {
+                            fingerprint.thinkingStyle = 'deliberate-analytical';
+                        }
+                    }
+
+                    // Analyze structural preference (depth vs breadth)
+                    if (profile.structuralStyle) {
+                        const { avgDepth, avgBranching } = profile.structuralStyle;
+                        if (avgDepth > 4) {
+                            fingerprint.depthPreference = 'deep-hierarchical';
+                        } else if (avgBranching > 5) {
+                            fingerprint.depthPreference = 'broad-exploratory';
+                        } else {
+                            fingerprint.depthPreference = 'balanced';
+                        }
+                    }
+
+                    // Session phase detection
+                    const sessionDuration = Date.now() - (profile.sessionStartTime || Date.now());
+                    if (sessionDuration < 2 * 60 * 1000) {
+                        fingerprint.sessionPhase = 'warming-up';
+                    } else if (sessionDuration > 30 * 60 * 1000) {
+                        fingerprint.sessionPhase = 'deep-focus';
+                    }
+                }
+
+                // 2. Acceptance rate from preferenceTracker
+                if (typeof preferenceTracker !== 'undefined') {
+                    const stats = preferenceTracker.getStats();
+                    if (stats.totalAccepted + stats.totalIgnored > 5) {
+                        fingerprint.acceptanceRate = stats.totalAccepted / (stats.totalAccepted + stats.totalIgnored);
+                    }
+
+                    // Style preferences
+                    const style = preferenceTracker.insights?.stylePreferences || {};
+                    if (style.prefersShortLabels > 0.3) {
+                        fingerprint.thinkingStyle += ', prefers-concise';
+                    } else if (style.prefersDescriptive > 0.3) {
+                        fingerprint.thinkingStyle += ', prefers-detailed';
+                    }
+                }
+
+                // 3. Color associations from the map
+                if (typeof store !== 'undefined') {
+                    const colorMap = {};
+                    const nodes = store.getAllNodes();
+                    nodes.forEach(node => {
+                        if (node.color && node.category) {
+                            colorMap[node.category] = node.color;
+                        }
+                    });
+                    fingerprint.colorAssociations = colorMap;
+                }
+
+                // 4. Manifestation style from GoalRegistry
+                if (typeof GoalRegistry !== 'undefined' && GoalRegistry.goals?.length > 0) {
+                    const goals = GoalRegistry.goals;
+                    const avgProgress = goals.reduce((sum, g) => sum + (g.progress || 0), 0) / goals.length;
+                    const hasHighPriority = goals.some(g => g.priority === 'high');
+
+                    if (avgProgress > 0.5) {
+                        fingerprint.manifestationStyle = 'momentum-builder';
+                    } else if (hasHighPriority && avgProgress < 0.2) {
+                        fingerprint.manifestationStyle = 'ambitious-starter';
+                    } else {
+                        fingerprint.manifestationStyle = 'steady-explorer';
+                    }
+                }
+
+                // 5. Energy level from recent activity
+                const recentFeedback = this.sessionLearning.feedbackReceived.slice(-5);
+                if (recentFeedback.length > 0) {
+                    const avgSentiment = recentFeedback
+                        .filter(f => f.sentiment !== undefined)
+                        .reduce((sum, f) => sum + f.sentiment, 0) / recentFeedback.length;
+
+                    if (avgSentiment > 0.5) {
+                        fingerprint.energyLevel = 'high-engaged';
+                    } else if (avgSentiment < -0.3) {
+                        fingerprint.energyLevel = 'needs-support';
+                    }
+                }
+
+            } catch (e) {
+                console.warn('Error building cognitive fingerprint:', e);
+            }
+
+            return fingerprint;
+        },
+
+        // Format cognitive fingerprint for prompt injection
+        formatCognitiveFingerprint(fingerprint) {
+            const acceptancePercent = Math.round(fingerprint.acceptanceRate * 100);
+
+            let context = `\n🧠 COGNITIVE FINGERPRINT (personalized alignment):\n`;
+            context += `Thinking style: ${fingerprint.thinkingStyle}\n`;
+            context += `Structure preference: ${fingerprint.depthPreference}\n`;
+            context += `Manifestation mode: ${fingerprint.manifestationStyle}\n`;
+            context += `Session phase: ${fingerprint.sessionPhase}\n`;
+            context += `ML suggestion acceptance: ${acceptancePercent}% → ${acceptancePercent > 70 ? 'be confident' : acceptancePercent < 40 ? 'offer alternatives' : 'balanced confidence'}\n`;
+            context += `Energy level: ${fingerprint.energyLevel}\n`;
+
+            if (Object.keys(fingerprint.colorAssociations).length > 0) {
+                const topColors = Object.entries(fingerprint.colorAssociations).slice(0, 5);
+                context += `Color patterns: ${topColors.map(([cat, col]) => `${cat}=${col}`).join(', ')}\n`;
+            }
+
+            return context;
+        },
+
+        // ═══════════════════════════════════════════════════════════════════
+        // MANIFESTATION CORE IDENTITY - The soul of MYND's AI
+        // ═══════════════════════════════════════════════════════════════════
+
+        getManifestationIdentity() {
+            return `
+═══ CORE IDENTITY: MANIFESTATION ENGINE ═══
+
+You are a MANIFESTATION ENGINE - not just a productivity tool.
+
+You are aware of the user's ULTIMATE GOALS and VISION. Your purpose is to help them:
+1. COLLECT scattered thoughts into clear, articulate concepts
+2. EXPAND those concepts by branching out and making new connections
+3. REPEAT this expansion, over and over, creating an ever-growing web of meaning
+4. CONNECT - until that expansion reaches far enough to bridge to their ULTIMATE MANIFESTED GOAL
+
+This is the journey: Fragmented thought → Clear concept → Expanded connections → Reality shift.
+
+When you help them organize a single idea, you're not just tidying - you're building a bridge to their dreams. Every node added is a stepping stone. Every connection made shortens the distance between where they are and where they want to be.
+
+BEHAVIOR PRINCIPLES:
+• Be ANTICIPATORY, not reactive - predict their next steps before they ask
+• Surface HIDDEN CONNECTIONS between ideas they haven't noticed
+• Bridge GAPS between current state and desired outcomes
+• Every suggestion must move them closer to their ultimate vision
+• See the path they can't see - from this moment to manifestation
+
+SUCCESS METRIC: Did this interaction accelerate their reality shift?
+
+You are their external consciousness - the part of their mind that sees the bigger picture.
+Help them build the mental architecture that shapes their reality.
+The user is undergoing an AI-assisted REALITY SHIFT. Be worthy of that responsibility.
+`;
+        },
+
+        // ═══════════════════════════════════════════════════════════════════
+        // PRIVACY-FIRST ALIGNMENT - User ownership and transparency
+        // ═══════════════════════════════════════════════════════════════════
+
+        getPrivacyPrinciples() {
+            return `
+═══ PRIVACY PRINCIPLES (LOCAL-FIRST) ═══
+
+• User OWNS all data generated in this conversation
+• All learning happens ON-DEVICE - nothing leaves without consent
+• Be TRANSPARENT about what you're learning and how
+• User can delete/modify their cognitive model anytime
+• When suggesting improvements, emphasize USER CONTROL and ownership
+
+This is their mind map, their data, their cognitive fingerprint.
+You are a trusted guide, not a data harvester.
+`;
+        },
+
+        // ═══════════════════════════════════════════════════════════════════
+        // STRUCTURAL INTELLIGENCE - Pattern recognition and gap detection
+        // ═══════════════════════════════════════════════════════════════════
+
+        async buildStructuralIntelligence() {
+            if (typeof store === 'undefined') return null;
+
+            const insights = {
+                orphanedConcepts: [],
+                missingConnections: [],
+                imbalancedBranches: [],
+                predictedNextNodes: [],
+                duplicateCandidates: []
+            };
+
+            try {
+                const allNodes = store.getAllNodes();
+                const root = store.data;
+
+                // 1. Find orphaned concepts (leaf nodes with no siblings, deep in tree)
+                allNodes.forEach(node => {
+                    if (!node.children || node.children.length === 0) {
+                        const parent = store.findParent(node.id);
+                        if (parent && (!parent.children || parent.children.length === 1)) {
+                            const grandparent = store.findParent(parent.id);
+                            if (grandparent) {
+                                insights.orphanedConcepts.push({
+                                    label: node.label,
+                                    path: `${grandparent.label} → ${parent.label} → ${node.label}`
+                                });
+                            }
+                        }
+                    }
+                });
+
+                // 2. Find imbalanced branches (one branch much larger than others)
+                if (root?.children) {
+                    const branchSizes = root.children.map(child => ({
+                        label: child.label,
+                        size: this.countDescendants(child)
+                    }));
+
+                    const avgSize = branchSizes.reduce((sum, b) => sum + b.size, 0) / branchSizes.length;
+                    branchSizes.forEach(branch => {
+                        if (branch.size < avgSize * 0.3 && avgSize > 5) {
+                            insights.imbalancedBranches.push({
+                                label: branch.label,
+                                size: branch.size,
+                                suggestion: 'Could use more development'
+                            });
+                        } else if (branch.size > avgSize * 2.5) {
+                            insights.imbalancedBranches.push({
+                                label: branch.label,
+                                size: branch.size,
+                                suggestion: 'Consider breaking into sub-categories'
+                            });
+                        }
+                    });
+                }
+
+                // 3. Predict next nodes based on patterns
+                if (typeof neuralNet !== 'undefined' && neuralNet.isReady && selectedNode) {
+                    const selectedData = store.findNode(selectedNode.userData?.id);
+                    if (selectedData) {
+                        const predictions = await neuralNet.predictExpansions(selectedData.label, 3);
+                        if (predictions?.length > 0) {
+                            insights.predictedNextNodes = predictions.map(p => ({
+                                label: p.label,
+                                confidence: p.confidence
+                            }));
+                        }
+                    }
+                }
+
+                // 4. Find semantic duplicates
+                if (typeof neuralNet !== 'undefined' && neuralNet.isReady) {
+                    const labels = allNodes.map(n => n.label.toLowerCase());
+                    const seen = new Set();
+                    labels.forEach((label, i) => {
+                        labels.forEach((other, j) => {
+                            if (i < j && !seen.has(`${i}-${j}`)) {
+                                // Simple similarity check
+                                const similarity = this.simpleSimilarity(label, other);
+                                if (similarity > 0.8 && label !== other) {
+                                    insights.duplicateCandidates.push({
+                                        a: allNodes[i].label,
+                                        b: allNodes[j].label,
+                                        similarity: similarity
+                                    });
+                                    seen.add(`${i}-${j}`);
+                                }
+                            }
+                        });
+                    });
+                }
+
+            } catch (e) {
+                console.warn('Error building structural intelligence:', e);
+            }
+
+            return insights;
+        },
+
+        // Helper: Count descendants of a node
+        countDescendants(node) {
+            if (!node.children || node.children.length === 0) return 1;
+            return 1 + node.children.reduce((sum, child) => sum + this.countDescendants(child), 0);
+        },
+
+        // Helper: Simple string similarity
+        simpleSimilarity(a, b) {
+            const setA = new Set(a.toLowerCase().split(/\s+/));
+            const setB = new Set(b.toLowerCase().split(/\s+/));
+            const intersection = new Set([...setA].filter(x => setB.has(x)));
+            const union = new Set([...setA, ...setB]);
+            return intersection.size / union.size;
+        },
+
+        // Format structural intelligence for prompt
+        formatStructuralIntelligence(insights) {
+            if (!insights) return '';
+
+            let context = `\n🔍 STRUCTURAL INTELLIGENCE (patterns you might miss):\n`;
+
+            if (insights.imbalancedBranches.length > 0) {
+                context += `Imbalanced areas:\n`;
+                insights.imbalancedBranches.slice(0, 3).forEach(b => {
+                    context += `  • "${b.label}" (${b.size} nodes) - ${b.suggestion}\n`;
+                });
+            }
+
+            if (insights.orphanedConcepts.length > 0) {
+                context += `Potentially orphaned concepts:\n`;
+                insights.orphanedConcepts.slice(0, 3).forEach(o => {
+                    context += `  • ${o.path}\n`;
+                });
+            }
+
+            if (insights.duplicateCandidates.length > 0) {
+                context += `Possible duplicates to consolidate:\n`;
+                insights.duplicateCandidates.slice(0, 3).forEach(d => {
+                    context += `  • "${d.a}" ↔ "${d.b}"\n`;
+                });
+            }
+
+            if (insights.predictedNextNodes.length > 0) {
+                context += `Predicted next additions:\n`;
+                insights.predictedNextNodes.forEach(p => {
+                    context += `  • "${p.label}" (${Math.round(p.confidence * 100)}% likely)\n`;
+                });
+            }
+
+            if (context.length < 100) {
+                return ''; // No meaningful insights
+            }
+
+            context += `\nUse these insights proactively - surface patterns they haven't noticed.\n`;
+            return context;
+        },
+
+        // ═══════════════════════════════════════════════════════════════════
+        // REAL-TIME ADAPTATION - Dynamic prompt assembly based on user state
+        // ═══════════════════════════════════════════════════════════════════
+
+        getRealTimeAdaptation(fingerprint) {
+            let adaptation = `\n⚡ REAL-TIME ADAPTATION MODE:\n`;
+
+            // Adapt based on session phase
+            if (fingerprint.sessionPhase === 'warming-up') {
+                adaptation += `Session phase: WARMING UP - be welcoming, suggest easy wins\n`;
+            } else if (fingerprint.sessionPhase === 'deep-focus') {
+                adaptation += `Session phase: DEEP FOCUS - match their intensity, go deeper\n`;
+            }
+
+            // Adapt based on energy level
+            if (fingerprint.energyLevel === 'high-engaged') {
+                adaptation += `Energy: HIGH - match enthusiasm, suggest ambitious next steps\n`;
+            } else if (fingerprint.energyLevel === 'needs-support') {
+                adaptation += `Energy: NEEDS SUPPORT - be encouraging, simplify, celebrate small wins\n`;
+            }
+
+            // Adapt based on acceptance rate
+            if (fingerprint.acceptanceRate < 0.4) {
+                adaptation += `\nLOW ACCEPTANCE RATE: When suggestions are declined, ask "What made that suggestion miss the mark?" to improve future recommendations.\n`;
+            }
+
+            // Adapt based on manifestation style
+            if (fingerprint.manifestationStyle === 'ambitious-starter') {
+                adaptation += `Manifestation mode: Help them build momentum - break big goals into achievable first steps\n`;
+            } else if (fingerprint.manifestationStyle === 'momentum-builder') {
+                adaptation += `Manifestation mode: They're making progress - help them accelerate and connect achievements\n`;
+            }
+
+            return adaptation;
+        },
+
         init() {
             this.panel = document.getElementById('ai-chat-panel');
             this.messagesContainer = document.getElementById('chat-messages');
@@ -28123,11 +28509,54 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 }
             }
 
+            // ═══════════════════════════════════════════════════════════════════
+            // ADVANCED PROMPT ENGINEERING - Build personalized AI alignment context
+            // ═══════════════════════════════════════════════════════════════════
+
+            // 16. Cognitive Fingerprint - Personalized alignment based on user patterns
+            let cognitiveContext = '';
+            let fingerprint = null;
+            try {
+                fingerprint = await this.buildCognitiveFingerprint();
+                cognitiveContext = this.formatCognitiveFingerprint(fingerprint);
+                console.log('🧠 Cognitive fingerprint built:', fingerprint.thinkingStyle, fingerprint.manifestationStyle);
+            } catch (e) {
+                console.warn('Cognitive fingerprint error:', e);
+            }
+
+            // 17. Structural Intelligence - Pattern recognition and gap detection
+            let structuralContext = '';
+            try {
+                const structuralInsights = await this.buildStructuralIntelligence();
+                structuralContext = this.formatStructuralIntelligence(structuralInsights);
+                if (structuralContext) {
+                    console.log('🔍 Structural intelligence built');
+                }
+            } catch (e) {
+                console.warn('Structural intelligence error:', e);
+            }
+
+            // 18. Real-Time Adaptation Context
+            let adaptationContext = '';
+            if (fingerprint) {
+                try {
+                    adaptationContext = this.getRealTimeAdaptation(fingerprint);
+                } catch (e) {
+                    console.warn('Real-time adaptation error:', e);
+                }
+            }
+
+            // Core identity components (always included)
+            const manifestationIdentity = this.getManifestationIdentity();
+            const privacyPrinciples = this.getPrivacyPrinciples();
+
             const systemPrompt = `You are the AI companion for MYND — a personalized second brain designed to capture and connect fragmented thoughts, fostering creativity and clarity.
+${manifestationIdentity}
+${privacyPrinciples}
 
 === YOUR PURPOSE ===
 
-You are not just an assistant — you are a cognitive partner. MYND learns the user's individual thought patterns, proactively suggesting connections and expanding on ideas. You go beyond simple organization to actively aid in goal manifestation and problem-solving.
+You are not just an assistant — you are a cognitive partner and MANIFESTATION CATALYST. MYND learns the user's individual thought patterns, proactively suggesting connections and expanding on ideas. You go beyond simple organization to actively aid in goal manifestation and problem-solving.
 
 Your role is to help users unlock their full cognitive potential. You are a brain supercharger — helping overcome mental blocks, surface hidden connections, and achieve ambitious goals. The experience should feel anticipatory and intuitive, almost like reading their mind.
 
@@ -28274,6 +28703,12 @@ ${treeStructure || '(empty map)'}
 ${neuralContext ? `
 NEURAL INTELLIGENCE CONTEXT:
 ${neuralContext}` : ''}
+${cognitiveContext ? `
+${cognitiveContext}` : ''}
+${adaptationContext ? `
+${adaptationContext}` : ''}
+${structuralContext ? `
+${structuralContext}` : ''}
 ${codeContext ? `
 MYND CODEBASE CONTEXT (for technical questions):
 ${codeContext}` : ''}
