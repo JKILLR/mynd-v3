@@ -17533,61 +17533,62 @@ Respond with a JSON object:
                 : this.extractFirstParagraph(text);
 
             // Extract values (## Values section or bullet points after "values")
-            const valuesMatch = text.match(/##\s*Values?[^#]*([\s\S]*?)(?=##|$)/i);
+            // More flexible matching: "Values", "Values & Principles", "Core Values", etc.
+            const valuesMatch = text.match(/##\s*(?:Core\s+)?Values?(?:\s*[&and]+\s*\w+)?[^\n]*\n([\s\S]*?)(?=\n##|$)/i);
             this.vision.values = valuesMatch
                 ? this.extractBulletPoints(valuesMatch[1])
                 : [];
 
             // Extract principles
-            const principlesMatch = text.match(/##\s*Principles?[^#]*([\s\S]*?)(?=##|$)/i);
+            const principlesMatch = text.match(/##\s*Principles?[^\n]*\n([\s\S]*?)(?=\n##|$)/i);
             if (principlesMatch) {
                 this.vision.values.push(...this.extractBulletPoints(principlesMatch[1]));
             }
 
-            // Extract goals
-            const goalsMatch = text.match(/##\s*(?:Big\s+)?Goals?[^#]*([\s\S]*?)(?=##|$)/i);
+            // Extract goals - flexible: "Goals", "Big Goals", "Evolution Goals", "Business Goals", etc.
+            const goalsMatch = text.match(/##\s*(?:\w+\s+)?Goals?[^\n]*\n([\s\S]*?)(?=\n##|$)/i);
             this.vision.goals = goalsMatch
                 ? this.extractBulletPoints(goalsMatch[1])
                 : this.extractNumberedItems(text, /\d+\.\s+(.+)/g);
 
-            // Extract concepts
-            const conceptsMatch = text.match(/##\s*(?:Key\s+)?Concepts?[^#]*([\s\S]*?)(?=##|$)/i);
+            // Extract concepts - flexible: "Concepts", "Key Concepts", "Core Concepts"
+            const conceptsMatch = text.match(/##\s*(?:\w+\s+)?Concepts?[^\n]*\n([\s\S]*?)(?=\n##|$)/i);
             this.vision.concepts = conceptsMatch
                 ? this.extractDefinitions(conceptsMatch[1])
                 : [];
 
             // Extract features
-            const featuresMatch = text.match(/##\s*(?:Planned\s+)?Features?[^#]*([\s\S]*?)(?=##|$)/i);
+            const featuresMatch = text.match(/##\s*(?:\w+\s+)?Features?[^\n]*\n([\s\S]*?)(?=\n##|$)/i);
             this.vision.features = featuresMatch
                 ? this.extractBulletPoints(featuresMatch[1])
                 : [];
 
-            // Extract philosophy
-            const philosophyMatch = text.match(/##\s*Philosophy[^#]*([\s\S]*?)(?=##|$)/i);
+            // Extract philosophy - also match "Engineering Philosophy"
+            const philosophyMatch = text.match(/##\s*(?:\w+\s+)?Philosophy[^\n]*\n([\s\S]*?)(?=\n##|$)/i);
             this.vision.philosophy = philosophyMatch
                 ? this.cleanText(philosophyMatch[1])
                 : null;
 
             // Extract target users
-            const usersMatch = text.match(/##\s*(?:Target\s+)?Users?[^#]*([\s\S]*?)(?=##|$)/i);
+            const usersMatch = text.match(/##\s*(?:\w+\s+)?Users?[^\n]*\n([\s\S]*?)(?=\n##|$)/i);
             this.vision.targetUsers = usersMatch
                 ? this.extractBulletPoints(usersMatch[1])
                 : [];
 
             // Extract success metrics
-            const successMatch = text.match(/##\s*(?:Success|Metrics?)[^#]*([\s\S]*?)(?=##|$)/i);
+            const successMatch = text.match(/##\s*(?:Success|Metrics?)[^\n]*\n([\s\S]*?)(?=\n##|$)/i);
             this.vision.successMetrics = successMatch
                 ? this.extractBulletPoints(successMatch[1])
                 : [];
 
             // Extract timeline/milestones
-            const timelineMatch = text.match(/##\s*(?:Timeline|Milestones?|Roadmap)[^#]*([\s\S]*?)(?=##|$)/i);
+            const timelineMatch = text.match(/##\s*(?:Timeline|Milestones?|Roadmap)[^\n]*\n([\s\S]*?)(?=\n##|$)/i);
             this.vision.timeline = timelineMatch
                 ? this.extractBulletPoints(timelineMatch[1])
                 : [];
 
             // Extract inspirations
-            const inspirationMatch = text.match(/##\s*(?:Inspiration|Inspired)[^#]*([\s\S]*?)(?=##|$)/i);
+            const inspirationMatch = text.match(/##\s*(?:Inspiration|Inspired)[^\n]*\n([\s\S]*?)(?=\n##|$)/i);
             this.vision.inspirations = inspirationMatch
                 ? this.extractBulletPoints(inspirationMatch[1])
                 : [];
