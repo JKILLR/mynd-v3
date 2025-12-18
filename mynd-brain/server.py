@@ -24,6 +24,8 @@ import torch
 import numpy as np
 from fastapi import FastAPI, HTTPException, WebSocket, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 # Local imports
@@ -38,16 +40,16 @@ from models.vision import VisionEngine
 
 class Config:
     PORT = 8420
-    HOST = "127.0.0.1"  # Local only - never expose externally
+    HOST = "0.0.0.0"  # Listen on all interfaces for network access
 
     # Model settings
     EMBEDDING_MODEL = "all-MiniLM-L6-v2"  # Fast, good quality
     EMBEDDING_DIM = 384
 
-    # Graph Transformer settings
-    HIDDEN_DIM = 256
-    NUM_HEADS = 4
-    NUM_LAYERS = 2
+    # Graph Transformer v2 settings
+    HIDDEN_DIM = 512   # Upgraded from 256
+    NUM_HEADS = 8      # Upgraded from 4
+    NUM_LAYERS = 3     # Upgraded from 2
 
     # Voice settings (Whisper)
     WHISPER_MODEL = "base"  # tiny, base, small, medium, large
@@ -391,6 +393,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Static file serving for frontend (parent directory)
+import pathlib
+FRONTEND_DIR = pathlib.Path(__file__).parent.parent
+
+# Serve JS files
+app.mount("/js", StaticFiles(directory=FRONTEND_DIR / "js"), name="js")
+
+# Serve the main app
+@app.get("/app")
+async def serve_app():
+    """Serve the MYND app."""
+    return FileResponse(FRONTEND_DIR / "self-dev.html")
 
 # ═══════════════════════════════════════════════════════════════════
 # ENDPOINTS

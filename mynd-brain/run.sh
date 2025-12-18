@@ -27,8 +27,9 @@ echo "╔═══════════════════════�
 echo "║                                                               ║"
 echo "║   🧠  MYND BRAIN - Local ML Server                           ║"
 echo "║                                                               ║"
-echo "║   Running on: http://localhost:8420                          ║"
-echo "║   Health check: http://localhost:8420/health                 ║"
+echo "║   Local:   http://localhost:8420                              ║"
+echo "║   Network: http://$(ipconfig getifaddr en0 2>/dev/null || echo 'YOUR_IP'):8420  ║"
+echo "║   Health:  http://localhost:8420/health                      ║"
 echo "║                                                               ║"
 echo "║   Press Ctrl+C to stop                                       ║"
 echo "║                                                               ║"
@@ -36,4 +37,4 @@ echo "╚═══════════════════════�
 echo ""
 
 # Run the server
-python -m uvicorn server:app --host 127.0.0.1 --port 8420 --reload
+python -m uvicorn server:app --host 0.0.0.0 --port 8420 --reload
