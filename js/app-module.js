@@ -32280,8 +32280,8 @@ Respond with JSON only:`;
                 diffHTML += `
                     <div style="padding: 8px; border-bottom: 1px solid var(--glass-border);">
                         <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 6px;">
-                            📄 ${diff.file} - ${diff.description}
-                            <span style="color: var(--accent);">${diff.location || ''}</span>
+                            📄 ${escapeHtml(diff.file || '')} - ${escapeHtml(diff.description || '')}
+                            <span style="color: var(--accent);">${escapeHtml(diff.location || '')}</span>
                         </div>
                         <div style="background: rgba(220, 38, 38, 0.1); padding: 6px; border-radius: 4px; margin-bottom: 4px;">
                             <div style="font-size: 9px; color: #dc2626; margin-bottom: 4px;">- REMOVE (${diff.deletions} lines)</div>
@@ -32298,7 +32298,7 @@ Respond with JSON only:`;
             if (patch.testInstructions) {
                 diffHTML += `
                     <div style="padding: 8px; background: rgba(59, 130, 246, 0.1); border-radius: 0 0 8px 8px;">
-                        <div style="font-size: 10px; color: #3b82f6;">📋 Test: ${patch.testInstructions}</div>
+                        <div style="font-size: 10px; color: #3b82f6;">📋 Test: ${escapeHtml(patch.testInstructions)}</div>
                     </div>
                 `;
             }
