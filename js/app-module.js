@@ -8866,14 +8866,32 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
         
         // Generate AI-enhanced child suggestions using Claude
         async generateSmartSuggestions(node, store) {
-            const nodeText = node.description 
+            const nodeText = node.description
                 ? `${node.label}. ${node.description}`
                 : node.label;
-            
+
             // Get our ML predictions first
             const existingChildren = (node.children || []).map(c => c.label);
             const mlSuggestions = await this.predictChildren(nodeText, existingChildren, 2);
-            
+
+            // GRAPH TRANSFORMER PREDICTIONS - Cross-map attention via LocalBrain
+            let graphTransformerPredictions = null;
+            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                try {
+                    const gtResult = await LocalBrain.predictConnections(node.id, store.data, 5);
+                    if (gtResult && gtResult.connections && gtResult.connections.length > 0) {
+                        graphTransformerPredictions = {
+                            connections: gtResult.connections,
+                            attentionWeights: gtResult.attentionWeights,
+                            source: gtResult.source
+                        };
+                        console.log(`🔮 Graph Transformer found ${gtResult.connections.length} cross-map connections`);
+                    }
+                } catch (e) {
+                    console.warn('Graph Transformer prediction failed:', e);
+                }
+            }
+
             // Get path context
             const path = store.getPath(node.id);
             const pathStr = path.map(n => n.label).join(' → ');
@@ -8919,6 +8937,13 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
             let semanticContext = '';
             if (mlSuggestions.length > 0) {
                 semanticContext += `LEARNED PATTERNS suggest:\n${mlSuggestions.map(s => `- ${s.label} (${Math.round(s.confidence * 100)}% confidence)`).join('\n')}\n\n`;
+            }
+            // GRAPH TRANSFORMER CROSS-MAP CONNECTIONS
+            if (graphTransformerPredictions && graphTransformerPredictions.connections.length > 0) {
+                const crossMapConnections = graphTransformerPredictions.connections
+                    .map(c => `- "${c.target_label}" (attention: ${Math.round((c.attention_score || c.score || 0.5) * 100)}%)`)
+                    .join('\n');
+                semanticContext += `CROSS-MAP CONNECTIONS (Graph Transformer found these distant but related nodes):\n${crossMapConnections}\n\n`;
             }
             if (relationshipInsights) semanticContext += `STRUCTURE: ${relationshipInsights}\n`;
             if (conceptInsights) semanticContext += `ABSTRACTION: ${conceptInsights}\n`;
@@ -8970,15 +8995,16 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                     return {
                         mlSuggestions,
                         aiSuggestions: suggestions,
+                        graphTransformerPredictions,
                         combined: true
                     };
                 }
 
-                return { mlSuggestions, aiSuggestions: [], combined: false };
-                
+                return { mlSuggestions, aiSuggestions: [], graphTransformerPredictions, combined: false };
+
             } catch (error) {
                 console.error('Smart suggestions error:', error);
-                return { mlSuggestions, aiSuggestions: [], combined: false };
+                return { mlSuggestions, aiSuggestions: [], graphTransformerPredictions, combined: false };
             }
         }
         
@@ -9326,7 +9352,10 @@ Return as JSON:
                 patternWeights: this.patternWeights.size,
                 highConfidencePatterns: incrementalStats.highConfidencePatterns,
                 avgPatternWeight: incrementalStats.avgWeight,
-                pendingEmbeddings: incrementalStats.pendingEmbeddings
+                pendingEmbeddings: incrementalStats.pendingEmbeddings,
+                // Local Brain stats
+                localBrainHits: this.stats?.localBrainHits || 0,
+                cacheHits: this.stats?.cacheHits || 0
             };
         }
         
@@ -13027,47 +13056,77 @@ Return as JSON:
                 return false;
             }
         }
-        
+
         /**
          * Generate embedding for a single text
+         * Routes through LocalBrain (M2 GPU) when available, falls back to browser
          */
         async embed(text, options = {}) {
-            if (!this.initialized) {
-                const ready = await this.initialize();
-                if (!ready) return null;
-            }
-            
             const cacheKey = options.cacheKey || text;
-            
-            // Check cache
+
+            // Check cache first (works for both local and browser embeddings)
             if (this.embeddingCache.has(cacheKey) && !options.forceRecompute) {
                 this.stats.cacheHits++;
                 return this.embeddingCache.get(cacheKey);
             }
-            
+
+            // ═══════════════════════════════════════════════════════════════
+            // LOCAL BRAIN ROUTING - Use M2 GPU when available
+            // ═══════════════════════════════════════════════════════════════
+            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                try {
+                    const startTime = performance.now();
+                    const embedding = await LocalBrain.embed(text);
+
+                    if (embedding && Array.isArray(embedding)) {
+                        const inferenceTime = performance.now() - startTime;
+                        this.stats.totalInferenceTime += inferenceTime;
+                        this.stats.embeddingsGenerated++;
+                        this.stats.avgInferenceTime = this.stats.totalInferenceTime / this.stats.embeddingsGenerated;
+                        this.stats.localBrainHits = (this.stats.localBrainHits || 0) + 1;
+
+                        // Cache result
+                        this.embeddingCache.set(cacheKey, embedding);
+
+                        return embedding;
+                    }
+                } catch (e) {
+                    console.warn('LocalBrain embed failed, falling back to browser:', e);
+                }
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // BROWSER FALLBACK - TensorFlow.js / Transformers.js
+            // ═══════════════════════════════════════════════════════════════
+            if (!this.initialized) {
+                const ready = await this.initialize();
+                if (!ready) return null;
+            }
+
             try {
                 const startTime = performance.now();
-                
+
                 // Run inference
                 const output = await this.pipeline(text, {
                     pooling: 'mean',
                     normalize: true
                 });
-                
+
                 // Extract embedding array
                 const embedding = Array.from(output.data);
-                
+
                 // Update stats
                 const inferenceTime = performance.now() - startTime;
                 this.stats.totalInferenceTime += inferenceTime;
                 this.stats.embeddingsGenerated++;
                 this.stats.avgInferenceTime = this.stats.totalInferenceTime / this.stats.embeddingsGenerated;
-                
+                this.stats.browserFallbackHits = (this.stats.browserFallbackHits || 0) + 1;
+
                 // Cache result
                 this.embeddingCache.set(cacheKey, embedding);
-                
+
                 return embedding;
-                
+
             } catch (e) {
                 console.error('Embedding generation failed:', e);
                 return null;
@@ -13076,17 +13135,13 @@ Return as JSON:
         
         /**
          * Generate embeddings for multiple texts (batched)
+         * Routes through LocalBrain (M2 GPU) when available, falls back to browser
          */
         async embedBatch(texts, options = {}) {
-            if (!this.initialized) {
-                const ready = await this.initialize();
-                if (!ready) return texts.map(() => null);
-            }
-            
             const results = [];
             const toCompute = [];
             const toComputeIndices = [];
-            
+
             // Check cache first
             for (let i = 0; i < texts.length; i++) {
                 const cacheKey = options.cacheKeys?.[i] || texts[i];
@@ -13099,29 +13154,68 @@ Return as JSON:
                     results[i] = null;
                 }
             }
-            
+
             // Compute missing embeddings
             if (toCompute.length > 0) {
                 const startTime = performance.now();
-                
+
+                // ═══════════════════════════════════════════════════════════════
+                // LOCAL BRAIN ROUTING - Use M2 GPU for batch embeddings
+                // ═══════════════════════════════════════════════════════════════
+                if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                    try {
+                        const embeddings = await LocalBrain.embedBatch(toCompute);
+
+                        if (embeddings && Array.isArray(embeddings)) {
+                            for (let j = 0; j < toCompute.length; j++) {
+                                const embedding = embeddings[j];
+                                const originalIndex = toComputeIndices[j];
+                                const cacheKey = options.cacheKeys?.[originalIndex] || texts[originalIndex];
+
+                                results[originalIndex] = embedding;
+                                this.embeddingCache.set(cacheKey, embedding);
+                            }
+
+                            const inferenceTime = performance.now() - startTime;
+                            this.stats.totalInferenceTime += inferenceTime;
+                            this.stats.embeddingsGenerated += toCompute.length;
+                            this.stats.avgInferenceTime = this.stats.totalInferenceTime / this.stats.embeddingsGenerated;
+                            this.stats.localBrainHits = (this.stats.localBrainHits || 0) + toCompute.length;
+
+                            console.log(`🧠 LocalBrain batch: ${toCompute.length} embeddings in ${inferenceTime.toFixed(1)}ms`);
+                            return results;
+                        }
+                    } catch (e) {
+                        console.warn('LocalBrain batch embed failed, falling back to browser:', e);
+                    }
+                }
+
+                // ═══════════════════════════════════════════════════════════════
+                // BROWSER FALLBACK - TensorFlow.js / Transformers.js
+                // ═══════════════════════════════════════════════════════════════
+                if (!this.initialized) {
+                    const ready = await this.initialize();
+                    if (!ready) return texts.map(() => null);
+                }
+
                 // Process in batches
                 for (let i = 0; i < toCompute.length; i += this.batchSize) {
                     const batch = toCompute.slice(i, i + this.batchSize);
                     const batchIndices = toComputeIndices.slice(i, i + this.batchSize);
-                    
+
                     try {
                         // Run batch inference
                         const outputs = await this.pipeline(batch, {
                             pooling: 'mean',
                             normalize: true
                         });
-                        
+
                         // Extract embeddings
                         for (let j = 0; j < batch.length; j++) {
                             const embedding = Array.from(outputs[j].data);
                             const originalIndex = batchIndices[j];
                             const cacheKey = options.cacheKeys?.[originalIndex] || texts[originalIndex];
-                            
+
                             results[originalIndex] = embedding;
                             this.embeddingCache.set(cacheKey, embedding);
                         }
@@ -13133,13 +13227,14 @@ Return as JSON:
                         }
                     }
                 }
-                
+
                 const inferenceTime = performance.now() - startTime;
                 this.stats.totalInferenceTime += inferenceTime;
                 this.stats.embeddingsGenerated += toCompute.length;
                 this.stats.avgInferenceTime = this.stats.totalInferenceTime / this.stats.embeddingsGenerated;
+                this.stats.browserFallbackHits = (this.stats.browserFallbackHits || 0) + toCompute.length;
             }
-            
+
             return results;
         }
         
@@ -35994,20 +36089,68 @@ showKeyboardHints();
                 
                 if (gpuCompute.initialized && gpuCompute.stats.operationCount > 0) {
                     const stats = gpuCompute.getStats();
-                    
+
                     if (gpuOpsRow) {
                         gpuOpsRow.style.display = 'flex';
                         document.getElementById('gpu-ops-count').textContent = stats.operationCount;
                     }
-                    
+
                     if (gpuTimeRow && stats.avgGpuTime !== 'N/A') {
                         gpuTimeRow.style.display = 'flex';
                         document.getElementById('gpu-avg-time').textContent = stats.avgGpuTime;
                     }
                 }
             }
+
+            // Update Local Brain (M2 GPU Server) stats
+            if (typeof LocalBrain !== 'undefined') {
+                const lbStatusEl = document.getElementById('localbrain-status');
+                const lbDeviceRow = document.getElementById('localbrain-device-row');
+                const lbLatencyRow = document.getElementById('localbrain-latency-row');
+                const lbHitsRow = document.getElementById('localbrain-hits-row');
+
+                if (lbStatusEl) {
+                    const status = LocalBrain.getStatus();
+
+                    if (status.connected) {
+                        lbStatusEl.textContent = '✓ Connected';
+                        lbStatusEl.style.color = '#22c55e';
+
+                        // Show device info
+                        if (lbDeviceRow) {
+                            lbDeviceRow.style.display = 'flex';
+                            const deviceEl = document.getElementById('localbrain-device');
+                            deviceEl.textContent = status.device === 'mps' ? 'M2 Metal' :
+                                                   status.device === 'cuda' ? 'CUDA GPU' : 'CPU';
+                            deviceEl.style.color = status.device !== 'cpu' ? '#22c55e' : '#f59e0b';
+                        }
+
+                        // Show latency
+                        if (lbLatencyRow && status.lastLatency > 0) {
+                            lbLatencyRow.style.display = 'flex';
+                            document.getElementById('localbrain-latency').textContent =
+                                status.lastLatency.toFixed(0) + 'ms';
+                        }
+
+                        // Show server hits from neuralNet stats
+                        const nnStats = neuralNet.getStats();
+                        if (lbHitsRow && nnStats.localBrainHits > 0) {
+                            lbHitsRow.style.display = 'flex';
+                            document.getElementById('localbrain-hits').textContent = nnStats.localBrainHits;
+                        }
+                    } else {
+                        lbStatusEl.textContent = 'Offline';
+                        lbStatusEl.style.color = 'var(--text-muted)';
+                        lbStatusEl.title = 'Start local server: cd mynd-brain && ./run.sh';
+
+                        if (lbDeviceRow) lbDeviceRow.style.display = 'none';
+                        if (lbLatencyRow) lbLatencyRow.style.display = 'none';
+                        if (lbHitsRow) lbHitsRow.style.display = 'none';
+                    }
+                }
+            }
         },
-        
+
         async trainNetwork() {
             if (neuralNet.isTraining) return;
             
@@ -36628,6 +36771,16 @@ showKeyboardHints();
                         if (parentNode) {
                             neuralNet.boostPattern(parentNode.label, label, suggestionType);
 
+                            // LOCAL BRAIN FEEDBACK - Train Graph Transformer on user decisions
+                            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                                LocalBrain.recordFeedback(parentId, 'accepted', {
+                                    parentLabel: parentNode.label,
+                                    acceptedLabel: label,
+                                    suggestionType: suggestionType,
+                                    timestamp: Date.now()
+                                });
+                            }
+
                             // Store semantic memory
                             semanticMemory.addMemory(
                                 'suggestion_accepted',
@@ -36725,6 +36878,17 @@ showKeyboardHints();
                             metaLearner.trackSuggestionAccepted(label, true); // true = Add All
                             if (parentNode) {
                                 neuralNet.boostPattern(parentNode.label, label, suggestionType);
+
+                                // LOCAL BRAIN FEEDBACK - Train Graph Transformer (batch accept)
+                                if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                                    LocalBrain.recordFeedback(parentId, 'accepted_batch', {
+                                        parentLabel: parentNode.label,
+                                        acceptedLabel: label,
+                                        suggestionType: suggestionType,
+                                        batchMode: true,
+                                        timestamp: Date.now()
+                                    });
+                                }
 
                                 // Store semantic memory
                                 semanticMemory.addMemory(
