@@ -18833,6 +18833,26 @@ Respond with a JSON object:
                 this.createFeedbackMemory(feedback);
             }
 
+            // === REAL-TIME CONVERSATION LEARNING ===
+            // Record this feedback in chatManager so the AI knows what it learned this session
+            if (typeof chatManager !== 'undefined' && action !== 'ignored') {
+                const detail = feedback.type === 'category'
+                    ? `${action === 'accepted' ? 'accepted' : 'rejected'} "${feedback.content?.predicted}" for "${feedback.context?.nodeLabel || 'content'}"`
+                    : `${action} ${feedback.type} suggestion`;
+
+                chatManager.recordSessionLearning('feedback', {
+                    action,
+                    type: feedback.type,
+                    detail
+                });
+
+                // Also boost pattern if accepted
+                if (action === 'accepted' && typeof neuralNet !== 'undefined') {
+                    const pattern = `${feedback.context?.parentLabel || 'parent'} → ${feedback.context?.nodeLabel || 'child'}`;
+                    chatManager.recordSessionLearning('pattern', pattern);
+                }
+            }
+
             // Trigger BATCH learning if enough feedback has accumulated
             this.checkAndTriggerLearning(feedback);
         },
@@ -26271,7 +26291,83 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         isProcessing: false,
         conversation: [], // {role: 'user'|'assistant', content: string, actions?: array, timestamp: number}
         maxHistory: 20, // Keep last 20 messages for context
-        
+
+        // Real-time conversation learning - tracks what was learned THIS session
+        sessionLearning: {
+            feedbackReceived: [],    // [{action, type, detail, timestamp}]
+            patternsLearned: [],     // What patterns were reinforced
+            preferencesUpdated: [],  // What preferences changed
+            lastUpdate: null
+        },
+
+        // Record real-time learning from this conversation
+        recordSessionLearning(type, data) {
+            const entry = {
+                type,
+                data,
+                timestamp: Date.now()
+            };
+
+            if (type === 'feedback') {
+                this.sessionLearning.feedbackReceived.push({
+                    action: data.action,
+                    feedbackType: data.type,
+                    detail: data.detail || '',
+                    timestamp: Date.now()
+                });
+            } else if (type === 'pattern') {
+                this.sessionLearning.patternsLearned.push(data);
+            } else if (type === 'preference') {
+                this.sessionLearning.preferencesUpdated.push(data);
+            }
+
+            this.sessionLearning.lastUpdate = Date.now();
+
+            // Keep only recent items (last 20)
+            if (this.sessionLearning.feedbackReceived.length > 20) {
+                this.sessionLearning.feedbackReceived.shift();
+            }
+
+            console.log(`🧠 Session learning recorded: ${type}`, data);
+        },
+
+        // Get context about what was learned in THIS conversation
+        getSessionLearningContext() {
+            const { feedbackReceived, patternsLearned } = this.sessionLearning;
+
+            if (feedbackReceived.length === 0 && patternsLearned.length === 0) {
+                return null;
+            }
+
+            let context = '\n🔄 LEARNED THIS CONVERSATION:\n';
+
+            // Recent feedback
+            if (feedbackReceived.length > 0) {
+                const recent = feedbackReceived.slice(-5);
+                recent.forEach(f => {
+                    const actionEmoji = f.action === 'accepted' ? '✓' : f.action === 'rejected' ? '✗' : '~';
+                    context += `  ${actionEmoji} ${f.feedbackType}: ${f.detail}\n`;
+                });
+            }
+
+            // Patterns learned
+            if (patternsLearned.length > 0) {
+                context += `  Patterns reinforced: ${patternsLearned.slice(-3).join(', ')}\n`;
+            }
+
+            return context;
+        },
+
+        // Clear session learning (on new conversation or page reload)
+        clearSessionLearning() {
+            this.sessionLearning = {
+                feedbackReceived: [],
+                patternsLearned: [],
+                preferencesUpdated: [],
+                lastUpdate: null
+            };
+        },
+
         init() {
             this.panel = document.getElementById('ai-chat-panel');
             this.messagesContainer = document.getElementById('chat-messages');
@@ -27095,6 +27191,16 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 }
             } catch (e) {
                 // Feedback stats not critical
+            }
+
+            // 7b. Real-time session learning (what was learned THIS conversation)
+            try {
+                const sessionLearning = this.getSessionLearningContext();
+                if (sessionLearning) {
+                    neuralContext += sessionLearning;
+                }
+            } catch (e) {
+                // Session learning not critical
             }
 
             // Check for comprehensive code review requests (used by multiple context providers)
@@ -35482,13 +35588,23 @@ showKeyboardHints();
                         metaLearner.trackSuggestionAccepted(label, false); // false = not Add All
                         if (parentNode) {
                             neuralNet.boostPattern(parentNode.label, label, suggestionType);
-                            
+
                             // Store semantic memory
                             semanticMemory.addMemory(
                                 'suggestion_accepted',
                                 `User accepted ${suggestionType} suggestion "${label}" under "${parentNode.label}"`,
                                 { parentLabel: parentNode.label, childLabel: label, suggestionType }
                             );
+
+                            // Real-time session learning
+                            if (typeof chatManager !== 'undefined') {
+                                chatManager.recordSessionLearning('feedback', {
+                                    action: 'accepted',
+                                    type: 'expansion',
+                                    detail: `accepted "${label}" under "${parentNode.label}"`
+                                });
+                                chatManager.recordSessionLearning('pattern', `${parentNode.label} → ${label}`);
+                            }
                         }
                         
                         buildScene();
@@ -35570,15 +35686,25 @@ showKeyboardHints();
                             metaLearner.trackSuggestionAccepted(label, true); // true = Add All
                             if (parentNode) {
                                 neuralNet.boostPattern(parentNode.label, label, suggestionType);
-                                
+
                                 // Store semantic memory
                                 semanticMemory.addMemory(
                                     'suggestion_accepted',
                                     `User accepted ${suggestionType} suggestion "${label}" under "${parentNode.label}"`,
                                     { parentLabel: parentNode.label, childLabel: label, suggestionType }
                                 );
+
+                                // Real-time session learning
+                                if (typeof chatManager !== 'undefined') {
+                                    chatManager.recordSessionLearning('feedback', {
+                                        action: 'accepted',
+                                        type: 'expansion',
+                                        detail: `accepted "${label}" under "${parentNode.label}"`
+                                    });
+                                    chatManager.recordSessionLearning('pattern', `${parentNode.label} → ${label}`);
+                                }
                             }
-                            
+
                             // Mark as added
                             el.classList.add('added');
                             el.style.opacity = '0.5';
