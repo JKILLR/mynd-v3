@@ -26439,29 +26439,270 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
             }, 50);
         },
-        
+
+        // ─────────────────────────────────────────────────────────────────
+        // OPTIMIZED MAP CONTEXT - Semantic search for relevant nodes only
+        // Reduces token usage from ~25K to ~3-5K per message
+        // ─────────────────────────────────────────────────────────────────
+
+        async getRelevantMapContext(query, options = {}) {
+            const {
+                maxNodes = 50,
+                includeAncestors = true,
+                includeTopLevel = true,
+                summaryOnly = false,
+                minSimilarity = 0.25
+            } = options;
+
+            const allNodes = store.getAllNodes();
+            const totalNodes = allNodes.length;
+
+            // For small maps, just return full structure (not worth optimizing)
+            if (totalNodes <= 30) {
+                return {
+                    mode: 'full',
+                    structure: this.buildCompactTree(store.data, { maxDepth: 10 }),
+                    stats: { total: totalNodes, included: totalNodes, mode: 'full-small-map' }
+                };
+            }
+
+            // Find semantically relevant nodes
+            let relevantNodeIds = new Set();
+            let relevantNodes = [];
+
+            // 1. Use neuralNet to find similar nodes
+            if (typeof neuralNet !== 'undefined' && neuralNet.isReady) {
+                try {
+                    const similar = await neuralNet.findSimilarNodes(query, store, maxNodes);
+                    similar.forEach(s => {
+                        if (s.similarity >= minSimilarity) {
+                            relevantNodeIds.add(s.nodeId);
+                            relevantNodes.push({ id: s.nodeId, similarity: s.similarity, source: 'semantic' });
+                        }
+                    });
+                } catch (e) {
+                    console.warn('Semantic node search failed:', e);
+                }
+            }
+
+            // 2. Always include selected node and its branch
+            if (selectedNode?.userData?.id) {
+                const selectedId = selectedNode.userData.id;
+                relevantNodeIds.add(selectedId);
+                relevantNodes.push({ id: selectedId, similarity: 1.0, source: 'selected' });
+
+                // Include selected node's children
+                const selectedData = store.findNode(selectedId);
+                if (selectedData?.children) {
+                    selectedData.children.forEach(child => {
+                        relevantNodeIds.add(child.id);
+                        relevantNodes.push({ id: child.id, similarity: 0.9, source: 'selected-child' });
+                    });
+                }
+            }
+
+            // 3. Keyword matching fallback (if semantic search found few results)
+            if (relevantNodeIds.size < 10) {
+                const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+                for (const node of allNodes) {
+                    if (relevantNodeIds.size >= maxNodes) break;
+                    const text = `${node.label} ${node.description || ''}`.toLowerCase();
+                    if (queryWords.some(w => text.includes(w))) {
+                        if (!relevantNodeIds.has(node.id)) {
+                            relevantNodeIds.add(node.id);
+                            relevantNodes.push({ id: node.id, similarity: 0.5, source: 'keyword' });
+                        }
+                    }
+                }
+            }
+
+            // 4. Include ancestors for hierarchy context
+            if (includeAncestors) {
+                const ancestorIds = new Set();
+                for (const nodeId of relevantNodeIds) {
+                    let current = store.findNode(nodeId);
+                    // Walk up the tree to find ancestors
+                    const findAncestors = (searchNode, targetId, path = []) => {
+                        if (!searchNode) return null;
+                        if (searchNode.id === targetId) return path;
+                        if (searchNode.children) {
+                            for (const child of searchNode.children) {
+                                const result = findAncestors(child, targetId, [...path, searchNode.id]);
+                                if (result) return result;
+                            }
+                        }
+                        return null;
+                    };
+                    const ancestors = findAncestors(store.data, nodeId, []);
+                    if (ancestors) {
+                        ancestors.forEach(id => ancestorIds.add(id));
+                    }
+                }
+                ancestorIds.forEach(id => {
+                    if (!relevantNodeIds.has(id)) {
+                        relevantNodeIds.add(id);
+                        relevantNodes.push({ id, similarity: 0.3, source: 'ancestor' });
+                    }
+                });
+            }
+
+            // 5. Always include top-level branches for orientation
+            if (includeTopLevel && store.data?.children) {
+                store.data.children.forEach(child => {
+                    if (!relevantNodeIds.has(child.id)) {
+                        relevantNodeIds.add(child.id);
+                        relevantNodes.push({ id: child.id, similarity: 0.4, source: 'top-level' });
+                    }
+                });
+            }
+
+            // Build optimized tree structure
+            const structure = summaryOnly
+                ? this.buildMapSummary(store.data, relevantNodeIds, totalNodes)
+                : this.buildRelevantTree(store.data, relevantNodeIds);
+
+            return {
+                mode: summaryOnly ? 'summary' : 'relevant',
+                structure,
+                stats: {
+                    total: totalNodes,
+                    included: relevantNodeIds.size,
+                    semantic: relevantNodes.filter(n => n.source === 'semantic').length,
+                    reduction: Math.round((1 - relevantNodeIds.size / totalNodes) * 100) + '%'
+                }
+            };
+        },
+
+        // Build compact tree with only relevant nodes
+        buildRelevantTree(node, relevantIds, depth = 0) {
+            if (!node) return '';
+
+            const isRelevant = relevantIds.has(node.id);
+            const hasRelevantDescendants = this.hasRelevantDescendants(node, relevantIds);
+
+            // Skip if not relevant and no relevant descendants
+            if (!isRelevant && !hasRelevantDescendants) return '';
+
+            const indent = '  '.repeat(depth);
+            const childCount = node.children?.length || 0;
+
+            // Compact format: label [id] (children count)
+            // Skip descriptions to save tokens
+            let line = `${indent}- ${node.label} [${node.id}]`;
+            if (childCount > 0) {
+                const relevantChildCount = node.children?.filter(c =>
+                    relevantIds.has(c.id) || this.hasRelevantDescendants(c, relevantIds)
+                ).length || 0;
+                if (relevantChildCount < childCount) {
+                    line += ` (${relevantChildCount}/${childCount} shown)`;
+                } else {
+                    line += ` (${childCount})`;
+                }
+            }
+
+            if (node.children && node.children.length > 0) {
+                const childLines = node.children
+                    .map(child => this.buildRelevantTree(child, relevantIds, depth + 1))
+                    .filter(line => line.length > 0);
+                if (childLines.length > 0) {
+                    line += '\n' + childLines.join('\n');
+                }
+            }
+
+            return line;
+        },
+
+        // Check if node has any relevant descendants
+        hasRelevantDescendants(node, relevantIds) {
+            if (!node?.children) return false;
+            for (const child of node.children) {
+                if (relevantIds.has(child.id)) return true;
+                if (this.hasRelevantDescendants(child, relevantIds)) return true;
+            }
+            return false;
+        },
+
+        // Build ultra-compact summary (for overview requests)
+        buildMapSummary(root, relevantIds, totalNodes) {
+            let summary = `MAP: ${totalNodes} nodes\n`;
+
+            // Top-level branches only
+            if (root?.children) {
+                summary += `BRANCHES:\n`;
+                root.children.forEach(branch => {
+                    const branchNodes = this.countNodes(branch);
+                    const isRelevant = relevantIds.has(branch.id) ? '→' : ' ';
+                    summary += `${isRelevant} ${branch.label} (${branchNodes} nodes)\n`;
+                });
+            }
+
+            // List relevant nodes compactly
+            if (relevantIds.size > 0 && relevantIds.size < 30) {
+                summary += `\nRELEVANT: `;
+                const relevantLabels = [];
+                const findLabels = (node) => {
+                    if (relevantIds.has(node.id) && node.id !== root.id) {
+                        relevantLabels.push(node.label);
+                    }
+                    node.children?.forEach(findLabels);
+                };
+                findLabels(root);
+                summary += relevantLabels.slice(0, 20).join(', ');
+                if (relevantLabels.length > 20) summary += `... +${relevantLabels.length - 20} more`;
+            }
+
+            return summary;
+        },
+
+        // Count nodes in a subtree
+        countNodes(node) {
+            if (!node) return 0;
+            let count = 1;
+            if (node.children) {
+                node.children.forEach(child => count += this.countNodes(child));
+            }
+            return count;
+        },
+
+        // Build compact tree (for small maps)
+        buildCompactTree(node, options = {}, depth = 0) {
+            const { maxDepth = 5 } = options;
+            if (!node || depth > maxDepth) return '';
+
+            const indent = '  '.repeat(depth);
+            const childCount = node.children?.length || 0;
+            let line = `${indent}- ${node.label} [${node.id}]`;
+            if (childCount > 0) line += ` (${childCount})`;
+
+            if (node.children && node.children.length > 0 && depth < maxDepth) {
+                const childLines = node.children.map(child =>
+                    this.buildCompactTree(child, options, depth + 1)
+                ).filter(l => l);
+                if (childLines.length > 0) {
+                    line += '\n' + childLines.join('\n');
+                }
+            }
+
+            return line;
+        },
+
         async callAI(userMessage) {
             // Build context
             const allNodes = store.getAllNodes();
             const selectedNodeData = selectedNode ? store.findNode(selectedNode.userData.id) : null;
-            
-            // Build complete tree structure from store.data recursively
-            const buildFullTree = (node, depth = 0) => {
-                if (!node) return '';
-                const indent = '  '.repeat(depth);
-                const childCount = node.children?.length || 0;
-                const desc = node.description ? ` - "${node.description.substring(0, 50)}${node.description.length > 50 ? '...' : ''}"` : '';
-                let line = `${indent}- ${node.label} [id:${node.id}]${childCount > 0 ? ` (${childCount} children)` : ''}${desc}`;
-                
-                if (node.children && node.children.length > 0) {
-                    const childLines = node.children.map(child => buildFullTree(child, depth + 1));
-                    line += '\n' + childLines.join('\n');
-                }
-                return line;
-            };
-            
-            const treeStructure = buildFullTree(store.data);
             const totalNodes = allNodes.length;
+
+            // Use optimized map context - semantic search for relevant nodes only
+            // Reduces token usage from ~25K to ~3-5K for large maps
+            const mapContext = await this.getRelevantMapContext(userMessage, {
+                maxNodes: 50,
+                includeAncestors: true,
+                includeTopLevel: true,
+                summaryOnly: false
+            });
+
+            const treeStructure = mapContext.structure;
+            console.log(`🗺️ Map context: ${mapContext.stats.included}/${mapContext.stats.total} nodes (${mapContext.stats.reduction} reduction, mode: ${mapContext.mode})`);
             
             // Build conversation history for Claude
             // Include completed actions so AI knows what was already done
@@ -27072,9 +27313,10 @@ Both AI features can:
 
 CURRENT CONTEXT:
 - Total nodes in map: ${totalNodes}
+- Map context: ${mapContext.stats.included} relevant nodes shown (${mapContext.stats.reduction} token optimization)
 - Selected node: ${selectedNodeData ? `"${selectedNodeData.label}" [id:${selectedNodeData.id}]${selectedNodeData.children?.length ? ` with ${selectedNodeData.children.length} children` : ''}` : 'None'}
 
-COMPLETE MAP STRUCTURE:
+MAP STRUCTURE (semantic search - most relevant to query):
 ${treeStructure || '(empty map)'}
 ${neuralContext ? `
 NEURAL INTELLIGENCE CONTEXT:
@@ -27102,7 +27344,7 @@ LOADED SOURCE FILE FOR REVIEW:
 ${loadedSourceContext}` : ''}
 
 YOUR CAPABILITIES:
-1. **Full Map Visibility**: You can see the ENTIRE map structure above
+1. **Smart Map Context**: You see the most RELEVANT nodes via semantic search (top-level branches + nodes related to the query). For large maps this optimizes token usage while maintaining full awareness
 2. **Neural Insights**: Use the neural context above to understand user patterns, find similar nodes, and make personalized suggestions
 3. **Actions**: Create, edit, delete, move, focus on nodes when user wants
 4. **Proactive**: Suggest improvements, identify duplicates, offer to help organize based on learned patterns
