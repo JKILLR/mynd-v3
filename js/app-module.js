@@ -13695,6 +13695,361 @@ Return as JSON:
             localStorage.removeItem(this.STORAGE_KEY);
             return this.initialize();
         }
+
+        // ─────────────────────────────────────────────────────────────────
+        // EXTERNAL SOURCE FILE PROCESSING
+        // Process loaded source files (not just current page)
+        // ─────────────────────────────────────────────────────────────────
+
+        // Process an external source file and store separately
+        async processSourceFile(sourceCode, fileName) {
+            console.log(`📚 Processing source file: ${fileName} (${Math.round(sourceCode.length / 1024)}KB)`);
+
+            // Store source file metadata
+            this.loadedSource = {
+                fileName,
+                code: sourceCode,
+                processedAt: Date.now()
+            };
+
+            // Chunk the source file
+            this.sourceChunks = this.chunkCode(sourceCode);
+            console.log(`📚 Created ${this.sourceChunks.length} chunks from ${fileName}`);
+
+            // Generate embeddings for source chunks
+            await this.embedSourceChunks();
+
+            // Detect ML sections dynamically
+            this.mlSections = this.detectMLSections(sourceCode);
+            console.log(`🧠 Detected ${this.mlSections.length} ML/Neural sections`);
+
+            return {
+                chunks: this.sourceChunks.length,
+                mlSections: this.mlSections.length,
+                sections: [...new Set(this.sourceChunks.map(c => c.section))].length
+            };
+        }
+
+        // Embed source file chunks (separate from main codebase embeddings)
+        async embedSourceChunks() {
+            if (!this.sourceChunks || this.sourceChunks.length === 0) return;
+
+            const encoder = this.encoder || neuralNet?.encoder;
+            if (!encoder) {
+                console.warn('CodeRAG: No encoder available for source embeddings');
+                return;
+            }
+
+            this.sourceEmbeddings = new Map();
+            console.log(`📚 Embedding ${this.sourceChunks.length} source chunks...`);
+
+            const batchSize = 20;
+            for (let i = 0; i < this.sourceChunks.length; i += batchSize) {
+                const batch = this.sourceChunks.slice(i, i + batchSize);
+                const texts = batch.map(chunk =>
+                    `${chunk.name} ${chunk.section} ${chunk.type}: ${chunk.code.substring(0, 500)}`
+                );
+
+                try {
+                    const embeddings = await encoder.embed(texts);
+                    const vectors = await embeddings.array();
+                    embeddings.dispose();
+
+                    batch.forEach((chunk, idx) => {
+                        this.sourceEmbeddings.set(chunk.id, vectors[idx]);
+                    });
+                } catch (error) {
+                    console.warn(`Source embedding batch ${i} failed:`, error);
+                }
+            }
+            console.log(`📚 Embedded ${this.sourceEmbeddings.size} source chunks`);
+        }
+
+        // Detect ML/Neural sections using pattern matching (not hardcoded line numbers)
+        detectMLSections(sourceCode) {
+            const lines = sourceCode.split('\n');
+            const sections = [];
+
+            // Patterns that indicate ML/Neural code
+            const mlPatterns = [
+                { regex: /class\s+(PersonalNeuralNet|NeuralNet|NeuralDB)/i, name: 'Neural Network Core' },
+                { regex: /class\s+CognitiveG(T|raphTransformer)/i, name: 'Cognitive Graph Transformer' },
+                { regex: /class\s+(SemanticMemory|MemorySystem)/i, name: 'Semantic Memory System' },
+                { regex: /class\s+(PreferenceTracker|UserPreference)/i, name: 'Preference Tracker' },
+                { regex: /class\s+(RelationshipClassifier|Classifier)/i, name: 'Relationship Classifier' },
+                { regex: /class\s+(ConceptAbstractor|Abstractor)/i, name: 'Concept Abstractor' },
+                { regex: /class\s+MetaLearner/i, name: 'Meta Learner' },
+                { regex: /class\s+(StyleTransfer|StyleNet)/i, name: 'Style Transfer' },
+                { regex: /class\s+WebGPU(Compute|Engine)/i, name: 'WebGPU Compute Engine' },
+                { regex: /class\s+(TeacherKnowledge|Distillation)/i, name: 'Knowledge Distillation' },
+                { regex: /class\s+AIFeedback/i, name: 'AI Feedback System' },
+                { regex: /const\s+neuralNet\s*=|window\.neuralNet/i, name: 'Neural Net Instance' },
+                { regex: /\/\/\s*═+\s*(NEURAL|ML|MACHINE LEARNING|TENSORFLOW|EMBEDDING|TRAINING)/i, name: null }, // Section header
+                { regex: /async\s+train\s*\(|\.train\s*\(/i, name: 'Training System' },
+                { regex: /\.embed\s*\(|embedding[s]?\s*=/i, name: 'Embedding System' },
+                { regex: /backpropagat|gradient|loss\s*=/i, name: 'Backpropagation' },
+            ];
+
+            let currentSection = null;
+            let braceDepth = 0;
+            let sectionStart = -1;
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+
+                // Check for ML section start
+                for (const pattern of mlPatterns) {
+                    if (pattern.regex.test(line)) {
+                        // Check for section header pattern
+                        const sectionHeader = line.match(/\/\/\s*═+\s*(.+?)\s*═*/);
+                        if (sectionHeader) {
+                            // Save previous section if exists
+                            if (currentSection && sectionStart >= 0) {
+                                sections.push({
+                                    name: currentSection,
+                                    start: sectionStart + 1, // 1-indexed
+                                    end: i,
+                                    lines: i - sectionStart
+                                });
+                            }
+                            currentSection = sectionHeader[1].trim();
+                            sectionStart = i;
+                            braceDepth = 0;
+                            break;
+                        }
+
+                        // Class or function start
+                        if (!currentSection || line.match(/class\s+\w+/)) {
+                            if (currentSection && sectionStart >= 0) {
+                                // Find end of previous section
+                                sections.push({
+                                    name: currentSection,
+                                    start: sectionStart + 1,
+                                    end: i,
+                                    lines: i - sectionStart
+                                });
+                            }
+                            currentSection = pattern.name || 'ML Code';
+                            sectionStart = i;
+                            braceDepth = 0;
+                        }
+                        break;
+                    }
+                }
+
+                // Track brace depth for class/function boundaries
+                for (const char of line) {
+                    if (char === '{') braceDepth++;
+                    if (char === '}') braceDepth--;
+                }
+
+                // End of current section (class ended)
+                if (currentSection && braceDepth === 0 && sectionStart >= 0 && i > sectionStart + 10) {
+                    const nextLine = lines[i + 1] || '';
+                    // Check if next line starts a new section or is empty
+                    if (nextLine.trim() === '' || nextLine.match(/\/\/\s*═+/) || nextLine.match(/class\s+\w+/)) {
+                        sections.push({
+                            name: currentSection,
+                            start: sectionStart + 1,
+                            end: i + 1,
+                            lines: i - sectionStart + 1
+                        });
+                        currentSection = null;
+                        sectionStart = -1;
+                    }
+                }
+            }
+
+            // Add final section if still open
+            if (currentSection && sectionStart >= 0) {
+                sections.push({
+                    name: currentSection,
+                    start: sectionStart + 1,
+                    end: lines.length,
+                    lines: lines.length - sectionStart
+                });
+            }
+
+            // Filter and dedupe sections, keep substantial ones
+            const seen = new Set();
+            return sections
+                .filter(s => s.lines > 20) // At least 20 lines
+                .filter(s => {
+                    const key = `${s.name}-${s.start}`;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                })
+                .sort((a, b) => a.start - b.start);
+        }
+
+        // Search loaded source file semantically
+        async searchSource(query, topK = 5) {
+            if (!this.sourceChunks || this.sourceChunks.length === 0) {
+                return [];
+            }
+
+            const encoder = this.encoder || neuralNet?.encoder;
+            if (!encoder || !this.sourceEmbeddings || this.sourceEmbeddings.size === 0) {
+                // Fallback to keyword search
+                return this.keywordSearchSource(query, topK);
+            }
+
+            try {
+                const queryEmbedding = await encoder.embed([query]);
+                const queryVector = (await queryEmbedding.array())[0];
+                queryEmbedding.dispose();
+
+                const results = [];
+                for (const chunk of this.sourceChunks) {
+                    const chunkVector = this.sourceEmbeddings.get(chunk.id);
+                    if (!chunkVector) continue;
+
+                    const similarity = this.cosineSimilarity(queryVector, chunkVector);
+                    results.push({ ...chunk, similarity });
+                }
+
+                results.sort((a, b) => b.similarity - a.similarity);
+                return results.slice(0, topK);
+
+            } catch (error) {
+                console.warn('Source search failed, using keyword fallback:', error);
+                return this.keywordSearchSource(query, topK);
+            }
+        }
+
+        // Keyword-based fallback search for source
+        keywordSearchSource(query, topK = 5) {
+            if (!this.sourceChunks) return [];
+
+            const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+            const results = [];
+
+            for (const chunk of this.sourceChunks) {
+                const text = `${chunk.name} ${chunk.section} ${chunk.code}`.toLowerCase();
+                let score = 0;
+                for (const word of queryWords) {
+                    if (text.includes(word)) score++;
+                }
+                if (score > 0) {
+                    results.push({ ...chunk, similarity: score / queryWords.length });
+                }
+            }
+
+            results.sort((a, b) => b.similarity - a.similarity);
+            return results.slice(0, topK);
+        }
+
+        // Get optimized context for source file reviews
+        async getSourceContext(query, options = {}) {
+            const {
+                maxChunks = 5,
+                maxChars = 20000,
+                includeMLSections = false,
+                summaryOnly = false
+            } = options;
+
+            if (!this.loadedSource) {
+                return null;
+            }
+
+            const { fileName, code } = this.loadedSource;
+            let context = `\n📂 SOURCE FILE: ${fileName} (${Math.round(code.length / 1024)}KB)\n`;
+
+            // Summary mode - just overview, no code
+            if (summaryOnly) {
+                context += `\n📋 FILE OVERVIEW:\n`;
+                const sectionNames = [...new Set(this.sourceChunks.map(c => c.section))];
+                context += `• ${sectionNames.length} major sections\n`;
+                context += `• ${this.sourceChunks.filter(c => c.type === 'function').length} functions\n`;
+                context += `• ${this.mlSections?.length || 0} ML/Neural systems\n`;
+                context += `\nSections: ${sectionNames.slice(0, 10).join(', ')}${sectionNames.length > 10 ? '...' : ''}\n`;
+
+                if (this.mlSections?.length > 0) {
+                    context += `\n🧠 ML SYSTEMS:\n`;
+                    for (const s of this.mlSections.slice(0, 8)) {
+                        context += `• ${s.name} (lines ${s.start}-${s.end}, ${s.lines} lines)\n`;
+                    }
+                }
+
+                context += `\n💡 Ask about specific sections for detailed code.\n`;
+                return context;
+            }
+
+            // ML review mode - extract ML sections by pattern
+            if (includeMLSections && this.mlSections?.length > 0) {
+                const lines = code.split('\n');
+                context += `\n🧠 ML/NEURAL SYSTEMS (${this.mlSections.length} detected):\n`;
+
+                let mlCode = '';
+                let totalLines = 0;
+                const maxMLLines = 3000; // ~75KB limit for ML review
+
+                for (const section of this.mlSections) {
+                    if (totalLines + section.lines > maxMLLines) {
+                        context += `\n⚠️ Truncated - ${this.mlSections.length - this.mlSections.indexOf(section)} more sections available\n`;
+                        break;
+                    }
+
+                    const sectionLines = lines.slice(section.start - 1, section.end);
+                    mlCode += `\n// ═══ ${section.name.toUpperCase()} (lines ${section.start}-${section.end}) ═══\n`;
+                    mlCode += sectionLines.join('\n') + '\n';
+                    totalLines += section.lines;
+                }
+
+                context += `\`\`\`javascript\n${mlCode}\n\`\`\`\n`;
+                console.log(`🧠 ML context: ${this.mlSections.length} sections, ${Math.round(mlCode.length / 1024)}KB`);
+                return context;
+            }
+
+            // Semantic search mode - find relevant chunks
+            const relevantChunks = await this.searchSource(query, maxChunks * 2);
+            const highRelevance = relevantChunks.filter(c => c.similarity > 0.2).slice(0, maxChunks);
+
+            if (highRelevance.length > 0) {
+                context += `\n🔍 RELEVANT CODE (${highRelevance.length} sections, semantic match):\n`;
+
+                let totalChars = 0;
+                for (const chunk of highRelevance) {
+                    const relevancePercent = Math.round(chunk.similarity * 100);
+                    const header = `\n[${chunk.type.toUpperCase()}: ${chunk.name}] (${chunk.section}, lines ${chunk.startLine}-${chunk.endLine}, ${relevancePercent}% relevant)\n`;
+
+                    const codeLen = Math.min(chunk.code.length, (maxChars - totalChars) / highRelevance.length);
+                    if (totalChars + codeLen > maxChars) break;
+
+                    context += header + '```javascript\n' + chunk.code.substring(0, codeLen) + '\n```\n';
+                    totalChars += header.length + codeLen;
+                }
+            } else {
+                // Fallback: show file structure
+                context += `\n📋 No highly relevant sections found. File structure:\n`;
+                const sectionNames = [...new Set(this.sourceChunks.map(c => c.section))];
+                for (const section of sectionNames.slice(0, 15)) {
+                    const sectionChunks = this.sourceChunks.filter(c => c.section === section);
+                    context += `• ${section} (${sectionChunks.length} functions)\n`;
+                }
+            }
+
+            return context;
+        }
+
+        // Check if source file is loaded
+        hasLoadedSource() {
+            return !!(this.loadedSource && this.sourceChunks?.length > 0);
+        }
+
+        // Get source file stats
+        getSourceStats() {
+            if (!this.loadedSource) return null;
+            return {
+                fileName: this.loadedSource.fileName,
+                fileSize: this.loadedSource.code.length,
+                chunks: this.sourceChunks?.length || 0,
+                embedded: this.sourceEmbeddings?.size || 0,
+                mlSections: this.mlSections?.length || 0,
+                sections: [...new Set(this.sourceChunks?.map(c => c.section) || [])].length
+            };
+        }
     }
 
     // Global CodeRAG instance
@@ -19322,9 +19677,21 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
 
                 console.log(`🔧 Source file loaded: ${handle.name} (${Math.round(this.sourceCode.length / 1024)}KB)`);
 
+                // Process with CodeRAG for semantic search and ML detection
+                if (typeof codeRAG !== 'undefined') {
+                    try {
+                        const stats = await codeRAG.processSourceFile(this.sourceCode, handle.name);
+                        console.log(`📚 CodeRAG processed: ${stats.chunks} chunks, ${stats.mlSections} ML sections`);
+                    } catch (e) {
+                        console.warn('CodeRAG processing failed:', e);
+                    }
+                }
+
                 return {
                     name: handle.name,
-                    size: this.sourceCode.length
+                    size: this.sourceCode.length,
+                    chunks: codeRAG?.sourceChunks?.length || 0,
+                    mlSections: codeRAG?.mlSections?.length || 0
                 };
 
             } catch (e) {
@@ -26427,212 +26794,139 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 }
             }
 
-            // 14. Loaded Source File - When user has selected a source file for review via Self-Improvement Engine
+            // 14. Loaded Source File - Using CodeRAG semantic search for optimized token usage
             let loadedSourceContext = '';
 
-            // Check for code review/analysis requests (used by multiple context providers)
+            // Check for code review/analysis requests
             const sourceReviewKeywords = ['review', 'analyze', 'code', 'source', 'file', 'look at', 'check', 'inspect', 'examine', 'audit', 'bug', 'issue', 'fix', 'improve', 'self-dev', 'self-improvement', 'codebase'];
             const wantsSourceReview = sourceReviewKeywords.some(kw => messageLower.includes(kw));
 
-            if (typeof SelfImprover !== 'undefined' && SelfImprover.sourceCode && SelfImprover.sourceFileHandle) {
+            // Check for summary/overview requests (progressive loading)
+            const wantsSummary = ['overview', 'structure', 'summary', 'what sections', 'what files', 'list'].some(kw => messageLower.includes(kw));
+
+            // Use CodeRAG for semantic source file search (when source is loaded)
+            if (typeof codeRAG !== 'undefined' && codeRAG.hasLoadedSource && codeRAG.hasLoadedSource()) {
+                try {
+                    if (wantsSourceReview || isComprehensiveReview || isMLReview) {
+                        // Use CodeRAG's optimized context retrieval
+                        loadedSourceContext = await codeRAG.getSourceContext(userMessage, {
+                            maxChunks: isComprehensiveReview ? 8 : 5,
+                            maxChars: isComprehensiveReview ? 50000 : 20000,
+                            includeMLSections: isMLReview,
+                            summaryOnly: wantsSummary && !isMLReview && !isComprehensiveReview
+                        });
+
+                        if (loadedSourceContext) {
+                            const stats = codeRAG.getSourceStats();
+                            console.log(`📚 CodeRAG context: ${Math.round(loadedSourceContext.length / 1024)}KB (semantic search from ${stats.chunks} chunks)`);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('CodeRAG source context error:', e);
+                }
+            }
+            // Fallback: Use SelfImprover source directly if CodeRAG not available
+            else if (typeof SelfImprover !== 'undefined' && SelfImprover.sourceCode && SelfImprover.sourceFileHandle) {
                 try {
                     if (wantsSourceReview || isComprehensiveReview || isMLReview) {
                         const sourceCode = SelfImprover.sourceCode;
                         const fileName = SelfImprover.sourceFileHandle.name;
                         const fileSize = sourceCode.length;
 
-                        // ML Review: Extract all ML/Neural sections specifically (~346KB)
-                        // Comprehensive review: up to 350KB
-                        // Regular review: 50KB
-                        const maxChars = isMLReview ? 360000 : (isComprehensiveReview ? 350000 : 50000);
+                        // Token-optimized limits: 20KB normal, 50KB comprehensive
+                        const maxChars = isComprehensiveReview ? 50000 : 20000;
 
-                        // Smart chunking - find major sections
-                        const sectionPattern = /\/\/\s*═+\s*(.+?)\s*═+/g;
-                        const sections = [];
-                        let match;
-                        while ((match = sectionPattern.exec(sourceCode)) !== null) {
-                            sections.push({ name: match[1].trim(), index: match.index });
-                        }
+                        loadedSourceContext = `\n📂 SOURCE FILE: ${fileName} (${Math.round(fileSize / 1024)}KB)\n`;
 
-                        loadedSourceContext = `\n📂 LOADED SOURCE FILE: ${fileName} (${Math.round(fileSize / 1024)}KB)\n`;
-                        loadedSourceContext += `This file has been loaded via the Self-Improvement Engine for your review.\n`;
-
-                        // ML Review Mode: Extract specific ML/Learning sections by line ranges
-                        if (isMLReview) {
+                        // Summary mode - just structure, no code
+                        if (wantsSummary) {
+                            const sectionPattern = /\/\/\s*═+\s*(.+?)\s*═+/g;
+                            const sections = [];
+                            let match;
+                            while ((match = sectionPattern.exec(sourceCode)) !== null) {
+                                sections.push(match[1].trim());
+                            }
+                            loadedSourceContext += `\n📋 FILE STRUCTURE (${sections.length} sections):\n`;
+                            sections.slice(0, 20).forEach((s, i) => {
+                                loadedSourceContext += `  ${i + 1}. ${s}\n`;
+                            });
+                            loadedSourceContext += `\n💡 Ask about specific sections for detailed code.\n`;
+                        } else {
+                            // Keyword-based relevant section extraction
+                            const queryWords = userMessage.toLowerCase().split(/\s+/).filter(w => w.length > 3);
                             const lines = sourceCode.split('\n');
 
-                            // Define ML section line ranges (0-indexed internally, but based on 1-indexed line numbers)
-                            const mlSections = [
-                                { name: 'TensorFlow Lazy Loader', start: 9798, end: 9870 },
-                                { name: 'NeuralDB (IndexedDB Storage)', start: 10979, end: 11097 },
-                                { name: 'PreferenceTracker', start: 12209, end: 12607 },
-                                { name: 'SemanticMemory System', start: 12609, end: 12935 },
-                                { name: 'RelationshipClassifier', start: 13454, end: 13890 },
-                                { name: 'ConceptAbstractor', start: 13892, end: 14466 },
-                                { name: 'MetaLearner', start: 14468, end: 14959 },
-                                { name: 'Neural Training Worker', start: 15371, end: 15602 },
-                                { name: 'Embedding Worker', start: 15604, end: 15669 },
-                                { name: 'PersonalNeuralNet (Core + Distillation)', start: 15671, end: 18386 },
-                                { name: 'Cognitive Graph Transformer', start: 18388, end: 19950 },
-                                { name: 'WebGPU Compute Engine', start: 21163, end: 21945 },
-                                { name: 'TeacherKnowledge (Enhanced Distillation)', start: 27026, end: 27645 },
-                                { name: 'AIFeedback System', start: 27647, end: 28180 }
-                            ];
+                            // Find sections that match query
+                            let relevantCode = '';
+                            const sectionPattern = /\/\/\s*═+\s*(.+?)\s*═+/g;
+                            let sectionMatch;
+                            let lastIndex = 0;
+                            const foundSections = [];
 
-                            loadedSourceContext += `\n🧠 ML/LEARNING SYSTEM REVIEW MODE\n`;
-                            loadedSourceContext += `Extracting all machine learning and neural network code sections.\n\n`;
-                            loadedSourceContext += `📋 ML SECTIONS INCLUDED:\n`;
-                            mlSections.forEach((s, i) => {
-                                loadedSourceContext += `  ${i + 1}. ${s.name} (lines ${s.start}-${s.end})\n`;
-                            });
-                            loadedSourceContext += `\n`;
-
-                            let mlCode = '';
-                            for (const section of mlSections) {
-                                // Convert to 0-indexed
-                                const startIdx = section.start - 1;
-                                const endIdx = section.end;
-                                const sectionLines = lines.slice(startIdx, endIdx);
-                                mlCode += `\n// ═══════════════════════════════════════════════════════════════════\n`;
-                                mlCode += `// ${section.name.toUpperCase()} (lines ${section.start}-${section.end})\n`;
-                                mlCode += `// ═══════════════════════════════════════════════════════════════════\n`;
-                                mlCode += sectionLines.join('\n') + '\n';
+                            while ((sectionMatch = sectionPattern.exec(sourceCode)) !== null) {
+                                foundSections.push({ name: sectionMatch[1].trim(), index: sectionMatch.index });
                             }
 
-                            loadedSourceContext += `\n📄 COMPLETE ML/LEARNING CODE (~${Math.round(mlCode.length / 1024)}KB):\n`;
-                            loadedSourceContext += `\`\`\`javascript\n${mlCode}\n\`\`\`\n`;
+                            for (let i = 0; i < foundSections.length && relevantCode.length < maxChars; i++) {
+                                const section = foundSections[i];
+                                const nextIndex = foundSections[i + 1]?.index || sourceCode.length;
+                                const sectionCode = sourceCode.substring(section.index, Math.min(section.index + 10000, nextIndex));
 
-                            console.log(`🧠 ML Review mode: extracted ${mlSections.length} sections (${Math.round(mlCode.length / 1024)}KB)`);
-                        } else {
-                            // Non-ML review mode: use smart chunking
-
-                            if (sections.length > 0) {
-                                loadedSourceContext += `\n📋 FILE STRUCTURE (${sections.length} major sections):\n`;
-                                sections.forEach((s, i) => {
-                                    const nextIndex = sections[i + 1]?.index || sourceCode.length;
-                                    const sectionSize = nextIndex - s.index;
-                                    loadedSourceContext += `  ${i + 1}. ${s.name} (~${Math.round(sectionSize / 1024)}KB)\n`;
-                                });
+                                if (queryWords.some(w => section.name.toLowerCase().includes(w) || sectionCode.toLowerCase().includes(w))) {
+                                    relevantCode += `\n// ═══ ${section.name} ═══\n${sectionCode}\n`;
+                                }
                             }
 
-                            // Include actual source code content
-                            if (sourceCode.length <= maxChars) {
-                                // File fits entirely
-                                loadedSourceContext += `\n📄 FULL SOURCE CODE:\n\`\`\`javascript\n${sourceCode}\n\`\`\`\n`;
+                            if (relevantCode.length > 500) {
+                                loadedSourceContext += `\n🔍 RELEVANT SECTIONS:\n\`\`\`javascript\n${relevantCode.substring(0, maxChars)}\n\`\`\`\n`;
                             } else {
-                                // Intelligent chunking based on user query
-                                loadedSourceContext += `\n📄 SOURCE CODE (first ${Math.round(maxChars / 1024)}KB of ${Math.round(fileSize / 1024)}KB):\n`;
-
-                                // Try to find relevant sections based on user message
-                                let relevantCode = '';
-                                const queryWords = userMessage.toLowerCase().split(/\s+/).filter(w => w.length > 3);
-
-                                for (const section of sections) {
-                                    const nextIndex = sections[sections.indexOf(section) + 1]?.index || sourceCode.length;
-                                    const sectionCode = sourceCode.substring(section.index, nextIndex);
-                                    const sectionLower = sectionCode.toLowerCase();
-
-                                    // Check if this section is relevant to the query
-                                    const isRelevant = queryWords.some(word => sectionLower.includes(word));
-                                    if (isRelevant && relevantCode.length + sectionCode.length < maxChars) {
-                                        relevantCode += `\n// ═══ ${section.name} ═══\n${sectionCode}\n`;
-                                    }
-                                }
-
-                                if (relevantCode.length > 1000) {
-                                    loadedSourceContext += `\n\`\`\`javascript\n${relevantCode.substring(0, maxChars)}\n\`\`\`\n`;
-                                } else {
-                                    // No specific relevant sections found, include from start
-                                    loadedSourceContext += `\n\`\`\`javascript\n${sourceCode.substring(0, maxChars)}\n\`\`\`\n`;
-                                    if (sourceCode.length > maxChars) {
-                                        loadedSourceContext += `\n... [truncated - ${Math.round((fileSize - maxChars) / 1024)}KB more]\n`;
-                                    }
-                                }
+                                // No specific match - show first portion
+                                loadedSourceContext += `\n📄 SOURCE (first ${Math.round(maxChars / 1024)}KB):\n\`\`\`javascript\n${sourceCode.substring(0, maxChars)}\n\`\`\`\n`;
                             }
-
-                            console.log(`📂 Loaded source file context provided: ${fileName} (${Math.round(loadedSourceContext.length / 1024)}KB context)`);
                         }
+
+                        console.log(`📂 Source context (fallback): ${Math.round(loadedSourceContext.length / 1024)}KB`);
                     }
                 } catch (e) {
-                    console.warn('Loaded source file context error:', e);
+                    console.warn('Source file context error:', e);
                 }
             }
 
-            // 15. Direct Source Access Fallback - When no other source is available but user wants code review
-            // This reads the current page's source directly as a fallback
+            // 15. Direct Source Access Fallback - Process current page source with CodeRAG
             if (!loadedSourceContext && !codeContext && (isComprehensiveReview || isMLReview || wantsSourceReview)) {
                 try {
-                    console.log('📂 No codeRAG or loaded source - using direct source access fallback...');
+                    console.log('📂 Processing current page source with CodeRAG...');
 
-                    // Read the current page's HTML directly
                     const rawHtml = document.documentElement.outerHTML;
-
-                    // Extract just the main script content
                     const scriptMatch = rawHtml.match(/<script>([\s\S]*?)<\/script>\s*<!--\s*External modules/);
                     const sourceCode = scriptMatch ? scriptMatch[1] : rawHtml;
                     const fileName = window.location.pathname.split('/').pop() || 'self-dev.html';
 
                     if (sourceCode && sourceCode.length > 1000) {
-                        const maxChars = isMLReview ? 360000 : (isComprehensiveReview ? 350000 : 50000);
-
-                        loadedSourceContext = `\n📂 DIRECT SOURCE ACCESS: ${fileName} (${Math.round(sourceCode.length / 1024)}KB)\n`;
-                        loadedSourceContext += `Source code loaded directly from the current page.\n`;
-
-                        if (isMLReview) {
-                            // ML Review mode - extract specific sections
-                            const lines = sourceCode.split('\n');
-                            const mlSections = [
-                                { name: 'TensorFlow Lazy Loader', start: 9798, end: 9870 },
-                                { name: 'NeuralDB (IndexedDB Storage)', start: 10979, end: 11097 },
-                                { name: 'PreferenceTracker', start: 12209, end: 12607 },
-                                { name: 'SemanticMemory System', start: 12609, end: 12935 },
-                                { name: 'RelationshipClassifier', start: 13454, end: 13890 },
-                                { name: 'ConceptAbstractor', start: 13892, end: 14466 },
-                                { name: 'MetaLearner', start: 14468, end: 14959 },
-                                { name: 'Neural Training Worker', start: 15371, end: 15602 },
-                                { name: 'Embedding Worker', start: 15604, end: 15669 },
-                                { name: 'PersonalNeuralNet (Core + Distillation)', start: 15671, end: 18386 },
-                                { name: 'Cognitive Graph Transformer', start: 18388, end: 19950 },
-                                { name: 'WebGPU Compute Engine', start: 21163, end: 21945 },
-                                { name: 'TeacherKnowledge (Enhanced Distillation)', start: 27026, end: 27645 },
-                                { name: 'AIFeedback System', start: 27647, end: 28180 }
-                            ];
-
-                            loadedSourceContext += `\n🧠 ML/LEARNING SYSTEM REVIEW MODE\n`;
-                            loadedSourceContext += `📋 ML SECTIONS INCLUDED:\n`;
-                            mlSections.forEach((s, i) => {
-                                loadedSourceContext += `  ${i + 1}. ${s.name} (lines ${s.start}-${s.end})\n`;
-                            });
-
-                            let mlCode = '';
-                            for (const section of mlSections) {
-                                const startIdx = section.start - 1;
-                                const endIdx = section.end;
-                                const sectionLines = lines.slice(startIdx, endIdx);
-                                mlCode += `\n// ═══════════════════════════════════════════════════════════════════\n`;
-                                mlCode += `// ${section.name.toUpperCase()} (lines ${section.start}-${section.end})\n`;
-                                mlCode += `// ═══════════════════════════════════════════════════════════════════\n`;
-                                mlCode += sectionLines.join('\n') + '\n';
-                            }
-
-                            loadedSourceContext += `\n📄 COMPLETE ML/LEARNING CODE (~${Math.round(mlCode.length / 1024)}KB):\n`;
-                            loadedSourceContext += `\`\`\`javascript\n${mlCode}\n\`\`\`\n`;
-                        } else {
-                            // Regular/comprehensive review - include source up to limit
-                            const codeToInclude = sourceCode.substring(0, maxChars);
-                            loadedSourceContext += `\n📄 SOURCE CODE (${Math.round(codeToInclude.length / 1024)}KB of ${Math.round(sourceCode.length / 1024)}KB):\n`;
-                            loadedSourceContext += `\`\`\`javascript\n${codeToInclude}\n\`\`\`\n`;
-
-                            if (sourceCode.length > maxChars) {
-                                loadedSourceContext += `\n... [truncated - ${Math.round((sourceCode.length - maxChars) / 1024)}KB more]\n`;
-                                loadedSourceContext += `\nTo see specific sections, ask about: "neural net", "AI feedback", "self-improvement", etc.\n`;
-                            }
+                        // Process with CodeRAG if not already done
+                        if (typeof codeRAG !== 'undefined' && (!codeRAG.hasLoadedSource || !codeRAG.hasLoadedSource())) {
+                            await codeRAG.processSourceFile(sourceCode, fileName);
                         }
 
-                        console.log(`📂 Direct source access provided: ${fileName} (${Math.round(loadedSourceContext.length / 1024)}KB context)`);
+                        // Now use CodeRAG for context
+                        if (codeRAG.hasLoadedSource && codeRAG.hasLoadedSource()) {
+                            loadedSourceContext = await codeRAG.getSourceContext(userMessage, {
+                                maxChunks: 5,
+                                maxChars: 20000,
+                                includeMLSections: isMLReview,
+                                summaryOnly: wantsSummary
+                            });
+                        } else {
+                            // Ultimate fallback - limited source excerpt
+                            const maxChars = 20000;
+                            loadedSourceContext = `\n📂 SOURCE: ${fileName} (${Math.round(sourceCode.length / 1024)}KB)\n`;
+                            loadedSourceContext += `\`\`\`javascript\n${sourceCode.substring(0, maxChars)}\n\`\`\`\n`;
+                        }
+
+                        console.log(`📂 Direct source: ${Math.round(loadedSourceContext.length / 1024)}KB context`);
                     }
                 } catch (e) {
-                    console.warn('Direct source access fallback error:', e);
+                    console.warn('Direct source access error:', e);
                 }
             }
 
