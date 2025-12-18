@@ -32471,6 +32471,25 @@ Respond with JSON only:`;
             updateSelfImproverUI();
         });
 
+        // Expand/collapse diff viewer
+        let diffExpanded = false;
+        document.getElementById('diff-expand-btn')?.addEventListener('click', () => {
+            const viewer = document.getElementById('diff-viewer');
+            const btn = document.getElementById('diff-expand-btn');
+            if (!viewer || !btn) return;
+
+            diffExpanded = !diffExpanded;
+            if (diffExpanded) {
+                viewer.style.maxHeight = '80vh';
+                viewer.style.minHeight = '500px';
+                btn.textContent = '⤡ Collapse';
+            } else {
+                viewer.style.maxHeight = '500px';
+                viewer.style.minHeight = '300px';
+                btn.textContent = '⤢ Expand';
+            }
+        });
+
         // Initialize SelfImprover
         SelfImprover.initialize();
 

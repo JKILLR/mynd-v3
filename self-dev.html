@@ -8060,23 +8060,26 @@
                 <!-- Pending Patches List -->
                 <div id="self-improver-patches" style="margin-top: 12px; display: none;">
                     <div style="font-size: 11px; font-weight: 500; color: var(--text-muted); margin-bottom: 8px;">PENDING PATCHES</div>
-                    <div id="self-improver-patches-list" style="max-height: 200px; overflow-y: auto;"></div>
+                    <div id="self-improver-patches-list" style="max-height: 250px; overflow-y: auto;"></div>
                 </div>
 
                 <!-- Diff Viewer -->
                 <div id="self-improver-diff" style="margin-top: 12px; display: none;">
                     <div style="font-size: 11px; font-weight: 500; color: var(--text-muted); margin-bottom: 8px;">
                         DIFF PREVIEW: <span id="diff-patch-title"></span>
+                        <span id="diff-expand-btn" style="float: right; cursor: pointer; color: var(--accent-primary);" title="Toggle expanded view">⤢ Expand</span>
                     </div>
                     <div id="diff-viewer" style="
-                        max-height: 300px;
+                        max-height: 500px;
+                        min-height: 300px;
                         overflow: auto;
                         background: var(--bg-deep);
                         border: 1px solid var(--glass-border);
                         border-radius: 8px;
                         font-family: var(--font-mono);
-                        font-size: 11px;
-                        line-height: 1.4;
+                        font-size: 12px;
+                        line-height: 1.5;
+                        resize: vertical;
                     "></div>
                     <div style="display: flex; gap: 8px; margin-top: 10px;">
                         <button class="api-key-btn primary" id="diff-apply-btn" style="flex: 1; background: #16a34a; border-color: #16a34a;">
