@@ -20922,20 +20922,19 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
     // ═══════════════════════════════════════════════════════════════════
     // TOAST NOTIFICATIONS
     // ═══════════════════════════════════════════════════════════════════
+
+    // Pre-defined icon map (avoid object creation on each call)
+    const TOAST_ICONS = { success: '✓', error: '✕', info: 'i' };
+
     function showToast(message, type = 'info', duration = 3000) {
-        const container = document.getElementById('toast-container');
+        const container = DOMCache.get('toast-container');
+        if (!container) return;
+
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
-        
-        const icons = {
-            success: '✓',
-            error: '✕',
-            info: 'i'
-        };
-        
-        toast.innerHTML = `<span>${icons[type] || ''}</span> ${escapeHTML(message)}`;
+        toast.innerHTML = `<span>${TOAST_ICONS[type] || ''}</span> ${escapeHTML(message)}`;
         container.appendChild(toast);
-        
+
         setTimeout(() => {
             toast.classList.add('exiting');
             setTimeout(() => toast.remove(), 300);
@@ -20952,13 +20951,16 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                 cancelText = 'Cancel',
                 danger = false
             } = options;
-            
-            const modal = document.getElementById('confirm-modal');
-            const titleEl = document.getElementById('confirm-modal-title');
-            const messageEl = document.getElementById('confirm-modal-message');
-            const iconEl = document.getElementById('confirm-modal-icon');
-            const confirmBtn = document.getElementById('confirm-modal-confirm');
-            const cancelBtn = document.getElementById('confirm-modal-cancel');
+
+            // Use cached DOM elements
+            const modal = DOMCache.get('confirm-modal');
+            const titleEl = DOMCache.get('confirm-modal-title');
+            const messageEl = DOMCache.get('confirm-modal-message');
+            const iconEl = DOMCache.get('confirm-modal-icon');
+            const confirmBtn = DOMCache.get('confirm-modal-confirm');
+            const cancelBtn = DOMCache.get('confirm-modal-cancel');
+
+            if (!modal) return resolve(false);
             
             // Set content
             titleEl.textContent = title;
