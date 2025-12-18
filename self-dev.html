@@ -9683,6 +9683,7 @@ Things to avoid..."></textarea>
     <!-- MYND Modules -->
     <script src="js/config.js"></script>
     <script src="js/goal-system.js"></script>
+    <script src="js/local-brain-client.js"></script>
 
     <!-- SELF DEVELOPER MODE: Embedded MYND Map Data -->
     <script src="mynd-app-data.js"></script>
@@ -9701,6 +9702,17 @@ Things to avoid..."></textarea>
                 }
                 // Mark as onboarded
                 localStorage.setItem('mynd-onboarded-v17', 'true');
+            }
+
+            // Initialize Local Brain connection (M2 Mac ML server)
+            if (typeof LocalBrain !== 'undefined') {
+                LocalBrain.init().then(connected => {
+                    if (connected) {
+                        console.log('🧠 Local Brain connected - using M2 GPU for ML');
+                    } else {
+                        console.log('☁️ Local Brain offline - using browser TensorFlow.js');
+                    }
+                });
             }
         });
     </script>
