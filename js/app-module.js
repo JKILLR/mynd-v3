@@ -27037,7 +27037,31 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 }
             }
 
-            // 13. VisionCore - Foundational vision, mission, goals, and values
+            // 13. GoalRegistry - User's manifestation goals from the Goal Wizard
+            let goalsContext = '';
+            if (typeof GoalRegistry !== 'undefined') {
+                try {
+                    const activeGoals = GoalRegistry.getActiveGoals ? GoalRegistry.getActiveGoals() : [];
+                    const allGoals = GoalRegistry.goals || [];
+
+                    if (allGoals.length > 0 || activeGoals.length > 0) {
+                        const goals = activeGoals.length > 0 ? activeGoals : allGoals;
+                        goalsContext = '\n🎯 MANIFESTATION GOALS:\n';
+                        goals.forEach(goal => {
+                            const progress = goal.progress ? Math.round(goal.progress * 100) : 0;
+                            goalsContext += `• ${goal.label} [${goal.priority || 'medium'} priority, ${progress}% progress]\n`;
+                            if (goal.desiredState) goalsContext += `  Desire: ${goal.desiredState}\n`;
+                            if (goal.whyItMatters) goalsContext += `  Why: ${goal.whyItMatters}\n`;
+                            if (goal.description) goalsContext += `  Success: ${goal.description}\n`;
+                        });
+                        console.log(`🎯 GoalRegistry: ${goals.length} goals loaded for AI context`);
+                    }
+                } catch (e) {
+                    console.warn('GoalRegistry context error:', e);
+                }
+            }
+
+            // 14. VisionCore - Foundational vision, mission, goals, and values
             let visionContext = '';
             if (VisionCore.initialized && VisionCore.vision.raw) {
                 try {
@@ -27356,6 +27380,9 @@ ${evolutionContext}` : ''}
 ${visionContext ? `
 FOUNDATIONAL VISION (your soul & purpose):
 ${visionContext}` : ''}
+${goalsContext ? `
+MANIFESTATION GOALS (from Goal Wizard):
+${goalsContext}` : ''}
 ${loadedSourceContext ? `
 LOADED SOURCE FILE FOR REVIEW:
 ${loadedSourceContext}` : ''}
@@ -30897,13 +30924,21 @@ MYND is your second brain - an intelligent extension of your memory and thinking
         setTimeout(updateVisionPreview, 100);
 
         // Initialize VisionCore with stored/default vision on startup
+        // Always load the stored vision (user's custom) over any default
         setTimeout(async () => {
-            const storedVision = localStorage.getItem('mynd_vision_document') || DEFAULT_MYND_VISION;
-            if (typeof VisionCore !== 'undefined' && !VisionCore.vision?.raw) {
-                await VisionCore.setVision(storedVision);
-                console.log('🎯 Self Developer: VisionCore initialized with vision document');
+            const storedVision = localStorage.getItem('mynd_vision_document');
+            if (typeof VisionCore !== 'undefined') {
+                if (storedVision) {
+                    // User has a custom vision - always use it
+                    await VisionCore.setVision(storedVision);
+                    console.log('🎯 Self Developer: VisionCore loaded custom vision document');
+                } else if (!VisionCore.vision?.raw) {
+                    // No custom vision, use default
+                    await VisionCore.setVision(DEFAULT_MYND_VISION);
+                    console.log('🎯 Self Developer: VisionCore initialized with default vision');
+                }
             }
-        }, 3000);
+        }, 2000);
     }
 
     // ═══════════════════════════════════════════════════════════════════
