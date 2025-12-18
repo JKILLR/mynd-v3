@@ -26902,7 +26902,6 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             }
 
             // Check for comprehensive code review requests (used by multiple context providers)
-            const messageLower = userMessage.toLowerCase();
             const reviewKeywords = ['review the code', 'review code', 'code review', 'analyze the code', 'full review', 'comprehensive review', 'review self-dev', 'review the codebase', 'review codebase', 'audit the code', 'review this file', 'review the file'];
             const isComprehensiveReview = reviewKeywords.some(kw => messageLower.includes(kw));
 
