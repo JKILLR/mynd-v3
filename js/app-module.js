@@ -10805,10 +10805,22 @@ Return as JSON:
                 console.log('⚠ CGT: TensorFlow not loaded, deferring initialization');
                 return;
             }
-            
+
+            // Dynamic throttle based on map size - larger maps = less frequent processing
+            const allNodes = store?.getAllNodes?.() || [];
+            const nodeCount = allNodes.length;
+            let dynamicInterval = this.processInterval; // Base: 5000ms
+            if (nodeCount > 1000) {
+                dynamicInterval = 30000; // 30s for very large maps
+            } else if (nodeCount > 500) {
+                dynamicInterval = 15000; // 15s for large maps
+            } else if (nodeCount > 200) {
+                dynamicInterval = 10000; // 10s for medium maps
+            }
+
             // Throttle processing
             const now = Date.now();
-            if (now - this.lastProcessTime < this.processInterval) return;
+            if (now - this.lastProcessTime < dynamicInterval) return;
             this.lastProcessTime = now;
             
             if (!this.initialized) {
@@ -13018,8 +13030,17 @@ Return as JSON:
         
         /**
          * Initialize the transformer model
+         * Skips loading if LocalBrain server is available (uses GPU instead)
          */
         async initialize() {
+            // Skip browser model if LocalBrain is available - it handles embeddings on GPU
+            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                console.log('🧠 SemanticEngine: Skipping browser model - LocalBrain GPU available');
+                this.initialized = true;
+                this.usingLocalBrain = true;
+                return true;
+            }
+
             if (this.initialized) return true;
             if (this.initializing) {
                 // Wait for ongoing initialization
