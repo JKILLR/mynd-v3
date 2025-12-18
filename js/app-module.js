@@ -2169,11 +2169,23 @@
             }
         },
         
-        // Get AI description for image (uses Claude API if available)
+        // Get AI description for image (uses Claude API if available, LocalBrain CLIP as fallback)
         async getImageDescription(file, nodeLabel = '') {
             try {
                 const apiKey = localStorage.getItem('claude-api-key');
                 if (!apiKey) {
+                    // Try LocalBrain CLIP if available (local M2 GPU)
+                    if (typeof LocalBrain !== 'undefined' && LocalBrain.isVisionAvailable()) {
+                        try {
+                            const result = await LocalBrain.describeImage(file);
+                            if (result.success && result.description) {
+                                console.log('🖼️ Image described via LocalBrain CLIP');
+                                return result.description;
+                            }
+                        } catch (e) {
+                            console.warn('LocalBrain image description failed:', e);
+                        }
+                    }
                     return this.getBasicImageInfo(file);
                 }
                 
@@ -2220,10 +2232,22 @@
                 return data.content[0].text;
             } catch (error) {
                 console.warn('Image description error:', error);
+                // Try LocalBrain CLIP as fallback
+                if (typeof LocalBrain !== 'undefined' && LocalBrain.isVisionAvailable()) {
+                    try {
+                        const result = await LocalBrain.describeImage(file);
+                        if (result.success && result.description) {
+                            console.log('🖼️ Image described via LocalBrain CLIP (fallback)');
+                            return result.description;
+                        }
+                    } catch (e) {
+                        console.warn('LocalBrain fallback failed:', e);
+                    }
+                }
                 return this.getBasicImageInfo(file);
             }
         },
-        
+
         // Basic image info fallback
         getBasicImageInfo(file) {
             const sizeKB = Math.round(file.size / 1024);
@@ -29897,6 +29921,10 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
         apiKey: localStorage.getItem(CONFIG.API_KEY) || '',
         ttsEnabled: localStorage.getItem('mynd-tts-enabled') !== 'false', // Default on
         ttsVoice: null,
+        // Whisper (LocalBrain) support
+        mediaRecorder: null,
+        audioChunks: [],
+        useWhisper: false, // Will be set true when LocalBrain voice is available
         
         // Text-to-Speech system
         initTTS() {
@@ -30037,63 +30065,139 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
         },
         
         init() {
+            // Check if LocalBrain Whisper is available (better transcription)
+            if (typeof LocalBrain !== 'undefined' && LocalBrain.isVoiceAvailable()) {
+                this.useWhisper = true;
+                console.log('🎤 Voice: Using LocalBrain Whisper (local M2 GPU)');
+            }
+
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) {
+            if (!SpeechRecognition && !this.useWhisper) {
                 console.warn('Speech recognition not supported');
                 return false;
             }
-            
-            this.recognition = new SpeechRecognition();
-            this.recognition.continuous = false;
-            this.recognition.interimResults = true;
-            this.recognition.lang = 'en-US';
-            
-            this.recognition.onstart = () => {
-                console.log('Voice recognition started');
-            };
-            
-            this.recognition.onresult = (event) => {
-                const transcript = Array.from(event.results)
-                    .map(result => result[0].transcript)
-                    .join('');
-                document.getElementById('voice-transcript').textContent = transcript || 'Listening...';
-            };
-            
-            this.recognition.onend = () => {
-                if (this.isRecording) {
-                    const transcript = document.getElementById('voice-transcript').textContent;
-                    if (transcript && transcript !== 'Listening...' && transcript !== 'Say something...') {
-                        this.processWithAI(transcript);
-                    } else {
+
+            // Set up browser speech recognition as fallback/real-time display
+            if (SpeechRecognition) {
+                this.recognition = new SpeechRecognition();
+                this.recognition.continuous = false;
+                this.recognition.interimResults = true;
+                this.recognition.lang = 'en-US';
+
+                this.recognition.onstart = () => {
+                    console.log('Voice recognition started');
+                };
+
+                this.recognition.onresult = (event) => {
+                    const transcript = Array.from(event.results)
+                        .map(result => result[0].transcript)
+                        .join('');
+                    document.getElementById('voice-transcript').textContent = transcript || 'Listening...';
+                };
+
+                this.recognition.onend = () => {
+                    // If using Whisper, don't process here - wait for Whisper result
+                    if (this.useWhisper) return;
+
+                    if (this.isRecording) {
+                        const transcript = document.getElementById('voice-transcript').textContent;
+                        if (transcript && transcript !== 'Listening...' && transcript !== 'Say something...') {
+                            this.processWithAI(transcript);
+                        } else {
+                            this.stop();
+                        }
+                    }
+                };
+
+                this.recognition.onerror = (event) => {
+                    console.error('Speech recognition error:', event.error);
+                    if (event.error === 'not-allowed') {
+                        showToast('Microphone access denied', 'error');
+                    }
+                    // If using Whisper, continue with Whisper - don't stop
+                    if (!this.useWhisper) {
                         this.stop();
                     }
-                }
-            };
-            
-            this.recognition.onerror = (event) => {
-                console.error('Speech recognition error:', event.error);
-                if (event.error === 'not-allowed') {
-                    showToast('Microphone access denied', 'error');
-                }
-                this.stop();
-            };
-            
+                };
+            }
+
             // Initialize TTS
             this.initTTS();
-            
+
             return true;
+        },
+
+        // Initialize MediaRecorder for Whisper transcription
+        async initWhisperRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                this.audioChunks = [];
+
+                this.mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        this.audioChunks.push(event.data);
+                    }
+                };
+
+                this.mediaRecorder.onstop = async () => {
+                    if (this.audioChunks.length === 0) {
+                        this.stop();
+                        return;
+                    }
+
+                    // Show processing state
+                    document.getElementById('voice-status').textContent = 'Transcribing with Whisper...';
+                    this.isProcessing = true;
+                    this.updateUI('processing');
+
+                    const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                    this.audioChunks = [];
+
+                    try {
+                        const result = await LocalBrain.transcribe(audioBlob);
+                        if (result.success && result.text) {
+                            console.log('🎤 Whisper transcription:', result.text);
+                            document.getElementById('voice-transcript').textContent = result.text;
+                            this.processWithAI(result.text);
+                        } else {
+                            console.warn('Whisper transcription failed:', result.error);
+                            showToast('Transcription failed: ' + (result.error || 'Unknown error'), 'error');
+                            this.stop();
+                        }
+                    } catch (e) {
+                        console.error('Whisper error:', e);
+                        showToast('Whisper transcription error', 'error');
+                        this.stop();
+                    }
+                };
+
+                return true;
+            } catch (e) {
+                console.error('Failed to init Whisper recording:', e);
+                return false;
+            }
+        },
+
+        // Stop Whisper recording and process
+        async stopWhisperRecording() {
+            if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                this.mediaRecorder.stop();
+                // Stop the media stream tracks
+                this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            }
         },
         
         async start() {
             console.log('Voice memo start called');
-            
+
             // Check if user is authenticated OR has API key
             let isAuthenticated = false;
             if (typeof supabase !== 'undefined' && supabase !== null) {
                 const { data } = await supabase.auth.getSession();
                 isAuthenticated = !!data?.session;
             }
-            
+
             if (!isAuthenticated && !this.apiKey) {
                 // Not authenticated and no API key - prompt to sign in
                 showToast('Sign in for AI features', 'info');
@@ -30101,14 +30205,14 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 document.getElementById('auth-modal').classList.add('active');
                 return;
             }
-            
+
             // Show UI immediately - even if voice isn't supported, text input will work
             this.isRecording = true;
             this.updateUI('recording');
             document.getElementById('voice-transcript').textContent = 'Say something...';
-            
+
             // Try to initialize speech recognition
-            if (!this.recognition && !this.init()) {
+            if (!this.recognition && !this.useWhisper && !this.init()) {
                 // Voice not supported, but text input still works
                 console.warn('Voice not supported, text input available');
                 document.getElementById('voice-status').textContent = 'Voice not supported - use text';
@@ -30116,7 +30220,25 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 // Don't stop - let user switch to text mode
                 return;
             }
-            
+
+            // If using Whisper, start MediaRecorder
+            if (this.useWhisper) {
+                const whisperReady = await this.initWhisperRecording();
+                if (whisperReady) {
+                    this.mediaRecorder.start();
+                    document.getElementById('voice-status').textContent = 'Recording (Whisper)...';
+                    console.log('🎤 Whisper recording started');
+                    haptic.medium();
+                    // Also start browser recognition for real-time display (optional)
+                    if (this.recognition) {
+                        try { this.recognition.start(); } catch (e) {}
+                    }
+                    return;
+                }
+                // Whisper init failed, fall back to browser recognition
+                this.useWhisper = false;
+            }
+
             try {
                 this.recognition.start();
                 haptic.medium();
@@ -30127,29 +30249,46 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 document.getElementById('voice-transcript').textContent = 'Click "Type" to enter your request';
             }
         },
-        
+
         // Start only the recording part (called from mode toggle)
-        startRecording() {
-            if (!this.recognition && !this.init()) {
+        async startRecording() {
+            if (!this.recognition && !this.useWhisper && !this.init()) {
                 showToast('Voice not supported in this browser', 'error');
                 return;
             }
-            
+
             this.isRecording = true;
             document.getElementById('voice-transcript').textContent = 'Say something...';
-            
+
+            // If using Whisper, start MediaRecorder
+            if (this.useWhisper) {
+                const whisperReady = await this.initWhisperRecording();
+                if (whisperReady) {
+                    this.mediaRecorder.start();
+                    document.getElementById('voice-status').textContent = 'Recording (Whisper)...';
+                    if (this.recognition) {
+                        try { this.recognition.start(); } catch (e) {}
+                    }
+                    return;
+                }
+            }
+
             try {
                 this.recognition.start();
             } catch (e) {
                 console.error('Failed to start recognition:', e);
             }
         },
-        
+
         stop() {
             this.isRecording = false;
             this.isProcessing = false;
             if (this.recognition) {
                 try { this.recognition.stop(); } catch (e) {}
+            }
+            // Stop Whisper recording if active
+            if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                this.stopWhisperRecording();
             }
             this.stopSpeaking();
             this.updateUI('idle');
@@ -36113,8 +36252,17 @@ showKeyboardHints();
                     const status = LocalBrain.getStatus();
 
                     if (status.connected) {
-                        lbStatusEl.textContent = '✓ Connected';
+                        // Build status text with multi-modal capabilities
+                        let statusParts = ['✓ Connected'];
+                        if (status.voiceAvailable) statusParts.push('🎤');
+                        if (status.visionAvailable) statusParts.push('🖼️');
+                        lbStatusEl.textContent = statusParts.join(' ');
                         lbStatusEl.style.color = '#22c55e';
+                        lbStatusEl.title = [
+                            'LocalBrain Server',
+                            status.voiceAvailable ? '🎤 Whisper voice ready' : '',
+                            status.visionAvailable ? '🖼️ CLIP vision ready' : ''
+                        ].filter(Boolean).join('\n');
 
                         // Show device info
                         if (lbDeviceRow) {
