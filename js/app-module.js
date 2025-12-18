@@ -17448,7 +17448,18 @@ Respond with a JSON object:
             console.log('🎯 Initializing VisionCore...');
 
             try {
-                // Load from storage
+                // PRIORITY 1: Check for custom vision document (from vision editor)
+                // This takes precedence over cached VisionCore data
+                const customVision = localStorage.getItem('mynd_vision_document');
+                if (customVision && customVision.length > 50) {
+                    console.log('🎯 Found custom vision document, loading...');
+                    await this.setVision(customVision);
+                    this.initialized = true;
+                    console.log(`✓ VisionCore loaded CUSTOM vision: "${this.vision.title || 'Vision'}" with ${this.vision.goals.length} goals, ${this.vision.concepts.length} concepts`);
+                    return this.vision;
+                }
+
+                // PRIORITY 2: Load from VisionCore internal storage
                 const stored = this.loadFromStorage();
                 if (stored && stored.version === this.VERSION && stored.vision.raw) {
                     this.vision = stored.vision;
@@ -17457,7 +17468,7 @@ Respond with a JSON object:
                     return this.vision;
                 }
 
-                // Check if MYND-App map exists and has vision content
+                // PRIORITY 3: Check if MYND-App map exists and has vision content
                 await this.loadFromMYNDAppMap();
 
                 this.initialized = true;
@@ -27091,16 +27102,23 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
 
             // 14. VisionCore - Foundational vision, mission, goals, and values
             let visionContext = '';
-            if (VisionCore.initialized && VisionCore.vision.raw) {
-                try {
+            try {
+                // Ensure VisionCore is initialized (loads custom vision if available)
+                if (!VisionCore.initialized) {
+                    await VisionCore.initialize();
+                }
+
+                if (VisionCore.vision.raw) {
                     // Always include vision context - it's the soul of MYND
                     visionContext = VisionCore.getContext(userMessage);
                     if (visionContext) {
                         console.log('🎯 VisionCore provided foundational context');
                     }
-                } catch (e) {
-                    console.warn('VisionCore context error:', e);
+                } else {
+                    console.log('🎯 VisionCore: No vision document set');
                 }
+            } catch (e) {
+                console.warn('VisionCore context error:', e);
             }
 
             // 14. Loaded Source File - Using CodeRAG semantic search for optimized token usage
