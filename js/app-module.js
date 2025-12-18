@@ -19849,7 +19849,8 @@ Respond with a JSON object:
             const context = {
                 relevantCode: [],
                 relatedSystems: [],
-                existingPatterns: []
+                existingPatterns: [],
+                bapiAnalysis: null
             };
 
             // Use CodePretraining if available
@@ -19870,6 +19871,25 @@ Respond with a JSON object:
                         location: c.location,
                         relevance: c.score
                     })));
+                }
+            }
+
+            // Fetch BAPI (Local Brain) analysis for graph insights
+            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                try {
+                    const analysis = await LocalBrain.analyze();
+                    if (analysis && !analysis.error) {
+                        context.bapiAnalysis = {
+                            observations: analysis.observations || [],
+                            importantNodes: analysis.important_nodes || [],
+                            missingConnections: analysis.observations?.filter(o => o.type === 'missing_connection') || [],
+                            isolatedNodes: analysis.isolated_nodes || [],
+                            headAttention: analysis.head_attention || null
+                        };
+                        console.log('🧠 BAPI analysis integrated into patch context');
+                    }
+                } catch (e) {
+                    console.warn('BAPI analysis unavailable:', e.message);
                 }
             }
 
@@ -19910,6 +19930,48 @@ Generate a specific code patch for the following improvement:
 
             if (context.relatedSystems.length > 0) {
                 prompt += `\n### Related Systems: ${context.relatedSystems.join(', ')}\n`;
+            }
+
+            // Add BAPI (Local Brain) graph analysis insights
+            if (context.bapiAnalysis) {
+                prompt += `\n## Local Brain Analysis (Graph Transformer Insights)\n`;
+                prompt += `The following insights come from MYND's local neural network analysis of the codebase structure:\n\n`;
+
+                if (context.bapiAnalysis.observations?.length > 0) {
+                    prompt += `### Structural Observations:\n`;
+                    for (const obs of context.bapiAnalysis.observations.slice(0, 5)) {
+                        prompt += `- **${obs.type}**: ${obs.message}\n`;
+                    }
+                    prompt += '\n';
+                }
+
+                if (context.bapiAnalysis.importantNodes?.length > 0) {
+                    prompt += `### High-Importance Code Elements:\n`;
+                    prompt += `These nodes are central to the codebase (high connectivity/attention):\n`;
+                    for (const node of context.bapiAnalysis.importantNodes.slice(0, 5)) {
+                        prompt += `- ${node.label} (importance: ${(node.importance * 100).toFixed(1)}%)\n`;
+                    }
+                    prompt += '\n';
+                }
+
+                if (context.bapiAnalysis.missingConnections?.length > 0) {
+                    prompt += `### Potential Missing Connections:\n`;
+                    prompt += `The graph transformer suggests these elements should be more connected:\n`;
+                    for (const mc of context.bapiAnalysis.missingConnections.slice(0, 3)) {
+                        prompt += `- ${mc.message}\n`;
+                    }
+                    prompt += '\n';
+                }
+
+                if (context.bapiAnalysis.isolatedNodes?.length > 0) {
+                    prompt += `### Isolated Elements (may need integration):\n`;
+                    for (const node of context.bapiAnalysis.isolatedNodes.slice(0, 3)) {
+                        prompt += `- ${node.label}\n`;
+                    }
+                    prompt += '\n';
+                }
+
+                prompt += `Consider these graph-level insights when generating the patch.\n`;
             }
 
             prompt += `
