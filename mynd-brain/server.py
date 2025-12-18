@@ -4,24 +4,33 @@ MYND Brain - Local ML Server
 A local Python server that provides GPU-accelerated ML for MYND.
 Runs on Apple Silicon (M2) via Metal Performance Shaders (MPS).
 
+Features:
+- Text embeddings (sentence-transformers)
+- Graph Transformer for connection prediction
+- Voice transcription (Whisper)
+- Image understanding (CLIP)
+
 Start with: uvicorn server:app --reload --port 8420
 """
 
 import os
 import time
 import asyncio
+import base64
 from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
 
 import torch
 import numpy as np
-from fastapi import FastAPI, HTTPException, WebSocket
+from fastapi import FastAPI, HTTPException, WebSocket, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # Local imports
 from models.embeddings import EmbeddingEngine
 from models.graph_transformer import MYNDGraphTransformer
+from models.voice import VoiceTranscriber
+from models.vision import VisionEngine
 
 # ═══════════════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -39,6 +48,13 @@ class Config:
     HIDDEN_DIM = 256
     NUM_HEADS = 4
     NUM_LAYERS = 2
+
+    # Voice settings (Whisper)
+    WHISPER_MODEL = "base"  # tiny, base, small, medium, large
+
+    # Vision settings (CLIP)
+    CLIP_MODEL = "ViT-B-32"
+    CLIP_PRETRAINED = "laion2b_s34b_b79k"
 
     # Device selection
     @staticmethod
@@ -104,7 +120,44 @@ class HealthResponse(BaseModel):
     device: str
     embedding_model: str
     graph_transformer: bool
+    voice_model: Optional[str] = None
+    vision_model: Optional[str] = None
     uptime_seconds: float
+
+# Voice transcription models
+class TranscribeRequest(BaseModel):
+    audio_base64: str  # Base64 encoded audio
+    language: Optional[str] = None
+    task: str = "transcribe"  # or "translate"
+
+class TranscribeResponse(BaseModel):
+    success: bool
+    text: Optional[str] = None
+    language: Optional[str] = None
+    error: Optional[str] = None
+    time_ms: float
+
+# Image understanding models
+class DescribeImageRequest(BaseModel):
+    image_base64: str  # Base64 encoded image
+    candidate_labels: Optional[List[str]] = None
+    top_k: int = 5
+
+class DescribeImageResponse(BaseModel):
+    success: bool
+    description: Optional[str] = None
+    confidence: Optional[float] = None
+    matches: Optional[List[Dict[str, Any]]] = None
+    error: Optional[str] = None
+    time_ms: float
+
+class ImageEmbedRequest(BaseModel):
+    image_base64: str
+
+class ImageEmbedResponse(BaseModel):
+    embedding: List[float]
+    dim: int
+    time_ms: float
 
 # ═══════════════════════════════════════════════════════════════════
 # BRAIN - The ML Engine
@@ -113,10 +166,10 @@ class HealthResponse(BaseModel):
 class MYNDBrain:
     """
     The local ML brain for MYND.
-    Handles embeddings, graph attention, and learning.
+    Handles embeddings, graph attention, voice, vision, and learning.
     """
 
-    def __init__(self):
+    def __init__(self, load_multimodal: bool = True):
         self.device = config.get_device()
         self.start_time = time.time()
 
@@ -136,6 +189,29 @@ class MYNDBrain:
             num_layers=config.NUM_LAYERS,
             device=self.device
         )
+
+        # Initialize Voice Transcription (Whisper)
+        self.voice = None
+        if load_multimodal:
+            try:
+                self.voice = VoiceTranscriber(
+                    model_size=config.WHISPER_MODEL,
+                    device=self.device
+                )
+            except Exception as e:
+                print(f"⚠️ Voice model not loaded: {e}")
+
+        # Initialize Vision (CLIP)
+        self.vision = None
+        if load_multimodal:
+            try:
+                self.vision = VisionEngine(
+                    model_name=config.CLIP_MODEL,
+                    pretrained=config.CLIP_PRETRAINED,
+                    device=self.device
+                )
+            except Exception as e:
+                print(f"⚠️ Vision model not loaded: {e}")
 
         # Learning state
         self.feedback_buffer = []
@@ -251,6 +327,27 @@ class MYNDBrain:
 
         print("✅ Training complete")
 
+    async def transcribe(self, audio_data: bytes, language: str = None, task: str = "transcribe") -> Dict:
+        """Transcribe audio to text using Whisper."""
+        if self.voice is None or not self.voice.initialized:
+            return {"success": False, "error": "Voice model not available"}
+
+        return self.voice.transcribe(audio_data, language=language, task=task)
+
+    async def describe_image(self, image_data: bytes, candidate_labels: List[str] = None, top_k: int = 5) -> Dict:
+        """Describe an image using CLIP."""
+        if self.vision is None or not self.vision.initialized:
+            return {"success": False, "error": "Vision model not available"}
+
+        return self.vision.describe_image(image_data, candidate_labels=candidate_labels, top_k=top_k)
+
+    async def embed_image(self, image_data: bytes) -> Optional[np.ndarray]:
+        """Generate embedding for an image."""
+        if self.vision is None or not self.vision.initialized:
+            return None
+
+        return self.vision.embed_image(image_data)
+
     def get_health(self) -> Dict:
         """Get health status."""
         return {
@@ -258,6 +355,8 @@ class MYNDBrain:
             "device": str(self.device),
             "embedding_model": config.EMBEDDING_MODEL,
             "graph_transformer": self.graph_transformer is not None,
+            "voice_model": config.WHISPER_MODEL if self.voice and self.voice.initialized else None,
+            "vision_model": config.CLIP_MODEL if self.vision and self.vision.initialized else None,
             "uptime_seconds": time.time() - self.start_time
         }
 
@@ -309,9 +408,16 @@ async def root():
     """Root endpoint with info."""
     return {
         "name": "MYND Brain",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "status": "running",
-        "endpoints": ["/health", "/embed", "/embed/batch", "/predict/connections", "/train/feedback"]
+        "endpoints": [
+            "/health",
+            "/embed", "/embed/batch",
+            "/predict/connections",
+            "/train/feedback",
+            "/voice/transcribe",
+            "/image/describe", "/image/embed"
+        ]
     }
 
 @app.post("/embed", response_model=EmbedResponse)
@@ -380,6 +486,201 @@ async def train_feedback(request: TrainFeedbackRequest):
 
     await brain.record_feedback(request)
     return {"status": "recorded", "buffer_size": len(brain.feedback_buffer)}
+
+# ═══════════════════════════════════════════════════════════════════
+# VOICE ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════
+
+@app.post("/voice/transcribe", response_model=TranscribeResponse)
+async def transcribe_audio(request: TranscribeRequest):
+    """
+    Transcribe audio to text using Whisper.
+    Audio should be base64 encoded.
+    """
+    if brain is None:
+        raise HTTPException(status_code=503, detail="Brain not initialized")
+
+    if brain.voice is None or not brain.voice.initialized:
+        raise HTTPException(status_code=503, detail="Voice model not available")
+
+    start = time.time()
+
+    try:
+        # Decode base64 audio
+        audio_data = base64.b64decode(request.audio_base64)
+
+        # Transcribe
+        result = await brain.transcribe(
+            audio_data,
+            language=request.language,
+            task=request.task
+        )
+
+        elapsed = (time.time() - start) * 1000
+
+        return TranscribeResponse(
+            success=result.get("success", False),
+            text=result.get("text"),
+            language=result.get("language"),
+            error=result.get("error"),
+            time_ms=elapsed
+        )
+
+    except Exception as e:
+        return TranscribeResponse(
+            success=False,
+            error=str(e),
+            time_ms=(time.time() - start) * 1000
+        )
+
+@app.post("/voice/transcribe/file")
+async def transcribe_audio_file(file: UploadFile = File(...)):
+    """
+    Transcribe audio from uploaded file.
+    Supports WAV, MP3, M4A, etc.
+    """
+    if brain is None:
+        raise HTTPException(status_code=503, detail="Brain not initialized")
+
+    if brain.voice is None or not brain.voice.initialized:
+        raise HTTPException(status_code=503, detail="Voice model not available")
+
+    start = time.time()
+
+    try:
+        audio_data = await file.read()
+        result = await brain.transcribe(audio_data)
+        elapsed = (time.time() - start) * 1000
+
+        return {
+            "success": result.get("success", False),
+            "text": result.get("text"),
+            "language": result.get("language"),
+            "segments": result.get("segments", []),
+            "error": result.get("error"),
+            "time_ms": elapsed
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "time_ms": (time.time() - start) * 1000
+        }
+
+# ═══════════════════════════════════════════════════════════════════
+# IMAGE ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════
+
+@app.post("/image/describe", response_model=DescribeImageResponse)
+async def describe_image(request: DescribeImageRequest):
+    """
+    Describe an image using CLIP.
+    Image should be base64 encoded.
+    """
+    if brain is None:
+        raise HTTPException(status_code=503, detail="Brain not initialized")
+
+    if brain.vision is None or not brain.vision.initialized:
+        raise HTTPException(status_code=503, detail="Vision model not available")
+
+    start = time.time()
+
+    try:
+        # Decode base64 image
+        image_data = base64.b64decode(request.image_base64)
+
+        # Describe
+        result = await brain.describe_image(
+            image_data,
+            candidate_labels=request.candidate_labels,
+            top_k=request.top_k
+        )
+
+        elapsed = (time.time() - start) * 1000
+
+        return DescribeImageResponse(
+            success=result.get("success", False),
+            description=result.get("description"),
+            confidence=result.get("confidence"),
+            matches=result.get("matches"),
+            error=result.get("error"),
+            time_ms=elapsed
+        )
+
+    except Exception as e:
+        return DescribeImageResponse(
+            success=False,
+            error=str(e),
+            time_ms=(time.time() - start) * 1000
+        )
+
+@app.post("/image/embed", response_model=ImageEmbedResponse)
+async def embed_image(request: ImageEmbedRequest):
+    """
+    Generate embedding for an image using CLIP.
+    Can be used to find similar images or match images to text.
+    """
+    if brain is None:
+        raise HTTPException(status_code=503, detail="Brain not initialized")
+
+    if brain.vision is None or not brain.vision.initialized:
+        raise HTTPException(status_code=503, detail="Vision model not available")
+
+    start = time.time()
+
+    try:
+        image_data = base64.b64decode(request.image_base64)
+        embedding = await brain.embed_image(image_data)
+
+        if embedding is None:
+            raise HTTPException(status_code=500, detail="Failed to generate embedding")
+
+        elapsed = (time.time() - start) * 1000
+
+        return ImageEmbedResponse(
+            embedding=embedding.tolist(),
+            dim=len(embedding),
+            time_ms=elapsed
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/image/describe/file")
+async def describe_image_file(file: UploadFile = File(...)):
+    """
+    Describe an image from uploaded file.
+    Supports PNG, JPG, WEBP, etc.
+    """
+    if brain is None:
+        raise HTTPException(status_code=503, detail="Brain not initialized")
+
+    if brain.vision is None or not brain.vision.initialized:
+        raise HTTPException(status_code=503, detail="Vision model not available")
+
+    start = time.time()
+
+    try:
+        image_data = await file.read()
+        result = await brain.describe_image(image_data)
+        elapsed = (time.time() - start) * 1000
+
+        return {
+            "success": result.get("success", False),
+            "description": result.get("description"),
+            "confidence": result.get("confidence"),
+            "matches": result.get("matches"),
+            "error": result.get("error"),
+            "time_ms": elapsed
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "time_ms": (time.time() - start) * 1000
+        }
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
