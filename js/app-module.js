@@ -28956,12 +28956,21 @@ You are a trusted guide, not a data harvester.
             }
 
             // 19. Deep Code Self-Awareness (Claude's understanding of MYND codebase)
+            // Only include for explicit code review requests, not general "code" mentions
             let deepSelfAwarenessContext = '';
-            const deepCodeKeywords = ['code', 'implement', 'function', 'how does', 'architecture', 'system', 'improve', 'fix', 'bug', 'feature', 'self-dev', 'codebase'];
+            const deepCodeKeywords = ['review code', 'review the code', 'codebase', 'architecture', 'self-dev', 'how does mynd', 'how do you work'];
             const needsDeepSelfAwareness = deepCodeKeywords.some(kw => messageLower.includes(kw)) || isComprehensiveReview || isMLReview;
             if (needsDeepSelfAwareness && CodeSelfAwareness.loaded) {
-                deepSelfAwarenessContext = CodeSelfAwareness.getDocument();
-                console.log('🧠 Deep Code Self-Awareness context included');
+                try {
+                    const doc = CodeSelfAwareness.getDocument();
+                    // Limit size and escape problematic characters
+                    if (doc && doc.length < 5000) {
+                        deepSelfAwarenessContext = doc;
+                        console.log('🧠 Deep Code Self-Awareness context included');
+                    }
+                } catch (e) {
+                    console.warn('Code self-awareness context error:', e);
+                }
             }
 
             // Core identity components (always included)
