@@ -487,6 +487,7 @@ class MYNDBrain:
                 })
 
         # 4. Get attention patterns from each head
+        head_attention_data = None
         if num_nodes > 0:
             # Sample a central node to see head specialization
             central_idx = int(np.argmax(importance))
@@ -495,6 +496,11 @@ class MYNDBrain:
                 central_idx,
                 adjacency=self.map_adjacency
             )
+            # Convert to serializable format for API response
+            head_attention_data = {
+                k: v.tolist() if hasattr(v, 'tolist') else v
+                for k, v in head_attention.items()
+            }
 
         elapsed = (time.time() - start_time) * 1000
 
@@ -503,6 +509,7 @@ class MYNDBrain:
             "observations": observations,
             "important_nodes": important_nodes,
             "isolated_nodes": isolated[:5],  # Limit to 5
+            "head_attention": head_attention_data,
             "time_ms": elapsed,
             "last_sync": self.map_last_sync
         }

@@ -27798,7 +27798,38 @@ You are a trusted guide, not a data harvester.
                 .replace(/`(.*?)`/g, '<code>$1</code>')
                 .replace(/\n/g, '<br>');
         },
-        
+
+        // Format markdown for BAPI messages with proper escaping
+        formatMarkdown(content) {
+            if (!content) return '';
+
+            // Escape HTML first to prevent XSS
+            let html = escapeHTML(content);
+
+            // Headers (h3 and h4 for chat context)
+            html = html.replace(/^### (.+)$/gm, '<h4 style="margin: 0.5em 0 0.25em; color: #a855f7;">$1</h4>');
+            html = html.replace(/^## (.+)$/gm, '<h3 style="margin: 0.5em 0 0.25em; color: #a855f7;">$1</h3>');
+
+            // Bold and italic
+            html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+            // Inline code
+            html = html.replace(/`([^`]+)`/g, '<code style="background: rgba(168, 85, 247, 0.15); padding: 0.1em 0.3em; border-radius: 3px;">$1</code>');
+
+            // Bullet points
+            html = html.replace(/^[•\-\*] (.+)$/gm, '<li style="margin-left: 1em;">$1</li>');
+
+            // Numbered lists
+            html = html.replace(/^\d+\. (.+)$/gm, '<li style="margin-left: 1em;">$1</li>');
+
+            // Line breaks
+            html = html.replace(/\n/g, '<br>');
+
+            return html;
+        },
+
         showTyping() {
             const typing = document.createElement('div');
             typing.className = 'chat-message assistant';
