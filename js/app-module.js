@@ -26328,7 +26328,35 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             
             // Save conversation
             this.saveConversation();
-            
+
+            // Store chat context in semantic memory for neural net learning
+            if (typeof semanticMemory !== 'undefined' && semanticMemory.loaded && content && content.length > 20) {
+                try {
+                    if (role === 'user') {
+                        // Store user queries as interests/topics
+                        semanticMemory.addMemory(
+                            'chat_query',
+                            `User asked about: ${content.slice(0, 300)}`,
+                            { source: 'ai_chat', type: 'query' }
+                        );
+                    } else if (role === 'assistant' && content.length > 100) {
+                        // Extract and store key insights from AI responses
+                        // Get the user's question for context
+                        const lastUserMsg = this.conversation.filter(m => m.role === 'user').slice(-1)[0];
+                        const topic = lastUserMsg ? lastUserMsg.content.slice(0, 100) : 'general';
+
+                        // Store the insight with topic context
+                        semanticMemory.addMemory(
+                            'chat_insight',
+                            `Discussion about "${topic}": ${content.slice(0, 500)}`,
+                            { source: 'ai_chat', type: 'insight', topic: topic.slice(0, 50) }
+                        );
+                    }
+                } catch (e) {
+                    console.warn('Failed to store chat memory:', e);
+                }
+            }
+
             // Render message
             this.renderMessage(message);
             
