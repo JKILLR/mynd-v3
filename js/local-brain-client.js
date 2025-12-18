@@ -353,6 +353,39 @@ const LocalBrain = {
     },
 
     // ═══════════════════════════════════════════════════════════════════
+    // CODE SELF-AWARENESS - Deep Code Understanding for Claude
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Get the Code Self-Awareness Document for Claude.
+     * This document gives Claude true understanding of the MYND codebase.
+     * Include this in ALL Claude API calls (~500-1000 tokens).
+     * @param {boolean} forceRegenerate - Force regeneration even if cached
+     * @returns {Promise<{document: string, cached: boolean, token_estimate: number}>}
+     */
+    async getCodeSelfAwareness(forceRegenerate = false) {
+        if (!this.isAvailable) {
+            console.log('🧠 LocalBrain.getCodeSelfAwareness: Server not available');
+            return { document: null, error: 'Server not available' };
+        }
+
+        try {
+            const url = `${this.serverUrl}/code/self-awareness${forceRegenerate ? '?regenerate=true' : ''}`;
+            const res = await fetch(url);
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🧠 Code Self-Awareness: ${result.cached ? 'cached' : 'fresh'} (${result.token_estimate || Math.round(result.document?.length / 4)} tokens)`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getCodeSelfAwareness failed:', e);
+        }
+
+        return { document: null, error: 'Failed to fetch' };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
     // CODE EMBEDDING - Parse codebase into map
     // ═══════════════════════════════════════════════════════════════════
 

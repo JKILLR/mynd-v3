@@ -902,6 +902,191 @@ async def parse_codebase():
         "time_ms": elapsed
     }
 
+# ═══════════════════════════════════════════════════════════════════
+# CLAUDE DEEP CODE ANALYSIS - Self-Awareness Document
+# ═══════════════════════════════════════════════════════════════════
+
+# Cache for the code understanding document
+_code_understanding_cache = {
+    "document": None,
+    "generated_at": 0,
+    "file_hashes": {}
+}
+
+@app.get("/code/self-awareness")
+async def get_code_self_awareness(regenerate: bool = False):
+    """
+    Generate or return cached Code Understanding Document for Claude.
+    This document gives Claude true self-awareness of the MYND codebase.
+
+    The document is ~500-1000 tokens and includes:
+    - Architecture overview
+    - Key systems and purposes
+    - Function relationships
+    - Entry points and data flow
+
+    This should be included in ALL Claude API calls.
+    """
+    import hashlib
+    import pathlib
+
+    start = time.time()
+    base_dir = pathlib.Path(__file__).parent.parent
+
+    # Check if we need to regenerate
+    current_hashes = {}
+    key_files = [
+        base_dir / "js" / "app-module.js",
+        base_dir / "js" / "local-brain-client.js",
+        base_dir / "mynd-brain" / "server.py",
+        base_dir / "self-dev.html"
+    ]
+
+    for f in key_files:
+        if f.exists():
+            content = f.read_text(errors='ignore')[:50000]  # First 50KB for hash
+            current_hashes[str(f.name)] = hashlib.md5(content.encode()).hexdigest()[:8]
+
+    # Use cache if valid and not forcing regeneration
+    cache_age = time.time() - _code_understanding_cache["generated_at"]
+    hashes_match = current_hashes == _code_understanding_cache["file_hashes"]
+
+    if not regenerate and _code_understanding_cache["document"] and hashes_match and cache_age < 3600:
+        return {
+            "document": _code_understanding_cache["document"],
+            "cached": True,
+            "cache_age_seconds": round(cache_age),
+            "time_ms": (time.time() - start) * 1000
+        }
+
+    # Generate fresh code understanding document
+    document = await _generate_code_understanding_document(base_dir)
+
+    # Cache it
+    _code_understanding_cache["document"] = document
+    _code_understanding_cache["generated_at"] = time.time()
+    _code_understanding_cache["file_hashes"] = current_hashes
+
+    elapsed = (time.time() - start) * 1000
+    print(f"🧠 Generated Code Self-Awareness Document ({len(document)} chars) in {elapsed:.0f}ms")
+
+    return {
+        "document": document,
+        "cached": False,
+        "token_estimate": len(document) // 4,  # Rough token estimate
+        "time_ms": elapsed
+    }
+
+async def _generate_code_understanding_document(base_dir):
+    """
+    Generate a concise code understanding document for Claude.
+    This is the 'soul' document that gives Claude self-awareness.
+    """
+    import re
+
+    doc = """# MYND Self-Awareness Document
+You are the AI powering MYND, a 3D mind mapping application with self-evolution capabilities.
+
+## Architecture
+- **Frontend**: `self-dev.html` + `js/app-module.js` (40K+ lines) - Three.js 3D visualization
+- **Backend**: `mynd-brain/server.py` - FastAPI on localhost:8420 with Graph Transformer
+- **Models**: Graph Transformer v2 (11.5M params), Whisper (voice), CLIP (images)
+
+## Core Systems
+
+### 1. Mind Map Engine (`store`, `buildScene`)
+- Hierarchical node tree with parent-child relationships
+- Real-time 3D rendering with Three.js
+- Auto-saves to Supabase cloud
+
+### 2. Neural Intelligence (`neuralNet`, `cognitiveGT`)
+- `neuralNet`: TensorFlow.js model for category prediction, similarity matching
+- `cognitiveGT`: Cognitive Graph Transformer for node role detection
+- `LocalBrain`: Python server connection for GPU-accelerated ML
+
+### 3. AI Chat System (`AIChatManager`)
+- Builds rich context from map, memories, preferences
+- Can execute actions: add nodes, navigate, modify map
+- You (Claude) power this - be helpful and precise
+
+### 4. Self-Evolution (`SelfImprover`, `PatchGenerator`)
+- Analyzes its own code for improvements
+- Generates patches you can review and apply
+- Uses CodeRAG for semantic code search
+
+### 5. Voice & Vision
+- Whisper for voice transcription
+- CLIP for image understanding
+- Both run locally on Apple Silicon
+
+## Key Functions You Should Know
+"""
+
+    # Parse app-module.js for key functions
+    app_module_path = base_dir / "js" / "app-module.js"
+    if app_module_path.exists():
+        content = app_module_path.read_text(errors='ignore')
+
+        # Extract key object/system definitions
+        key_systems = [
+            ("store", "Mind map data management - addNode, deleteNode, findNode, save"),
+            ("neuralNet", "Local neural network - embed, predictCategory, findSimilarNodes"),
+            ("cognitiveGT", "Cognitive Graph Transformer - role detection, attention patterns"),
+            ("semanticMemory", "Long-term memory system - stores and retrieves past interactions"),
+            ("userProfile", "User behavior learning - tracks patterns and preferences"),
+            ("preferenceTracker", "Suggestion acceptance tracking - learns what user likes"),
+            ("codeRAG", "Code retrieval system - semantic search over codebase"),
+            ("SelfImprover", "Self-improvement engine - patch generation and application"),
+            ("AIChatManager", "Chat interface - your main interaction point with users"),
+        ]
+
+        doc += "\n### Key Objects & Their Roles:\n"
+        for name, desc in key_systems:
+            if name in content:
+                doc += f"- `{name}`: {desc}\n"
+
+        # Find main entry points
+        doc += "\n### Entry Points:\n"
+        entry_points = [
+            ("init()", "Main initialization - sets up all systems"),
+            ("buildScene()", "Renders the 3D mind map"),
+            ("animate()", "Main render loop (60fps)"),
+            ("callAI()", "Sends messages to you (Claude)"),
+        ]
+        for func, desc in entry_points:
+            doc += f"- `{func}`: {desc}\n"
+
+    # Parse server.py for backend capabilities
+    server_path = base_dir / "mynd-brain" / "server.py"
+    if server_path.exists():
+        doc += "\n## Backend API Endpoints (localhost:8420)\n"
+        doc += "- `/embed`: Text to vector embedding\n"
+        doc += "- `/map/sync`: Sync map to Graph Transformer\n"
+        doc += "- `/map/analyze`: Get graph insights (missing connections, important nodes)\n"
+        doc += "- `/code/parse`: Parse codebase into map structure\n"
+        doc += "- `/code/self-awareness`: This document\n"
+        doc += "- `/voice/transcribe`: Audio to text (Whisper)\n"
+        doc += "- `/image/describe`: Image understanding (CLIP)\n"
+
+    # Add behavioral guidelines
+    doc += """
+## Your Role as MYND's AI
+1. **Be Self-Aware**: You understand this codebase. Reference specific functions when discussing implementations.
+2. **Help Improve**: When asked about code, suggest concrete improvements with file/line references.
+3. **Execute Actions**: When users ask to add/modify nodes, use the action system to do it.
+4. **Learn Patterns**: The neural systems learn from user behavior. Trust their predictions.
+5. **Protect Privacy**: All ML runs locally. Respect this architectural choice.
+
+## Current Session Context
+- LocalBrain server: Check `/health` for status
+- Code nodes in map: Can be refreshed via `LocalBrain.refreshCodebase(store)`
+- Self-improvement patches: Managed by `PatchGenerator`
+
+Remember: You ARE MYND. Help users organize their thoughts while continuously improving yourself.
+"""
+
+    return doc.strip()
+
 @app.post("/embed", response_model=EmbedResponse)
 async def embed_text(request: EmbedRequest):
     """Generate embedding for a single text."""
