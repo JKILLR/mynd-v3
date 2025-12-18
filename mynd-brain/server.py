@@ -645,9 +645,9 @@ async def map_status():
 @app.get("/code/parse")
 async def parse_codebase():
     """
-    Parse the MYND codebase into a map-ready structure.
-    Returns nodes for files, classes, functions that can be imported into the map.
-    This enables MYND to analyze its own architecture.
+    Parse the MYND codebase into a map-ready structure with FULL CODE.
+    Returns nodes for files, classes, functions with actual source code.
+    This enables MYND to deeply understand its own architecture.
     """
     import re
     import pathlib
@@ -669,6 +669,7 @@ async def parse_codebase():
         "id": root_id,
         "label": "MYND Codebase",
         "type": "root",
+        "description": "The complete MYND application - a 3D mind mapping app with local AI.\nFrontend: JavaScript (Three.js, neural networks, chat)\nBackend: Python (FastAPI, Graph Transformer, Whisper, CLIP)",
         "children": []
     })
 
@@ -678,6 +679,7 @@ async def parse_codebase():
         "id": js_dir_id,
         "label": "JavaScript (Frontend)",
         "type": "directory",
+        "description": "Browser-side code:\n- 3D rendering with Three.js\n- Neural network for embeddings\n- Chat interface with AI\n- Voice input with Whisper\n- LocalBrain connection to Python server",
         "parentId": root_id,
         "children": []
     })
@@ -687,53 +689,95 @@ async def parse_codebase():
     for js_file in js_files:
         file_id = make_id()
         content = js_file.read_text(errors='ignore')
+        lines = content.split('\n')
 
-        # Extract functions
-        functions = re.findall(r'(?:function\s+(\w+)|const\s+(\w+)\s*=\s*(?:async\s+)?(?:function|\([^)]*\)\s*=>))', content)
-        function_names = [f[0] or f[1] for f in functions if f[0] or f[1]]
+        # Find function definitions with line numbers
+        function_matches = []
+        for i, line in enumerate(lines):
+            # Match: function name(), const name = function, const name = () =>
+            if 'function ' in line or ('=>' in line and 'const ' in line):
+                match = re.search(r'(?:function\s+(\w+)|const\s+(\w+)\s*=)', line)
+                if match:
+                    name = match.group(1) or match.group(2)
+                    if name and len(name) > 2 and not name.startswith('_'):
+                        function_matches.append((name, i))
 
-        # Extract objects/classes
-        objects = re.findall(r'const\s+(\w+)\s*=\s*\{', content)
+        # Find object definitions
+        object_matches = []
+        for i, line in enumerate(lines):
+            match = re.search(r'const\s+(\w+)\s*=\s*\{', line)
+            if match:
+                name = match.group(1)
+                if len(name) > 2:
+                    object_matches.append((name, i))
 
+        # File node with overview
+        file_overview = content[:3000] + ('...' if len(content) > 3000 else '')
         file_node = {
             "id": file_id,
             "label": js_file.name,
             "type": "file",
+            "description": f"JavaScript file: {len(lines):,} lines | {len(function_matches)} functions | {len(object_matches)} objects\n\n=== FILE START ===\n{file_overview}",
             "parentId": js_dir_id,
             "children": [],
-            "stats": {
-                "lines": len(content.split('\n')),
-                "functions": len(function_names),
-                "objects": len(objects)
-            }
+            "stats": {"lines": len(lines), "functions": len(function_matches), "objects": len(object_matches)}
         }
 
-        # Add function nodes (limit to avoid overwhelming)
-        for func_name in function_names[:20]:
+        # Add function nodes with FULL CODE
+        for func_name, line_num in function_matches[:40]:
             func_id = make_id()
+            # Extract function code (up to 80 lines or until next top-level declaration)
+            func_lines = []
+            brace_count = 0
+            started = False
+            for j in range(line_num, min(line_num + 100, len(lines))):
+                func_lines.append(lines[j])
+                brace_count += lines[j].count('{') - lines[j].count('}')
+                if '{' in lines[j]:
+                    started = True
+                if started and brace_count <= 0:
+                    break
+            func_code = '\n'.join(func_lines[:80])
+
             file_node["children"].append(func_id)
             nodes.append({
                 "id": func_id,
                 "label": f"{func_name}()",
                 "type": "function",
+                "description": f"Function at line {line_num + 1}\n\n```javascript\n{func_code}\n```",
                 "parentId": file_id,
-                "children": []
+                "children": [],
+                "line": line_num + 1
             })
 
-        # Add object nodes
-        for obj_name in objects[:10]:
+        # Add object nodes with FULL CODE
+        for obj_name, line_num in object_matches[:20]:
             obj_id = make_id()
+            # Extract object code (up to 120 lines)
+            obj_lines = []
+            brace_count = 0
+            started = False
+            for j in range(line_num, min(line_num + 150, len(lines))):
+                obj_lines.append(lines[j])
+                brace_count += lines[j].count('{') - lines[j].count('}')
+                if '{' in lines[j]:
+                    started = True
+                if started and brace_count <= 0:
+                    break
+            obj_code = '\n'.join(obj_lines[:120])
+
             file_node["children"].append(obj_id)
             nodes.append({
                 "id": obj_id,
                 "label": obj_name,
                 "type": "object",
+                "description": f"Object/Module at line {line_num + 1}\n\n```javascript\n{obj_code}\n```",
                 "parentId": file_id,
-                "children": []
+                "children": [],
+                "line": line_num + 1
             })
 
         nodes.append(file_node)
-        # Find js_dir node and add this file
         for n in nodes:
             if n["id"] == js_dir_id:
                 n["children"].append(file_id)
@@ -745,6 +789,7 @@ async def parse_codebase():
         "id": py_dir_id,
         "label": "Python (Backend)",
         "type": "directory",
+        "description": "Server-side ML code:\n- FastAPI server (server.py)\n- Graph Transformer neural network\n- Whisper voice transcription\n- CLIP image understanding\n- Sentence embeddings",
         "parentId": root_id,
         "children": []
     })
@@ -754,51 +799,76 @@ async def parse_codebase():
     for py_file in py_files:
         file_id = make_id()
         content = py_file.read_text(errors='ignore')
+        lines = content.split('\n')
 
-        # Extract classes
-        classes = re.findall(r'class\s+(\w+)', content)
+        # Find class definitions
+        class_matches = []
+        for i, line in enumerate(lines):
+            match = re.match(r'^class\s+(\w+)', line)
+            if match:
+                class_matches.append((match.group(1), i))
 
-        # Extract functions
-        functions = re.findall(r'def\s+(\w+)', content)
-        # Filter out private methods for cleaner output
-        public_functions = [f for f in functions if not f.startswith('_')]
+        # Find top-level function definitions
+        func_matches = []
+        for i, line in enumerate(lines):
+            match = re.match(r'^def\s+(\w+)', line)
+            if match and not match.group(1).startswith('_'):
+                func_matches.append((match.group(1), i))
 
         relative_path = py_file.relative_to(base_dir / "mynd-brain")
+        file_overview = content[:3000] + ('...' if len(content) > 3000 else '')
         file_node = {
             "id": file_id,
             "label": str(relative_path),
             "type": "file",
+            "description": f"Python file: {len(lines):,} lines | {len(class_matches)} classes | {len(func_matches)} functions\n\n=== FILE START ===\n{file_overview}",
             "parentId": py_dir_id,
             "children": [],
-            "stats": {
-                "lines": len(content.split('\n')),
-                "classes": len(classes),
-                "functions": len(public_functions)
-            }
+            "stats": {"lines": len(lines), "classes": len(class_matches), "functions": len(func_matches)}
         }
 
-        # Add class nodes
-        for class_name in classes:
+        # Add class nodes with FULL CODE
+        for class_name, line_num in class_matches:
             class_id = make_id()
+            # Find class end (next class/def at column 0, or EOF)
+            class_end = len(lines)
+            for j in range(line_num + 1, len(lines)):
+                if lines[j] and not lines[j][0].isspace() and (lines[j].startswith('class ') or lines[j].startswith('def ')):
+                    class_end = j
+                    break
+            class_code = '\n'.join(lines[line_num:min(class_end, line_num + 200)])
+
             file_node["children"].append(class_id)
             nodes.append({
                 "id": class_id,
                 "label": class_name,
                 "type": "class",
+                "description": f"Class at line {line_num + 1} ({class_end - line_num} lines)\n\n```python\n{class_code}\n```",
                 "parentId": file_id,
-                "children": []
+                "children": [],
+                "line": line_num + 1
             })
 
-        # Add function nodes (limit to top-level, non-private)
-        for func_name in public_functions[:15]:
+        # Add function nodes with FULL CODE
+        for func_name, line_num in func_matches[:25]:
             func_id = make_id()
+            # Find function end
+            func_end = len(lines)
+            for j in range(line_num + 1, len(lines)):
+                if lines[j] and not lines[j][0].isspace() and lines[j].strip():
+                    func_end = j
+                    break
+            func_code = '\n'.join(lines[line_num:min(func_end, line_num + 80)])
+
             file_node["children"].append(func_id)
             nodes.append({
                 "id": func_id,
                 "label": f"{func_name}()",
                 "type": "function",
+                "description": f"Function at line {line_num + 1}\n\n```python\n{func_code}\n```",
                 "parentId": file_id,
-                "children": []
+                "children": [],
+                "line": line_num + 1
             })
 
         nodes.append(file_node)
@@ -809,12 +879,17 @@ async def parse_codebase():
 
     elapsed = (time.time() - start) * 1000
 
+    # Calculate total embedded code size
+    total_code_chars = sum(len(n.get('description', '')) for n in nodes)
+
     return {
         "nodes": nodes,
         "stats": {
             "total_nodes": len(nodes),
             "js_files": len(js_files),
-            "py_files": len(py_files)
+            "py_files": len(py_files),
+            "total_code_chars": total_code_chars,
+            "estimated_mb": round(total_code_chars / 1024 / 1024, 2)
         },
         "time_ms": elapsed
     }
