@@ -444,6 +444,99 @@ const LocalBrain = {
         return colors[type] || null;
     },
 
+    /**
+     * Refresh existing code nodes in the map with current source code.
+     * Matches nodes by label and updates their descriptions.
+     * @param {Object} store - The store object with findNode and data
+     * @returns {Promise<Object>} Stats on what was updated
+     */
+    async refreshCodebase(store) {
+        if (!this.isAvailable) {
+            return { success: false, error: 'Server not available' };
+        }
+
+        const result = await this.parseCodebase();
+        if (result.error) {
+            return { success: false, error: result.error };
+        }
+
+        // Build lookup of fresh code by label
+        const freshCodeByLabel = {};
+        for (const node of result.nodes) {
+            freshCodeByLabel[node.label] = node;
+        }
+
+        // Find and update existing code nodes in the map
+        let updated = 0;
+        let notFound = 0;
+
+        const updateNode = (mapNode) => {
+            // Check if this is a code node (has description with code block)
+            if (mapNode.description &&
+                (mapNode.description.includes('```javascript') ||
+                 mapNode.description.includes('```python') ||
+                 mapNode.description.includes('=== FILE START ==='))) {
+
+                // Try to find fresh code for this node
+                const freshNode = freshCodeByLabel[mapNode.label];
+                if (freshNode && freshNode.description) {
+                    mapNode.description = freshNode.description;
+                    if (freshNode.stats) {
+                        mapNode.stats = freshNode.stats;
+                    }
+                    updated++;
+                } else {
+                    notFound++;
+                }
+            }
+
+            // Recursively update children
+            if (mapNode.children) {
+                for (const child of mapNode.children) {
+                    updateNode(child);
+                }
+            }
+        };
+
+        // Start from root
+        updateNode(store.data);
+
+        // Save the updated map
+        if (store.save) {
+            store.save();
+        }
+
+        console.log(`🧠 Codebase refreshed: ${updated} nodes updated, ${notFound} not found in current code`);
+
+        return {
+            success: true,
+            updated,
+            notFound,
+            freshNodeCount: result.nodes.length
+        };
+    },
+
+    /**
+     * Find the code root node in the map (if previously imported)
+     * @param {Object} store - The store object
+     * @returns {Object|null} The code root node or null
+     */
+    findCodeRoot(store) {
+        const search = (node) => {
+            if (node.label === 'MYND Codebase') {
+                return node;
+            }
+            if (node.children) {
+                for (const child of node.children) {
+                    const found = search(child);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+        return search(store.data);
+    },
+
     // ═══════════════════════════════════════════════════════════════════
     // VOICE (Whisper)
     // ═══════════════════════════════════════════════════════════════════
