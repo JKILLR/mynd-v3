@@ -9701,9 +9701,13 @@ Return as JSON:
             this.stats.nodesProcessed += allNodes.length;
         }
         
-        collectAllNodes(graph) {
+        collectAllNodes(graph, includeCodeNodes = false) {
             const nodes = [];
             const traverse = (node) => {
+                // Skip code nodes from ML processing (they're just random text to embeddings)
+                if (!includeCodeNodes && typeof isCodeNode === 'function' && isCodeNode(node)) {
+                    return; // Skip this node and its children
+                }
                 nodes.push(node);
                 if (node.children) {
                     for (const child of node.children) {
@@ -9711,13 +9715,13 @@ Return as JSON:
                     }
                 }
             };
-            
+
             if (graph.data) {
                 traverse(graph.data);
             } else if (graph.id) {
                 traverse(graph);
             }
-            
+
             return nodes;
         }
         
@@ -13522,12 +13526,16 @@ Return as JSON:
             return nodeEmbeddings;
         }
         
-        collectAllNodes(node, result = []) {
+        collectAllNodes(node, result = [], includeCodeNodes = false) {
             if (!node) return result;
+            // Skip code nodes from ML processing (they're just random text to embeddings)
+            if (!includeCodeNodes && typeof isCodeNode === 'function' && isCodeNode(node)) {
+                return result;
+            }
             result.push(node);
             if (node.children) {
                 for (const child of node.children) {
-                    this.collectAllNodes(child, result);
+                    this.collectAllNodes(child, result, includeCodeNodes);
                 }
             }
             return result;
@@ -14953,6 +14961,75 @@ Return as JSON:
 
     // Global CodeKnowledge instance
     const codeKnowledge = new CodeKnowledge();
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════════
+    // CODE NODE DETECTION - Exclude code from ML processing
+    // ═══════════════════════════════════════════════════════════════════
+    // Code nodes (files, classes, functions) are not useful for local ML models
+    // since they just see random text. Only Claude understands code.
+
+    /**
+     * Check if a node is a code node that should be excluded from ML processing.
+     * @param {Object} node - The node to check
+     * @returns {boolean} True if this is a code node
+     */
+    function isCodeNode(node) {
+        if (!node) return false;
+        // Check node description for code block markers
+        const desc = node.description || '';
+        if (desc.includes('```javascript') || desc.includes('```python') || desc.includes('=== FILE START ===')) {
+            return true;
+        }
+        // Check if it's under the MYND Codebase root
+        const label = node.label || '';
+        if (label === 'MYND Codebase' || label === 'JavaScript (Frontend)' || label === 'Python (Backend)') {
+            return true;
+        }
+        return false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CODE SELF-AWARENESS - Claude's Understanding of MYND
+    // ═══════════════════════════════════════════════════════════════════
+    // Provides a cached self-awareness document that's included in ALL Claude calls.
+    // This gives Claude true understanding of the codebase (~500-1000 tokens).
+    const CodeSelfAwareness = {
+        document: null,
+        loaded: false,
+        loading: false,
+
+        async init() {
+            if (this.loaded || this.loading) return this.document;
+            this.loading = true;
+            try {
+                if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                    const result = await LocalBrain.getCodeSelfAwareness();
+                    if (result.document) {
+                        this.document = result.document;
+                        this.loaded = true;
+                        console.log(`✅ Code Self-Awareness loaded (${result.token_estimate || '~500'} tokens)`);
+                    }
+                }
+            } catch (e) {
+                console.warn('CodeSelfAwareness init failed:', e);
+            }
+            this.loading = false;
+            return this.document;
+        },
+
+        // Get document for Claude prompts (returns cached or empty string)
+        getDocument() {
+            return this.document || '';
+        },
+
+        // Force refresh (call after code changes)
+        async refresh() {
+            this.loaded = false;
+            this.document = null;
+            return this.init();
+        }
+    };
 
     // ═══════════════════════════════════════════════════════════════════
     // CODE PRETRAINING SYSTEM - Deep Codebase Understanding
@@ -20037,6 +20114,13 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                 throw new Error('Claude API key not set. Please add it in Settings.');
             }
 
+            // Build system prompt with self-awareness if available
+            let systemPrompt = 'You are a precise code improvement assistant. Generate minimal, focused patches that improve code quality without breaking existing functionality. Always respond with valid JSON. Keep responses concise - include only essential code changes.';
+
+            if (CodeSelfAwareness.loaded) {
+                systemPrompt = `${CodeSelfAwareness.getDocument()}\n\n---\n\n${systemPrompt}`;
+            }
+
             const response = await fetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
                 headers: {
@@ -20052,7 +20136,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                         role: 'user',
                         content: prompt
                     }],
-                    system: 'You are a precise code improvement assistant. Generate minimal, focused patches that improve code quality without breaking existing functionality. Always respond with valid JSON. Keep responses concise - include only essential code changes.'
+                    system: systemPrompt
                 })
             });
 
@@ -28871,6 +28955,15 @@ You are a trusted guide, not a data harvester.
                 }
             }
 
+            // 19. Deep Code Self-Awareness (Claude's understanding of MYND codebase)
+            let deepSelfAwarenessContext = '';
+            const deepCodeKeywords = ['code', 'implement', 'function', 'how does', 'architecture', 'system', 'improve', 'fix', 'bug', 'feature', 'self-dev', 'codebase'];
+            const needsDeepSelfAwareness = deepCodeKeywords.some(kw => messageLower.includes(kw)) || isComprehensiveReview || isMLReview;
+            if (needsDeepSelfAwareness && CodeSelfAwareness.loaded) {
+                deepSelfAwarenessContext = CodeSelfAwareness.getDocument();
+                console.log('🧠 Deep Code Self-Awareness context included');
+            }
+
             // Core identity components (always included)
             const manifestationIdentity = this.getManifestationIdentity();
             const privacyPrinciples = this.getPrivacyPrinciples();
@@ -29037,6 +29130,8 @@ ${structuralContext}` : ''}
 ${codeContext ? `
 MYND CODEBASE CONTEXT (for technical questions):
 ${codeContext}` : ''}
+${deepSelfAwarenessContext ? `
+${deepSelfAwarenessContext}` : ''}
 ${selfAwarenessContext ? `
 SELF-AWARENESS (how concepts map to code):
 ${selfAwarenessContext}` : ''}
@@ -35329,6 +35424,17 @@ showKeyboardHints();
                     console.log('%c  ✓ File System API supported', 'color: #16a34a;');
                 } else {
                     console.log('%c  ⚠ File System API not supported (use Chrome/Edge)', 'color: #f59e0b;');
+                }
+
+                // Initialize Code Self-Awareness (loads the document that gives Claude understanding of the codebase)
+                if (typeof LocalBrain !== 'undefined') {
+                    setTimeout(() => {
+                        CodeSelfAwareness.init().then(() => {
+                            if (CodeSelfAwareness.loaded) {
+                                console.log('%c  ✓ Code Self-Awareness loaded', 'color: #16a34a;');
+                            }
+                        }).catch(e => console.warn('Code Self-Awareness init failed:', e));
+                    }, 1000); // Wait for LocalBrain to connect
                 }
             } else {
                 console.log('✨ MYND initialized successfully');
