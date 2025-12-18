@@ -1699,7 +1699,160 @@
             }
         }
     };
-    
+
+    // ═══════════════════════════════════════════════════════════════════
+    // MEMORY MONITOR - Track and optimize memory usage
+    // ═══════════════════════════════════════════════════════════════════
+    const MemoryMonitor = {
+        lastCheck: null,
+        history: [],
+        maxHistory: 100,
+
+        // Get current memory stats
+        getStats() {
+            const stats = {
+                timestamp: Date.now(),
+                jsHeap: null,
+                tensorCount: 0,
+                tensorMemoryMB: 0,
+                caches: {},
+                localStorage: 0,
+                indexedDB: null
+            };
+
+            // JS Heap (Chrome only)
+            if (performance.memory) {
+                stats.jsHeap = {
+                    usedMB: Math.round(performance.memory.usedJSHeapSize / 1024 / 1024),
+                    totalMB: Math.round(performance.memory.totalJSHeapSize / 1024 / 1024),
+                    limitMB: Math.round(performance.memory.jsHeapSizeLimit / 1024 / 1024),
+                    usagePercent: Math.round((performance.memory.usedJSHeapSize / performance.memory.jsHeapSizeLimit) * 100)
+                };
+            }
+
+            // TensorFlow.js tensors
+            if (typeof tf !== 'undefined') {
+                const tfMemory = tf.memory();
+                stats.tensorCount = tfMemory.numTensors;
+                stats.tensorMemoryMB = Math.round(tfMemory.numBytes / 1024 / 1024 * 100) / 100;
+            }
+
+            // Cache sizes
+            if (typeof neuralNet !== 'undefined') {
+                stats.caches.embeddings = neuralNet.embeddings?.size || 0;
+                stats.caches.patterns = neuralNet.expansionPatterns?.size || 0;
+            }
+            if (typeof semanticMemory !== 'undefined') {
+                stats.caches.memories = semanticMemory.memories?.length || 0;
+            }
+            if (typeof SemanticSearch !== 'undefined' && SemanticSearch.embeddingCache) {
+                stats.caches.semanticEmbeddings = SemanticSearch.embeddingCache.size || 0;
+            }
+
+            // localStorage usage
+            try {
+                let total = 0;
+                for (let key in localStorage) {
+                    if (localStorage.hasOwnProperty(key)) {
+                        total += localStorage[key].length * 2; // UTF-16
+                    }
+                }
+                stats.localStorage = Math.round(total / 1024); // KB
+            } catch (e) {}
+
+            this.lastCheck = stats;
+            this.history.push(stats);
+            if (this.history.length > this.maxHistory) {
+                this.history.shift();
+            }
+
+            return stats;
+        },
+
+        // Format stats for display
+        formatStats(stats = null) {
+            const s = stats || this.getStats();
+            let output = '📊 MEMORY USAGE:\n';
+
+            if (s.jsHeap) {
+                output += `  JS Heap: ${s.jsHeap.usedMB}MB / ${s.jsHeap.limitMB}MB (${s.jsHeap.usagePercent}%)\n`;
+            }
+            if (s.tensorCount > 0) {
+                output += `  TF Tensors: ${s.tensorCount} (${s.tensorMemoryMB}MB)\n`;
+            }
+            output += `  localStorage: ${s.localStorage}KB\n`;
+            output += `  Caches: embeddings=${s.caches.embeddings || 0}, patterns=${s.caches.patterns || 0}, memories=${s.caches.memories || 0}\n`;
+
+            return output;
+        },
+
+        // Check for potential issues
+        checkHealth() {
+            const stats = this.getStats();
+            const warnings = [];
+
+            if (stats.jsHeap && stats.jsHeap.usagePercent > 80) {
+                warnings.push(`⚠️ High memory usage: ${stats.jsHeap.usagePercent}%`);
+            }
+            if (stats.tensorCount > 100) {
+                warnings.push(`⚠️ Many tensors active: ${stats.tensorCount} (possible leak)`);
+            }
+            if (stats.localStorage > 4000) {
+                warnings.push(`⚠️ localStorage near limit: ${stats.localStorage}KB`);
+            }
+
+            return { stats, warnings, healthy: warnings.length === 0 };
+        },
+
+        // Clean up to free memory
+        async cleanup() {
+            console.log('🧹 Running memory cleanup...');
+            let freed = 0;
+
+            // Dispose any leaked tensors (if TF available)
+            if (typeof tf !== 'undefined') {
+                const before = tf.memory().numTensors;
+                // Can't auto-dispose without knowing which are still needed
+                // But we can report
+                console.log(`  TF Tensors: ${before} active`);
+            }
+
+            // Clear old semantic memories (keep last 500)
+            if (typeof semanticMemory !== 'undefined' && semanticMemory.memories?.length > 500) {
+                const removed = semanticMemory.memories.length - 500;
+                semanticMemory.memories = semanticMemory.memories.slice(-500);
+                freed += removed;
+                console.log(`  Trimmed ${removed} old memories`);
+            }
+
+            // Clear embedding cache entries older than 1 hour
+            if (typeof SemanticSearch !== 'undefined' && SemanticSearch.embeddingCache) {
+                // Can't easily age-out without timestamps, but can limit size
+                if (SemanticSearch.embeddingCache.size > 1000) {
+                    const toRemove = SemanticSearch.embeddingCache.size - 1000;
+                    let count = 0;
+                    for (const key of SemanticSearch.embeddingCache.keys()) {
+                        if (count++ >= toRemove) break;
+                        SemanticSearch.embeddingCache.delete(key);
+                    }
+                    freed += toRemove;
+                    console.log(`  Cleared ${toRemove} cached embeddings`);
+                }
+            }
+
+            console.log(`🧹 Cleanup complete. Freed ~${freed} items.`);
+            return freed;
+        },
+
+        // Log to console
+        log() {
+            console.log(this.formatStats());
+        }
+    };
+
+    // Make MemoryMonitor globally accessible
+    window.MemoryMonitor = MemoryMonitor;
+
     // ═══════════════════════════════════════════════════════════════════
     // ATTACHMENT STORAGE - IndexedDB for file blobs
     // ═══════════════════════════════════════════════════════════════════
@@ -17623,6 +17776,7 @@ Respond with a JSON object:
                 if (this.vision.raw) {
                     const fullEmbedding = await window.useModel.embed([this.vision.raw]);
                     this.vision.embedding = Array.from(fullEmbedding.arraySync()[0]);
+                    fullEmbedding.dispose(); // Clean up tensor
                 }
 
                 // Embed individual concepts for semantic search
@@ -17641,6 +17795,7 @@ Respond with a JSON object:
                         type: item.type,
                         embedding: Array.from(embedding.arraySync()[0])
                     });
+                    embedding.dispose(); // Clean up tensor
                 }
 
                 console.log(`🎯 Created ${this.vision.conceptEmbeddings.size} vision embeddings`);
@@ -17786,6 +17941,7 @@ Respond with a JSON object:
                 // Embed the action description
                 const actionEmbedding = await window.useModel.embed([description]);
                 const actionVec = actionEmbedding.arraySync()[0];
+                actionEmbedding.dispose(); // Clean up tensor
 
                 // Calculate cosine similarity with vision
                 const similarity = this.cosineSimilarity(actionVec, this.vision.embedding);
