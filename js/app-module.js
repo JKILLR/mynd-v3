@@ -13027,47 +13027,77 @@ Return as JSON:
                 return false;
             }
         }
-        
+
         /**
          * Generate embedding for a single text
+         * Routes through LocalBrain (M2 GPU) when available, falls back to browser
          */
         async embed(text, options = {}) {
-            if (!this.initialized) {
-                const ready = await this.initialize();
-                if (!ready) return null;
-            }
-            
             const cacheKey = options.cacheKey || text;
-            
-            // Check cache
+
+            // Check cache first (works for both local and browser embeddings)
             if (this.embeddingCache.has(cacheKey) && !options.forceRecompute) {
                 this.stats.cacheHits++;
                 return this.embeddingCache.get(cacheKey);
             }
-            
+
+            // ═══════════════════════════════════════════════════════════════
+            // LOCAL BRAIN ROUTING - Use M2 GPU when available
+            // ═══════════════════════════════════════════════════════════════
+            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                try {
+                    const startTime = performance.now();
+                    const embedding = await LocalBrain.embed(text);
+
+                    if (embedding && Array.isArray(embedding)) {
+                        const inferenceTime = performance.now() - startTime;
+                        this.stats.totalInferenceTime += inferenceTime;
+                        this.stats.embeddingsGenerated++;
+                        this.stats.avgInferenceTime = this.stats.totalInferenceTime / this.stats.embeddingsGenerated;
+                        this.stats.localBrainHits = (this.stats.localBrainHits || 0) + 1;
+
+                        // Cache result
+                        this.embeddingCache.set(cacheKey, embedding);
+
+                        return embedding;
+                    }
+                } catch (e) {
+                    console.warn('LocalBrain embed failed, falling back to browser:', e);
+                }
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // BROWSER FALLBACK - TensorFlow.js / Transformers.js
+            // ═══════════════════════════════════════════════════════════════
+            if (!this.initialized) {
+                const ready = await this.initialize();
+                if (!ready) return null;
+            }
+
             try {
                 const startTime = performance.now();
-                
+
                 // Run inference
                 const output = await this.pipeline(text, {
                     pooling: 'mean',
                     normalize: true
                 });
-                
+
                 // Extract embedding array
                 const embedding = Array.from(output.data);
-                
+
                 // Update stats
                 const inferenceTime = performance.now() - startTime;
                 this.stats.totalInferenceTime += inferenceTime;
                 this.stats.embeddingsGenerated++;
                 this.stats.avgInferenceTime = this.stats.totalInferenceTime / this.stats.embeddingsGenerated;
-                
+                this.stats.browserFallbackHits = (this.stats.browserFallbackHits || 0) + 1;
+
                 // Cache result
                 this.embeddingCache.set(cacheKey, embedding);
-                
+
                 return embedding;
-                
+
             } catch (e) {
                 console.error('Embedding generation failed:', e);
                 return null;
@@ -13076,17 +13106,13 @@ Return as JSON:
         
         /**
          * Generate embeddings for multiple texts (batched)
+         * Routes through LocalBrain (M2 GPU) when available, falls back to browser
          */
         async embedBatch(texts, options = {}) {
-            if (!this.initialized) {
-                const ready = await this.initialize();
-                if (!ready) return texts.map(() => null);
-            }
-            
             const results = [];
             const toCompute = [];
             const toComputeIndices = [];
-            
+
             // Check cache first
             for (let i = 0; i < texts.length; i++) {
                 const cacheKey = options.cacheKeys?.[i] || texts[i];
@@ -13099,29 +13125,68 @@ Return as JSON:
                     results[i] = null;
                 }
             }
-            
+
             // Compute missing embeddings
             if (toCompute.length > 0) {
                 const startTime = performance.now();
-                
+
+                // ═══════════════════════════════════════════════════════════════
+                // LOCAL BRAIN ROUTING - Use M2 GPU for batch embeddings
+                // ═══════════════════════════════════════════════════════════════
+                if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                    try {
+                        const embeddings = await LocalBrain.embedBatch(toCompute);
+
+                        if (embeddings && Array.isArray(embeddings)) {
+                            for (let j = 0; j < toCompute.length; j++) {
+                                const embedding = embeddings[j];
+                                const originalIndex = toComputeIndices[j];
+                                const cacheKey = options.cacheKeys?.[originalIndex] || texts[originalIndex];
+
+                                results[originalIndex] = embedding;
+                                this.embeddingCache.set(cacheKey, embedding);
+                            }
+
+                            const inferenceTime = performance.now() - startTime;
+                            this.stats.totalInferenceTime += inferenceTime;
+                            this.stats.embeddingsGenerated += toCompute.length;
+                            this.stats.avgInferenceTime = this.stats.totalInferenceTime / this.stats.embeddingsGenerated;
+                            this.stats.localBrainHits = (this.stats.localBrainHits || 0) + toCompute.length;
+
+                            console.log(`🧠 LocalBrain batch: ${toCompute.length} embeddings in ${inferenceTime.toFixed(1)}ms`);
+                            return results;
+                        }
+                    } catch (e) {
+                        console.warn('LocalBrain batch embed failed, falling back to browser:', e);
+                    }
+                }
+
+                // ═══════════════════════════════════════════════════════════════
+                // BROWSER FALLBACK - TensorFlow.js / Transformers.js
+                // ═══════════════════════════════════════════════════════════════
+                if (!this.initialized) {
+                    const ready = await this.initialize();
+                    if (!ready) return texts.map(() => null);
+                }
+
                 // Process in batches
                 for (let i = 0; i < toCompute.length; i += this.batchSize) {
                     const batch = toCompute.slice(i, i + this.batchSize);
                     const batchIndices = toComputeIndices.slice(i, i + this.batchSize);
-                    
+
                     try {
                         // Run batch inference
                         const outputs = await this.pipeline(batch, {
                             pooling: 'mean',
                             normalize: true
                         });
-                        
+
                         // Extract embeddings
                         for (let j = 0; j < batch.length; j++) {
                             const embedding = Array.from(outputs[j].data);
                             const originalIndex = batchIndices[j];
                             const cacheKey = options.cacheKeys?.[originalIndex] || texts[originalIndex];
-                            
+
                             results[originalIndex] = embedding;
                             this.embeddingCache.set(cacheKey, embedding);
                         }
@@ -13133,13 +13198,14 @@ Return as JSON:
                         }
                     }
                 }
-                
+
                 const inferenceTime = performance.now() - startTime;
                 this.stats.totalInferenceTime += inferenceTime;
                 this.stats.embeddingsGenerated += toCompute.length;
                 this.stats.avgInferenceTime = this.stats.totalInferenceTime / this.stats.embeddingsGenerated;
+                this.stats.browserFallbackHits = (this.stats.browserFallbackHits || 0) + toCompute.length;
             }
-            
+
             return results;
         }
         
