@@ -1,8 +1,6 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    console.log('🔵 MAIN MODULE: Checkpoint 1 - Imports complete');
-
     // ═══════════════════════════════════════════════════════════════════
     // CORE UTILITIES - Optimization infrastructure
     // ═══════════════════════════════════════════════════════════════════
@@ -374,8 +372,6 @@
         TimeoutManager.clearAll();
         CameraAnimator.cancel();
     });
-
-    console.log('🔵 MAIN MODULE: Core utilities initialized');
 
     // CONFIG is now loaded from js/config.js
 

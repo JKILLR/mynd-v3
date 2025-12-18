@@ -9707,28 +9707,6 @@ Things to avoid..."></textarea>
 
     <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 
-    <!-- Error catcher for module loading -->
-    <script>
-        window.onerror = function(msg, url, line, col, error) {
-            console.error('🔴 GLOBAL ERROR:', msg, 'at line', line, 'col', col);
-            console.error('Error object:', error);
-            return false;
-        };
-        window.addEventListener('unhandledrejection', function(event) {
-            console.error('🔴 UNHANDLED PROMISE:', event.reason);
-        });
-        console.log('🟢 Error handlers installed');
-    </script>
-
-    <!-- Test module to verify module loading works -->
-    <script type="module">
-    import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    console.log('🟡 Test module: THREE imported:', typeof THREE);
-    console.log('🟡 Test module: OrbitControls imported:', typeof OrbitControls);
-    console.log('🟡 Test module: COMPLETE - All imports successful');
-    </script>
-
     <script type="module" src="js/app-module.js"></script>
 </body>
 </html>
