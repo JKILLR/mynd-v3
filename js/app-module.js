@@ -419,34 +419,46 @@
             }
             
             this.loading = true;
-            
+
             this.loadPromise = new Promise(async (resolve, reject) => {
                 try {
                     console.log('📦 Loading TensorFlow.js (first AI feature used)...');
                     showToast('Loading AI engine...', 'info');
-                    
+
                     // Load TensorFlow.js
                     await this.loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js');
-                    
+
                     // Load Universal Sentence Encoder
                     await this.loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder@1.3.3/dist/universal-sentence-encoder.min.js');
-                    
-                    // Initialize GPU backend
+
+                    // Initialize GPU backend - try WebGPU first, fall back to WebGL
                     if (typeof tf !== 'undefined') {
+                        let backend = 'cpu';
                         try {
-                            await tf.setBackend('webgl');
+                            // Try WebGPU first (faster on supported browsers)
+                            await tf.setBackend('webgpu');
                             await tf.ready();
-                            console.log(`✓ TensorFlow.js loaded with ${tf.getBackend()} backend`);
+                            backend = 'webgpu';
+                            console.log('✓ TensorFlow.js using WebGPU backend (fastest)');
                         } catch (e) {
-                            console.log('WebGL not available, using CPU');
+                            try {
+                                // Fall back to WebGL
+                                await tf.setBackend('webgl');
+                                await tf.ready();
+                                backend = 'webgl';
+                                console.log('✓ TensorFlow.js using WebGL backend');
+                            } catch (e2) {
+                                console.log('⚠ GPU backends unavailable, using CPU');
+                            }
                         }
+                        console.log(`✓ TensorFlow.js loaded with ${tf.getBackend()} backend`);
                     }
-                    
+
                     this.loaded = true;
                     this.loading = false;
                     showToast('AI engine ready', 'success');
                     resolve(true);
-                    
+
                 } catch (error) {
                     console.error('Failed to load TensorFlow:', error);
                     this.loading = false;
@@ -454,7 +466,7 @@
                     reject(error);
                 }
             });
-            
+
             return this.loadPromise;
         },
         
@@ -38298,173 +38310,138 @@ Summary:`
             }, 250);
         });
     }, 200);
-    
-    // Initialize Cognitive Graph Transformer (advanced ML)
-    setTimeout(async () => {
+
+    // ═══════════════════════════════════════════════════════════════════
+    // PROGRESSIVE LOADING - Defer heavy tasks to prevent UI freeze
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Use requestIdleCallback for low-priority tasks (falls back to setTimeout)
+    const scheduleIdle = (callback, options = {}) => {
+        const { timeout = 5000, priority = 'low' } = options;
+
+        if (priority === 'high') {
+            // High priority: run after a short delay
+            setTimeout(callback, 100);
+        } else if ('requestIdleCallback' in window) {
+            // Low priority: run when browser is idle
+            requestIdleCallback(callback, { timeout });
+        } else {
+            // Fallback for browsers without requestIdleCallback
+            setTimeout(callback, timeout);
+        }
+    };
+
+    // Queue for staggering heavy initializations
+    const initQueue = [];
+    let initIndex = 0;
+
+    const queueInit = (name, fn, delay = 0) => {
+        initQueue.push({ name, fn, delay });
+    };
+
+    const processInitQueue = async () => {
+        if (initIndex >= initQueue.length) return;
+
+        const item = initQueue[initIndex++];
+        console.log(`📦 Loading: ${item.name}...`);
+
         try {
-            await cognitiveGT.initialize();
-            
-            // Process graph on initial load
-            setTimeout(() => {
+            await item.fn();
+            console.log(`✓ ${item.name} ready`);
+        } catch (e) {
+            console.warn(`⚠ ${item.name} deferred:`, e.message);
+        }
+
+        // Schedule next item when idle
+        if (initIndex < initQueue.length) {
+            scheduleIdle(() => processInitQueue(), { timeout: 3000 });
+        }
+    };
+
+    // Queue all heavy ML initializations - they'll run one at a time when idle
+    queueInit('Cognitive Graph Transformer', async () => {
+        await cognitiveGT.initialize();
+        // Process graph after a delay
+        setTimeout(() => cognitiveGT.processGraph(store), 5000);
+        // Periodic processing
+        IntervalManager.set(() => {
+            const isMobile = window.innerWidth <= 768;
+            if (ActivityTracker.isActive(120000) && !isMobile) {
                 cognitiveGT.processGraph(store);
-            }, 2000);
-
-            // Periodic graph processing (every 60 seconds when active)
-            // Uses shared activity tracking from ActivityTracker
-            IntervalManager.set(() => {
-                // Only process if user has been active in last 2 minutes
-                // And not on mobile (to save battery)
-                const isMobile = window.innerWidth <= 768;
-                if (ActivityTracker.isActive(120000) && !isMobile) {
-                    cognitiveGT.processGraph(store);
-                }
-            }, 60000, 'cognitiveGT-process');
-
-            // Save CGT state periodically
-            IntervalManager.set(() => {
-                if (cognitiveGT.initialized) {
-                    cognitiveGT.saveState();
-                }
-            }, 120000, 'cognitiveGT-save');
-            
-        } catch (e) {
-            console.warn('CGT initialization deferred:', e.message);
-        }
-    }, 500);
-    
-    // Initialize Style Transfer System (Phase 4)
-    setTimeout(async () => {
-        try {
-            await styleTransfer.initialize();
-
-            // Save periodically (less frequently on mobile)
-            const saveInterval = window.innerWidth <= 768 ? 300000 : 120000; // 5min mobile, 2min desktop
-            IntervalManager.set(() => {
-                if (styleTransfer.initialized) {
-                    styleTransfer.save();
-                }
-            }, saveInterval, 'styleTransfer-save');
-
-        } catch (e) {
-            console.warn('StyleTransfer initialization deferred:', e.message);
-        }
-    }, 600);
-    
-    // Initialize WebGPU Compute Engine (GPU-accelerated similarity)
-    setTimeout(async () => {
-        try {
-            const supported = await gpuCompute.initialize();
-            
-            if (supported) {
-                // Optional: Run benchmark on first load (can be removed in production)
-                // gpuCompute.benchmark(100, 128);
-                
-                // Update UI to show GPU is active
-                NeuralUI.updateStatus();
             }
-        } catch (e) {
-            console.warn('WebGPU initialization deferred:', e.message);
+        }, 60000, 'cognitiveGT-process');
+        IntervalManager.set(() => {
+            if (cognitiveGT.initialized) cognitiveGT.saveState();
+        }, 120000, 'cognitiveGT-save');
+    });
+
+    queueInit('Style Transfer', async () => {
+        await styleTransfer.initialize();
+        const saveInterval = window.innerWidth <= 768 ? 300000 : 120000;
+        IntervalManager.set(() => {
+            if (styleTransfer.initialized) styleTransfer.save();
+        }, saveInterval, 'styleTransfer-save');
+    });
+
+    queueInit('GPU Compute', async () => {
+        const supported = await gpuCompute.initialize();
+        if (supported) NeuralUI.updateStatus();
+    });
+
+    queueInit('CodeRAG', async () => {
+        const hasEncoder = await AsyncUtils.waitFor(
+            () => neuralNet.isReady || neuralNet.encoder,
+            { timeout: 30000, interval: 2000, name: 'neuralNet.encoder' }
+        );
+        if (hasEncoder) {
+            if (neuralNet.encoder) codeRAG.setEncoder(neuralNet.encoder);
+            await codeRAG.initialize();
         }
-    }, 700);
+    });
 
-    // Initialize CodeRAG System (codebase understanding for AI)
-    setTimeout(async () => {
-        try {
-            // Wait for neuralNet encoder with clean async pattern
-            const hasEncoder = await AsyncUtils.waitFor(
-                () => neuralNet.isReady || neuralNet.encoder,
-                { timeout: 30000, interval: 2000, name: 'neuralNet.encoder' }
-            );
+    queueInit('CodeKnowledge', async () => {
+        const ready = await AsyncUtils.waitFor(
+            () => codeRAG.initialized,
+            { timeout: 60000, interval: 3000, name: 'codeRAG' }
+        );
+        if (ready) await codeKnowledge.initialize();
+    });
 
-            if (hasEncoder) {
-                if (neuralNet.encoder) codeRAG.setEncoder(neuralNet.encoder);
-                await codeRAG.initialize();
-                console.log('📚 CodeRAG stats:', codeRAG.getStats());
-            }
-        } catch (e) {
-            console.warn('CodeRAG initialization deferred:', e.message);
-        }
-    }, 800);
+    queueInit('CodePretraining', async () => {
+        const ready = await AsyncUtils.waitFor(
+            () => codeRAG.initialized,
+            { timeout: 90000, interval: 3000, name: 'codeRAG for pretraining' }
+        );
+        if (ready) await CodePretraining.initialize();
+    });
 
-    // Initialize CodeKnowledge System (self-awareness - concept to code mapping)
-    setTimeout(async () => {
-        try {
-            const ready = await AsyncUtils.waitFor(
-                () => codeRAG.initialized,
-                { timeout: 60000, interval: 3000, name: 'codeRAG' }
-            );
+    queueInit('CodeAnalyzer', async () => {
+        const ready = await AsyncUtils.waitFor(
+            () => CodePretraining.initialized,
+            { timeout: 120000, interval: 3000, name: 'CodePretraining' }
+        );
+        if (ready) await CodeAnalyzer.initialize();
+    });
 
-            if (ready) {
-                await codeKnowledge.initialize();
-                console.log('🧠 CodeKnowledge stats:', codeKnowledge.getStats());
-            }
-        } catch (e) {
-            console.warn('CodeKnowledge initialization deferred:', e.message);
-        }
-    }, 2000);
+    queueInit('EvolutionJournal', async () => {
+        await EvolutionJournal.initialize();
+    });
 
-    // Initialize CodePretraining System (deep pre-trained codebase understanding)
-    setTimeout(async () => {
-        try {
-            const ready = await AsyncUtils.waitFor(
-                () => codeRAG.initialized,
-                { timeout: 90000, interval: 3000, name: 'codeRAG for pretraining' }
-            );
+    queueInit('AutonomousEvolution', async () => {
+        await AutonomousEvolution.initialize();
+    });
 
-            if (ready) {
-                await CodePretraining.initialize();
-                console.log('🎓 CodePretraining stats:', CodePretraining.getStats());
-            }
-        } catch (e) {
-            console.warn('CodePretraining initialization deferred:', e.message);
-        }
+    // VisionCore is important - load with higher priority
+    queueInit('VisionCore', async () => {
+        await VisionCore.initialize();
+        console.log('🎯 VisionCore stats:', VisionCore.getStats());
+    });
+
+    // Start processing the initialization queue after UI is ready (3 seconds)
+    setTimeout(() => {
+        console.log('🚀 Starting progressive initialization...');
+        scheduleIdle(() => processInitQueue(), { timeout: 1000 });
     }, 3000);
-
-    // Initialize CodeAnalyzer System (comprehensive self-improvement analysis)
-    setTimeout(async () => {
-        try {
-            const ready = await AsyncUtils.waitFor(
-                () => CodePretraining.initialized,
-                { timeout: 120000, interval: 3000, name: 'CodePretraining' }
-            );
-
-            if (ready) {
-                await CodeAnalyzer.initialize();
-                console.log('🔍 CodeAnalyzer stats:', CodeAnalyzer.getStats());
-            }
-        } catch (e) {
-            console.warn('CodeAnalyzer initialization deferred:', e.message);
-        }
-    }, 4000);
-
-    // Initialize EvolutionJournal System (logs all evolution insights and decisions)
-    setTimeout(async () => {
-        try {
-            await EvolutionJournal.initialize();
-        } catch (e) {
-            console.warn('EvolutionJournal initialization deferred:', e.message);
-        }
-    }, 4500);
-
-    // Initialize AutonomousEvolution System (self-dialogue & recursive self-improvement)
-    setTimeout(async () => {
-        try {
-            await AutonomousEvolution.initialize();
-            console.log('🔄 AutonomousEvolution stats:', AutonomousEvolution.getStats());
-        } catch (e) {
-            console.warn('AutonomousEvolution initialization deferred:', e.message);
-        }
-    }, 5000);
-
-    // Initialize VisionCore System (foundational purpose & mission)
-    setTimeout(async () => {
-        try {
-            await VisionCore.initialize();
-            console.log('🎯 VisionCore stats:', VisionCore.getStats());
-        } catch (e) {
-            console.warn('VisionCore initialization deferred:', e.message);
-        }
-    }, 2000);
 
     // Mobile: Start with toolbar collapsed
     if (window.innerWidth <= 768) {
