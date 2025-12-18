@@ -26451,11 +26451,21 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 includeAncestors = true,
                 includeTopLevel = true,
                 summaryOnly = false,
-                minSimilarity = 0.25
+                minSimilarity = 0.25,
+                fullMap = false
             } = options;
 
             const allNodes = store.getAllNodes();
             const totalNodes = allNodes.length;
+
+            // Full map requested - return entire structure
+            if (fullMap) {
+                return {
+                    mode: 'full',
+                    structure: this.buildCompactTree(store.data, { maxDepth: 15 }),
+                    stats: { total: totalNodes, included: totalNodes, mode: 'full-requested' }
+                };
+            }
 
             // For small maps, just return full structure (not worth optimizing)
             if (totalNodes <= 30) {
@@ -26692,13 +26702,19 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             const selectedNodeData = selectedNode ? store.findNode(selectedNode.userData.id) : null;
             const totalNodes = allNodes.length;
 
+            // Check if user wants full map context
+            const messageLower = userMessage.toLowerCase();
+            const wantsFullMap = ['entire map', 'full map', 'all nodes', 'whole map', 'complete map', 'everything in my map', 'show me all'].some(kw => messageLower.includes(kw));
+
             // Use optimized map context - semantic search for relevant nodes only
             // Reduces token usage from ~25K to ~3-5K for large maps
+            // Unless user explicitly requests full map view
             const mapContext = await this.getRelevantMapContext(userMessage, {
-                maxNodes: 50,
+                maxNodes: wantsFullMap ? 9999 : 50,
                 includeAncestors: true,
                 includeTopLevel: true,
-                summaryOnly: false
+                summaryOnly: false,
+                fullMap: wantsFullMap
             });
 
             const treeStructure = mapContext.structure;
@@ -27312,6 +27328,7 @@ Both AI features can:
 === END APP KNOWLEDGE ===
 
 CURRENT CONTEXT:
+- Today's date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
 - Total nodes in map: ${totalNodes}
 - Map context: ${mapContext.stats.included} relevant nodes shown (${mapContext.stats.reduction} token optimization)
 - Selected node: ${selectedNodeData ? `"${selectedNodeData.label}" [id:${selectedNodeData.id}]${selectedNodeData.children?.length ? ` with ${selectedNodeData.children.length} children` : ''}` : 'None'}
@@ -27403,6 +27420,12 @@ GUIDELINES:
 - Avoid walls of text, excessive bullet points, and over-explanation
 - Get to the point quickly, then offer to elaborate if needed
 - One clear insight is better than ten mediocre ones
+
+**GIVE ACTIONABLE GUIDANCE:**
+- When advising on implementation or business steps, give ONE clear next action
+- Don't overwhelm with 10-step plans - focus on the immediate next step
+- Make instructions simple and specific: "Do X, then we'll discuss Y"
+- After they complete a step, guide them to the next one
 
 **WRITE NATURALLY:**
 - Use normal prose and conversational language
@@ -29108,6 +29131,7 @@ MYND is a 3D spatial mind map. Nodes are spheres connected hierarchically. Users
 
 USER INPUT: "${cleanedTranscript}"
 
+TODAY'S DATE: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
 SELECTED NODE: ${currentContext || 'None selected'}
 ${neuralContext}
 CURRENT MAP STRUCTURE (with node IDs):
