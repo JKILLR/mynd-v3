@@ -269,6 +269,275 @@ const LocalBrain = {
     },
 
     // ═══════════════════════════════════════════════════════════════════
+    // BAPI - Full Map Awareness
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Sync the full map to BAPI's context window.
+     * Call this on map load and after significant changes.
+     * @param {Object} mapData - The full map data (store.data or array format)
+     * @returns {Promise<{synced: number, time_ms: number}>}
+     */
+    async syncMap(mapData) {
+        if (!this.isAvailable) {
+            console.log('🧠 LocalBrain.syncMap: Server not available');
+            return { synced: 0, time_ms: 0 };
+        }
+
+        try {
+            const formattedMap = this._formatMapForServer(mapData);
+            const start = performance.now();
+
+            const res = await fetch(`${this.serverUrl}/map/sync`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formattedMap)
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🧠 BAPI synced: ${result.synced} nodes in ${result.time_ms.toFixed(0)}ms`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.syncMap failed:', e);
+        }
+
+        return { synced: 0, time_ms: 0 };
+    },
+
+    /**
+     * Get BAPI's analysis of the current map.
+     * Returns observations about missing connections, important nodes, etc.
+     * @returns {Promise<Object>} Analysis results
+     */
+    async analyze() {
+        if (!this.isAvailable) {
+            console.log('🧠 LocalBrain.analyze: Server not available');
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/map/analyze`);
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🧠 BAPI analysis: ${result.observations?.length || 0} observations`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.analyze failed:', e);
+        }
+
+        return { error: 'Analysis failed' };
+    },
+
+    /**
+     * Get current map sync status
+     */
+    async getMapStatus() {
+        if (!this.isAvailable) {
+            return { synced: false, node_count: 0 };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/map/status`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getMapStatus failed:', e);
+        }
+
+        return { synced: false, node_count: 0 };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CODE EMBEDDING - Parse codebase into map
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Parse the MYND codebase into map-ready nodes.
+     * Use this for MYND to analyze its own architecture.
+     * @returns {Promise<Object>} Parsed code structure
+     */
+    async parseCodebase() {
+        if (!this.isAvailable) {
+            console.log('🧠 LocalBrain.parseCodebase: Server not available');
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/code/parse`);
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🧠 Codebase parsed: ${result.stats.total_nodes} nodes (${result.stats.js_files} JS, ${result.stats.py_files} Python)`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.parseCodebase failed:', e);
+        }
+
+        return { error: 'Parse failed' };
+    },
+
+    /**
+     * Import parsed codebase as a new branch in the map.
+     * @param {Function} addChildFn - Function to add child nodes (e.g., from store)
+     * @param {string} parentId - ID of parent node to attach code tree to
+     */
+    async importCodebaseToMap(addChildFn, parentId) {
+        const result = await this.parseCodebase();
+        if (result.error) {
+            console.error('Failed to parse codebase:', result.error);
+            return { success: false, error: result.error };
+        }
+
+        // Convert parsed nodes to map format
+        const codeRoot = result.nodes.find(n => n.type === 'root');
+        if (!codeRoot) {
+            return { success: false, error: 'No root node in parsed code' };
+        }
+
+        // Recursive function to add nodes
+        let addedCount = 0;
+        const addNodes = async (nodeData, targetParentId) => {
+            const newNode = await addChildFn(targetParentId, {
+                label: nodeData.label,
+                description: nodeData.type,
+                color: this._getCodeNodeColor(nodeData.type)
+            });
+
+            addedCount++;
+
+            // Add children
+            if (nodeData.children && nodeData.children.length > 0) {
+                for (const childId of nodeData.children) {
+                    const childNode = result.nodes.find(n => n.id === childId);
+                    if (childNode) {
+                        await addNodes(childNode, newNode.id);
+                    }
+                }
+            }
+
+            return newNode;
+        };
+
+        // Start adding from code root
+        await addNodes(codeRoot, parentId);
+
+        console.log(`🧠 Imported ${addedCount} code nodes into map`);
+        return { success: true, nodesAdded: addedCount };
+    },
+
+    // Get color based on code node type
+    _getCodeNodeColor(type) {
+        const colors = {
+            'root': '#a855f7',      // Purple - code root
+            'directory': '#3b82f6', // Blue - directories
+            'file': '#22c55e',      // Green - files
+            'class': '#f59e0b',     // Orange - classes
+            'object': '#ec4899',    // Pink - objects
+            'function': '#06b6d4'   // Cyan - functions
+        };
+        return colors[type] || null;
+    },
+
+    /**
+     * Refresh existing code nodes in the map with current source code.
+     * Matches nodes by label and updates their descriptions.
+     * @param {Object} store - The store object with findNode and data
+     * @returns {Promise<Object>} Stats on what was updated
+     */
+    async refreshCodebase(store) {
+        if (!this.isAvailable) {
+            return { success: false, error: 'Server not available' };
+        }
+
+        const result = await this.parseCodebase();
+        if (result.error) {
+            return { success: false, error: result.error };
+        }
+
+        // Build lookup of fresh code by label
+        const freshCodeByLabel = {};
+        for (const node of result.nodes) {
+            freshCodeByLabel[node.label] = node;
+        }
+
+        // Find and update existing code nodes in the map
+        let updated = 0;
+        let notFound = 0;
+
+        const updateNode = (mapNode) => {
+            // Check if this is a code node (has description with code block)
+            if (mapNode.description &&
+                (mapNode.description.includes('```javascript') ||
+                 mapNode.description.includes('```python') ||
+                 mapNode.description.includes('=== FILE START ==='))) {
+
+                // Try to find fresh code for this node
+                const freshNode = freshCodeByLabel[mapNode.label];
+                if (freshNode && freshNode.description) {
+                    mapNode.description = freshNode.description;
+                    if (freshNode.stats) {
+                        mapNode.stats = freshNode.stats;
+                    }
+                    updated++;
+                } else {
+                    notFound++;
+                }
+            }
+
+            // Recursively update children
+            if (mapNode.children) {
+                for (const child of mapNode.children) {
+                    updateNode(child);
+                }
+            }
+        };
+
+        // Start from root
+        updateNode(store.data);
+
+        // Save the updated map
+        if (store.save) {
+            store.save();
+        }
+
+        console.log(`🧠 Codebase refreshed: ${updated} nodes updated, ${notFound} not found in current code`);
+
+        return {
+            success: true,
+            updated,
+            notFound,
+            freshNodeCount: result.nodes.length
+        };
+    },
+
+    /**
+     * Find the code root node in the map (if previously imported)
+     * @param {Object} store - The store object
+     * @returns {Object|null} The code root node or null
+     */
+    findCodeRoot(store) {
+        const search = (node) => {
+            if (node.label === 'MYND Codebase') {
+                return node;
+            }
+            if (node.children) {
+                for (const child of node.children) {
+                    const found = search(child);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+        return search(store.data);
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
     // VOICE (Whisper)
     // ═══════════════════════════════════════════════════════════════════
 

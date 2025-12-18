@@ -218,6 +218,14 @@ class MYNDBrain:
         # Learning state
         self.feedback_buffer = []
 
+        # Full map state (BAPI's context window)
+        self.map_state = None
+        self.map_embeddings = None
+        self.map_transformed = None
+        self.map_adjacency = None
+        self.map_node_index = {}
+        self.map_last_sync = 0
+
         print(f"✅ MYND Brain ready on {self.device}")
 
     async def embed(self, text: str) -> np.ndarray:
@@ -350,6 +358,162 @@ class MYNDBrain:
 
         return self.vision.embed_image(image_data)
 
+    async def sync_map(self, map_data: MapData) -> Dict:
+        """
+        Sync the full map to BAPI's context window.
+        This gives BAPI awareness of the entire map at all times.
+        """
+        start_time = time.time()
+        nodes = map_data.nodes
+
+        if len(nodes) == 0:
+            return {"synced": 0, "time_ms": 0}
+
+        # Store map state
+        self.map_state = map_data
+        self.map_node_index = {n.id: i for i, n in enumerate(nodes)}
+
+        # Compute embeddings for all nodes
+        labels = [n.label for n in nodes]
+        self.map_embeddings = await self.embed_batch(labels)
+
+        # Build adjacency matrix
+        num_nodes = len(nodes)
+        self.map_adjacency = np.zeros((num_nodes, num_nodes), dtype=np.float32)
+        for i, node in enumerate(nodes):
+            # Parent-child connections
+            if node.parentId and node.parentId in self.map_node_index:
+                parent_idx = self.map_node_index[node.parentId]
+                self.map_adjacency[i, parent_idx] = 1.0
+                self.map_adjacency[parent_idx, i] = 1.0
+            # Children connections
+            for child_id in (node.children or []):
+                if child_id in self.map_node_index:
+                    child_idx = self.map_node_index[child_id]
+                    self.map_adjacency[i, child_idx] = 1.0
+                    self.map_adjacency[child_idx, i] = 1.0
+
+        # Compute node depths
+        depths = np.zeros(num_nodes, dtype=np.int32)
+        for i, node in enumerate(nodes):
+            depth = 0
+            current = node
+            while current.parentId and current.parentId in self.map_node_index:
+                depth += 1
+                parent_idx = self.map_node_index[current.parentId]
+                current = nodes[parent_idx]
+                if depth > 20:  # Safety limit
+                    break
+            depths[i] = depth
+
+        # Compute node degrees
+        degrees = np.sum(self.map_adjacency, axis=1).astype(np.int32)
+
+        # Run through Graph Transformer - this is the key step
+        # Now BAPI has transformed representations of ALL nodes
+        self.map_transformed, _ = self.graph_transformer.forward(
+            self.map_embeddings,
+            adjacency=self.map_adjacency,
+            depths=depths,
+            degrees=degrees
+        )
+
+        self.map_last_sync = time.time()
+        elapsed = (time.time() - start_time) * 1000
+
+        print(f"🧠 Map synced: {num_nodes} nodes in {elapsed:.0f}ms")
+
+        return {
+            "synced": num_nodes,
+            "time_ms": elapsed
+        }
+
+    async def analyze_map(self) -> Dict:
+        """
+        BAPI analyzes the full map and returns observations.
+        This is BAPI's voice - what it notices about your thinking.
+        """
+        if self.map_state is None or self.map_transformed is None:
+            return {"error": "No map synced. Call /map/sync first."}
+
+        start_time = time.time()
+        nodes = self.map_state.nodes
+        num_nodes = len(nodes)
+
+        observations = []
+
+        # 1. Find missing connections
+        missing = self.graph_transformer.find_missing_connections(
+            self.map_embeddings,
+            self.map_adjacency,
+            threshold=0.65,
+            top_k=5
+        )
+
+        for src_idx, tgt_idx, score in missing:
+            observations.append({
+                "type": "missing_connection",
+                "message": f"'{nodes[src_idx].label}' and '{nodes[tgt_idx].label}' seem related but aren't connected",
+                "source_id": nodes[src_idx].id,
+                "target_id": nodes[tgt_idx].id,
+                "confidence": score
+            })
+
+        # 2. Find important nodes
+        importance = self.graph_transformer.get_node_importance(
+            self.map_embeddings,
+            adjacency=self.map_adjacency
+        )
+
+        # Top important nodes
+        top_important = np.argsort(importance)[-5:][::-1]
+        important_nodes = []
+        for idx in top_important:
+            important_nodes.append({
+                "id": nodes[idx].id,
+                "label": nodes[idx].label,
+                "importance": float(importance[idx])
+            })
+
+        # 3. Find isolated nodes (potentially orphaned ideas)
+        isolated = []
+        for i, node in enumerate(nodes):
+            connection_count = np.sum(self.map_adjacency[i])
+            if connection_count <= 1 and importance[i] > 0.5:  # Important but isolated
+                isolated.append({
+                    "id": node.id,
+                    "label": node.label,
+                    "message": f"'{node.label}' seems important but has few connections"
+                })
+
+        # 4. Get attention patterns from each head
+        head_attention_data = None
+        if num_nodes > 0:
+            # Sample a central node to see head specialization
+            central_idx = int(np.argmax(importance))
+            head_attention = self.graph_transformer.get_head_attention(
+                self.map_embeddings,
+                central_idx,
+                adjacency=self.map_adjacency
+            )
+            # Convert to serializable format for API response
+            head_attention_data = {
+                k: v.tolist() if hasattr(v, 'tolist') else v
+                for k, v in head_attention.items()
+            }
+
+        elapsed = (time.time() - start_time) * 1000
+
+        return {
+            "node_count": num_nodes,
+            "observations": observations,
+            "important_nodes": important_nodes,
+            "isolated_nodes": isolated[:5],  # Limit to 5
+            "head_attention": head_attention_data,
+            "time_ms": elapsed,
+            "last_sync": self.map_last_sync
+        }
+
     def get_health(self) -> Dict:
         """Get health status."""
         return {
@@ -423,16 +587,318 @@ async def root():
     """Root endpoint with info."""
     return {
         "name": "MYND Brain",
-        "version": "0.2.0",
+        "version": "0.3.0",
         "status": "running",
         "endpoints": [
             "/health",
+            "/map/sync", "/map/analyze",  # BAPI full context
             "/embed", "/embed/batch",
             "/predict/connections",
             "/train/feedback",
             "/voice/transcribe",
             "/image/describe", "/image/embed"
         ]
+    }
+
+# ═══════════════════════════════════════════════════════════════════
+# BAPI - Full Map Awareness
+# ═══════════════════════════════════════════════════════════════════
+
+@app.post("/map/sync")
+async def sync_map(map_data: MapData):
+    """
+    Sync the full map to BAPI's context window.
+    Call this on map load and after significant changes.
+    BAPI will then have awareness of ALL nodes.
+    """
+    if brain is None:
+        raise HTTPException(status_code=503, detail="Brain not initialized")
+
+    result = await brain.sync_map(map_data)
+    return result
+
+@app.get("/map/analyze")
+async def analyze_map():
+    """
+    BAPI analyzes the synced map and returns observations:
+    - Missing connections (nodes that should be linked)
+    - Important nodes (central to your thinking)
+    - Isolated nodes (important but disconnected)
+
+    Call /map/sync first to load the map.
+    """
+    if brain is None:
+        raise HTTPException(status_code=503, detail="Brain not initialized")
+
+    result = await brain.analyze_map()
+    return result
+
+@app.get("/map/status")
+async def map_status():
+    """Check current map sync status."""
+    if brain is None:
+        raise HTTPException(status_code=503, detail="Brain not initialized")
+
+    return {
+        "synced": brain.map_state is not None,
+        "node_count": len(brain.map_state.nodes) if brain.map_state else 0,
+        "last_sync": brain.map_last_sync
+    }
+
+# ═══════════════════════════════════════════════════════════════════
+# CODE EMBEDDING - Parse codebase into map structure
+# ═══════════════════════════════════════════════════════════════════
+
+@app.get("/code/parse")
+async def parse_codebase():
+    """
+    Parse the MYND codebase into a map-ready structure with FULL CODE.
+    Returns nodes for files, classes, functions with actual source code.
+    This enables MYND to deeply understand its own architecture.
+    """
+    import re
+    import pathlib
+
+    start = time.time()
+    base_dir = pathlib.Path(__file__).parent.parent
+
+    nodes = []
+    node_id = 0
+
+    def make_id():
+        nonlocal node_id
+        node_id += 1
+        return f"code_{node_id}"
+
+    # Root node
+    root_id = make_id()
+    nodes.append({
+        "id": root_id,
+        "label": "MYND Codebase",
+        "type": "root",
+        "description": "The complete MYND application - a 3D mind mapping app with local AI.\nFrontend: JavaScript (Three.js, neural networks, chat)\nBackend: Python (FastAPI, Graph Transformer, Whisper, CLIP)",
+        "children": []
+    })
+
+    # Parse JavaScript files
+    js_dir_id = make_id()
+    nodes.append({
+        "id": js_dir_id,
+        "label": "JavaScript (Frontend)",
+        "type": "directory",
+        "description": "Browser-side code:\n- 3D rendering with Three.js\n- Neural network for embeddings\n- Chat interface with AI\n- Voice input with Whisper\n- LocalBrain connection to Python server",
+        "parentId": root_id,
+        "children": []
+    })
+    nodes[0]["children"].append(js_dir_id)
+
+    js_files = list((base_dir / "js").glob("*.js"))
+    for js_file in js_files:
+        file_id = make_id()
+        content = js_file.read_text(errors='ignore')
+        lines = content.split('\n')
+
+        # Find function definitions with line numbers
+        function_matches = []
+        for i, line in enumerate(lines):
+            # Match: function name(), const name = function, const name = () =>
+            if 'function ' in line or ('=>' in line and 'const ' in line):
+                match = re.search(r'(?:function\s+(\w+)|const\s+(\w+)\s*=)', line)
+                if match:
+                    name = match.group(1) or match.group(2)
+                    if name and len(name) > 2 and not name.startswith('_'):
+                        function_matches.append((name, i))
+
+        # Find object definitions
+        object_matches = []
+        for i, line in enumerate(lines):
+            match = re.search(r'const\s+(\w+)\s*=\s*\{', line)
+            if match:
+                name = match.group(1)
+                if len(name) > 2:
+                    object_matches.append((name, i))
+
+        # File node with overview
+        file_overview = content[:3000] + ('...' if len(content) > 3000 else '')
+        file_node = {
+            "id": file_id,
+            "label": js_file.name,
+            "type": "file",
+            "description": f"JavaScript file: {len(lines):,} lines | {len(function_matches)} functions | {len(object_matches)} objects\n\n=== FILE START ===\n{file_overview}",
+            "parentId": js_dir_id,
+            "children": [],
+            "stats": {"lines": len(lines), "functions": len(function_matches), "objects": len(object_matches)}
+        }
+
+        # Add function nodes with FULL CODE
+        for func_name, line_num in function_matches[:40]:
+            func_id = make_id()
+            # Extract function code (up to 80 lines or until next top-level declaration)
+            func_lines = []
+            brace_count = 0
+            started = False
+            for j in range(line_num, min(line_num + 100, len(lines))):
+                func_lines.append(lines[j])
+                brace_count += lines[j].count('{') - lines[j].count('}')
+                if '{' in lines[j]:
+                    started = True
+                if started and brace_count <= 0:
+                    break
+            func_code = '\n'.join(func_lines[:80])
+
+            file_node["children"].append(func_id)
+            nodes.append({
+                "id": func_id,
+                "label": f"{func_name}()",
+                "type": "function",
+                "description": f"Function at line {line_num + 1}\n\n```javascript\n{func_code}\n```",
+                "parentId": file_id,
+                "children": [],
+                "line": line_num + 1
+            })
+
+        # Add object nodes with FULL CODE
+        for obj_name, line_num in object_matches[:20]:
+            obj_id = make_id()
+            # Extract object code (up to 120 lines)
+            obj_lines = []
+            brace_count = 0
+            started = False
+            for j in range(line_num, min(line_num + 150, len(lines))):
+                obj_lines.append(lines[j])
+                brace_count += lines[j].count('{') - lines[j].count('}')
+                if '{' in lines[j]:
+                    started = True
+                if started and brace_count <= 0:
+                    break
+            obj_code = '\n'.join(obj_lines[:120])
+
+            file_node["children"].append(obj_id)
+            nodes.append({
+                "id": obj_id,
+                "label": obj_name,
+                "type": "object",
+                "description": f"Object/Module at line {line_num + 1}\n\n```javascript\n{obj_code}\n```",
+                "parentId": file_id,
+                "children": [],
+                "line": line_num + 1
+            })
+
+        nodes.append(file_node)
+        for n in nodes:
+            if n["id"] == js_dir_id:
+                n["children"].append(file_id)
+                break
+
+    # Parse Python files
+    py_dir_id = make_id()
+    nodes.append({
+        "id": py_dir_id,
+        "label": "Python (Backend)",
+        "type": "directory",
+        "description": "Server-side ML code:\n- FastAPI server (server.py)\n- Graph Transformer neural network\n- Whisper voice transcription\n- CLIP image understanding\n- Sentence embeddings",
+        "parentId": root_id,
+        "children": []
+    })
+    nodes[0]["children"].append(py_dir_id)
+
+    py_files = list((base_dir / "mynd-brain").glob("**/*.py"))
+    for py_file in py_files:
+        file_id = make_id()
+        content = py_file.read_text(errors='ignore')
+        lines = content.split('\n')
+
+        # Find class definitions
+        class_matches = []
+        for i, line in enumerate(lines):
+            match = re.match(r'^class\s+(\w+)', line)
+            if match:
+                class_matches.append((match.group(1), i))
+
+        # Find top-level function definitions
+        func_matches = []
+        for i, line in enumerate(lines):
+            match = re.match(r'^def\s+(\w+)', line)
+            if match and not match.group(1).startswith('_'):
+                func_matches.append((match.group(1), i))
+
+        relative_path = py_file.relative_to(base_dir / "mynd-brain")
+        file_overview = content[:3000] + ('...' if len(content) > 3000 else '')
+        file_node = {
+            "id": file_id,
+            "label": str(relative_path),
+            "type": "file",
+            "description": f"Python file: {len(lines):,} lines | {len(class_matches)} classes | {len(func_matches)} functions\n\n=== FILE START ===\n{file_overview}",
+            "parentId": py_dir_id,
+            "children": [],
+            "stats": {"lines": len(lines), "classes": len(class_matches), "functions": len(func_matches)}
+        }
+
+        # Add class nodes with FULL CODE
+        for class_name, line_num in class_matches:
+            class_id = make_id()
+            # Find class end (next class/def at column 0, or EOF)
+            class_end = len(lines)
+            for j in range(line_num + 1, len(lines)):
+                if lines[j] and not lines[j][0].isspace() and (lines[j].startswith('class ') or lines[j].startswith('def ')):
+                    class_end = j
+                    break
+            class_code = '\n'.join(lines[line_num:min(class_end, line_num + 200)])
+
+            file_node["children"].append(class_id)
+            nodes.append({
+                "id": class_id,
+                "label": class_name,
+                "type": "class",
+                "description": f"Class at line {line_num + 1} ({class_end - line_num} lines)\n\n```python\n{class_code}\n```",
+                "parentId": file_id,
+                "children": [],
+                "line": line_num + 1
+            })
+
+        # Add function nodes with FULL CODE
+        for func_name, line_num in func_matches[:25]:
+            func_id = make_id()
+            # Find function end
+            func_end = len(lines)
+            for j in range(line_num + 1, len(lines)):
+                if lines[j] and not lines[j][0].isspace() and lines[j].strip():
+                    func_end = j
+                    break
+            func_code = '\n'.join(lines[line_num:min(func_end, line_num + 80)])
+
+            file_node["children"].append(func_id)
+            nodes.append({
+                "id": func_id,
+                "label": f"{func_name}()",
+                "type": "function",
+                "description": f"Function at line {line_num + 1}\n\n```python\n{func_code}\n```",
+                "parentId": file_id,
+                "children": [],
+                "line": line_num + 1
+            })
+
+        nodes.append(file_node)
+        for n in nodes:
+            if n["id"] == py_dir_id:
+                n["children"].append(file_id)
+                break
+
+    elapsed = (time.time() - start) * 1000
+
+    # Calculate total embedded code size
+    total_code_chars = sum(len(n.get('description', '')) for n in nodes)
+
+    return {
+        "nodes": nodes,
+        "stats": {
+            "total_nodes": len(nodes),
+            "js_files": len(js_files),
+            "py_files": len(py_files),
+            "total_code_chars": total_code_chars,
+            "estimated_mb": round(total_code_chars / 1024 / 1024, 2)
+        },
+        "time_ms": elapsed
     }
 
 @app.post("/embed", response_model=EmbedResponse)

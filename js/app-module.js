@@ -23409,14 +23409,19 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         });
         
         updateDepthIndicator();
-        
+
         // Mark labels for declutter recalculation
         LabelSystem.markDirty();
-        
+
         // Request a render for the new scene
         AnimationController.requestRender();
+
+        // Sync full map to BAPI (Local Brain) for full context awareness
+        if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+            LocalBrain.syncMap(store.data).catch(e => console.warn('BAPI sync failed:', e));
+        }
     }
-    
+
     // Smoothly update node positions without rebuilding scene
     function updateNodePositions() {
         const contextNode = store.findNode(currentContextId);
@@ -27466,13 +27471,100 @@ You are a trusted guide, not a data harvester.
             if (typeof NeuralUI !== 'undefined' && NeuralUI.isOpen) {
                 NeuralUI.close();
             }
-            
+
             this.isOpen = true;
             this.panel.classList.add('open');
             document.body.classList.add('chat-open');
             setTimeout(() => this.input.focus(), 350);
+
+            // Fetch BAPI observations when opening chat
+            this.fetchBAPIObservations();
         },
-        
+
+        // Fetch and display BAPI's observations about the map
+        async fetchBAPIObservations() {
+            if (typeof LocalBrain === 'undefined' || !LocalBrain.isAvailable) return;
+
+            try {
+                const analysis = await LocalBrain.analyze();
+                if (analysis.error) return;
+
+                // Only show if there are interesting observations
+                if (analysis.observations?.length > 0 || analysis.isolated_nodes?.length > 0) {
+                    this.displayBAPIInsights(analysis);
+                }
+            } catch (e) {
+                console.warn('BAPI observation fetch failed:', e);
+            }
+        },
+
+        // Display BAPI insights as a special message
+        displayBAPIInsights(analysis) {
+            // Check if we already have a recent BAPI insight (within last 5 minutes)
+            const lastBAPIMessage = this.conversation.findLast(m => m.role === 'bapi');
+            if (lastBAPIMessage && (Date.now() - lastBAPIMessage.timestamp) < 300000) {
+                return; // Don't spam insights
+            }
+
+            let insightParts = [];
+
+            // Missing connections
+            if (analysis.observations?.length > 0) {
+                const connections = analysis.observations.slice(0, 3);
+                insightParts.push('**Connections I noticed:**');
+                connections.forEach(obs => {
+                    insightParts.push(`• ${obs.message}`);
+                });
+            }
+
+            // Isolated important nodes
+            if (analysis.isolated_nodes?.length > 0) {
+                insightParts.push('');
+                insightParts.push('**Ideas that might need more connections:**');
+                analysis.isolated_nodes.slice(0, 3).forEach(node => {
+                    insightParts.push(`• "${node.label}"`);
+                });
+            }
+
+            // Important nodes (only show if no other insights)
+            if (insightParts.length === 0 && analysis.important_nodes?.length > 0) {
+                insightParts.push('**Central ideas in your map:**');
+                analysis.important_nodes.slice(0, 3).forEach(node => {
+                    insightParts.push(`• "${node.label}"`);
+                });
+            }
+
+            if (insightParts.length === 0) return;
+
+            const content = insightParts.join('\n');
+
+            // Add as a special BAPI message
+            const message = {
+                role: 'bapi',
+                content: content,
+                timestamp: Date.now()
+            };
+
+            this.conversation.push(message);
+            this.renderBAPIMessage(message);
+        },
+
+        // Render a BAPI insight message
+        renderBAPIMessage(message) {
+            const messageEl = document.createElement('div');
+            messageEl.className = 'chat-message bapi';
+            messageEl.innerHTML = `
+                <div class="chat-message-header">
+                    <span class="chat-message-role">🧠 BAPI</span>
+                    <span class="chat-message-time">${this.formatTime(message.timestamp)}</span>
+                </div>
+                <div class="chat-message-content">${this.formatMarkdown(message.content)}</div>
+            `;
+
+            this.messagesContainer.appendChild(messageEl);
+            this.scrollToBottom();
+        },
+
         close() {
             this.isOpen = false;
             this.panel.classList.remove('open');
@@ -27706,7 +27798,38 @@ You are a trusted guide, not a data harvester.
                 .replace(/`(.*?)`/g, '<code>$1</code>')
                 .replace(/\n/g, '<br>');
         },
-        
+
+        // Format markdown for BAPI messages with proper escaping
+        formatMarkdown(content) {
+            if (!content) return '';
+
+            // Escape HTML first to prevent XSS
+            let html = escapeHTML(content);
+
+            // Headers (h3 and h4 for chat context)
+            html = html.replace(/^### (.+)$/gm, '<h4 style="margin: 0.5em 0 0.25em; color: #a855f7;">$1</h4>');
+            html = html.replace(/^## (.+)$/gm, '<h3 style="margin: 0.5em 0 0.25em; color: #a855f7;">$1</h3>');
+
+            // Bold and italic
+            html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+            // Inline code
+            html = html.replace(/`([^`]+)`/g, '<code style="background: rgba(168, 85, 247, 0.15); padding: 0.1em 0.3em; border-radius: 3px;">$1</code>');
+
+            // Bullet points
+            html = html.replace(/^[•\-\*] (.+)$/gm, '<li style="margin-left: 1em;">$1</li>');
+
+            // Numbered lists
+            html = html.replace(/^\d+\. (.+)$/gm, '<li style="margin-left: 1em;">$1</li>');
+
+            // Line breaks
+            html = html.replace(/\n/g, '<br>');
+
+            return html;
+        },
+
         showTyping() {
             const typing = document.createElement('div');
             typing.className = 'chat-message assistant';
