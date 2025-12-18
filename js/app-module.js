@@ -27424,7 +27424,7 @@ ${evolutionContext ? `
 AUTONOMOUS EVOLUTION (self-dialogue & auto-generation):
 ${evolutionContext}` : ''}
 ${visionContext ? `
-FOUNDATIONAL VISION (your soul & purpose):
+FOUNDATIONAL VISION (OUR shared vision - yours and your creator's):
 ${visionContext}` : ''}
 ${goalsContext ? `
 MANIFESTATION GOALS (from Goal Wizard):
