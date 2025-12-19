@@ -475,6 +475,111 @@ const LocalBrain = {
     },
 
     // ═══════════════════════════════════════════════════════════════════
+    // SELF-LEARNING - Brain learns from its own predictions
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Record predictions made by the Graph Transformer.
+     * Call this when predictions are generated/shown to user.
+     * This enables the brain to learn from prediction outcomes.
+     *
+     * @param {string} sourceId - The node predictions were made for
+     * @param {Array} predictions - Array of {target_id, target_label, score}
+     */
+    async recordPredictions(sourceId, predictions) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/predictions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    source_id: sourceId,
+                    predictions: predictions
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🧠 Predictions recorded: ${predictions.length} for node ${sourceId}`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.recordPredictions failed:', e);
+        }
+
+        return { error: 'Failed to record predictions' };
+    },
+
+    /**
+     * Tell the brain about a new connection being created.
+     * The brain checks if it predicted this and learns accordingly.
+     *
+     * This is the KEY self-learning method:
+     * - If brain predicted this: Reinforces the pattern
+     * - If brain missed this: Learns the new pattern
+     *
+     * @param {string} sourceId - Source node of connection
+     * @param {string} targetId - Target node of connection
+     * @param {string} connectionType - 'manual', 'suggested', 'ai'
+     * @returns {Promise<{was_predicted, learning_signal, accuracy}>}
+     */
+    async learnFromConnection(sourceId, targetId, connectionType = 'manual') {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/learn-connection`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    source_id: sourceId,
+                    target_id: targetId,
+                    connection_type: connectionType
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                if (result.was_predicted) {
+                    console.log(`🧠 Self-learning: Brain correctly predicted this connection! (accuracy: ${(result.accuracy * 100).toFixed(1)}%)`);
+                } else {
+                    console.log(`🧠 Self-learning: Brain learned new pattern from this connection`);
+                }
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.learnFromConnection failed:', e);
+        }
+
+        return { error: 'Failed to learn from connection' };
+    },
+
+    /**
+     * Get the brain's learning statistics
+     * Shows prediction accuracy and learning history
+     */
+    async getLearningStats() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/learning`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getLearningStats failed:', e);
+        }
+
+        return { error: 'Failed to get learning stats' };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
     // CODE SELF-AWARENESS - Deep Code Understanding for Claude (Legacy)
     // ═══════════════════════════════════════════════════════════════════
 

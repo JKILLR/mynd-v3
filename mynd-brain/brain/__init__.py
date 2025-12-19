@@ -8,6 +8,7 @@ from .unified_brain import (
     UnifiedBrain,
     SelfAwareness,
     MemorySystem,
+    PredictionTracker,
     ContextRequest,
     ContextResponse
 )
@@ -16,6 +17,7 @@ __all__ = [
     'UnifiedBrain',
     'SelfAwareness',
     'MemorySystem',
+    'PredictionTracker',
     'ContextRequest',
     'ContextResponse'
 ]

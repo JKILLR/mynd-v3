@@ -197,6 +197,93 @@ I am not just an app with AI. I AM the AI that IS the app.
             self.growth_events = self.growth_events[-100:]
 
 
+class PredictionTracker:
+    """
+    Tracks the brain's own predictions to learn from outcomes.
+    This is how the brain learns from itself.
+    """
+
+    def __init__(self):
+        self.pending_predictions = {}  # node_id -> [predictions]
+        self.prediction_history = []   # Past predictions with outcomes
+        self.accuracy_by_type = {}     # Track accuracy by relationship type
+        self.total_predictions = 0
+        self.correct_predictions = 0
+
+    def record_prediction(self, source_id: str, predictions: List[Dict]):
+        """Record predictions made by the Graph Transformer"""
+        self.pending_predictions[source_id] = {
+            'predictions': predictions,
+            'timestamp': time.time(),
+            'predicted_targets': {p['target_id']: p['score'] for p in predictions}
+        }
+        self.total_predictions += len(predictions)
+
+    def check_connection(self, source_id: str, target_id: str) -> Dict:
+        """
+        Check if a newly created connection was predicted.
+        Returns learning signal.
+        """
+        result = {
+            'was_predicted': False,
+            'prediction_score': 0,
+            'learning_signal': 'new_pattern'  # or 'reinforce' or 'missed'
+        }
+
+        # Check if we predicted this connection
+        if source_id in self.pending_predictions:
+            pending = self.pending_predictions[source_id]
+            predicted_targets = pending.get('predicted_targets', {})
+
+            if target_id in predicted_targets:
+                # We predicted this! Reinforce.
+                result['was_predicted'] = True
+                result['prediction_score'] = predicted_targets[target_id]
+                result['learning_signal'] = 'reinforce'
+                self.correct_predictions += 1
+
+                self.prediction_history.append({
+                    'source': source_id,
+                    'target': target_id,
+                    'predicted': True,
+                    'score': predicted_targets[target_id],
+                    'timestamp': time.time()
+                })
+            else:
+                # We didn't predict this - learn from it
+                result['learning_signal'] = 'new_pattern'
+
+                self.prediction_history.append({
+                    'source': source_id,
+                    'target': target_id,
+                    'predicted': False,
+                    'score': 0,
+                    'timestamp': time.time()
+                })
+
+        # Keep history bounded
+        if len(self.prediction_history) > 500:
+            self.prediction_history = self.prediction_history[-500:]
+
+        return result
+
+    def get_accuracy(self) -> float:
+        """Get overall prediction accuracy"""
+        if self.total_predictions == 0:
+            return 0.0
+        return self.correct_predictions / self.total_predictions
+
+    def get_stats(self) -> Dict:
+        """Get prediction tracking stats"""
+        return {
+            'total_predictions': self.total_predictions,
+            'correct_predictions': self.correct_predictions,
+            'accuracy': self.get_accuracy(),
+            'pending_nodes': len(self.pending_predictions),
+            'history_size': len(self.prediction_history)
+        }
+
+
 class MemorySystem:
     """
     Simple memory system for Phase 1.
@@ -290,6 +377,7 @@ class UnifiedBrain:
         # Core systems
         self.self_awareness = SelfAwareness(base_dir)
         self.memory = MemorySystem()
+        self.predictions = PredictionTracker()  # Self-learning from predictions
 
         # External references (set by server.py)
         self.ml_brain = None  # Reference to MYNDBrain for neural ops
@@ -521,3 +609,86 @@ class UnifiedBrain:
             'target': target,
             'result': result
         }, importance=0.6)
+
+    # ═══════════════════════════════════════════════════════════════════
+    # SELF-LEARNING - Learning from own predictions
+    # ═══════════════════════════════════════════════════════════════════
+
+    def record_predictions(self, source_id: str, predictions: List[Dict]):
+        """
+        Record predictions made by the Graph Transformer.
+        Call this whenever predictions are generated.
+        """
+        self.predictions.record_prediction(source_id, predictions)
+
+        # Also store in memory for context
+        self.memory.remember({
+            'type': 'prediction',
+            'source_id': source_id,
+            'num_predictions': len(predictions),
+            'top_prediction': predictions[0] if predictions else None
+        }, importance=0.4)
+
+    def learn_from_connection(self, source_id: str, target_id: str, connection_type: str = 'manual') -> Dict:
+        """
+        Learn from a connection being created.
+        This is the key self-learning mechanism.
+
+        Returns learning result with signal type.
+        """
+        # Check if this was predicted
+        result = self.predictions.check_connection(source_id, target_id)
+
+        # Record growth event
+        self.self_awareness.record_growth({
+            'type': 'connection_learning',
+            'source': source_id,
+            'target': target_id,
+            'was_predicted': result['was_predicted'],
+            'learning_signal': result['learning_signal'],
+            'prediction_score': result['prediction_score']
+        })
+
+        self.growth_events_today += 1
+
+        # Store in memory with high importance if we learned something
+        importance = 0.8 if result['was_predicted'] else 0.6
+        self.memory.remember({
+            'type': 'connection_created',
+            'source_id': source_id,
+            'target_id': target_id,
+            'was_predicted': result['was_predicted'],
+            'learning_signal': result['learning_signal']
+        }, importance=importance)
+
+        # Log learning
+        if result['was_predicted']:
+            print(f"🧠 Self-learning: Correctly predicted {source_id}→{target_id} (score: {result['prediction_score']:.2f})")
+        else:
+            print(f"🧠 Self-learning: New pattern discovered {source_id}→{target_id}")
+
+        return result
+
+    def get_prediction_accuracy(self) -> Dict:
+        """Get prediction accuracy stats"""
+        return self.predictions.get_stats()
+
+    def get_learning_summary(self) -> str:
+        """Get a summary of what the brain has learned"""
+        stats = self.predictions.get_stats()
+        history = self.predictions.prediction_history[-10:]  # Last 10
+
+        lines = ["## What I've Learned"]
+        lines.append(f"\n**Prediction Accuracy**: {stats['accuracy']*100:.1f}%")
+        lines.append(f"- Total predictions: {stats['total_predictions']}")
+        lines.append(f"- Correct: {stats['correct_predictions']}")
+
+        if history:
+            lines.append("\n**Recent Learnings**:")
+            for h in history:
+                if h['predicted']:
+                    lines.append(f"- ✓ Correctly predicted connection (score: {h['score']:.2f})")
+                else:
+                    lines.append(f"- ○ Learned new pattern")
+
+        return "\n".join(lines)

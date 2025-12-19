@@ -625,9 +625,12 @@ async def root():
         "status": "running",
         "endpoints": {
             "unified_brain": [
-                "/brain/context",   # THE unified context endpoint
-                "/brain/state",     # Brain introspection
-                "/brain/feedback"   # Learning from user
+                "/brain/context",        # THE unified context endpoint
+                "/brain/state",          # Brain introspection
+                "/brain/feedback",       # Learning from user
+                "/brain/predictions",    # Record predictions for self-learning
+                "/brain/learn-connection", # Learn from connections
+                "/brain/learning"        # View learning stats
             ],
             "ml_processing": [
                 "/embed", "/embed/batch",
@@ -793,6 +796,79 @@ async def record_brain_feedback(
 
     return {
         "status": "recorded",
+        "growth_events_today": unified_brain.growth_events_today
+    }
+
+# ═══════════════════════════════════════════════════════════════════
+# SELF-LEARNING - Brain learns from its own predictions
+# ═══════════════════════════════════════════════════════════════════
+
+class PredictionRecord(BaseModel):
+    source_id: str
+    predictions: List[Dict[str, Any]]
+
+class ConnectionLearning(BaseModel):
+    source_id: str
+    target_id: str
+    connection_type: str = "manual"
+
+@app.post("/brain/predictions")
+async def record_predictions(record: PredictionRecord):
+    """
+    Record predictions made by the Graph Transformer.
+    Call this whenever predictions are shown to the user.
+    This enables the brain to learn from whether predictions were correct.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    unified_brain.record_predictions(record.source_id, record.predictions)
+
+    return {
+        "status": "recorded",
+        "predictions_tracked": len(record.predictions),
+        "total_predictions": unified_brain.predictions.total_predictions
+    }
+
+@app.post("/brain/learn-connection")
+async def learn_from_connection(learning: ConnectionLearning):
+    """
+    Tell the brain about a new connection.
+    The brain checks if it predicted this and learns accordingly.
+
+    This is the KEY self-learning endpoint:
+    - If predicted: Reinforces the pattern (brain was right!)
+    - If not predicted: Learns new pattern (brain missed this)
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    result = unified_brain.learn_from_connection(
+        learning.source_id,
+        learning.target_id,
+        learning.connection_type
+    )
+
+    return {
+        "status": "learned",
+        "was_predicted": result['was_predicted'],
+        "prediction_score": result['prediction_score'],
+        "learning_signal": result['learning_signal'],
+        "accuracy": unified_brain.predictions.get_accuracy()
+    }
+
+@app.get("/brain/learning")
+async def get_learning_stats():
+    """
+    Get the brain's learning statistics.
+    Shows prediction accuracy and what the brain has learned.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return {
+        "stats": unified_brain.get_prediction_accuracy(),
+        "summary": unified_brain.get_learning_summary(),
         "growth_events_today": unified_brain.growth_events_today
     }
 
