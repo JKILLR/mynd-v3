@@ -28459,7 +28459,8 @@ You are a trusted guide, not a data harvester.
             
             // Build conversation history for Claude
             // Include completed actions so AI knows what was already done
-            const historyForClaude = this.conversation.slice(-10).map(m => {
+            // Filter out 'bapi' role messages - only 'user' and 'assistant' are valid for Claude API
+            const historyForClaude = this.conversation.slice(-10).filter(m => m.role === 'user' || m.role === 'assistant').map(m => {
                 let content = m.content;
                 
                 // If assistant message had successful actions, append them to content
