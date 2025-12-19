@@ -90,7 +90,9 @@ class EmbedResponse(BaseModel):
 class NodeData(BaseModel):
     id: str
     label: str
+    description: Optional[str] = None
     parentId: Optional[str] = None
+    depth: Optional[int] = None
     children: Optional[List[str]] = []
     embedding: Optional[List[float]] = None
 
@@ -776,7 +778,7 @@ async def get_brain_context(request: BrainContextRequest):
     map_dict = None
     if request.map_data:
         map_dict = {
-            'nodes': [n.dict() for n in request.map_data.nodes]
+            'nodes': [n.model_dump() for n in request.map_data.nodes]
         }
 
     ctx_request = ContextRequest(
@@ -825,7 +827,7 @@ async def get_brain_state():
 async def record_brain_feedback(
     node_id: str,
     action: str,  # 'accepted', 'rejected', 'corrected'
-    context: Dict[str, Any] = {}
+    context: Optional[Dict[str, Any]] = None
 ):
     """
     Record feedback for the brain's learning.
@@ -834,7 +836,7 @@ async def record_brain_feedback(
     if unified_brain is None:
         raise HTTPException(status_code=503, detail="Unified brain not initialized")
 
-    unified_brain.record_feedback(node_id, action, context)
+    unified_brain.record_feedback(node_id, action, context or {})
 
     return {
         "status": "recorded",
@@ -946,7 +948,7 @@ async def receive_from_claude(claude_response: ClaudeResponse):
     if unified_brain is None:
         raise HTTPException(status_code=503, detail="Unified brain not initialized")
 
-    result = unified_brain.receive_from_claude(claude_response.dict())
+    result = unified_brain.receive_from_claude(claude_response.model_dump())
 
     return {
         "status": "learned",

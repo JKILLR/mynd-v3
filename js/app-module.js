@@ -28488,16 +28488,16 @@ You are a trusted guide, not a data harvester.
             if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
                 try {
                     const brainResult = await LocalBrain.getBrainContext({
-                        query: userMessage,
+                        requestType: 'chat',
+                        userMessage: userMessage,
                         selectedNodeId: selectedNodeData?.id,
                         mapData: store.data,
                         include: {
-                            identity: true,
-                            vision: true,
-                            predictions: true,
-                            knowledge: true,
-                            improvements: true,
-                            metaLearning: true
+                            self_awareness: true,
+                            map_context: true,
+                            memories: true,
+                            user_profile: true,
+                            neural_insights: true
                         }
                     });
 
@@ -29917,10 +29917,15 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
             if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable && parsedResult.message) {
                 // Fire and forget - don't block the response
                 LocalBrain.sendToBrain({
-                    userQuery: userMessage,
                     response: parsedResult.message,
-                    actions: parsedResult.actions || [],
-                    context: {
+                    insights: [], // Claude doesn't provide structured insights yet
+                    patterns: [], // Could extract patterns from actions in future
+                    corrections: [],
+                    explanations: {},
+                    // Additional context for the brain
+                    metadata: {
+                        userQuery: userMessage,
+                        actions: parsedResult.actions || [],
                         selectedNode: selectedNodeData?.label,
                         mapSize: totalNodes,
                         timestamp: Date.now()

@@ -253,6 +253,7 @@ const LocalBrain = {
             const res = await fetch(`${this.serverUrl}/predict/category`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                signal: AbortSignal.timeout(10000), // 10 second timeout
                 body: JSON.stringify({
                     text: text,
                     map_data: formattedMap,
@@ -460,6 +461,7 @@ const LocalBrain = {
             const res = await fetch(`${this.serverUrl}/brain/context`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                signal: AbortSignal.timeout(30000), // 30 second timeout
                 body: JSON.stringify({
                     request_type: options.requestType || 'chat',
                     user_message: options.userMessage || '',
