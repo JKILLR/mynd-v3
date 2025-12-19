@@ -930,6 +930,271 @@ const LocalBrain = {
     },
 
     // ═══════════════════════════════════════════════════════════════════
+    // SELF-IMPROVEMENT - Analyze weaknesses and suggest improvements
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Run a complete self-analysis of the brain.
+     * Generates improvement suggestions based on performance metrics.
+     * Uses the vision statement to prioritize suggestions.
+     */
+    async runSelfAnalysis() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/analyze`, {
+                method: 'POST'
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🔍 Self-analysis: ${result.suggestion_count} suggestions generated`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.runSelfAnalysis failed:', e);
+        }
+
+        return { error: 'Failed to run self-analysis' };
+    },
+
+    /**
+     * Get current improvement suggestions.
+     * @param {string} category - Optional: architecture, training, integration, data_flow, user_experience, performance, accuracy
+     * @param {string} priority - Optional: high, medium, low
+     */
+    async getImprovementSuggestions(category = null, priority = null) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            let url = `${this.serverUrl}/brain/suggestions`;
+            const params = [];
+            if (category) params.push(`category=${encodeURIComponent(category)}`);
+            if (priority) params.push(`priority=${encodeURIComponent(priority)}`);
+            if (params.length) url += '?' + params.join('&');
+
+            const res = await fetch(url);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getImprovementSuggestions failed:', e);
+        }
+
+        return { error: 'Failed to get suggestions' };
+    },
+
+    /**
+     * Get top improvement suggestions by priority.
+     * @param {number} limit - Max number of suggestions to return
+     */
+    async getTopSuggestions(limit = 5) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/suggestions/top?limit=${limit}`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getTopSuggestions failed:', e);
+        }
+
+        return { error: 'Failed to get top suggestions' };
+    },
+
+    /**
+     * Get a human-readable summary of improvement suggestions.
+     * Returns markdown formatted by priority.
+     */
+    async getImprovementSummary() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/suggestions/summary`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getImprovementSummary failed:', e);
+        }
+
+        return { error: 'Failed to get improvement summary' };
+    },
+
+    /**
+     * Mark a suggestion's status.
+     * @param {string} suggestionId - The suggestion ID
+     * @param {string} status - 'accepted', 'rejected', or 'implemented'
+     * @param {string} notes - Optional notes about the decision
+     */
+    async markSuggestionStatus(suggestionId, status, notes = '') {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/suggestions/status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    suggestion_id: suggestionId,
+                    status,
+                    notes
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🔍 Suggestion ${suggestionId}: ${status}`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.markSuggestionStatus failed:', e);
+        }
+
+        return { error: 'Failed to mark suggestion status' };
+    },
+
+    /**
+     * Get self-improvement statistics.
+     */
+    async getImprovementStats() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/improvement-stats`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getImprovementStats failed:', e);
+        }
+
+        return { error: 'Failed to get improvement stats' };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // VISION - User-editable goals and priorities
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Get the brain's vision statement, goals, and priorities.
+     * This guides what improvements the brain suggests.
+     */
+    async getVision() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/vision`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getVision failed:', e);
+        }
+
+        return { error: 'Failed to get vision' };
+    },
+
+    /**
+     * Update the vision statement, goals, or priorities.
+     * @param {Object} updates
+     * @param {string} updates.statement - The vision statement text
+     * @param {string[]} updates.goals - Array of goals
+     * @param {string[]} updates.priorities - Array of priorities in order
+     */
+    async setVision(updates) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/vision`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log('🎯 Vision updated');
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.setVision failed:', e);
+        }
+
+        return { error: 'Failed to update vision' };
+    },
+
+    /**
+     * Add a goal to the vision.
+     * @param {string} goal - The goal to add
+     */
+    async addVisionGoal(goal) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/vision/goals`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ goal })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🎯 Goal added: ${goal}`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.addVisionGoal failed:', e);
+        }
+
+        return { error: 'Failed to add goal' };
+    },
+
+    /**
+     * Remove a goal from the vision.
+     * @param {string} goal - The goal to remove
+     */
+    async removeVisionGoal(goal) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/vision/goals?goal=${encodeURIComponent(goal)}`, {
+                method: 'DELETE'
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🎯 Goal removed: ${goal}`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.removeVisionGoal failed:', e);
+        }
+
+        return { error: 'Failed to remove goal' };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
     // CODE SELF-AWARENESS - Deep Code Understanding for Claude (Legacy)
     // ═══════════════════════════════════════════════════════════════════
 

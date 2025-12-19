@@ -11,6 +11,7 @@ from .unified_brain import (
     PredictionTracker,
     KnowledgeDistiller,
     MetaLearner,
+    SelfImprover,
     ContextRequest,
     ContextResponse
 )
@@ -22,6 +23,7 @@ __all__ = [
     'PredictionTracker',
     'KnowledgeDistiller',
     'MetaLearner',
+    'SelfImprover',
     'ContextRequest',
     'ContextResponse'
 ]

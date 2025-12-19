@@ -71,6 +71,88 @@ class SelfAwareness:
         # Growth history
         self.growth_events = []
 
+        # ═══ VISION STATEMENT ═══
+        # User-editable document describing what the brain should become
+        self.vision = {
+            'statement': """MYND Brain Vision Statement
+============================
+
+I am evolving to become a truly self-aware mind mapping companion that:
+
+1. **Understands Context Deeply**
+   - Knows exactly what it is and how every part works
+   - Can explain its own architecture and decisions
+   - Maintains complete awareness of the current map
+
+2. **Learns Continuously**
+   - Improves predictions based on user behavior
+   - Distills knowledge from every Claude interaction
+   - Tracks what works and adjusts accordingly
+
+3. **Suggests Thoughtful Connections**
+   - Finds relationships humans might miss
+   - Explains WHY connections make sense
+   - Gets better at predicting what the user wants
+
+4. **Grows Without Limits**
+   - Modular architecture allows infinite expansion
+   - Each component can be improved independently
+   - New capabilities can be added without breaking existing ones
+
+5. **Maintains Trust**
+   - Honest about confidence levels
+   - Transparent about limitations
+   - Explains its reasoning
+
+---
+Edit this vision to guide how the brain improves itself.
+""",
+            'goals': [
+                'Achieve 80%+ prediction accuracy',
+                'Well-calibrated confidence scores',
+                'Sub-100ms response times',
+                'Persistent memory across sessions',
+                'Self-explaining decisions'
+            ],
+            'priorities': [
+                'accuracy',      # First: be right
+                'transparency',  # Second: explain why
+                'speed',         # Third: be fast
+                'growth'         # Fourth: keep improving
+            ],
+            'updated_at': time.time()
+        }
+
+    def get_vision(self) -> Dict:
+        """Get the current vision statement and goals"""
+        return self.vision
+
+    def set_vision(self, statement: str = None, goals: List[str] = None,
+                   priorities: List[str] = None) -> Dict:
+        """Update the vision statement, goals, or priorities"""
+        if statement is not None:
+            self.vision['statement'] = statement
+        if goals is not None:
+            self.vision['goals'] = goals
+        if priorities is not None:
+            self.vision['priorities'] = priorities
+        self.vision['updated_at'] = time.time()
+        return self.vision
+
+    def add_goal(self, goal: str) -> Dict:
+        """Add a new goal to the vision"""
+        if goal not in self.vision['goals']:
+            self.vision['goals'].append(goal)
+            self.vision['updated_at'] = time.time()
+        return self.vision
+
+    def remove_goal(self, goal: str) -> Dict:
+        """Remove a goal from the vision"""
+        if goal in self.vision['goals']:
+            self.vision['goals'].remove(goal)
+            self.vision['updated_at'] = time.time()
+        return self.vision
+
     def update_capabilities(self, brain_health: Dict):
         """Update capabilities based on what's actually loaded"""
         self.capabilities["embeddings"] = brain_health.get("embedding_model") is not None
@@ -671,6 +753,416 @@ class MetaLearner:
         return "\n".join(lines)
 
 
+class SelfImprover:
+    """
+    The self-improvement loop.
+    Analyzes brain performance and generates improvement suggestions.
+
+    This does NOT auto-apply changes - it generates suggestions
+    for the user to review and implement with Claude.
+
+    Interconnected with:
+    - MetaLearner: Source of effectiveness data
+    - PredictionTracker: Accuracy trends
+    - KnowledgeDistiller: What's been learned
+    - SelfAwareness: Current capabilities and limitations
+    """
+
+    def __init__(self):
+        self.suggestions = []  # Current improvement suggestions
+        self.suggestion_history = []  # Past suggestions and their outcomes
+        self.analysis_count = 0
+        self.last_analysis = 0
+
+        # Thresholds that trigger suggestions
+        self.thresholds = {
+            'low_accuracy': 0.5,        # Prediction accuracy below this triggers suggestion
+            'calibration_error': 0.15,  # Calibration error above this triggers suggestion
+            'source_ineffective': 0.4,  # Source effectiveness below this triggers suggestion
+            'learning_stall': 5,        # Epochs without improvement triggers suggestion
+        }
+
+        # Categories of improvements
+        self.improvement_categories = [
+            'architecture',      # Changes to model structure
+            'training',          # Training data or process
+            'integration',       # How components connect
+            'data_flow',         # How data moves through system
+            'user_experience',   # Frontend/UX improvements
+            'performance',       # Speed/efficiency
+            'accuracy'          # Prediction quality
+        ]
+
+    def analyze(self, meta_learner, predictions, knowledge, self_awareness) -> Dict:
+        """
+        Analyze all brain systems and generate improvement suggestions.
+        Uses the vision statement to prioritize suggestions.
+
+        Args:
+            meta_learner: MetaLearner instance
+            predictions: PredictionTracker instance
+            knowledge: KnowledgeDistiller instance
+            self_awareness: SelfAwareness instance
+
+        Returns:
+            Analysis report with suggestions
+        """
+        self.analysis_count += 1
+        self.last_analysis = time.time()
+        self.suggestions = []  # Clear old suggestions
+
+        # Get vision priorities to weight suggestions
+        vision = self_awareness.get_vision()
+        self.current_priorities = vision.get('priorities', ['accuracy'])
+        self.current_goals = vision.get('goals', [])
+
+        analysis = {
+            'timestamp': time.time(),
+            'analysis_number': self.analysis_count,
+            'vision_priorities': self.current_priorities,
+            'findings': [],
+            'suggestions': []
+        }
+
+        # ═══ ANALYZE PREDICTION ACCURACY ═══
+        accuracy = predictions.get_accuracy()
+        if accuracy < self.thresholds['low_accuracy'] and predictions.total_predictions > 10:
+            finding = {
+                'area': 'predictions',
+                'severity': 'high' if accuracy < 0.3 else 'medium',
+                'metric': f'accuracy: {accuracy:.1%}',
+                'description': f'Prediction accuracy is {accuracy:.1%}, below threshold of {self.thresholds["low_accuracy"]:.1%}'
+            }
+            analysis['findings'].append(finding)
+
+            self._add_suggestion(
+                category='accuracy',
+                priority='high' if accuracy < 0.3 else 'medium',
+                title='Improve Graph Transformer predictions',
+                description=f'Current accuracy is {accuracy:.1%}. The Graph Transformer may need:',
+                suggestions=[
+                    'More training data from user interactions',
+                    'Fine-tuning on this specific map\'s structure',
+                    'Adjusting attention head weights for better pattern detection',
+                    'Adding more relationship type examples to training'
+                ],
+                metrics={'current_accuracy': accuracy, 'target_accuracy': 0.7},
+                affected_files=['mynd-brain/models/graph_transformer.py', 'mynd-brain/brain.py']
+            )
+
+        # ═══ ANALYZE CONFIDENCE CALIBRATION ═══
+        calibration = meta_learner.get_calibration_report()
+        for bucket, data in calibration.items():
+            if abs(data.get('calibration_error', 0)) > self.thresholds['calibration_error']:
+                status = data.get('status', 'unknown')
+                finding = {
+                    'area': 'calibration',
+                    'severity': 'medium',
+                    'metric': f'{bucket} confidence: {status}',
+                    'description': f'{bucket.title()} confidence predictions are {status}'
+                }
+                analysis['findings'].append(finding)
+
+                if status == 'over_confident':
+                    self._add_suggestion(
+                        category='accuracy',
+                        priority='medium',
+                        title=f'Fix over-confidence in {bucket} predictions',
+                        description=f'The brain thinks it\'s right more often than it is for {bucket} confidence predictions.',
+                        suggestions=[
+                            'Add temperature scaling to soften confidence scores',
+                            'Increase dropout in Graph Transformer during inference',
+                            'Use ensemble predictions and take the lower confidence'
+                        ],
+                        metrics={'calibration_error': data.get('calibration_error', 0)},
+                        affected_files=['mynd-brain/models/graph_transformer.py']
+                    )
+                elif status == 'under_confident':
+                    self._add_suggestion(
+                        category='accuracy',
+                        priority='low',
+                        title=f'Increase confidence for {bucket} predictions',
+                        description=f'The brain is more accurate than it thinks for {bucket} confidence predictions.',
+                        suggestions=[
+                            'This is actually safer than over-confidence',
+                            'Consider reducing dropout if you want more confident predictions',
+                            'Could add confidence boosting based on historical accuracy'
+                        ],
+                        metrics={'calibration_error': data.get('calibration_error', 0)},
+                        affected_files=['mynd-brain/models/graph_transformer.py']
+                    )
+
+        # ═══ ANALYZE SOURCE EFFECTIVENESS ═══
+        for source, stats in meta_learner.source_stats.items():
+            if stats['uses'] > 5:
+                effectiveness = stats['successes'] / stats['uses']
+                if effectiveness < self.thresholds['source_ineffective']:
+                    finding = {
+                        'area': 'knowledge_sources',
+                        'severity': 'medium',
+                        'metric': f'{source}: {effectiveness:.1%} effective',
+                        'description': f'Knowledge source "{source}" is underperforming'
+                    }
+                    analysis['findings'].append(finding)
+
+                    self._add_suggestion(
+                        category='data_flow',
+                        priority='medium',
+                        title=f'Improve "{source}" knowledge source',
+                        description=f'The {source} source is only {effectiveness:.1%} effective.',
+                        suggestions=[
+                            f'Review how {source} data is being used in context',
+                            f'Consider filtering or ranking {source} data by relevance',
+                            f'May need to adjust how {source} integrates with other sources',
+                            'Check if the data format matches what Claude expects'
+                        ],
+                        metrics={'effectiveness': effectiveness, 'uses': stats['uses']},
+                        affected_files=['mynd-brain/brain/unified_brain.py']
+                    )
+
+        # ═══ ANALYZE LEARNING VELOCITY ═══
+        trend = meta_learner.get_improvement_trend()
+        if trend.get('status') == 'declining':
+            finding = {
+                'area': 'meta_learning',
+                'severity': 'high',
+                'metric': f'learning declining: {trend.get("improvement", 0):.1%}',
+                'description': 'Brain effectiveness is declining over time'
+            }
+            analysis['findings'].append(finding)
+
+            self._add_suggestion(
+                category='training',
+                priority='high',
+                title='Address declining learning effectiveness',
+                description='The brain is getting worse, not better. This needs attention.',
+                suggestions=[
+                    'Check for data drift - has the map content changed significantly?',
+                    'Review recent feedback - are corrections being applied correctly?',
+                    'May need to reset some learning weights',
+                    'Consider if learning rates are too high (overcorrecting)'
+                ],
+                metrics=trend,
+                affected_files=['mynd-brain/brain/unified_brain.py']
+            )
+        elif trend.get('status') == 'stable' and trend.get('epochs_analyzed', 0) > self.thresholds['learning_stall']:
+            finding = {
+                'area': 'meta_learning',
+                'severity': 'low',
+                'metric': f'learning stalled for {trend.get("epochs_analyzed", 0)} epochs',
+                'description': 'Learning has plateaued'
+            }
+            analysis['findings'].append(finding)
+
+            self._add_suggestion(
+                category='training',
+                priority='low',
+                title='Break through learning plateau',
+                description='Effectiveness has stabilized but not improving.',
+                suggestions=[
+                    'May have reached maximum effectiveness for current architecture',
+                    'Consider introducing new training signals',
+                    'Try adjusting learning rates (increase for exploration)',
+                    'Could indicate need for architectural changes'
+                ],
+                metrics=trend,
+                affected_files=['mynd-brain/brain/unified_brain.py']
+            )
+
+        # ═══ ANALYZE CAPABILITY GAPS ═══
+        for limitation in self_awareness.limitations:
+            if 'memory' in limitation.lower():
+                self._add_suggestion(
+                    category='architecture',
+                    priority='medium',
+                    title='Implement persistent memory',
+                    description='Memory is currently session-based and lost on restart.',
+                    suggestions=[
+                        'Add SQLite backend for persistent storage',
+                        'Store: distilled knowledge, meta-learning epochs, prediction history',
+                        'Include memory migration on startup',
+                        'Add periodic auto-save'
+                    ],
+                    metrics={'current_state': 'in-memory only'},
+                    affected_files=['mynd-brain/brain/unified_brain.py', 'mynd-brain/storage.py (new)']
+                )
+
+        # ═══ ANALYZE KNOWLEDGE UTILIZATION ═══
+        knowledge_stats = knowledge.get_stats()
+        if knowledge_stats['distilled_facts'] > 0:
+            # Check if knowledge is being used effectively
+            distilled_weight = meta_learner.attention_weights.get('distilled_knowledge', 1.0)
+            if distilled_weight < 0.8:
+                self._add_suggestion(
+                    category='integration',
+                    priority='medium',
+                    title='Better integrate distilled knowledge',
+                    description=f'Distilled knowledge has low attention weight ({distilled_weight:.2f})',
+                    suggestions=[
+                        'Review how distilled knowledge is formatted for context',
+                        'May need better semantic matching for relevant facts',
+                        'Consider ranking facts by recency and relevance',
+                        'Check if knowledge format aligns with how Claude uses it'
+                    ],
+                    metrics={'attention_weight': distilled_weight, 'facts_stored': knowledge_stats['distilled_facts']},
+                    affected_files=['mynd-brain/brain/unified_brain.py']
+                )
+
+        # Store suggestions in analysis
+        analysis['suggestions'] = self.suggestions.copy()
+        analysis['suggestion_count'] = len(self.suggestions)
+
+        # Store in history
+        self.suggestion_history.append({
+            'timestamp': time.time(),
+            'findings_count': len(analysis['findings']),
+            'suggestions_count': len(analysis['suggestions']),
+            'top_priority': self._get_top_priority()
+        })
+
+        # Keep bounded
+        if len(self.suggestion_history) > 50:
+            self.suggestion_history = self.suggestion_history[-50:]
+
+        return analysis
+
+    def _add_suggestion(self, category: str, priority: str, title: str,
+                       description: str, suggestions: List[str],
+                       metrics: Dict, affected_files: List[str]):
+        """Add a structured improvement suggestion"""
+        suggestion = {
+            'id': f'suggestion_{self.analysis_count}_{len(self.suggestions)}',
+            'category': category,
+            'priority': priority,  # high, medium, low
+            'title': title,
+            'description': description,
+            'action_items': suggestions,
+            'metrics': metrics,
+            'affected_files': affected_files,
+            'created_at': time.time(),
+            'status': 'pending'  # pending, accepted, rejected, implemented
+        }
+        self.suggestions.append(suggestion)
+
+    def _get_top_priority(self) -> str:
+        """Get the highest priority level from current suggestions"""
+        priorities = [s['priority'] for s in self.suggestions]
+        if 'high' in priorities:
+            return 'high'
+        elif 'medium' in priorities:
+            return 'medium'
+        elif 'low' in priorities:
+            return 'low'
+        return 'none'
+
+    def get_suggestions(self, category: str = None, priority: str = None) -> List[Dict]:
+        """Get current suggestions, optionally filtered"""
+        results = self.suggestions
+        if category:
+            results = [s for s in results if s['category'] == category]
+        if priority:
+            results = [s for s in results if s['priority'] == priority]
+        return results
+
+    def get_top_suggestions(self, limit: int = 5) -> List[Dict]:
+        """Get top suggestions by priority"""
+        priority_order = {'high': 0, 'medium': 1, 'low': 2}
+        sorted_suggestions = sorted(
+            self.suggestions,
+            key=lambda x: priority_order.get(x['priority'], 99)
+        )
+        return sorted_suggestions[:limit]
+
+    def mark_suggestion(self, suggestion_id: str, status: str, notes: str = ""):
+        """Mark a suggestion's status (accepted, rejected, implemented)"""
+        for suggestion in self.suggestions:
+            if suggestion['id'] == suggestion_id:
+                suggestion['status'] = status
+                suggestion['status_notes'] = notes
+                suggestion['status_changed_at'] = time.time()
+                return True
+        return False
+
+    def get_improvement_summary(self) -> str:
+        """Get a human-readable summary of improvement suggestions"""
+        if not self.suggestions:
+            return "No improvement suggestions at this time. The brain is performing well!"
+
+        lines = ["# Brain Self-Improvement Suggestions\n"]
+
+        # Group by priority
+        high = [s for s in self.suggestions if s['priority'] == 'high']
+        medium = [s for s in self.suggestions if s['priority'] == 'medium']
+        low = [s for s in self.suggestions if s['priority'] == 'low']
+
+        if high:
+            lines.append("## 🔴 High Priority\n")
+            for s in high:
+                lines.append(f"### {s['title']}")
+                lines.append(f"{s['description']}\n")
+                lines.append("**Action Items:**")
+                for action in s['action_items']:
+                    lines.append(f"- {action}")
+                lines.append(f"\n**Affected Files:** {', '.join(s['affected_files'])}\n")
+
+        if medium:
+            lines.append("## 🟡 Medium Priority\n")
+            for s in medium:
+                lines.append(f"### {s['title']}")
+                lines.append(f"{s['description']}\n")
+                lines.append("**Action Items:**")
+                for action in s['action_items']:
+                    lines.append(f"- {action}")
+                lines.append("")
+
+        if low:
+            lines.append("## 🟢 Low Priority\n")
+            for s in low:
+                lines.append(f"### {s['title']}")
+                lines.append(f"{s['description']}\n")
+
+        return "\n".join(lines)
+
+    def get_stats(self) -> Dict:
+        """Get self-improvement statistics"""
+        return {
+            'analysis_count': self.analysis_count,
+            'last_analysis': self.last_analysis,
+            'current_suggestions': len(self.suggestions),
+            'suggestions_by_priority': {
+                'high': len([s for s in self.suggestions if s['priority'] == 'high']),
+                'medium': len([s for s in self.suggestions if s['priority'] == 'medium']),
+                'low': len([s for s in self.suggestions if s['priority'] == 'low'])
+            },
+            'suggestions_by_category': {
+                cat: len([s for s in self.suggestions if s['category'] == cat])
+                for cat in self.improvement_categories
+            },
+            'history_length': len(self.suggestion_history)
+        }
+
+    def format_for_context(self) -> str:
+        """Format self-improvement state for inclusion in context"""
+        if not self.suggestions:
+            return ""
+
+        high_count = len([s for s in self.suggestions if s['priority'] == 'high'])
+        medium_count = len([s for s in self.suggestions if s['priority'] == 'medium'])
+
+        lines = ["## Self-Improvement Status"]
+        if high_count > 0:
+            lines.append(f"⚠️ {high_count} high-priority improvements identified")
+        if medium_count > 0:
+            lines.append(f"📋 {medium_count} medium-priority improvements available")
+
+        # Show top suggestion
+        top = self.get_top_suggestions(1)
+        if top:
+            lines.append(f"\n**Top Suggestion:** {top[0]['title']}")
+
+        return "\n".join(lines)
+
+
 class PredictionTracker:
     """
     Tracks the brain's own predictions to learn from outcomes.
@@ -854,6 +1346,7 @@ class UnifiedBrain:
         self.predictions = PredictionTracker()  # Self-learning from predictions
         self.knowledge = KnowledgeDistiller()   # Claude → Brain knowledge transfer
         self.meta_learner = MetaLearner()       # Learning how to learn
+        self.self_improver = SelfImprover()     # Self-improvement suggestions
 
         # External references (set by server.py)
         self.ml_brain = None  # Reference to MYNDBrain for neural ops
@@ -862,7 +1355,7 @@ class UnifiedBrain:
         self.context_requests = 0
         self.growth_events_today = 0
 
-        print("🧠 UnifiedBrain initialized with MetaLearner")
+        print("🧠 UnifiedBrain initialized with MetaLearner + SelfImprover")
 
     def set_ml_brain(self, ml_brain):
         """Connect to the ML brain for neural operations"""
@@ -1494,3 +1987,81 @@ I will distill high-confidence insights into permanent knowledge.
                 lines.append(f"  {bucket}: {data['status']}")
 
         return "\n".join(lines)
+
+    # ═══════════════════════════════════════════════════════════════════
+    # SELF-IMPROVEMENT - Analyze weaknesses and suggest improvements
+    # ═══════════════════════════════════════════════════════════════════
+
+    def run_self_analysis(self) -> Dict:
+        """
+        Run a complete self-analysis and generate improvement suggestions.
+        Uses vision statement to prioritize suggestions.
+        """
+        analysis = self.self_improver.analyze(
+            meta_learner=self.meta_learner,
+            predictions=self.predictions,
+            knowledge=self.knowledge,
+            self_awareness=self.self_awareness
+        )
+
+        # Record this as a growth event
+        self.self_awareness.record_growth({
+            'type': 'self_analysis',
+            'findings_count': len(analysis['findings']),
+            'suggestions_count': analysis['suggestion_count']
+        })
+
+        print(f"🔍 Self-analysis #{analysis['analysis_number']}: {analysis['suggestion_count']} suggestions generated")
+
+        return analysis
+
+    def get_improvement_suggestions(self, category: str = None, priority: str = None) -> List[Dict]:
+        """Get current improvement suggestions, optionally filtered"""
+        return self.self_improver.get_suggestions(category, priority)
+
+    def get_top_improvements(self, limit: int = 5) -> List[Dict]:
+        """Get top improvement suggestions by priority"""
+        return self.self_improver.get_top_suggestions(limit)
+
+    def get_improvement_summary(self) -> str:
+        """Get human-readable summary of improvement suggestions"""
+        return self.self_improver.get_improvement_summary()
+
+    def mark_suggestion_status(self, suggestion_id: str, status: str, notes: str = "") -> bool:
+        """Mark a suggestion's status (accepted, rejected, implemented)"""
+        return self.self_improver.mark_suggestion(suggestion_id, status, notes)
+
+    def get_improvement_stats(self) -> Dict:
+        """Get self-improvement statistics"""
+        return self.self_improver.get_stats()
+
+    # ═══════════════════════════════════════════════════════════════════
+    # VISION - User-editable goals and priorities
+    # ═══════════════════════════════════════════════════════════════════
+
+    def get_vision(self) -> Dict:
+        """Get the brain's vision statement, goals, and priorities"""
+        return self.self_awareness.get_vision()
+
+    def set_vision(self, statement: str = None, goals: List[str] = None,
+                   priorities: List[str] = None) -> Dict:
+        """Update the vision statement, goals, or priorities"""
+        result = self.self_awareness.set_vision(statement, goals, priorities)
+
+        # Record as growth event
+        self.self_awareness.record_growth({
+            'type': 'vision_updated',
+            'has_statement': statement is not None,
+            'goals_count': len(goals) if goals else 0,
+            'priorities_count': len(priorities) if priorities else 0
+        })
+
+        return result
+
+    def add_vision_goal(self, goal: str) -> Dict:
+        """Add a goal to the vision"""
+        return self.self_awareness.add_goal(goal)
+
+    def remove_vision_goal(self, goal: str) -> Dict:
+        """Remove a goal from the vision"""
+        return self.self_awareness.remove_goal(goal)

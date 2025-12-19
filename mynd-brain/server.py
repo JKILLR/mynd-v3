@@ -621,7 +621,7 @@ async def root():
     """Root endpoint with info."""
     return {
         "name": "MYND Brain",
-        "version": "0.5.0",  # Meta-learner update
+        "version": "0.6.0",  # Self-improvement + Vision update
         "status": "running",
         "endpoints": {
             "unified_brain": [
@@ -646,6 +646,18 @@ async def root():
                 "/brain/meta/feedback",     # Record source effectiveness
                 "/brain/meta/learning-rate", # Adjust learning rates
                 "/brain/meta/save-epoch"    # Save learning checkpoint
+            ],
+            "self_improvement": [
+                "/brain/analyze",           # Run self-analysis
+                "/brain/suggestions",       # Get improvement suggestions
+                "/brain/suggestions/top",   # Get top suggestions
+                "/brain/suggestions/summary", # Human-readable summary
+                "/brain/suggestions/status", # Mark suggestion status
+                "/brain/improvement-stats"  # Self-improvement statistics
+            ],
+            "vision": [
+                "/brain/vision",            # Get/set vision statement
+                "/brain/vision/goals"       # Add/remove goals
             ],
             "ml_processing": [
                 "/embed", "/embed/batch",
@@ -1127,6 +1139,188 @@ async def save_meta_epoch():
     return {
         "status": "saved",
         "epoch": epoch
+    }
+
+# ═══════════════════════════════════════════════════════════════════
+# SELF-IMPROVEMENT - Analyze weaknesses and suggest improvements
+# ═══════════════════════════════════════════════════════════════════
+
+class SuggestionStatus(BaseModel):
+    suggestion_id: str
+    status: str  # 'accepted', 'rejected', 'implemented'
+    notes: Optional[str] = ""
+
+class VisionUpdate(BaseModel):
+    statement: Optional[str] = None
+    goals: Optional[List[str]] = None
+    priorities: Optional[List[str]] = None
+
+class VisionGoal(BaseModel):
+    goal: str
+
+@app.post("/brain/analyze")
+async def run_self_analysis():
+    """
+    Run a complete self-analysis of the brain.
+    Generates improvement suggestions based on:
+    - Prediction accuracy
+    - Confidence calibration
+    - Source effectiveness
+    - Learning velocity
+    - Vision statement goals
+
+    Returns findings and prioritized suggestions.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    analysis = unified_brain.run_self_analysis()
+
+    return analysis
+
+@app.get("/brain/suggestions")
+async def get_improvement_suggestions(category: str = None, priority: str = None):
+    """
+    Get current improvement suggestions.
+
+    Optional filters:
+    - category: architecture, training, integration, data_flow, user_experience, performance, accuracy
+    - priority: high, medium, low
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    suggestions = unified_brain.get_improvement_suggestions(category, priority)
+
+    return {
+        "suggestions": suggestions,
+        "count": len(suggestions)
+    }
+
+@app.get("/brain/suggestions/top")
+async def get_top_suggestions(limit: int = 5):
+    """
+    Get top improvement suggestions by priority.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return {
+        "suggestions": unified_brain.get_top_improvements(limit)
+    }
+
+@app.get("/brain/suggestions/summary")
+async def get_improvement_summary():
+    """
+    Get a human-readable summary of all improvement suggestions.
+    Formatted in markdown, grouped by priority.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return {
+        "summary": unified_brain.get_improvement_summary()
+    }
+
+@app.post("/brain/suggestions/status")
+async def mark_suggestion_status(status_update: SuggestionStatus):
+    """
+    Mark a suggestion's status.
+
+    Statuses:
+    - accepted: User plans to implement this
+    - rejected: User decided not to implement
+    - implemented: Changes have been made
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    success = unified_brain.mark_suggestion_status(
+        status_update.suggestion_id,
+        status_update.status,
+        status_update.notes
+    )
+
+    return {
+        "status": "updated" if success else "not_found",
+        "suggestion_id": status_update.suggestion_id
+    }
+
+@app.get("/brain/improvement-stats")
+async def get_improvement_stats():
+    """
+    Get self-improvement statistics.
+    Shows analysis count, suggestion breakdown by priority/category.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return unified_brain.get_improvement_stats()
+
+# ═══════════════════════════════════════════════════════════════════
+# VISION - User-editable goals and priorities
+# ═══════════════════════════════════════════════════════════════════
+
+@app.get("/brain/vision")
+async def get_vision():
+    """
+    Get the brain's vision statement, goals, and priorities.
+    This guides what improvements the brain suggests.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return unified_brain.get_vision()
+
+@app.put("/brain/vision")
+async def set_vision(update: VisionUpdate):
+    """
+    Update the vision statement, goals, or priorities.
+
+    All fields are optional - only provided fields will be updated.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    result = unified_brain.set_vision(
+        statement=update.statement,
+        goals=update.goals,
+        priorities=update.priorities
+    )
+
+    return {
+        "status": "updated",
+        "vision": result
+    }
+
+@app.post("/brain/vision/goals")
+async def add_vision_goal(goal: VisionGoal):
+    """
+    Add a new goal to the vision.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    result = unified_brain.add_vision_goal(goal.goal)
+
+    return {
+        "status": "added",
+        "goals": result['goals']
+    }
+
+@app.delete("/brain/vision/goals")
+async def remove_vision_goal(goal: str):
+    """
+    Remove a goal from the vision.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    result = unified_brain.remove_vision_goal(goal)
+
+    return {
+        "status": "removed",
+        "goals": result['goals']
     }
 
 # ═══════════════════════════════════════════════════════════════════
