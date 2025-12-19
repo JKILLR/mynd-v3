@@ -23643,10 +23643,8 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         // Request a render for the new scene
         AnimationController.requestRender();
 
-        // Sync full map to BAPI (Local Brain) for full context awareness
-        if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
-            LocalBrain.syncMap(store.data).catch(e => console.warn('BAPI sync failed:', e));
-        }
+        // Note: Map sync to LocalBrain is handled by store.save() with debouncing
+        // Removed duplicate immediate sync that was causing spam
     }
 
     // Smoothly update node positions without rebuilding scene
