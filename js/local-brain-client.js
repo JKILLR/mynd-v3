@@ -353,7 +353,129 @@ const LocalBrain = {
     },
 
     // ═══════════════════════════════════════════════════════════════════
-    // CODE SELF-AWARENESS - Deep Code Understanding for Claude
+    // UNIFIED BRAIN - Complete Self-Aware Context
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Get complete context for Claude from the Unified Brain.
+     * This is THE method to use for all Claude API calls.
+     * One call = complete self-awareness.
+     *
+     * @param {Object} options
+     * @param {string} options.requestType - 'chat', 'action', 'code_review', 'self_improve'
+     * @param {string} options.userMessage - The user's message
+     * @param {string} options.selectedNodeId - Currently selected node ID
+     * @param {Object} options.mapData - Map data (store.data format)
+     * @param {Object} options.include - What to include in context
+     * @returns {Promise<{contextDocument: string, tokenCount: number, brainState: Object}>}
+     */
+    async getBrainContext(options = {}) {
+        if (!this.isAvailable) {
+            console.log('🧠 LocalBrain.getBrainContext: Server not available');
+            return { contextDocument: null, error: 'Server not available' };
+        }
+
+        try {
+            const start = performance.now();
+
+            // Format map data if provided
+            let mapData = null;
+            if (options.mapData) {
+                mapData = this._formatMapForServer(options.mapData);
+            }
+
+            const res = await fetch(`${this.serverUrl}/brain/context`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    request_type: options.requestType || 'chat',
+                    user_message: options.userMessage || '',
+                    selected_node_id: options.selectedNodeId || null,
+                    map_data: mapData,
+                    include: options.include || {
+                        self_awareness: true,
+                        map_context: true,
+                        memories: true,
+                        user_profile: true,
+                        neural_insights: true
+                    }
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                const latency = performance.now() - start;
+                console.log(`🧠 Brain context: ${result.token_count} tokens in ${latency.toFixed(0)}ms`);
+
+                return {
+                    contextDocument: result.context_document,
+                    tokenCount: result.token_count,
+                    breakdown: result.breakdown,
+                    brainState: result.brain_state,
+                    timeMs: result.time_ms
+                };
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getBrainContext failed:', e);
+        }
+
+        return { contextDocument: null, error: 'Failed to get brain context' };
+    },
+
+    /**
+     * Get current brain state for debugging/display
+     */
+    async getBrainState() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/state`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getBrainState failed:', e);
+        }
+
+        return { error: 'Failed to get brain state' };
+    },
+
+    /**
+     * Record feedback for brain learning
+     * Call this when user accepts, rejects, or corrects something
+     */
+    async recordBrainFeedback(nodeId, action, context = {}) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/feedback`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    node_id: nodeId,
+                    action: action,
+                    context: context
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🧠 Brain feedback recorded: ${action}`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.recordBrainFeedback failed:', e);
+        }
+
+        return { error: 'Failed to record feedback' };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CODE SELF-AWARENESS - Deep Code Understanding for Claude (Legacy)
     // ═══════════════════════════════════════════════════════════════════
 
     /**

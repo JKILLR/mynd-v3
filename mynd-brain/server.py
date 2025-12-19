@@ -33,6 +33,7 @@ from models.embeddings import EmbeddingEngine
 from models.graph_transformer import MYNDGraphTransformer
 from models.voice import VoiceTranscriber
 from models.vision import VisionEngine
+from brain import UnifiedBrain, ContextRequest, ContextResponse
 
 # ═══════════════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -159,6 +160,28 @@ class ImageEmbedRequest(BaseModel):
 class ImageEmbedResponse(BaseModel):
     embedding: List[float]
     dim: int
+    time_ms: float
+
+# Unified Brain models
+class BrainContextInclude(BaseModel):
+    self_awareness: bool = True
+    map_context: bool = True
+    memories: bool = True
+    user_profile: bool = True
+    neural_insights: bool = True
+
+class BrainContextRequest(BaseModel):
+    request_type: str = "chat"  # chat, action, code_review, self_improve
+    user_message: str = ""
+    selected_node_id: Optional[str] = None
+    map_data: Optional[MapData] = None
+    include: Optional[BrainContextInclude] = None
+
+class BrainContextResponse(BaseModel):
+    context_document: str
+    token_count: int
+    breakdown: Dict[str, int]
+    brain_state: Dict[str, Any]
     time_ms: float
 
 # ═══════════════════════════════════════════════════════════════════
@@ -530,14 +553,25 @@ class MYNDBrain:
 # FASTAPI APP
 # ═══════════════════════════════════════════════════════════════════
 
-# Global brain instance
+# Global brain instances
 brain: Optional[MYNDBrain] = None
+unified_brain: Optional[UnifiedBrain] = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize brain on startup, cleanup on shutdown."""
-    global brain
+    global brain, unified_brain
+
+    # Initialize ML brain
     brain = MYNDBrain()
+
+    # Initialize unified brain with reference to ML brain
+    base_dir = pathlib.Path(__file__).parent.parent
+    unified_brain = UnifiedBrain(base_dir, device=str(config.get_device()))
+    unified_brain.set_ml_brain(brain)
+
+    print("🧠 Unified Brain connected to ML Brain")
+
     yield
     # Cleanup
     print("🧠 MYND Brain shutting down...")
@@ -587,17 +621,31 @@ async def root():
     """Root endpoint with info."""
     return {
         "name": "MYND Brain",
-        "version": "0.3.0",
+        "version": "0.4.0",  # Unified Brain update
         "status": "running",
-        "endpoints": [
-            "/health",
-            "/map/sync", "/map/analyze",  # BAPI full context
-            "/embed", "/embed/batch",
-            "/predict/connections",
-            "/train/feedback",
-            "/voice/transcribe",
-            "/image/describe", "/image/embed"
-        ]
+        "endpoints": {
+            "unified_brain": [
+                "/brain/context",   # THE unified context endpoint
+                "/brain/state",     # Brain introspection
+                "/brain/feedback"   # Learning from user
+            ],
+            "ml_processing": [
+                "/embed", "/embed/batch",
+                "/predict/connections",
+                "/map/sync", "/map/analyze",
+            ],
+            "multimodal": [
+                "/voice/transcribe",
+                "/image/describe", "/image/embed"
+            ],
+            "code_analysis": [
+                "/code/parse",
+                "/code/self-awareness"
+            ],
+            "system": [
+                "/health"
+            ]
+        }
     }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -643,6 +691,109 @@ async def map_status():
         "synced": brain.map_state is not None,
         "node_count": len(brain.map_state.nodes) if brain.map_state else 0,
         "last_sync": brain.map_last_sync
+    }
+
+# ═══════════════════════════════════════════════════════════════════
+# UNIFIED BRAIN - Complete Self-Aware Context
+# ═══════════════════════════════════════════════════════════════════
+
+@app.post("/brain/context", response_model=BrainContextResponse)
+async def get_brain_context(request: BrainContextRequest):
+    """
+    THE unified context endpoint.
+    One call = complete context for Claude.
+
+    This replaces 19+ fragmented context providers with ONE call that includes:
+    - Self-awareness (who am I?)
+    - Code understanding (how do I work?)
+    - Map context (what is the user looking at?)
+    - Memories (what do I remember?)
+    - Neural insights (what do my models see?)
+
+    Use this for ALL Claude API calls to give Claude complete self-awareness.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    start = time.time()
+
+    # Convert Pydantic request to dataclass
+    include_dict = {}
+    if request.include:
+        include_dict = {
+            'self_awareness': request.include.self_awareness,
+            'map_context': request.include.map_context,
+            'memories': request.include.memories,
+            'user_profile': request.include.user_profile,
+            'neural_insights': request.include.neural_insights
+        }
+
+    map_dict = None
+    if request.map_data:
+        map_dict = {
+            'nodes': [n.dict() for n in request.map_data.nodes]
+        }
+
+    ctx_request = ContextRequest(
+        request_type=request.request_type,
+        user_message=request.user_message,
+        selected_node_id=request.selected_node_id,
+        map_data=map_dict,
+        include=include_dict
+    )
+
+    # Get unified context
+    response = unified_brain.get_context(ctx_request)
+
+    elapsed = (time.time() - start) * 1000
+    print(f"🧠 Brain context: {response.token_count} tokens in {elapsed:.0f}ms")
+
+    return BrainContextResponse(
+        context_document=response.context_document,
+        token_count=response.token_count,
+        breakdown=response.breakdown,
+        brain_state=response.brain_state,
+        time_ms=elapsed
+    )
+
+@app.get("/brain/state")
+async def get_brain_state():
+    """
+    Get current brain state for debugging/display.
+    Shows what the brain knows about itself.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return {
+        "state": unified_brain._get_brain_state(),
+        "capabilities": unified_brain.self_awareness.capabilities,
+        "limitations": unified_brain.self_awareness.limitations,
+        "recent_memories": [
+            {k: v for k, v in m.items() if k != 'embedding'}
+            for m in unified_brain.memory.get_recent(5)
+        ],
+        "growth_events": len(unified_brain.self_awareness.growth_events)
+    }
+
+@app.post("/brain/feedback")
+async def record_brain_feedback(
+    node_id: str,
+    action: str,  # 'accepted', 'rejected', 'corrected'
+    context: Dict[str, Any] = {}
+):
+    """
+    Record feedback for the brain's learning.
+    Call this when the user accepts, rejects, or corrects something.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    unified_brain.record_feedback(node_id, action, context)
+
+    return {
+        "status": "recorded",
+        "growth_events_today": unified_brain.growth_events_today
     }
 
 # ═══════════════════════════════════════════════════════════════════
