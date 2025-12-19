@@ -4392,6 +4392,27 @@
             border-left: 3px solid #10b981;
         }
 
+        /* Manifestation Alignment Styles */
+        .queue-item.alignment-high {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(167, 139, 250, 0.05));
+        }
+        .queue-item.alignment-high .queue-item-alignment {
+            color: #a78bfa;
+        }
+        .queue-item.alignment-medium .queue-item-alignment {
+            color: var(--text-secondary);
+        }
+        .queue-item.alignment-low {
+            opacity: 0.7;
+        }
+        .queue-item.alignment-low .queue-item-alignment {
+            color: var(--text-muted);
+        }
+        .queue-item-alignment {
+            font-size: 14px;
+            cursor: help;
+        }
+
         .queue-item-header {
             display: flex;
             align-items: center;

@@ -421,6 +421,7 @@ const ReflectionUI = {
 
     renderQueueItem(item) {
         const priorityClass = `priority-${item.priority || 'medium'}`;
+        const alignmentClass = `alignment-${item.manifestation_alignment || 'medium'}`;
         const typeIcon = {
             'insight': '💡',
             'improvement': '⚡',
@@ -428,24 +429,39 @@ const ReflectionUI = {
             'code_issue': '🐛'
         }[item.type] || '📝';
 
+        // Alignment indicator with visual cue
+        const alignmentIcon = {
+            'high': '🎯',
+            'medium': '◉',
+            'low': '○'
+        }[item.manifestation_alignment] || '◉';
+
         const timeAgo = this.formatTimeAgo(item.timestamp);
 
         // Escape all user-controlled content to prevent XSS
         const safeTitle = this.escapeHtml(item.title) || 'Untitled';
         const safeDescription = this.escapeHtml(item.description);
         const safePriority = this.escapeHtml(item.priority) || 'medium';
+        const safeAlignment = this.escapeHtml(item.manifestation_alignment) || 'medium';
+        const safeVisionConnection = this.escapeHtml(item.vision_connection);
         const safeRelatedNodes = item.relatedNodes?.slice(0, 3).map(n => this.escapeHtml(n)).join(', ');
         const safeId = this.escapeHtml(item.id);
 
         return `
-            <div class="queue-item ${priorityClass}" data-id="${safeId}">
+            <div class="queue-item ${priorityClass} ${alignmentClass}" data-id="${safeId}">
                 <div class="queue-item-header">
                     <span class="queue-item-type">${typeIcon}</span>
                     <span class="queue-item-title">${safeTitle}</span>
+                    <span class="queue-item-alignment" title="Vision Alignment: ${safeAlignment}">${alignmentIcon}</span>
                     <span class="queue-item-priority">${safePriority}</span>
                 </div>
                 <div class="queue-item-body">
                     <p class="queue-item-description">${safeDescription}</p>
+                    ${safeVisionConnection ? `
+                        <div class="queue-item-vision" style="font-size: 11px; color: var(--accent); margin-top: 6px; font-style: italic;">
+                            ↳ ${safeVisionConnection}
+                        </div>
+                    ` : ''}
                     ${item.relatedNodes?.length ? `
                         <div class="queue-item-related">
                             Related: ${safeRelatedNodes}

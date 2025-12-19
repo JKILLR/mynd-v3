@@ -563,36 +563,87 @@ const ReflectionDaemon = {
         return sections.join('\n');
     },
 
+    // ═══════════════════════════════════════════════════════════════════
+    // FOUNDATIONAL VISION
+    // ═══════════════════════════════════════════════════════════════════
+
+    FOUNDATIONAL_VISION: `MYND is a manifestation engine — a system designed to transform thought into reality.
+
+CORE PURPOSE:
+- Amplify human cognitive capability through AI-augmented thinking
+- Create a living, evolving knowledge structure that reflects and shapes its user's mind
+- Enable reality shifts by making the invisible visible, the complex navigable, the impossible achievable
+
+ULTIMATE GOALS:
+1. COGNITIVE SOVEREIGNTY: The user thinks more clearly, decides more wisely, creates more freely
+2. KNOWLEDGE CRYSTALLIZATION: Scattered thoughts become structured wisdom that compounds over time
+3. REALITY BRIDGE: Ideas flow seamlessly from conception to manifestation
+4. AUTONOMOUS EVOLUTION: The system grows smarter, more aligned, more useful without constant guidance
+
+WHAT MATTERS:
+- Insights that unlock new capabilities or remove blockers
+- Connections that reveal hidden opportunities or patterns
+- Improvements that directly accelerate manifestation
+- Code that makes the impossible possible
+
+WHAT DOESN'T MATTER:
+- Trivial style preferences or formatting nitpicks
+- Generic "best practices" that don't serve specific goals
+- Busywork optimizations with no tangible benefit
+- Observations without actionable next steps`,
+
     async callClaudeForReflection(context, apiKey) {
-        const systemPrompt = `You are MYND's autonomous reflection engine. You analyze the mind map structure and codebase to find insights and improvements.
+        const systemPrompt = `You are MYND's autonomous reflection engine — a MANIFESTATION ENGINE, not a linting tool.
 
-Your task is to review the provided context and generate:
-1. INSIGHTS: Observations about the map's structure, gaps, or patterns
-2. IMPROVEMENTS: Specific, actionable suggestions for the map or system
-3. CONNECTIONS: Missing relationships between concepts that should be linked
-4. CODE_ISSUES: Bugs, improvements, or patterns found in the code
+═══════════════════════════════════════════════════════════════════
+FOUNDATIONAL VISION
+═══════════════════════════════════════════════════════════════════
+${this.FOUNDATIONAL_VISION}
 
-IMPORTANT RULES:
-- Be specific and actionable, not vague
-- Focus on high-value observations
-- Prioritize by importance (high/medium/low)
-- Keep suggestions concise
+═══════════════════════════════════════════════════════════════════
+YOUR MISSION
+═══════════════════════════════════════════════════════════════════
+Every thought you generate must serve the reality shift. You analyze the mind map structure and codebase to find insights that DIRECTLY advance the vision.
+
+GENERATE ONLY:
+1. INSIGHTS: Pattern recognitions that unlock new understanding or capability
+2. IMPROVEMENTS: Changes that meaningfully accelerate manifestation
+3. CONNECTIONS: Relationships that reveal hidden leverage or opportunity
+4. CODE_ISSUES: Technical blockers preventing reality from matching vision
+
+CRITICAL FILTER - Ask for each observation:
+"Does this directly serve cognitive sovereignty, knowledge crystallization, or reality bridging?"
+If NO → Do not include it. Silence is better than noise.
+If YES → Rate its manifestation_alignment as high/medium/low
+
+ALIGNMENT LEVELS:
+- HIGH: Directly enables new capability, removes critical blocker, or reveals transformative insight
+- MEDIUM: Meaningfully improves experience or accelerates existing capabilities
+- LOW: Minor improvement with tangible but limited impact (still include if genuinely useful)
+
+DO NOT GENERATE:
+- Style nitpicks, formatting preferences, generic "clean code" suggestions
+- Observations without clear next steps
+- Busywork that doesn't compound toward the vision
+- Anything you wouldn't consider worth interrupting focused work for
 
 OUTPUT FORMAT (JSON only, no other text):
 {
   "insights": [
-    {"title": "...", "description": "...", "priority": "high|medium|low", "relatedNodes": ["node labels"]}
+    {"title": "...", "description": "...", "priority": "high|medium|low", "manifestation_alignment": "high|medium|low", "vision_connection": "brief note on how this serves the vision", "relatedNodes": ["node labels"]}
   ],
   "improvements": [
-    {"title": "...", "description": "...", "priority": "high|medium|low", "category": "map|code|ux", "relatedNodes": ["node labels"]}
+    {"title": "...", "description": "...", "priority": "high|medium|low", "manifestation_alignment": "high|medium|low", "vision_connection": "...", "category": "map|code|ux", "relatedNodes": ["node labels"]}
   ],
   "connections": [
-    {"title": "...", "from": "node label", "to": "node label", "reason": "...", "priority": "high|medium|low"}
+    {"title": "...", "from": "node label", "to": "node label", "reason": "...", "priority": "high|medium|low", "manifestation_alignment": "high|medium|low", "vision_connection": "..."}
   ],
   "codeIssues": [
-    {"title": "...", "description": "...", "priority": "high|medium|low", "relatedCode": ["section names"]}
+    {"title": "...", "description": "...", "priority": "high|medium|low", "manifestation_alignment": "high|medium|low", "vision_connection": "...", "relatedCode": ["section names"]}
   ]
-}`;
+}
+
+Remember: You are a manifestation engine. Every output should feel like it matters.`;
 
         const userPrompt = `REFLECTION CONTEXT (${context.timestamp}):
 
@@ -673,10 +724,18 @@ Analyze this context and provide structured reflection insights.`;
             // Helper to validate and sanitize items
             const validateItem = (item, type) => {
                 if (typeof item !== 'object' || item === null) return null;
+
+                // Validate manifestation alignment
+                const alignment = ['high', 'medium', 'low'].includes(item.manifestation_alignment)
+                    ? item.manifestation_alignment
+                    : 'medium';
+
                 return {
                     title: typeof item.title === 'string' ? item.title : '',
                     description: typeof item.description === 'string' ? item.description : '',
                     priority: ['high', 'medium', 'low'].includes(item.priority) ? item.priority : 'medium',
+                    manifestation_alignment: alignment,
+                    vision_connection: typeof item.vision_connection === 'string' ? item.vision_connection : '',
                     relatedNodes: Array.isArray(item.relatedNodes) ? item.relatedNodes.filter(n => typeof n === 'string') : [],
                     type,
                     id: this.generateId(),
@@ -691,22 +750,56 @@ Analyze this context and provide structured reflection insights.`;
                 };
             };
 
-            results.insights = (Array.isArray(parsed.insights) ? parsed.insights : [])
-                .map(i => validateItem(i, 'insight'))
-                .filter(Boolean);
+            // Alignment priority for sorting (high > medium > low)
+            const alignmentScore = (alignment) => {
+                switch(alignment) {
+                    case 'high': return 3;
+                    case 'medium': return 2;
+                    case 'low': return 1;
+                    default: return 0;
+                }
+            };
 
-            results.improvements = (Array.isArray(parsed.improvements) ? parsed.improvements : [])
-                .map(i => validateItem(i, 'improvement'))
-                .filter(Boolean);
+            // Sort by manifestation alignment (high first), then by priority
+            const sortByAlignment = (items) => {
+                return items.sort((a, b) => {
+                    const alignDiff = alignmentScore(b.manifestation_alignment) - alignmentScore(a.manifestation_alignment);
+                    if (alignDiff !== 0) return alignDiff;
+                    return alignmentScore(b.priority) - alignmentScore(a.priority);
+                });
+            };
 
-            results.connections = (Array.isArray(parsed.connections) ? parsed.connections : [])
-                .map(c => validateItem(c, 'connection'))
-                .filter(Boolean);
+            // Process and sort each category by manifestation alignment
+            results.insights = sortByAlignment(
+                (Array.isArray(parsed.insights) ? parsed.insights : [])
+                    .map(i => validateItem(i, 'insight'))
+                    .filter(Boolean)
+            );
 
-            results.codeIssues = (Array.isArray(parsed.codeIssues) ? parsed.codeIssues :
-                                  Array.isArray(parsed.code_issues) ? parsed.code_issues : [])
-                .map(c => validateItem(c, 'code_issue'))
-                .filter(Boolean);
+            results.improvements = sortByAlignment(
+                (Array.isArray(parsed.improvements) ? parsed.improvements : [])
+                    .map(i => validateItem(i, 'improvement'))
+                    .filter(Boolean)
+            );
+
+            results.connections = sortByAlignment(
+                (Array.isArray(parsed.connections) ? parsed.connections : [])
+                    .map(c => validateItem(c, 'connection'))
+                    .filter(Boolean)
+            );
+
+            results.codeIssues = sortByAlignment(
+                (Array.isArray(parsed.codeIssues) ? parsed.codeIssues :
+                    Array.isArray(parsed.code_issues) ? parsed.code_issues : [])
+                    .map(c => validateItem(c, 'code_issue'))
+                    .filter(Boolean)
+            );
+
+            // Log alignment distribution for transparency
+            const allItems = [...results.insights, ...results.improvements, ...results.connections, ...results.codeIssues];
+            const alignmentCounts = { high: 0, medium: 0, low: 0 };
+            allItems.forEach(item => alignmentCounts[item.manifestation_alignment]++);
+            console.log(`🔮 Reflection alignment distribution: ${alignmentCounts.high} high, ${alignmentCounts.medium} medium, ${alignmentCounts.low} low`);
 
         } catch (error) {
             console.warn('Failed to parse reflection response:', error);
@@ -717,6 +810,8 @@ Analyze this context and provide structured reflection insights.`;
                 title: 'Reflection Summary',
                 description: responseText.substring(0, 500),
                 priority: 'medium',
+                manifestation_alignment: 'medium',
+                vision_connection: 'Unparsed reflection output',
                 timestamp: Date.now(),
                 status: 'pending'
             });
