@@ -625,12 +625,17 @@ async def root():
         "status": "running",
         "endpoints": {
             "unified_brain": [
-                "/brain/context",        # THE unified context endpoint
-                "/brain/state",          # Brain introspection
-                "/brain/feedback",       # Learning from user
-                "/brain/predictions",    # Record predictions for self-learning
-                "/brain/learn-connection", # Learn from connections
-                "/brain/learning"        # View learning stats
+                "/brain/context",           # THE unified context endpoint
+                "/brain/state",             # Brain introspection
+                "/brain/feedback",          # Learning from user
+                "/brain/predictions",       # Record predictions for self-learning
+                "/brain/learn-connection",  # Learn from connections
+                "/brain/learning",          # View learning stats
+                "/brain/receive-from-claude", # Claude teaches brain
+                "/brain/ask-to-teach",      # Request teaching
+                "/brain/knowledge",         # View distilled knowledge
+                "/brain/teaching-prompt",   # Get teaching instructions
+                "/brain/full-stats"         # Comprehensive stats
             ],
             "ml_processing": [
                 "/embed", "/embed/batch",
@@ -871,6 +876,102 @@ async def get_learning_stats():
         "summary": unified_brain.get_learning_summary(),
         "growth_events_today": unified_brain.growth_events_today
     }
+
+# ═══════════════════════════════════════════════════════════════════
+# CLAUDE ↔ BRAIN - Bidirectional Learning & Knowledge Distillation
+# ═══════════════════════════════════════════════════════════════════
+
+class ClaudeResponse(BaseModel):
+    """Structured response from Claude with learning data"""
+    response: str  # The actual text response
+    insights: Optional[List[Dict[str, Any]]] = None
+    patterns: Optional[List[Dict[str, Any]]] = None
+    corrections: Optional[List[Dict[str, Any]]] = None
+    explanations: Optional[Dict[str, str]] = None
+
+class TeachRequest(BaseModel):
+    topic: str
+
+@app.post("/brain/receive-from-claude")
+async def receive_from_claude(claude_response: ClaudeResponse):
+    """
+    Receive Claude's response and extract learnable information.
+    This is how Claude TEACHES the brain.
+
+    Claude should include:
+    - insights: Key facts with confidence scores
+    - patterns: Behavioral or structural patterns
+    - corrections: Things Claude corrected
+    - explanations: Concept explanations
+
+    The brain will distill high-confidence information into permanent knowledge.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    result = unified_brain.receive_from_claude(claude_response.dict())
+
+    return {
+        "status": "learned",
+        **result
+    }
+
+@app.post("/brain/ask-to-teach")
+async def ask_claude_to_teach(request: TeachRequest):
+    """
+    Generate a context/prompt designed to have Claude teach the brain.
+    Returns a structured request that will elicit teaching behavior.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    teaching_request = unified_brain.ask_claude_to_teach(request.topic)
+
+    return {
+        "teaching_request": teaching_request,
+        "instructions_for_claude": unified_brain.get_claude_teaching_prompt()
+    }
+
+@app.get("/brain/knowledge")
+async def get_brain_knowledge():
+    """
+    Get all knowledge the brain has learned from Claude.
+    Shows distilled facts, patterns, corrections, and explanations.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return {
+        "stats": unified_brain.knowledge.get_stats(),
+        "patterns": unified_brain.knowledge.get_learned_patterns()[:10],
+        "recent_corrections": unified_brain.knowledge.corrections[-5:],
+        "explanations": dict(list(unified_brain.knowledge.explanations.items())[:5]),
+        "distilled_count": len(unified_brain.knowledge.distilled_knowledge)
+    }
+
+@app.get("/brain/teaching-prompt")
+async def get_teaching_prompt():
+    """
+    Get the instructions that should be included in Claude's system prompt
+    to enable structured teaching/learning.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return {
+        "prompt": unified_brain.get_claude_teaching_prompt(),
+        "usage": "Include this in Claude's system prompt to enable knowledge distillation"
+    }
+
+@app.get("/brain/full-stats")
+async def get_full_brain_stats():
+    """
+    Get comprehensive brain statistics including all learning systems.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return unified_brain.get_knowledge_stats()
 
 # ═══════════════════════════════════════════════════════════════════
 # CODE EMBEDDING - Parse codebase into map structure

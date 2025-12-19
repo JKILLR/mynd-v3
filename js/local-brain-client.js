@@ -580,6 +580,136 @@ const LocalBrain = {
     },
 
     // ═══════════════════════════════════════════════════════════════════
+    // CLAUDE ↔ BRAIN - Bidirectional Learning & Knowledge Distillation
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Send Claude's response to the brain for knowledge extraction.
+     * This is how Claude TEACHES the brain.
+     *
+     * @param {Object} claudeResponse - Structured response from Claude
+     * @param {string} claudeResponse.response - The text response
+     * @param {Array} claudeResponse.insights - Key facts with confidence
+     * @param {Array} claudeResponse.patterns - Patterns identified
+     * @param {Array} claudeResponse.corrections - Things corrected
+     * @param {Object} claudeResponse.explanations - Concept explanations
+     */
+    async sendToBrain(claudeResponse) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/receive-from-claude`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(claudeResponse)
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                const stats = result.knowledge_stats || {};
+                console.log(`🧠 Brain learned from Claude: ${stats.distilled_facts || 0} facts, ${stats.patterns_learned || 0} patterns`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.sendToBrain failed:', e);
+        }
+
+        return { error: 'Failed to send to brain' };
+    },
+
+    /**
+     * Get a teaching prompt for Claude.
+     * Use this to have Claude teach the brain about a topic.
+     *
+     * @param {string} topic - What to learn about
+     * @returns {Promise<{teaching_request, instructions_for_claude}>}
+     */
+    async askClaudeToTeach(topic) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/ask-to-teach`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ topic })
+            });
+
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.askClaudeToTeach failed:', e);
+        }
+
+        return { error: 'Failed to generate teaching request' };
+    },
+
+    /**
+     * Get all knowledge the brain has learned from Claude.
+     */
+    async getBrainKnowledge() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/knowledge`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getBrainKnowledge failed:', e);
+        }
+
+        return { error: 'Failed to get brain knowledge' };
+    },
+
+    /**
+     * Get the teaching prompt to include in Claude's system prompt.
+     * This enables structured knowledge transfer.
+     */
+    async getTeachingPrompt() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/teaching-prompt`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getTeachingPrompt failed:', e);
+        }
+
+        return { error: 'Failed to get teaching prompt' };
+    },
+
+    /**
+     * Get comprehensive brain statistics.
+     */
+    async getFullBrainStats() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/full-stats`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getFullBrainStats failed:', e);
+        }
+
+        return { error: 'Failed to get brain stats' };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
     // CODE SELF-AWARENESS - Deep Code Understanding for Claude (Legacy)
     // ═══════════════════════════════════════════════════════════════════
 

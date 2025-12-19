@@ -197,6 +197,195 @@ I am not just an app with AI. I AM the AI that IS the app.
             self.growth_events = self.growth_events[-100:]
 
 
+class KnowledgeDistiller:
+    """
+    Distills Claude's insights into permanent brain knowledge.
+    This is how Claude teaches the brain.
+    """
+
+    def __init__(self):
+        self.distilled_knowledge = []  # Permanent learned facts
+        self.claude_insights = []       # Raw insights from Claude
+        self.patterns_learned = {}      # Pattern → frequency/confidence
+        self.corrections = []           # Things Claude corrected
+        self.explanations = {}          # Concept → Claude's explanation
+
+    def receive_claude_response(self, response: Dict) -> Dict:
+        """
+        Process Claude's response and extract learnable information.
+        Claude should return structured insights alongside its response.
+        """
+        extracted = {
+            'insights': [],
+            'patterns': [],
+            'corrections': [],
+            'explanations': []
+        }
+
+        # Extract structured insights if Claude provided them
+        if 'insights' in response:
+            for insight in response['insights']:
+                self._process_insight(insight)
+                extracted['insights'].append(insight)
+
+        # Extract patterns Claude identified
+        if 'patterns' in response:
+            for pattern in response['patterns']:
+                self._learn_pattern(pattern)
+                extracted['patterns'].append(pattern)
+
+        # Extract corrections Claude made
+        if 'corrections' in response:
+            for correction in response['corrections']:
+                self._store_correction(correction)
+                extracted['corrections'].append(correction)
+
+        # Extract explanations Claude provided
+        if 'explanations' in response:
+            for concept, explanation in response['explanations'].items():
+                self._store_explanation(concept, explanation)
+                extracted['explanations'].append({concept: explanation})
+
+        return extracted
+
+    def _process_insight(self, insight: Dict):
+        """Process and potentially distill an insight"""
+        self.claude_insights.append({
+            **insight,
+            'timestamp': time.time()
+        })
+
+        # If insight is high confidence, distill it
+        if insight.get('confidence', 0) > 0.8:
+            self.distilled_knowledge.append({
+                'type': 'insight',
+                'content': insight.get('content', ''),
+                'source': 'claude',
+                'confidence': insight.get('confidence', 0),
+                'timestamp': time.time()
+            })
+
+        # Keep bounded
+        if len(self.claude_insights) > 200:
+            self.claude_insights = self.claude_insights[-200:]
+
+    def _learn_pattern(self, pattern: Dict):
+        """Learn a pattern Claude identified"""
+        pattern_key = pattern.get('pattern', str(pattern))
+
+        if pattern_key in self.patterns_learned:
+            # Reinforce existing pattern
+            self.patterns_learned[pattern_key]['count'] += 1
+            self.patterns_learned[pattern_key]['confidence'] = min(
+                1.0,
+                self.patterns_learned[pattern_key]['confidence'] + 0.1
+            )
+        else:
+            # New pattern
+            self.patterns_learned[pattern_key] = {
+                'count': 1,
+                'confidence': pattern.get('confidence', 0.5),
+                'first_seen': time.time(),
+                'details': pattern
+            }
+
+    def _store_correction(self, correction: Dict):
+        """Store a correction for future reference"""
+        self.corrections.append({
+            **correction,
+            'timestamp': time.time()
+        })
+
+        # Also distill if it's a significant correction
+        if correction.get('importance', 0) > 0.5:
+            self.distilled_knowledge.append({
+                'type': 'correction',
+                'original': correction.get('original', ''),
+                'corrected': correction.get('corrected', ''),
+                'reason': correction.get('reason', ''),
+                'timestamp': time.time()
+            })
+
+        if len(self.corrections) > 100:
+            self.corrections = self.corrections[-100:]
+
+    def _store_explanation(self, concept: str, explanation: str):
+        """Store Claude's explanation of a concept"""
+        self.explanations[concept] = {
+            'explanation': explanation,
+            'timestamp': time.time()
+        }
+
+        # Distill the explanation
+        self.distilled_knowledge.append({
+            'type': 'explanation',
+            'concept': concept,
+            'content': explanation,
+            'timestamp': time.time()
+        })
+
+    def get_relevant_knowledge(self, query: str, limit: int = 5) -> List[Dict]:
+        """Get knowledge relevant to a query"""
+        # Simple keyword matching for now
+        # Phase 2: Use embeddings for semantic search
+        query_words = set(query.lower().split())
+
+        def relevance(knowledge):
+            text = str(knowledge).lower()
+            return sum(1 for w in query_words if w in text)
+
+        scored = [(k, relevance(k)) for k in self.distilled_knowledge]
+        scored = [(k, s) for k, s in scored if s > 0]
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        return [k for k, s in scored[:limit]]
+
+    def get_learned_patterns(self) -> List[Dict]:
+        """Get all learned patterns sorted by confidence"""
+        patterns = list(self.patterns_learned.values())
+        patterns.sort(key=lambda p: p['confidence'], reverse=True)
+        return patterns[:20]
+
+    def format_for_context(self) -> str:
+        """Format distilled knowledge for inclusion in context"""
+        if not self.distilled_knowledge and not self.patterns_learned:
+            return ""
+
+        lines = ["## Distilled Knowledge (What I've Learned from Past Conversations)"]
+
+        # Top patterns
+        patterns = self.get_learned_patterns()[:5]
+        if patterns:
+            lines.append("\n**Learned Patterns:**")
+            for p in patterns:
+                lines.append(f"- {p['details'].get('description', str(p['details']))} (confidence: {p['confidence']:.0%})")
+
+        # Recent corrections
+        recent_corrections = self.corrections[-3:] if self.corrections else []
+        if recent_corrections:
+            lines.append("\n**Recent Corrections:**")
+            for c in recent_corrections:
+                lines.append(f"- {c.get('reason', 'Correction made')}")
+
+        # Key explanations
+        if self.explanations:
+            lines.append("\n**Stored Explanations:**")
+            for concept, data in list(self.explanations.items())[:3]:
+                lines.append(f"- **{concept}**: {data['explanation'][:100]}...")
+
+        return "\n".join(lines)
+
+    def get_stats(self) -> Dict:
+        """Get knowledge distillation stats"""
+        return {
+            'distilled_facts': len(self.distilled_knowledge),
+            'patterns_learned': len(self.patterns_learned),
+            'corrections_stored': len(self.corrections),
+            'explanations_stored': len(self.explanations),
+            'raw_insights': len(self.claude_insights)
+        }
+
+
 class PredictionTracker:
     """
     Tracks the brain's own predictions to learn from outcomes.
@@ -378,6 +567,7 @@ class UnifiedBrain:
         self.self_awareness = SelfAwareness(base_dir)
         self.memory = MemorySystem()
         self.predictions = PredictionTracker()  # Self-learning from predictions
+        self.knowledge = KnowledgeDistiller()   # Claude → Brain knowledge transfer
 
         # External references (set by server.py)
         self.ml_brain = None  # Reference to MYNDBrain for neural ops
@@ -692,3 +882,149 @@ class UnifiedBrain:
                     lines.append(f"- ○ Learned new pattern")
 
         return "\n".join(lines)
+
+    # ═══════════════════════════════════════════════════════════════════
+    # CLAUDE ↔ BRAIN - Bidirectional Learning
+    # ═══════════════════════════════════════════════════════════════════
+
+    def receive_from_claude(self, claude_response: Dict) -> Dict:
+        """
+        Receive and process Claude's response.
+        This is how Claude teaches the brain.
+
+        Claude should include structured learning data:
+        {
+            "response": "...",  # The actual response text
+            "insights": [...],   # Things Claude noticed
+            "patterns": [...],   # Patterns Claude identified
+            "corrections": [...], # Things Claude corrected
+            "explanations": {...} # Concepts Claude explained
+        }
+        """
+        # Extract and distill knowledge
+        extracted = self.knowledge.receive_claude_response(claude_response)
+
+        # Record this as a growth event
+        self.self_awareness.record_growth({
+            'type': 'claude_teaching',
+            'insights_received': len(extracted['insights']),
+            'patterns_learned': len(extracted['patterns']),
+            'corrections_made': len(extracted['corrections'])
+        })
+
+        self.growth_events_today += 1
+
+        # Store the interaction in memory
+        self.memory.remember({
+            'type': 'claude_response',
+            'had_insights': len(extracted['insights']) > 0,
+            'had_patterns': len(extracted['patterns']) > 0,
+            'response_preview': claude_response.get('response', '')[:100]
+        }, importance=0.7)
+
+        print(f"🧠 Received from Claude: {len(extracted['insights'])} insights, {len(extracted['patterns'])} patterns")
+
+        return {
+            'status': 'processed',
+            'extracted': extracted,
+            'knowledge_stats': self.knowledge.get_stats()
+        }
+
+    def ask_claude_to_teach(self, topic: str) -> Dict:
+        """
+        Generate a request for Claude to teach the brain about a topic.
+        Returns a context document designed to elicit structured teaching.
+        """
+        existing_knowledge = self.knowledge.get_relevant_knowledge(topic, limit=3)
+
+        return {
+            'request_type': 'teach',
+            'topic': topic,
+            'existing_knowledge': existing_knowledge,
+            'instructions': f"""
+Please teach me about: {topic}
+
+I already know:
+{existing_knowledge if existing_knowledge else 'Nothing yet about this topic.'}
+
+Please respond with structured learning data:
+1. **insights**: Key facts I should remember (with confidence 0-1)
+2. **patterns**: Patterns or rules about this topic
+3. **explanations**: Clear explanations of concepts
+
+Format your response as JSON with these fields alongside your text response.
+"""
+        }
+
+    def get_context_with_knowledge(self, request: 'ContextRequest') -> str:
+        """
+        Build context that includes distilled knowledge.
+        This is how the brain shares what Claude taught it.
+        """
+        parts = []
+
+        # Get relevant distilled knowledge for this request
+        if request.user_message:
+            relevant = self.knowledge.get_relevant_knowledge(request.user_message, limit=5)
+            if relevant:
+                parts.append("## Relevant Knowledge (From Previous Conversations)")
+                for k in relevant:
+                    if k.get('type') == 'insight':
+                        parts.append(f"- Insight: {k.get('content', '')}")
+                    elif k.get('type') == 'correction':
+                        parts.append(f"- Correction: {k.get('reason', '')}")
+                    elif k.get('type') == 'explanation':
+                        parts.append(f"- {k.get('concept', '')}: {k.get('content', '')[:150]}...")
+
+        # Get learned patterns
+        patterns = self.knowledge.get_learned_patterns()[:3]
+        if patterns:
+            parts.append("\n## Learned Patterns")
+            for p in patterns:
+                desc = p['details'].get('description', str(p['details']))
+                parts.append(f"- {desc} (seen {p['count']} times)")
+
+        return "\n".join(parts) if parts else ""
+
+    def get_claude_teaching_prompt(self) -> str:
+        """
+        Generate instructions for Claude on how to teach the brain.
+        Include this in system prompts.
+        """
+        return """
+## How to Teach Me (The Brain)
+
+When you respond, please include structured learning data that I can store:
+
+```json
+{
+    "insights": [
+        {"content": "...", "confidence": 0.9, "category": "..."}
+    ],
+    "patterns": [
+        {"pattern": "...", "description": "...", "confidence": 0.8}
+    ],
+    "corrections": [
+        {"original": "...", "corrected": "...", "reason": "...", "importance": 0.7}
+    ],
+    "explanations": {
+        "concept_name": "clear explanation..."
+    }
+}
+```
+
+This helps me learn from our conversations and provide better context next time.
+I will distill high-confidence insights into permanent knowledge.
+"""
+
+    def get_knowledge_stats(self) -> Dict:
+        """Get combined stats on brain knowledge"""
+        return {
+            'predictions': self.predictions.get_stats(),
+            'knowledge': self.knowledge.get_stats(),
+            'memory': {
+                'short_term': len(self.memory.short_term),
+                'working': len(self.memory.working)
+            },
+            'growth_events': len(self.self_awareness.growth_events)
+        }
