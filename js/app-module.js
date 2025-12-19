@@ -26146,11 +26146,22 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         if (styleTransfer.initialized) {
             styleTransfer.learnFromCreation(node, parent, store);
         }
-        
+
+        // Unified Brain: Learn from parent-child connection
+        if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+            LocalBrain.learnFromConnection(parent.id, node.id, node.source || 'manual')
+                .then(result => {
+                    if (result.was_predicted) {
+                        console.log(`🧠 Brain predicted this connection! Accuracy: ${(result.accuracy * 100).toFixed(1)}%`);
+                    }
+                })
+                .catch(e => console.warn('Brain connection learning failed:', e));
+        }
+
         // Update UI stats
         NeuralUI.updateStatus();
     });
-    
+
     // CGT: Track node deletion
     bus.on('node:deleted', ({ parentId, node }) => {
         cognitiveGT.recordAction('delete', node.id, { 
@@ -26161,14 +26172,25 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
     
     // CGT: Track node moved (reparented)
     bus.on('node:moved', ({ nodeId, oldParentId, newParentId }) => {
-        cognitiveGT.recordAction('reparent', nodeId, { 
+        cognitiveGT.recordAction('reparent', nodeId, {
             oldParentId,
             newParentId
         });
-        
+
         // StyleTransfer: Learn from reorganization
         if (styleTransfer.initialized) {
             styleTransfer.learnFromReorg();
+        }
+
+        // Unified Brain: Learn from new parent-child connection
+        if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+            LocalBrain.learnFromConnection(newParentId, nodeId, 'reparent')
+                .then(result => {
+                    if (result.learning_signal > 0) {
+                        console.log(`🧠 Brain learned from reparent (signal: ${result.learning_signal.toFixed(2)})`);
+                    }
+                })
+                .catch(e => console.warn('Brain reparent learning failed:', e));
         }
     });
     
@@ -28420,6 +28442,37 @@ You are a trusted guide, not a data harvester.
                 return { role: m.role, content };
             });
             
+            // ═══════════════════════════════════════════════════════════════
+            // UNIFIED BRAIN CONTEXT - Self-aware brain with meta-learning
+            // ═══════════════════════════════════════════════════════════════
+            let brainContext = '';
+            let brainState = null;
+            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                try {
+                    const brainResult = await LocalBrain.getBrainContext({
+                        query: userMessage,
+                        selectedNodeId: selectedNodeData?.id,
+                        mapData: store.data,
+                        include: {
+                            identity: true,
+                            vision: true,
+                            predictions: true,
+                            knowledge: true,
+                            improvements: true,
+                            metaLearning: true
+                        }
+                    });
+
+                    if (brainResult.contextDocument) {
+                        brainContext = brainResult.contextDocument;
+                        brainState = brainResult.brainState;
+                        console.log(`🧠 UnifiedBrain context: ${brainContext.length} chars, ${brainResult.timeMs?.toFixed(1)}ms`);
+                    }
+                } catch (e) {
+                    console.warn('UnifiedBrain context error:', e);
+                }
+            }
+
             // Gather neural context from all intelligence systems
             let neuralContext = '';
             
@@ -29162,6 +29215,11 @@ ${goalsContext}` : ''}
 ${loadedSourceContext ? `
 LOADED SOURCE FILE FOR REVIEW:
 ${loadedSourceContext}` : ''}
+${brainContext ? `
+═══════════════════════════════════════════════════════════════
+UNIFIED BRAIN - Self-Aware Intelligence Core
+═══════════════════════════════════════════════════════════════
+${brainContext}` : ''}
 
 YOUR CAPABILITIES:
 1. **Smart Map Context**: You see the most RELEVANT nodes via semantic search (top-level branches + nodes related to the query). For large maps this optimizes token usage while maintaining full awareness
@@ -29751,19 +29809,20 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
             }
             
             // Parse JSON response - handle markdown code blocks and text before JSON
+            let parsedResult = null;
             try {
                 // Remove markdown code block markers if present
                 let cleanedResponse = responseText
                     .replace(/```json\s*/gi, '')
                     .replace(/```\s*/g, '')
                     .trim();
-                
+
                 // Try to find JSON starting with {"message" (our expected format)
                 const jsonStartIndex = cleanedResponse.indexOf('{"message"');
                 if (jsonStartIndex !== -1) {
                     // Extract from {"message" to the end and find the matching closing brace
                     const jsonPart = cleanedResponse.substring(jsonStartIndex);
-                    
+
                     // Find the matching closing brace by counting braces
                     let braceCount = 0;
                     let endIndex = -1;
@@ -29775,14 +29834,14 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                             break;
                         }
                     }
-                    
+
                     if (endIndex > 0) {
                         const jsonString = jsonPart.substring(0, endIndex);
                         const parsed = JSON.parse(jsonString);
-                        
+
                         if (parsed && typeof parsed.message === 'string') {
                             console.log('Parsed AI response:', parsed);
-                            return {
+                            parsedResult = {
                                 message: parsed.message,
                                 actions: Array.isArray(parsed.actions) ? parsed.actions : [],
                                 suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : []
@@ -29790,25 +29849,52 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                         }
                     }
                 }
-                
+
                 // Fallback: try generic JSON extraction
-                const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    const parsed = JSON.parse(jsonMatch[0]);
-                    if (parsed && typeof parsed.message === 'string') {
-                        return {
-                            message: parsed.message,
-                            actions: Array.isArray(parsed.actions) ? parsed.actions : [],
-                            suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : []
-                        };
+                if (!parsedResult) {
+                    const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        const parsed = JSON.parse(jsonMatch[0]);
+                        if (parsed && typeof parsed.message === 'string') {
+                            parsedResult = {
+                                message: parsed.message,
+                                actions: Array.isArray(parsed.actions) ? parsed.actions : [],
+                                suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : []
+                            };
+                        }
                     }
                 }
             } catch (e) {
                 console.error('Failed to parse AI response:', e, responseText);
             }
-            
-            // Fallback - return full response if JSON parsing failed
-            return { message: responseText, actions: [], suggestions: [] };
+
+            // Fallback - use full response if JSON parsing failed
+            if (!parsedResult) {
+                parsedResult = { message: responseText, actions: [], suggestions: [] };
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // UNIFIED BRAIN LEARNING - Distill knowledge from Claude's response
+            // ═══════════════════════════════════════════════════════════════
+            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable && parsedResult.message) {
+                // Fire and forget - don't block the response
+                LocalBrain.sendToBrain({
+                    userQuery: userMessage,
+                    response: parsedResult.message,
+                    actions: parsedResult.actions || [],
+                    context: {
+                        selectedNode: selectedNodeData?.label,
+                        mapSize: totalNodes,
+                        timestamp: Date.now()
+                    }
+                }).then(result => {
+                    if (result.knowledge_stats) {
+                        console.log(`🧠 Brain learned: ${result.knowledge_stats.distilled_facts || 0} facts, ${result.knowledge_stats.patterns_learned || 0} patterns`);
+                    }
+                }).catch(e => console.warn('Brain learning failed:', e));
+            }
+
+            return parsedResult;
         },
         
         async executeActions(actions) {
