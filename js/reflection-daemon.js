@@ -94,6 +94,11 @@ const ReflectionDaemon = {
             return this;
         } catch (error) {
             console.error('ReflectionDaemon init failed:', error);
+            // Emit error event for UI notification
+            this.emitEvent('initError', { error: error.message });
+            // Still mark as initialized but with degraded functionality
+            this.initialized = false;
+            this.log(`Initialization failed: ${error.message}`);
             return this;
         }
     },
@@ -232,7 +237,7 @@ const ReflectionDaemon = {
     // ═══════════════════════════════════════════════════════════════════
 
     async checkIdleAndReflect() {
-        if (!this.isRunning || this.isPaused) return;
+        if (!this.isRunning) return;
 
         // Check if ActivityTracker is available
         if (typeof ActivityTracker === 'undefined') {
@@ -241,11 +246,14 @@ const ReflectionDaemon = {
 
         const idleTime = ActivityTracker.getIdleTime();
 
-        // Check if user became active (unpause)
+        // Check if user became active (auto-resume from paused state)
         if (idleTime < 10000 && this.isPaused) {
             this.resume();
             return;
         }
+
+        // Skip reflection check if paused
+        if (this.isPaused) return;
 
         // Check if user is now idle enough for reflection
         if (idleTime >= this.config.idleThresholdMs) {
@@ -495,29 +503,43 @@ ${context.neuralInsights || 'No neural insights available'}
 
 Analyze this context and provide structured reflection insights.`;
 
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': apiKey,
-                'anthropic-version': '2023-06-01',
-                'anthropic-dangerous-direct-browser-access': 'true'
-            },
-            body: JSON.stringify({
-                model: CONFIG.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
-                max_tokens: this.config.maxTokensPerReflection,
-                system: systemPrompt,
-                messages: [{ role: 'user', content: userPrompt }]
-            })
-        });
+        // Add timeout with AbortController (60 seconds)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(`Claude API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+        try {
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: CONFIG.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+                    max_tokens: this.config.maxTokensPerReflection,
+                    system: systemPrompt,
+                    messages: [{ role: 'user', content: userPrompt }]
+                }),
+                signal: controller.signal
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(`Claude API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+            }
+
+            const data = await response.json();
+            return data.content?.[0]?.text || '';
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                throw new Error('API request timed out after 60 seconds');
+            }
+            throw error;
+        } finally {
+            clearTimeout(timeoutId);
         }
-
-        const data = await response.json();
-        return data.content?.[0]?.text || '';
     },
 
     parseReflectionResponse(responseText) {
@@ -539,37 +561,48 @@ Analyze this context and provide structured reflection insights.`;
 
             const parsed = JSON.parse(jsonStr);
 
-            results.insights = (parsed.insights || []).map(i => ({
-                ...i,
-                type: 'insight',
-                id: this.generateId(),
-                timestamp: Date.now(),
-                status: 'pending'
-            }));
+            // Validate parsed structure
+            if (typeof parsed !== 'object' || parsed === null) {
+                throw new Error('Parsed response is not an object');
+            }
 
-            results.improvements = (parsed.improvements || []).map(i => ({
-                ...i,
-                type: 'improvement',
-                id: this.generateId(),
-                timestamp: Date.now(),
-                status: 'pending'
-            }));
+            // Helper to validate and sanitize items
+            const validateItem = (item, type) => {
+                if (typeof item !== 'object' || item === null) return null;
+                return {
+                    title: typeof item.title === 'string' ? item.title : '',
+                    description: typeof item.description === 'string' ? item.description : '',
+                    priority: ['high', 'medium', 'low'].includes(item.priority) ? item.priority : 'medium',
+                    relatedNodes: Array.isArray(item.relatedNodes) ? item.relatedNodes.filter(n => typeof n === 'string') : [],
+                    type,
+                    id: this.generateId(),
+                    timestamp: Date.now(),
+                    status: 'pending',
+                    // Preserve additional fields
+                    ...(item.category && typeof item.category === 'string' ? { category: item.category } : {}),
+                    ...(item.from && typeof item.from === 'string' ? { from: item.from } : {}),
+                    ...(item.to && typeof item.to === 'string' ? { to: item.to } : {}),
+                    ...(item.reason && typeof item.reason === 'string' ? { reason: item.reason } : {}),
+                    ...(item.relatedCode && Array.isArray(item.relatedCode) ? { relatedCode: item.relatedCode.filter(c => typeof c === 'string') } : {})
+                };
+            };
 
-            results.connections = (parsed.connections || []).map(c => ({
-                ...c,
-                type: 'connection',
-                id: this.generateId(),
-                timestamp: Date.now(),
-                status: 'pending'
-            }));
+            results.insights = (Array.isArray(parsed.insights) ? parsed.insights : [])
+                .map(i => validateItem(i, 'insight'))
+                .filter(Boolean);
 
-            results.codeIssues = (parsed.codeIssues || parsed.code_issues || []).map(c => ({
-                ...c,
-                type: 'code_issue',
-                id: this.generateId(),
-                timestamp: Date.now(),
-                status: 'pending'
-            }));
+            results.improvements = (Array.isArray(parsed.improvements) ? parsed.improvements : [])
+                .map(i => validateItem(i, 'improvement'))
+                .filter(Boolean);
+
+            results.connections = (Array.isArray(parsed.connections) ? parsed.connections : [])
+                .map(c => validateItem(c, 'connection'))
+                .filter(Boolean);
+
+            results.codeIssues = (Array.isArray(parsed.codeIssues) ? parsed.codeIssues :
+                                  Array.isArray(parsed.code_issues) ? parsed.code_issues : [])
+                .map(c => validateItem(c, 'code_issue'))
+                .filter(Boolean);
 
         } catch (error) {
             console.warn('Failed to parse reflection response:', error);
@@ -659,36 +692,45 @@ Analyze this context and provide structured reflection insights.`;
     async approveItem(itemId) {
         if (!this.db) return false;
 
-        const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(this.STORE_NAME);
+        // First, update the item status in IndexedDB
+        const item = await new Promise((resolve) => {
+            const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(this.STORE_NAME);
 
-        const request = store.get(itemId);
+            const request = store.get(itemId);
 
-        return new Promise((resolve) => {
-            request.onsuccess = async () => {
+            request.onsuccess = () => {
                 const item = request.result;
                 if (!item) {
-                    resolve(false);
+                    resolve(null);
                     return;
                 }
 
                 item.status = 'approved';
                 item.approvedAt = Date.now();
                 store.put(item);
-
-                this.stats.approvedCount++;
-                this.saveToStorage();
-
-                // Try to apply the item
-                await this.applyApprovedItem(item);
-
-                this.log(`Approved: ${item.title}`);
-                this.emitEvent('itemApproved', { item });
-                resolve(true);
+                resolve(item);
             };
 
-            request.onerror = () => resolve(false);
+            request.onerror = () => resolve(null);
         });
+
+        if (!item) return false;
+
+        // Update stats and apply item outside the transaction
+        this.stats.approvedCount++;
+        this.saveToStorage();
+
+        // Try to apply the item (async operation outside transaction)
+        try {
+            await this.applyApprovedItem(item);
+        } catch (error) {
+            console.warn('Failed to apply approved item:', error);
+        }
+
+        this.log(`Approved: ${item.title}`);
+        this.emitEvent('itemApproved', { item });
+        return true;
     },
 
     async dismissItem(itemId) {

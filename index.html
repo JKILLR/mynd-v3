@@ -9151,50 +9151,50 @@
         </div>
 
         <!-- Autonomous Reflection Section -->
-        <div class="neural-status" id="neural-reflection-stats" style="margin-top: 12px; border-top: 1px solid var(--bg-tertiary); padding-top: 12px;">
-            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+        <div class="neural-status" id="neural-reflection-stats" style="margin-top: 12px; border-top: 1px solid var(--bg-tertiary); padding-top: 12px;" role="region" aria-labelledby="reflection-section-title">
+            <div id="reflection-section-title" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;" aria-hidden="true">
                     <circle cx="12" cy="12" r="10"/>
                     <path d="M12 6v6l4 2"/>
                 </svg>
                 Autonomous Reflection
-                <span id="reflection-status-indicator" class="status-inactive" title="Autonomous mode inactive"></span>
+                <span id="reflection-status-indicator" class="status-inactive" title="Autonomous mode inactive" role="status" aria-live="polite"></span>
             </div>
             <div class="neural-status-row">
-                <span>Mode</span>
-                <span class="neural-status-value" id="reflection-mode-status">Off</span>
+                <span id="reflection-mode-label">Mode</span>
+                <span class="neural-status-value" id="reflection-mode-status" aria-labelledby="reflection-mode-label">Off</span>
             </div>
             <div class="neural-status-row">
-                <span>Total Reflections</span>
-                <span class="neural-status-value" id="reflection-total-count">0</span>
+                <span id="reflection-total-label">Total Reflections</span>
+                <span class="neural-status-value" id="reflection-total-count" aria-labelledby="reflection-total-label">0</span>
             </div>
             <div class="neural-status-row">
-                <span>Pending Insights</span>
-                <span class="neural-status-value" id="reflection-pending-count" style="position: relative;">
+                <span id="reflection-pending-label">Pending Insights</span>
+                <span class="neural-status-value" id="reflection-pending-count" style="position: relative;" aria-labelledby="reflection-pending-label">
                     0
-                    <span id="reflection-badge" class="reflection-notification-badge" style="display: none;">0</span>
+                    <span id="reflection-badge" class="reflection-notification-badge" style="display: none;" role="status" aria-live="polite" aria-label="Pending insights count">0</span>
                 </span>
             </div>
             <div class="neural-status-row">
-                <span>Last Reflection</span>
-                <span class="neural-status-value" id="reflection-last-time">Never</span>
+                <span id="reflection-last-label">Last Reflection</span>
+                <span class="neural-status-value" id="reflection-last-time" aria-labelledby="reflection-last-label">Never</span>
             </div>
             <div style="display: flex; gap: 8px; margin-top: 12px;">
                 <label class="toggle-switch" style="margin: 0;">
-                    <input type="checkbox" id="reflection-toggle-panel">
-                    <span class="toggle-slider"></span>
+                    <input type="checkbox" id="reflection-toggle-panel" aria-label="Enable autonomous reflection mode" aria-describedby="reflection-toggle-description">
+                    <span class="toggle-slider" aria-hidden="true"></span>
                 </label>
-                <span style="font-size: 11px; color: var(--text-secondary);">Enable autonomous mode</span>
+                <span id="reflection-toggle-description" style="font-size: 11px; color: var(--text-secondary);">Enable autonomous mode</span>
             </div>
-            <button class="neural-btn" id="reflection-queue-btn" style="margin-top: 8px; background: linear-gradient(135deg, #8b5cf6, #a78bfa);">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+            <button class="neural-btn" id="reflection-queue-btn" style="margin-top: 8px; background: linear-gradient(135deg, #8b5cf6, #a78bfa);" aria-label="View Reflection Queue">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;" aria-hidden="true">
                     <circle cx="12" cy="12" r="10"/>
                     <path d="M12 6v6l4 2"/>
                 </svg>
                 View Reflection Queue
             </button>
-            <button class="neural-btn" id="reflection-trigger-btn" style="margin-top: 4px; background: linear-gradient(135deg, #10b981, #34d399);">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+            <button class="neural-btn" id="reflection-trigger-btn" style="margin-top: 4px; background: linear-gradient(135deg, #10b981, #34d399);" aria-label="Trigger reflection now">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;" aria-hidden="true">
                     <polygon points="5 3 19 12 5 21 5 3"/>
                 </svg>
                 Reflect Now

@@ -17,6 +17,17 @@ const ReflectionUI = {
     panelVisible: false,
     pendingCount: 0,
 
+    // Store bound event listener references for cleanup
+    _boundListeners: {
+        reflectionComplete: null,
+        itemApproved: null,
+        itemDismissed: null,
+        started: null,
+        stopped: null,
+        reflectionStarted: null,
+        escapeHandler: null
+    },
+
     // ═══════════════════════════════════════════════════════════════════
     // INITIALIZATION
     // ═══════════════════════════════════════════════════════════════════
@@ -39,33 +50,69 @@ const ReflectionUI = {
     },
 
     setupEventListeners() {
-        // Listen for reflection daemon events
-        document.addEventListener('reflection:reflectionComplete', (e) => {
+        // Clean up any existing listeners first
+        this.cleanupEventListeners();
+
+        // Create bound listener references for cleanup
+        this._boundListeners.reflectionComplete = (e) => {
             this.updateBadge();
             this.showNotification(e.detail);
-        });
+        };
 
-        document.addEventListener('reflection:itemApproved', () => {
+        this._boundListeners.itemApproved = () => {
             this.updateBadge();
             this.refreshQueueView();
-        });
+        };
 
-        document.addEventListener('reflection:itemDismissed', () => {
+        this._boundListeners.itemDismissed = () => {
             this.updateBadge();
             this.refreshQueueView();
-        });
+        };
 
-        document.addEventListener('reflection:started', () => {
+        this._boundListeners.started = () => {
             this.updateStatusIndicator(true);
-        });
+        };
 
-        document.addEventListener('reflection:stopped', () => {
+        this._boundListeners.stopped = () => {
             this.updateStatusIndicator(false);
-        });
+        };
 
-        document.addEventListener('reflection:reflectionStarted', () => {
+        this._boundListeners.reflectionStarted = () => {
             this.showReflectionInProgress();
-        });
+        };
+
+        // Add event listeners with stored references
+        document.addEventListener('reflection:reflectionComplete', this._boundListeners.reflectionComplete);
+        document.addEventListener('reflection:itemApproved', this._boundListeners.itemApproved);
+        document.addEventListener('reflection:itemDismissed', this._boundListeners.itemDismissed);
+        document.addEventListener('reflection:started', this._boundListeners.started);
+        document.addEventListener('reflection:stopped', this._boundListeners.stopped);
+        document.addEventListener('reflection:reflectionStarted', this._boundListeners.reflectionStarted);
+    },
+
+    cleanupEventListeners() {
+        // Remove all stored event listeners to prevent memory leaks
+        if (this._boundListeners.reflectionComplete) {
+            document.removeEventListener('reflection:reflectionComplete', this._boundListeners.reflectionComplete);
+        }
+        if (this._boundListeners.itemApproved) {
+            document.removeEventListener('reflection:itemApproved', this._boundListeners.itemApproved);
+        }
+        if (this._boundListeners.itemDismissed) {
+            document.removeEventListener('reflection:itemDismissed', this._boundListeners.itemDismissed);
+        }
+        if (this._boundListeners.started) {
+            document.removeEventListener('reflection:started', this._boundListeners.started);
+        }
+        if (this._boundListeners.stopped) {
+            document.removeEventListener('reflection:stopped', this._boundListeners.stopped);
+        }
+        if (this._boundListeners.reflectionStarted) {
+            document.removeEventListener('reflection:reflectionStarted', this._boundListeners.reflectionStarted);
+        }
+        if (this._boundListeners.escapeHandler) {
+            document.removeEventListener('keydown', this._boundListeners.escapeHandler);
+        }
     },
 
     // ═══════════════════════════════════════════════════════════════════
@@ -357,8 +404,8 @@ const ReflectionUI = {
                         </div>
                     ` : log.map(entry => `
                         <div class="log-entry">
-                            <span class="log-time">${entry.time}</span>
-                            <span class="log-message">${entry.message}</span>
+                            <span class="log-time">${this.escapeHtml(entry.time)}</span>
+                            <span class="log-message">${this.escapeHtml(entry.message)}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -383,26 +430,33 @@ const ReflectionUI = {
 
         const timeAgo = this.formatTimeAgo(item.timestamp);
 
+        // Escape all user-controlled content to prevent XSS
+        const safeTitle = this.escapeHtml(item.title) || 'Untitled';
+        const safeDescription = this.escapeHtml(item.description);
+        const safePriority = this.escapeHtml(item.priority) || 'medium';
+        const safeRelatedNodes = item.relatedNodes?.slice(0, 3).map(n => this.escapeHtml(n)).join(', ');
+        const safeId = this.escapeHtml(item.id);
+
         return `
-            <div class="queue-item ${priorityClass}" data-id="${item.id}">
+            <div class="queue-item ${priorityClass}" data-id="${safeId}">
                 <div class="queue-item-header">
                     <span class="queue-item-type">${typeIcon}</span>
-                    <span class="queue-item-title">${item.title || 'Untitled'}</span>
-                    <span class="queue-item-priority">${item.priority || 'medium'}</span>
+                    <span class="queue-item-title">${safeTitle}</span>
+                    <span class="queue-item-priority">${safePriority}</span>
                 </div>
                 <div class="queue-item-body">
-                    <p class="queue-item-description">${item.description || ''}</p>
+                    <p class="queue-item-description">${safeDescription}</p>
                     ${item.relatedNodes?.length ? `
                         <div class="queue-item-related">
-                            Related: ${item.relatedNodes.slice(0, 3).join(', ')}
+                            Related: ${safeRelatedNodes}
                         </div>
                     ` : ''}
                 </div>
                 <div class="queue-item-footer">
                     <span class="queue-item-time">${timeAgo}</span>
                     <div class="queue-item-actions">
-                        <button class="queue-action-btn dismiss" data-action="dismiss" data-id="${item.id}">Dismiss</button>
-                        <button class="queue-action-btn approve" data-action="approve" data-id="${item.id}">Approve</button>
+                        <button class="queue-action-btn dismiss" data-action="dismiss" data-id="${safeId}">Dismiss</button>
+                        <button class="queue-action-btn approve" data-action="approve" data-id="${safeId}">Approve</button>
                     </div>
                 </div>
             </div>
@@ -462,32 +516,47 @@ const ReflectionUI = {
         const dismissAllBtn = document.getElementById('queue-dismiss-all');
         if (dismissAllBtn) {
             dismissAllBtn.addEventListener('click', async () => {
-                const items = await ReflectionDaemon.getQueue({ status: 'pending' });
-                for (const item of items) {
-                    await ReflectionDaemon.dismissItem(item.id);
+                try {
+                    dismissAllBtn.disabled = true;
+                    const items = await ReflectionDaemon.getQueue({ status: 'pending' });
+                    // Use Promise.all for parallel processing
+                    await Promise.all(items.map(item => ReflectionDaemon.dismissItem(item.id)));
+                    this.refreshQueueView();
+                } catch (error) {
+                    console.error('Failed to dismiss all items:', error);
+                } finally {
+                    dismissAllBtn.disabled = false;
                 }
-                this.refreshQueueView();
             });
         }
 
         const approveAllBtn = document.getElementById('queue-approve-all');
         if (approveAllBtn) {
             approveAllBtn.addEventListener('click', async () => {
-                const items = await ReflectionDaemon.getQueue({ status: 'pending' });
-                for (const item of items) {
-                    await ReflectionDaemon.approveItem(item.id);
+                try {
+                    approveAllBtn.disabled = true;
+                    const items = await ReflectionDaemon.getQueue({ status: 'pending' });
+                    // Use Promise.all for parallel processing
+                    await Promise.all(items.map(item => ReflectionDaemon.approveItem(item.id)));
+                    this.refreshQueueView();
+                } catch (error) {
+                    console.error('Failed to approve all items:', error);
+                } finally {
+                    approveAllBtn.disabled = false;
                 }
-                this.refreshQueueView();
             });
         }
 
-        // Close on escape
-        const handleEscape = (e) => {
+        // Close on escape - clean up previous handler first
+        if (this._boundListeners.escapeHandler) {
+            document.removeEventListener('keydown', this._boundListeners.escapeHandler);
+        }
+        this._boundListeners.escapeHandler = (e) => {
             if (e.key === 'Escape' && this.panelVisible) {
                 this.hideQueuePanel();
             }
         };
-        document.addEventListener('keydown', handleEscape);
+        document.addEventListener('keydown', this._boundListeners.escapeHandler);
 
         // Close on outside click
         const panel = document.getElementById('reflection-queue-panel');
@@ -540,6 +609,16 @@ const ReflectionUI = {
     // ═══════════════════════════════════════════════════════════════════
     // UTILITIES
     // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Escape HTML to prevent XSS attacks
+     */
+    escapeHtml(str) {
+        if (!str || typeof str !== 'string') return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    },
 
     formatTimeAgo(timestamp) {
         const seconds = Math.floor((Date.now() - timestamp) / 1000);

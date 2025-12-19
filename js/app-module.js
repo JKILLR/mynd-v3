@@ -35794,16 +35794,23 @@ showKeyboardHints();
                         Reflecting...
                     `;
 
-                    await ReflectionDaemon.triggerReflection('manual');
-
-                    btn.disabled = false;
-                    btn.innerHTML = `
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
-                            <polygon points="5 3 19 12 5 21 5 3"/>
-                        </svg>
-                        Reflect Now
-                    `;
-                    NeuralUI.updateReflectionStatus();
+                    try {
+                        await ReflectionDaemon.triggerReflection('manual');
+                    } catch (error) {
+                        console.error('Reflection failed:', error);
+                        if (typeof showToast === 'function') {
+                            showToast('Reflection failed: ' + error.message, 'error');
+                        }
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = `
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                            Reflect Now
+                        `;
+                        NeuralUI.updateReflectionStatus();
+                    }
                 }
             });
 
@@ -36921,7 +36928,7 @@ showKeyboardHints();
                     const pendingEl = document.getElementById('reflection-pending-count');
                     const badgeEl = document.getElementById('reflection-badge');
 
-                    if (pendingEl) {
+                    if (pendingEl && pendingEl.childNodes && pendingEl.childNodes[0]) {
                         // Update the text node, not the badge
                         pendingEl.childNodes[0].textContent = count;
                     }
@@ -36934,6 +36941,8 @@ showKeyboardHints();
                             badgeEl.style.display = 'none';
                         }
                     }
+                }).catch(error => {
+                    console.warn('Failed to update pending count:', error);
                 });
 
                 // Update last reflection time
