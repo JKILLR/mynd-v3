@@ -21045,9 +21045,31 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                     // Sync to cloud (debounced) - disabled in Self Developer Mode
                     SupabaseSync.scheduleSave(this.exportData(), this.data?.label || 'My Mind');
                 }
+
+                // Sync to LocalBrain server (debounced) - browser is source of truth
+                if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                    this._scheduleLocalBrainSync();
+                }
             } catch (e) {
                 console.warn('Failed to save data:', e.message);
             }
+        }
+
+        _scheduleLocalBrainSync() {
+            // Debounce: wait 2 seconds after last change before syncing
+            if (this._localBrainSyncTimeout) {
+                clearTimeout(this._localBrainSyncTimeout);
+            }
+            this._localBrainSyncTimeout = setTimeout(async () => {
+                try {
+                    const result = await LocalBrain.syncMapToServer(this.data);
+                    if (result.status === 'synced') {
+                        console.log(`🔄 Map synced to LocalBrain: ${result.nodes} nodes`);
+                    }
+                } catch (e) {
+                    console.warn('LocalBrain sync failed:', e.message);
+                }
+            }, 2000);
         }
         
         saveSnapshot(name = 'change') {

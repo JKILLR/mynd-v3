@@ -33,6 +33,9 @@ const LocalBrain = {
         visionAvailable: false
     },
 
+    // Track if initial map sync has been done
+    _initialSyncDone: false,
+
     /**
      * Initialize and check server availability
      */
@@ -65,6 +68,7 @@ const LocalBrain = {
 
             if (res.ok) {
                 const health = await res.json();
+                const wasConnected = this.isAvailable;
                 this.isAvailable = true;
                 this.status.connected = true;
                 this.status.device = health.device;
@@ -73,6 +77,12 @@ const LocalBrain = {
                 this.status.voiceAvailable = !!health.voice_model;
                 this.status.visionAvailable = !!health.vision_model;
                 this.lastCheck = Date.now();
+
+                // Initial map sync when first connected
+                if (!wasConnected && !this._initialSyncDone) {
+                    this._initialSyncDone = true;
+                    this._doInitialMapSync();
+                }
                 return true;
             }
         } catch (e) {
@@ -1845,6 +1855,29 @@ const LocalBrain = {
         }
 
         return { error: 'Failed to get stats' };
+    },
+
+    /**
+     * Internal: Perform initial map sync when server connects.
+     * Uses window.store if available (set by app-module.js).
+     */
+    async _doInitialMapSync() {
+        // Wait a bit for store to be ready
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        if (typeof window !== 'undefined' && window.store && window.store.data) {
+            try {
+                console.log('🔄 LocalBrain: Performing initial map sync...');
+                const result = await this.syncMapToServer(window.store.data);
+                if (result.status === 'synced') {
+                    console.log(`✅ LocalBrain: Initial sync complete - ${result.nodes} nodes`);
+                }
+            } catch (e) {
+                console.warn('LocalBrain: Initial map sync failed:', e.message);
+            }
+        } else {
+            console.log('⚠️ LocalBrain: No store available for initial sync');
+        }
     },
 
     // ═══════════════════════════════════════════════════════════════════
