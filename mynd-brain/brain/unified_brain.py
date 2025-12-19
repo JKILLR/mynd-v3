@@ -615,12 +615,18 @@ class UnifiedBrain:
             context_parts.append(("memories", memories))
             token_breakdown['memories'] = len(memories) // 4
 
-        # 4. Request-specific context
+        # 4. Distilled Knowledge (what has Claude taught me?)
+        knowledge_ctx = self.get_context_with_knowledge(request)
+        if knowledge_ctx:
+            context_parts.append(("distilled_knowledge", knowledge_ctx))
+            token_breakdown['distilled_knowledge'] = len(knowledge_ctx) // 4
+
+        # 5. Request-specific context
         request_ctx = self._build_request_context(request)
         context_parts.append(("request", request_ctx))
         token_breakdown['request'] = len(request_ctx) // 4
 
-        # 5. Neural insights (if available and requested)
+        # 6. Neural insights (if available and requested)
         if include.get('neural_insights', True) and self.ml_brain and request.map_data:
             insights = self._get_neural_insights(request)
             if insights:
@@ -736,7 +742,7 @@ class UnifiedBrain:
     def _combine_context(self, parts: List[tuple], request_type: str) -> str:
         """Combine all context parts into a single document"""
         # Order matters - most important first
-        order = ['self_awareness', 'request', 'map_context', 'memories', 'neural_insights']
+        order = ['self_awareness', 'distilled_knowledge', 'request', 'map_context', 'memories', 'neural_insights']
 
         ordered_parts = []
         for name in order:
@@ -761,6 +767,9 @@ class UnifiedBrain:
             'short_term_memories': len(self.memory.short_term),
             'working_memories': len(self.memory.working),
             'growth_events': len(self.self_awareness.growth_events),
+            'prediction_accuracy': self.predictions.get_accuracy(),
+            'distilled_facts': len(self.knowledge.distilled_knowledge),
+            'patterns_learned': len(self.knowledge.patterns_learned),
             'capabilities': self.self_awareness.capabilities
         }
 
