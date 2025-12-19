@@ -272,8 +272,12 @@ class ConversationStore:
     def _load_index(self):
         """Load the conversation index"""
         if self.index_path.exists():
-            with open(self.index_path, 'r') as f:
-                self.index = json.load(f)
+            try:
+                with open(self.index_path, 'r') as f:
+                    self.index = json.load(f)
+            except json.JSONDecodeError as e:
+                print(f"⚠️ Corrupted conversation index, resetting: {e}")
+                self.index = {"conversations": [], "total_chars": 0}
         else:
             self.index = {"conversations": [], "total_chars": 0}
 
@@ -335,7 +339,7 @@ class ConversationStore:
     def _generate_title(self, text: str) -> str:
         """Generate a title from conversation text"""
         # Take first meaningful line
-        lines = [l.strip() for l in text.split('\n') if l.strip() and len(l.strip()) > 10]
+        lines = [line.strip() for line in text.split('\n') if line.strip() and len(line.strip()) > 10]
         if lines:
             first_line = lines[0][:100]
             return first_line + ("..." if len(lines[0]) > 100 else "")
@@ -357,9 +361,13 @@ class ConversationStore:
         conv_path = self.data_dir / f"{conv_id}.json"
         if not conv_path.exists():
             return None
-        with open(conv_path, 'r') as f:
-            data = json.load(f)
-        return StoredConversation(**data)
+        try:
+            with open(conv_path, 'r') as f:
+                data = json.load(f)
+            return StoredConversation(**data)
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            print(f"⚠️ Failed to load conversation {conv_id}: {e}")
+            return None
 
     def list_all(self, source_filter: Optional[str] = None) -> List[Dict]:
         """List all conversations (metadata only)"""
@@ -417,7 +425,10 @@ class ConversationStore:
 
         context_parts = []
         current_tokens = 0
-        token_estimate = lambda s: len(s) // 4  # Rough estimate
+
+        def token_estimate(s: str) -> int:
+            """Rough token estimate (4 chars per token)"""
+            return len(s) // 4
 
         for result in search_results:
             if result["similarity"] < 0.3:  # Skip low relevance
@@ -2698,7 +2709,7 @@ async def get_unified_map_stats():
 # ═══════════════════════════════════════════════════════════════════
 
 @app.post("/unified/conversations/import")
-async def import_conversation(request: ConversationImportRequest):
+async def import_unified_conversation(request: ConversationImportRequest):
     """
     Import a conversation and optionally extract knowledge into the map.
 

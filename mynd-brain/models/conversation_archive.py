@@ -39,7 +39,7 @@ class ArchivedConversation:
     def __post_init__(self):
         if not self.created_at:
             self.created_at = datetime.utcnow().isoformat()
-        if not self.char_count:
+        if self.char_count == 0:
             self.char_count = len(self.text)
 
     def to_dict(self) -> Dict:

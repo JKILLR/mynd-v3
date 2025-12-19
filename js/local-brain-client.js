@@ -80,8 +80,11 @@ const LocalBrain = {
 
                 // Initial map sync when first connected
                 if (!wasConnected && !this._initialSyncDone) {
-                    this._initialSyncDone = true;
-                    this._doInitialMapSync();
+                    this._doInitialMapSync().then(() => {
+                        this._initialSyncDone = true;
+                    }).catch(() => {
+                        // Will retry on next checkAvailability
+                    });
                 }
                 return true;
             }
