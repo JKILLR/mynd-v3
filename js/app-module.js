@@ -29666,9 +29666,15 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 const { data } = await supabase.auth.getSession();
                 session = data?.session;
             }
-            
+
+            // Disable web search for code reviews - it just adds generic article noise
+            const shouldUseWebSearch = !(isComprehensiveReview || isMLReview || needsDeepSelfAwareness);
+            if (!shouldUseWebSearch) {
+                console.log('🔍 Web search disabled for code review (using actual code instead)');
+            }
+
             let responseText;
-            
+
             if (session?.access_token) {
                 // Use Edge Function
                 const response = await fetch(CONFIG.EDGE_FUNCTION_URL, {
@@ -29681,7 +29687,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                         type: 'chat',
                         messages: messages,
                         maxTokens: 8192,
-                        webSearch: true
+                        webSearch: shouldUseWebSearch
                     })
                 });
                 
@@ -29698,7 +29704,21 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 if (!apiKey) {
                     throw new Error('Please sign in or add an API key in Settings');
                 }
-                
+
+                // Build request body - only include web search for non-code-review requests
+                const requestBody = {
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 8192,
+                    messages: messages
+                };
+                if (shouldUseWebSearch) {
+                    requestBody.tools = [{
+                        type: 'web_search_20250305',
+                        name: 'web_search',
+                        max_uses: 3
+                    }];
+                }
+
                 const response = await fetch('https://api.anthropic.com/v1/messages', {
                     method: 'POST',
                     headers: {
@@ -29707,16 +29727,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                         'anthropic-version': '2023-06-01',
                         'anthropic-dangerous-direct-browser-access': 'true'
                     },
-                    body: JSON.stringify({
-                        model: 'claude-sonnet-4-20250514',
-                        max_tokens: 8192,
-                        tools: [{
-                            type: 'web_search_20250305',
-                            name: 'web_search',
-                            max_uses: 3
-                        }],
-                        messages: messages
-                    })
+                    body: JSON.stringify(requestBody)
                 });
                 
                 if (!response.ok) {
