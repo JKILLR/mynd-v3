@@ -2202,7 +2202,7 @@
                         'anthropic-dangerous-direct-browser-access': 'true'
                     },
                     body: JSON.stringify({
-                        model: 'claude-sonnet-4-20250514',
+                        model: CONFIG.CLAUDE_MODEL,
                         max_tokens: 300,
                         messages: [{
                             role: 'user',
@@ -2274,7 +2274,7 @@
                         'anthropic-dangerous-direct-browser-access': 'true'
                     },
                     body: JSON.stringify({
-                        model: 'claude-sonnet-4-20250514',
+                        model: CONFIG.CLAUDE_MODEL,
                         max_tokens: 300,
                         messages: [{
                             role: 'user',
@@ -2914,7 +2914,7 @@
                         'anthropic-dangerous-direct-browser-access': 'true'
                     },
                     body: JSON.stringify({
-                        model: 'claude-sonnet-4-20250514',
+                        model: CONFIG.CLAUDE_MODEL,
                         max_tokens: 1024,
                         messages: [{
                             role: 'user',
@@ -9067,7 +9067,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                         'anthropic-dangerous-direct-browser-access': 'true'
                     },
                     body: JSON.stringify({
-                        model: 'claude-sonnet-4-20250514',
+                        model: CONFIG.CLAUDE_MODEL,
                         max_tokens: 500,
                         messages: [{
                             role: 'user',
@@ -20130,7 +20130,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                     'anthropic-dangerous-direct-browser-access': 'true'
                 },
                 body: JSON.stringify({
-                    model: 'claude-sonnet-4-20250514',
+                    model: CONFIG.CLAUDE_MODEL,
                     max_tokens: 8192,
                     messages: [{
                         role: 'user',
@@ -25649,7 +25649,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                     'anthropic-dangerous-direct-browser-access': 'true'
                 },
                 body: JSON.stringify({
-                    model: 'claude-sonnet-4-20250514',
+                    model: CONFIG.CLAUDE_MODEL,
                     max_tokens: 300,
                     messages: [{
                         role: 'user',
@@ -29765,7 +29765,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
 
                 // Build request body - only include web search for non-code-review requests
                 const requestBody = {
-                    model: 'claude-sonnet-4-20250514',
+                    model: CONFIG.CLAUDE_MODEL,
                     max_tokens: 8192,
                     messages: messages
                 };
@@ -31628,7 +31628,7 @@ Respond with JSON only:`;
                             'anthropic-dangerous-direct-browser-access': 'true'
                         },
                         body: JSON.stringify({
-                            model: 'claude-sonnet-4-20250514',
+                            model: CONFIG.CLAUDE_MODEL,
                             max_tokens: 1024,
                             tools: [{
                                 type: 'web_search_20250305',
@@ -34047,7 +34047,7 @@ MYND is your second brain - an intelligent extension of your memory and thinking
                         'anthropic-dangerous-direct-browser-access': 'true'
                     },
                     body: JSON.stringify({
-                        model: 'claude-sonnet-4-20250514',
+                        model: CONFIG.CLAUDE_MODEL,
                         max_tokens: 8192,
                         messages: [{
                             role: 'user',
@@ -34847,7 +34847,7 @@ Guidelines:
                     'anthropic-dangerous-direct-browser-access': 'true'
                 },
                 body: JSON.stringify({
-                    model: 'claude-sonnet-4-20250514',
+                    model: CONFIG.CLAUDE_MODEL,
                     max_tokens: 4000,
                     temperature: 0,
                     system: `You create mind map structures as JSON. You ALWAYS include nested children. You NEVER create flat structures. Every node at level 1 MUST have children, and those children MUST have their own children. You ALWAYS create EXACTLY 4 top-level nodes.`,
@@ -37664,7 +37664,7 @@ IMPORTANT: In the "items" array, use ONLY the exact node label (the part before 
                 'anthropic-dangerous-direct-browser-access': 'true'
             },
             body: JSON.stringify({
-                model: 'claude-sonnet-4-20250514',
+                model: CONFIG.CLAUDE_MODEL,
                 max_tokens: maxTokens,
                 messages: [{ role: 'user', content: aiPrompt }]
             })
@@ -38582,7 +38582,7 @@ Consider these learned patterns when generating suggestions.`;
                             'anthropic-dangerous-direct-browser-access': 'true'
                         },
                         body: JSON.stringify({
-                            model: 'claude-sonnet-4-20250514',
+                            model: CONFIG.CLAUDE_MODEL,
                             max_tokens: 300,
                             messages: [{
                                 role: 'user',
@@ -38850,7 +38850,7 @@ Return ONLY JSON:
                         'anthropic-dangerous-direct-browser-access': 'true'
                     },
                     body: JSON.stringify({
-                        model: 'claude-sonnet-4-20250514',
+                        model: CONFIG.CLAUDE_MODEL,
                         max_tokens: 500,
                         messages: [{
                             role: 'user',
