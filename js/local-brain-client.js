@@ -1845,6 +1845,287 @@ const LocalBrain = {
         }
 
         return { error: 'Failed to get stats' };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // UNIFIED SYSTEM - Map as Vector Database
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Sync the browser's map to the server's unified graph.
+     * This makes the map the source of truth for the vector database.
+     * @param {Object} mapData - The map data (recursive node structure)
+     * @param {boolean} reEmbedAll - Whether to regenerate all embeddings
+     * @returns {Promise<{status, nodes, embedded, time_ms}>}
+     */
+    async syncMapToServer(mapData, reEmbedAll = false) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/unified/map/sync`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    map_data: mapData,
+                    re_embed_all: reEmbedAll
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🗺️ Map synced to server: ${result.nodes} nodes, ${result.embedded} embedded`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.syncMapToServer failed:', e);
+        }
+
+        return { error: 'Failed to sync map' };
+    },
+
+    /**
+     * Export the server's unified graph to browser map format.
+     * Use this to initialize the browser from server state.
+     * @returns {Promise<{map_data, stats}>}
+     */
+    async exportMapFromServer() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/unified/map/export`);
+            if (res.ok) {
+                const result = await res.json();
+                if (result.map_data) {
+                    console.log(`🗺️ Map exported from server: ${result.stats?.total_nodes} nodes`);
+                }
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.exportMapFromServer failed:', e);
+        }
+
+        return { error: 'Failed to export map' };
+    },
+
+    /**
+     * Semantic search across the unified map.
+     * @param {string} query - Search query
+     * @param {number} topK - Maximum results
+     * @param {number} threshold - Minimum similarity threshold
+     * @param {string[]} nodeTypes - Filter by node types
+     * @returns {Promise<{results, query, time_ms}>}
+     */
+    async searchUnifiedMap(query, topK = 10, threshold = 0.35, nodeTypes = null) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available', results: [] };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/unified/map/search`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query,
+                    top_k: topK,
+                    threshold,
+                    node_types: nodeTypes
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🔍 Map search: ${result.results?.length} results for "${query}"`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.searchUnifiedMap failed:', e);
+        }
+
+        return { error: 'Failed to search map', results: [] };
+    },
+
+    /**
+     * Get unified context for RAG from the map.
+     * This is THE method to call before every Claude request.
+     * @param {string} query - Query to find relevant context for
+     * @param {number} maxTokens - Maximum tokens to return
+     * @param {boolean} includeSources - Whether to include source excerpts
+     * @returns {Promise<{context, nodes_used, chars, time_ms}>}
+     */
+    async getUnifiedContext(query, maxTokens = 8000, includeSources = false) {
+        if (!this.isAvailable) {
+            return { context: '', error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/unified/context`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query,
+                    max_tokens: maxTokens,
+                    include_sources: includeSources
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                if (result.chars > 0) {
+                    console.log(`🧠 Unified context: ${result.chars} chars from ${result.nodes_used} nodes`);
+                }
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getUnifiedContext failed:', e);
+        }
+
+        return { context: '', error: 'Failed to get context' };
+    },
+
+    /**
+     * Get unified map statistics.
+     * @returns {Promise<{total_nodes, embedded_nodes, type_counts}>}
+     */
+    async getUnifiedMapStats() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/unified/map/stats`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getUnifiedMapStats failed:', e);
+        }
+
+        return { error: 'Failed to get stats' };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CONVERSATION ARCHIVE + KNOWLEDGE EXTRACTION
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Import a conversation and extract knowledge into the map.
+     * @param {string} text - Full conversation text
+     * @param {string} source - Source AI (claude, chatgpt, grok)
+     * @param {string} title - Optional title
+     * @param {boolean} processImmediately - Extract knowledge now
+     * @returns {Promise<{conversation_id, nodes_created, nodes_enriched}>}
+     */
+    async importConversationUnified(text, source = 'unknown', title = null, processImmediately = true) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/unified/conversations/import`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text,
+                    source,
+                    title,
+                    process_immediately: processImmediately
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                if (result.processed) {
+                    console.log(`📚 Conversation imported: ${result.concepts_extracted} concepts → ${result.nodes_created} new, ${result.nodes_enriched} enriched`);
+                } else {
+                    console.log(`📚 Conversation archived: ${result.title}`);
+                }
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.importConversationUnified failed:', e);
+        }
+
+        return { error: 'Failed to import conversation' };
+    },
+
+    /**
+     * List archived conversations.
+     * @param {string} source - Filter by source
+     * @param {boolean} processed - Filter by processed status
+     * @returns {Promise<{conversations, stats}>}
+     */
+    async listArchivedConversations(source = null, processed = null) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available', conversations: [] };
+        }
+
+        try {
+            const params = new URLSearchParams();
+            if (source) params.set('source', source);
+            if (processed !== null) params.set('processed', processed);
+
+            const res = await fetch(`${this.serverUrl}/unified/conversations?${params}`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.listArchivedConversations failed:', e);
+        }
+
+        return { error: 'Failed to list conversations', conversations: [] };
+    },
+
+    /**
+     * Process pending (unprocessed) conversations.
+     * Extracts knowledge and integrates into the map.
+     * @param {number} limit - Maximum conversations to process
+     * @returns {Promise<{processed, results}>}
+     */
+    async processPendingConversations(limit = 5) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/unified/conversations/process-pending?limit=${limit}`, {
+                method: 'POST'
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`⚙️ Processed ${result.processed} pending conversations`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.processPendingConversations failed:', e);
+        }
+
+        return { error: 'Failed to process conversations' };
+    },
+
+    /**
+     * Get conversation archive statistics.
+     * @returns {Promise<{total_conversations, processed, unprocessed, sources}>}
+     */
+    async getArchiveStats() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/unified/conversations/stats`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getArchiveStats failed:', e);
+        }
+
+        return { error: 'Failed to get stats' };
     }
 };
 

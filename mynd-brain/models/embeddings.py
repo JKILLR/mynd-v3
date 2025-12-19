@@ -17,15 +17,16 @@ class EmbeddingEngine:
     Much more powerful than browser-based Universal Sentence Encoder.
     """
 
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2", device: torch.device = None):
+    def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5", device: torch.device = None):
         """
         Initialize the embedding engine.
 
         Args:
             model_name: HuggingFace model name. Options:
-                - "all-MiniLM-L6-v2": Fast, 384 dims (default)
-                - "all-mpnet-base-v2": Best quality, 768 dims
-                - "paraphrase-multilingual-MiniLM-L12-v2": Multilingual
+                - "BAAI/bge-small-en-v1.5": Fast, 384 dims, best retrieval (default)
+                - "BAAI/bge-base-en-v1.5": Higher quality, 768 dims
+                - "all-MiniLM-L6-v2": Legacy, 384 dims
+                - "all-mpnet-base-v2": Good quality, 768 dims
             device: torch device (mps, cuda, or cpu)
         """
         self.model_name = model_name
