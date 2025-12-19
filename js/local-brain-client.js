@@ -1668,6 +1668,183 @@ const LocalBrain = {
             serverUrl: this.serverUrl,
             lastCheck: this.lastCheck ? new Date(this.lastCheck).toISOString() : null
         };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CONVERSATION STORAGE - Import and search AI conversations
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Import a conversation from any AI chat (Claude, ChatGPT, Grok, etc.)
+     * Full text is stored and embedded for semantic search.
+     *
+     * @param {string} text - Full conversation text
+     * @param {string} source - Source AI: 'claude', 'chatgpt', 'grok', etc.
+     * @param {string} title - Optional title for the conversation
+     * @returns {Promise<{status, id, title, chars}>}
+     */
+    async importConversation(text, source = 'unknown', title = null) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const start = performance.now();
+            const res = await fetch(`${this.serverUrl}/conversations/import`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, source, title })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`💬 Conversation imported: "${result.title}" (${result.chars} chars)`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.importConversation failed:', e);
+        }
+
+        return { error: 'Failed to import conversation' };
+    },
+
+    /**
+     * List all stored conversations.
+     * @param {string} source - Optional filter by source
+     * @returns {Promise<{conversations: Array, stats: Object}>}
+     */
+    async listConversations(source = null) {
+        if (!this.isAvailable) {
+            return { conversations: [], stats: {}, error: 'Server not available' };
+        }
+
+        try {
+            const url = source
+                ? `${this.serverUrl}/conversations?source=${encodeURIComponent(source)}`
+                : `${this.serverUrl}/conversations`;
+            const res = await fetch(url);
+
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.listConversations failed:', e);
+        }
+
+        return { conversations: [], stats: {}, error: 'Failed to list conversations' };
+    },
+
+    /**
+     * Get a specific conversation by ID.
+     * @param {string} convId - Conversation ID
+     * @returns {Promise<Object>} Full conversation data
+     */
+    async getConversation(convId) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/conversations/${convId}`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getConversation failed:', e);
+        }
+
+        return { error: 'Failed to get conversation' };
+    },
+
+    /**
+     * Search conversations by semantic similarity.
+     * @param {string} query - Search query
+     * @param {number} topK - Max results to return
+     * @param {string} source - Optional source filter
+     * @returns {Promise<{results: Array, query: string}>}
+     */
+    async searchConversations(query, topK = 5, source = null) {
+        if (!this.isAvailable) {
+            return { results: [], error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/conversations/search`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query, top_k: topK, source_filter: source })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`💬 Found ${result.results.length} relevant conversations for: "${query}"`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.searchConversations failed:', e);
+        }
+
+        return { results: [], error: 'Search failed' };
+    },
+
+    /**
+     * Get relevant context from past conversations for injection into Claude.
+     * This is THE key method for unified context.
+     *
+     * @param {string} query - The user's current query/message
+     * @param {number} maxTokens - Approximate max tokens for context
+     * @param {boolean} includeFullText - Include full conversations or just summaries
+     * @returns {Promise<{context: string, chars: number}>}
+     */
+    async getConversationContext(query, maxTokens = 4000, includeFullText = false) {
+        if (!this.isAvailable) {
+            return { context: '', error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/conversations/context`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query,
+                    max_tokens: maxTokens,
+                    include_full_text: includeFullText
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                if (result.chars > 0) {
+                    console.log(`💬 Retrieved ${result.chars} chars of conversation context`);
+                }
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getConversationContext failed:', e);
+        }
+
+        return { context: '', error: 'Failed to get context' };
+    },
+
+    /**
+     * Get conversation storage statistics.
+     * @returns {Promise<{total_conversations, total_chars, total_mb, sources}>}
+     */
+    async getConversationStats() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/conversations/stats`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getConversationStats failed:', e);
+        }
+
+        return { error: 'Failed to get stats' };
     }
 };
 
