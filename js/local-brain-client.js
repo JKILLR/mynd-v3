@@ -710,6 +710,226 @@ const LocalBrain = {
     },
 
     // ═══════════════════════════════════════════════════════════════════
+    // META-LEARNING - Learning how to learn
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Get detailed meta-learning statistics.
+     * Shows how the brain is learning to learn:
+     * - Source effectiveness (which knowledge sources work best)
+     * - Confidence calibration (is the brain over/under confident)
+     * - Learning rates per domain
+     * - Best learning strategies
+     * - Improvement trend over time
+     */
+    async getMetaStats() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/meta`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getMetaStats failed:', e);
+        }
+
+        return { error: 'Failed to get meta-learning stats' };
+    },
+
+    /**
+     * Get a human-readable summary of meta-learning state.
+     * Useful for debugging and displaying brain behavior.
+     */
+    async getMetaSummary() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/meta/summary`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getMetaSummary failed:', e);
+        }
+
+        return { error: 'Failed to get meta-learning summary' };
+    },
+
+    /**
+     * Check if the brain's confidence scores are calibrated.
+     * Shows whether it's over-confident, under-confident, or well-calibrated.
+     *
+     * Good calibration means:
+     * - When brain says 80% confident, it's right ~80% of the time
+     */
+    async getCalibrationReport() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/meta/calibration`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getCalibrationReport failed:', e);
+        }
+
+        return { error: 'Failed to get calibration report' };
+    },
+
+    /**
+     * Check if the brain is improving over time.
+     * Shows learning velocity and effectiveness trends.
+     */
+    async getImprovementTrend() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/meta/improvement`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getImprovementTrend failed:', e);
+        }
+
+        return { error: 'Failed to get improvement trend' };
+    },
+
+    /**
+     * Get recommendations on which knowledge sources to prioritize.
+     * The meta-learner tracks which sources are most effective
+     * and adjusts attention weights accordingly.
+     *
+     * @param {string} context - Optional context for recommendations
+     */
+    async getSourceRecommendations(context = '') {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const url = context
+                ? `${this.serverUrl}/brain/meta/recommendations?context=${encodeURIComponent(context)}`
+                : `${this.serverUrl}/brain/meta/recommendations`;
+            const res = await fetch(url);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getSourceRecommendations failed:', e);
+        }
+
+        return { error: 'Failed to get source recommendations' };
+    },
+
+    /**
+     * Record feedback on a knowledge source's effectiveness.
+     * Call this when you know a source helped or didn't help.
+     *
+     * This updates the meta-learner's attention weights -
+     * effective sources get prioritized in future context building.
+     *
+     * @param {string} source - 'predictions', 'distilled_knowledge', 'patterns', 'corrections', 'memories'
+     * @param {boolean} success - Whether the source helped
+     * @param {Object} context - Optional context about the usage
+     */
+    async recordSourceFeedback(source, success, context = null) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/meta/feedback`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    source,
+                    success,
+                    context
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🧠 Meta-learning: Recorded ${source} ${success ? 'success' : 'failure'} (new weight: ${result.new_weight?.toFixed(2)})`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.recordSourceFeedback failed:', e);
+        }
+
+        return { error: 'Failed to record source feedback' };
+    },
+
+    /**
+     * Adjust the learning rate for a domain.
+     * Positive delta = learn faster, negative = learn slower.
+     *
+     * @param {string} domain - 'connections', 'patterns', 'corrections', 'insights'
+     * @param {number} delta - Adjustment amount (e.g., 0.05 or -0.02)
+     */
+    async adjustLearningRate(domain, delta) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/meta/learning-rate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domain, delta })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🧠 Meta-learning: ${domain} learning rate ${result.old_rate.toFixed(3)} → ${result.new_rate.toFixed(3)}`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.adjustLearningRate failed:', e);
+        }
+
+        return { error: 'Failed to adjust learning rate' };
+    },
+
+    /**
+     * Manually save a meta-learning epoch.
+     * Epochs capture the brain's learning state at a point in time.
+     * Useful after significant learning events.
+     */
+    async saveMetaEpoch() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/meta/save-epoch`, {
+                method: 'POST'
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🧠 Meta-learning: Saved epoch ${result.epoch?.epoch}`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.saveMetaEpoch failed:', e);
+        }
+
+        return { error: 'Failed to save meta epoch' };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
     // CODE SELF-AWARENESS - Deep Code Understanding for Claude (Legacy)
     // ═══════════════════════════════════════════════════════════════════
 

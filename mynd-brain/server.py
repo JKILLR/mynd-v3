@@ -621,7 +621,7 @@ async def root():
     """Root endpoint with info."""
     return {
         "name": "MYND Brain",
-        "version": "0.4.0",  # Unified Brain update
+        "version": "0.5.0",  # Meta-learner update
         "status": "running",
         "endpoints": {
             "unified_brain": [
@@ -636,6 +636,16 @@ async def root():
                 "/brain/knowledge",         # View distilled knowledge
                 "/brain/teaching-prompt",   # Get teaching instructions
                 "/brain/full-stats"         # Comprehensive stats
+            ],
+            "meta_learning": [
+                "/brain/meta",              # Detailed meta-learning stats
+                "/brain/meta/summary",      # Human-readable summary
+                "/brain/meta/calibration",  # Confidence calibration report
+                "/brain/meta/improvement",  # Improvement trend over time
+                "/brain/meta/recommendations", # Source priority recommendations
+                "/brain/meta/feedback",     # Record source effectiveness
+                "/brain/meta/learning-rate", # Adjust learning rates
+                "/brain/meta/save-epoch"    # Save learning checkpoint
             ],
             "ml_processing": [
                 "/embed", "/embed/batch",
@@ -972,6 +982,152 @@ async def get_full_brain_stats():
         raise HTTPException(status_code=503, detail="Unified brain not initialized")
 
     return unified_brain.get_knowledge_stats()
+
+# ═══════════════════════════════════════════════════════════════════
+# META-LEARNING - Learning how to learn
+# ═══════════════════════════════════════════════════════════════════
+
+class SourceFeedback(BaseModel):
+    source: str  # 'predictions', 'distilled_knowledge', 'patterns', 'corrections', 'memories'
+    success: bool
+    context: Optional[Dict[str, Any]] = None
+
+class LearningRateAdjustment(BaseModel):
+    domain: str  # 'connections', 'patterns', 'corrections', 'insights'
+    delta: float  # positive = learn faster, negative = learn slower
+
+@app.get("/brain/meta")
+async def get_meta_learning_stats():
+    """
+    Get detailed meta-learning statistics.
+    Shows how the brain is learning to learn.
+
+    Includes:
+    - Source effectiveness (which knowledge sources work best)
+    - Confidence calibration (is the brain over/under confident)
+    - Learning rates per domain
+    - Best learning strategies
+    - Improvement trend over time
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return unified_brain.get_meta_stats()
+
+@app.get("/brain/meta/summary")
+async def get_meta_learning_summary():
+    """
+    Get a human-readable summary of meta-learning state.
+    Useful for debugging and understanding brain behavior.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return {
+        "summary": unified_brain.get_meta_learning_summary()
+    }
+
+@app.get("/brain/meta/calibration")
+async def get_calibration_report():
+    """
+    Check if the brain's confidence scores are calibrated.
+    Shows whether it's over-confident, under-confident, or well-calibrated.
+
+    Good calibration means:
+    - When brain says 80% confident, it's right ~80% of the time
+    - This is critical for trustworthy predictions
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return {
+        "calibration": unified_brain.get_calibration_report()
+    }
+
+@app.get("/brain/meta/improvement")
+async def get_improvement_trend():
+    """
+    Check if the brain is improving over time.
+    Shows learning velocity and effectiveness trends.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return unified_brain.get_improvement_trend()
+
+@app.get("/brain/meta/recommendations")
+async def get_source_recommendations(context: str = ""):
+    """
+    Get recommendations on which knowledge sources to prioritize.
+    The meta-learner tracks which sources are most effective
+    and adjusts attention weights accordingly.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return unified_brain.get_source_recommendations(context)
+
+@app.post("/brain/meta/feedback")
+async def record_source_feedback(feedback: SourceFeedback):
+    """
+    Record feedback on a knowledge source's effectiveness.
+    Call this when you know a source helped or didn't help.
+
+    This updates the meta-learner's attention weights -
+    effective sources get prioritized in future context building.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    result = unified_brain.record_source_feedback(
+        feedback.source,
+        feedback.success,
+        feedback.context
+    )
+
+    return {
+        "status": "recorded",
+        **result
+    }
+
+@app.post("/brain/meta/learning-rate")
+async def adjust_learning_rate(adjustment: LearningRateAdjustment):
+    """
+    Adjust the learning rate for a domain.
+    Positive delta = learn faster, negative = learn slower.
+
+    Domains:
+    - connections: How fast to update connection predictions
+    - patterns: How fast to trust new patterns
+    - corrections: How fast to apply corrections
+    - insights: How fast to integrate insights
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    result = unified_brain.adjust_learning_rate(adjustment.domain, adjustment.delta)
+
+    return {
+        "status": "adjusted",
+        **result
+    }
+
+@app.post("/brain/meta/save-epoch")
+async def save_meta_epoch():
+    """
+    Manually save a meta-learning epoch.
+    Epochs capture the brain's learning state at a point in time.
+    Useful after significant learning events.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    epoch = unified_brain.save_meta_epoch()
+
+    return {
+        "status": "saved",
+        "epoch": epoch
+    }
 
 # ═══════════════════════════════════════════════════════════════════
 # CODE EMBEDDING - Parse codebase into map structure

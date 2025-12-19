@@ -386,6 +386,291 @@ class KnowledgeDistiller:
         }
 
 
+class MetaLearner:
+    """
+    The system that learns HOW to learn.
+    This is meta-cognition - thinking about thinking.
+
+    Tracks:
+    - Which learning sources produce best outcomes
+    - Whether confidence scores are calibrated
+    - Which learning strategies work best
+    - How to allocate attention across knowledge types
+    """
+
+    def __init__(self):
+        # Source effectiveness tracking
+        self.source_stats = {
+            'predictions': {'uses': 0, 'successes': 0, 'failures': 0},
+            'distilled_knowledge': {'uses': 0, 'successes': 0, 'failures': 0},
+            'patterns': {'uses': 0, 'successes': 0, 'failures': 0},
+            'corrections': {'uses': 0, 'successes': 0, 'failures': 0},
+            'memories': {'uses': 0, 'successes': 0, 'failures': 0}
+        }
+
+        # Confidence calibration - track predicted vs actual accuracy
+        self.confidence_buckets = {
+            'high': {'predicted': 0, 'correct': 0},    # >0.8 confidence
+            'medium': {'predicted': 0, 'correct': 0},  # 0.5-0.8
+            'low': {'predicted': 0, 'correct': 0}      # <0.5
+        }
+
+        # Learning rate per domain
+        self.learning_rates = {
+            'connections': 0.1,   # How fast to update connection predictions
+            'patterns': 0.05,     # How fast to trust new patterns
+            'corrections': 0.2,  # How fast to apply corrections
+            'insights': 0.1      # How fast to integrate insights
+        }
+
+        # Strategy effectiveness
+        self.strategies = {
+            'reinforce_correct': {'uses': 0, 'outcomes': []},
+            'learn_from_miss': {'uses': 0, 'outcomes': []},
+            'pattern_matching': {'uses': 0, 'outcomes': []},
+            'semantic_similarity': {'uses': 0, 'outcomes': []}
+        }
+
+        # Meta-metrics over time
+        self.meta_history = []
+        self.epoch = 0
+
+        # Attention weights - which sources to prioritize
+        self.attention_weights = {
+            'predictions': 1.0,
+            'distilled_knowledge': 1.0,
+            'patterns': 1.0,
+            'corrections': 1.0,
+            'memories': 1.0
+        }
+
+    def record_source_usage(self, source: str, success: bool, context: Dict = None):
+        """
+        Record when a knowledge source was used and whether it helped.
+        This is how we learn which sources are most valuable.
+        """
+        if source not in self.source_stats:
+            self.source_stats[source] = {'uses': 0, 'successes': 0, 'failures': 0}
+
+        self.source_stats[source]['uses'] += 1
+        if success:
+            self.source_stats[source]['successes'] += 1
+        else:
+            self.source_stats[source]['failures'] += 1
+
+        # Update attention weights based on effectiveness
+        self._update_attention_weights()
+
+    def record_confidence_outcome(self, confidence: float, was_correct: bool):
+        """
+        Track whether confidence scores are calibrated.
+        If we're 80% confident, we should be right ~80% of the time.
+        """
+        if confidence > 0.8:
+            bucket = 'high'
+        elif confidence > 0.5:
+            bucket = 'medium'
+        else:
+            bucket = 'low'
+
+        self.confidence_buckets[bucket]['predicted'] += 1
+        if was_correct:
+            self.confidence_buckets[bucket]['correct'] += 1
+
+    def record_strategy_outcome(self, strategy: str, outcome: float):
+        """
+        Record the outcome of a learning strategy.
+        Outcome is 0-1 where 1 is success.
+        """
+        if strategy not in self.strategies:
+            self.strategies[strategy] = {'uses': 0, 'outcomes': []}
+
+        self.strategies[strategy]['uses'] += 1
+        self.strategies[strategy]['outcomes'].append({
+            'value': outcome,
+            'timestamp': time.time()
+        })
+
+        # Keep bounded
+        if len(self.strategies[strategy]['outcomes']) > 100:
+            self.strategies[strategy]['outcomes'] = self.strategies[strategy]['outcomes'][-100:]
+
+    def _update_attention_weights(self):
+        """
+        Update attention weights based on source effectiveness.
+        More effective sources get more weight.
+        """
+        for source, stats in self.source_stats.items():
+            if stats['uses'] > 5:  # Minimum samples before adjusting
+                effectiveness = stats['successes'] / stats['uses']
+                # Smooth update with learning rate
+                current = self.attention_weights.get(source, 1.0)
+                target = 0.5 + effectiveness  # Range 0.5 to 1.5
+                self.attention_weights[source] = current * 0.9 + target * 0.1
+
+    def get_calibration_report(self) -> Dict:
+        """
+        Check if confidence scores are calibrated correctly.
+        Returns over/under confidence analysis.
+        """
+        report = {}
+        for bucket, data in self.confidence_buckets.items():
+            if data['predicted'] > 0:
+                actual_accuracy = data['correct'] / data['predicted']
+                expected_accuracy = {
+                    'high': 0.85,
+                    'medium': 0.65,
+                    'low': 0.35
+                }.get(bucket, 0.5)
+
+                report[bucket] = {
+                    'samples': data['predicted'],
+                    'actual_accuracy': actual_accuracy,
+                    'expected_accuracy': expected_accuracy,
+                    'calibration_error': actual_accuracy - expected_accuracy,
+                    'status': 'well_calibrated' if abs(actual_accuracy - expected_accuracy) < 0.1 else (
+                        'over_confident' if actual_accuracy < expected_accuracy else 'under_confident'
+                    )
+                }
+        return report
+
+    def get_best_strategies(self) -> List[Dict]:
+        """Get learning strategies ranked by effectiveness"""
+        ranked = []
+        for name, data in self.strategies.items():
+            if data['uses'] > 0 and data['outcomes']:
+                avg_outcome = sum(o['value'] for o in data['outcomes']) / len(data['outcomes'])
+                ranked.append({
+                    'strategy': name,
+                    'uses': data['uses'],
+                    'avg_outcome': avg_outcome
+                })
+
+        ranked.sort(key=lambda x: x['avg_outcome'], reverse=True)
+        return ranked
+
+    def get_learning_rate(self, domain: str) -> float:
+        """Get the optimal learning rate for a domain"""
+        return self.learning_rates.get(domain, 0.1)
+
+    def adjust_learning_rate(self, domain: str, delta: float):
+        """Adjust learning rate based on performance"""
+        if domain in self.learning_rates:
+            new_rate = max(0.01, min(0.5, self.learning_rates[domain] + delta))
+            self.learning_rates[domain] = new_rate
+
+    def get_source_recommendation(self, context: str) -> Dict:
+        """
+        Recommend which knowledge sources to prioritize for a given context.
+        Returns weighted recommendations.
+        """
+        recommendations = {}
+        for source, weight in self.attention_weights.items():
+            stats = self.source_stats.get(source, {'uses': 0, 'successes': 0})
+            effectiveness = stats['successes'] / stats['uses'] if stats['uses'] > 0 else 0.5
+
+            recommendations[source] = {
+                'weight': weight,
+                'effectiveness': effectiveness,
+                'recommended': weight > 0.8  # Recommend if weight is above threshold
+            }
+
+        return recommendations
+
+    def save_epoch(self):
+        """
+        Save current meta-learning state as an epoch.
+        This lets us track improvement over time.
+        """
+        self.epoch += 1
+        snapshot = {
+            'epoch': self.epoch,
+            'timestamp': time.time(),
+            'source_effectiveness': {
+                k: v['successes'] / v['uses'] if v['uses'] > 0 else 0
+                for k, v in self.source_stats.items()
+            },
+            'calibration': self.get_calibration_report(),
+            'best_strategy': self.get_best_strategies()[0] if self.get_best_strategies() else None,
+            'attention_weights': self.attention_weights.copy(),
+            'learning_rates': self.learning_rates.copy()
+        }
+
+        self.meta_history.append(snapshot)
+
+        # Keep last 50 epochs
+        if len(self.meta_history) > 50:
+            self.meta_history = self.meta_history[-50:]
+
+        return snapshot
+
+    def get_improvement_trend(self) -> Dict:
+        """
+        Analyze improvement trend over epochs.
+        Shows whether the brain is learning to learn better.
+        """
+        if len(self.meta_history) < 2:
+            return {'status': 'insufficient_data', 'epochs': len(self.meta_history)}
+
+        # Compare first and last epochs
+        first = self.meta_history[0]
+        last = self.meta_history[-1]
+
+        # Calculate average effectiveness change
+        first_avg = sum(first['source_effectiveness'].values()) / len(first['source_effectiveness']) if first['source_effectiveness'] else 0
+        last_avg = sum(last['source_effectiveness'].values()) / len(last['source_effectiveness']) if last['source_effectiveness'] else 0
+
+        improvement = last_avg - first_avg
+
+        return {
+            'status': 'improving' if improvement > 0.05 else 'stable' if improvement > -0.05 else 'declining',
+            'epochs_analyzed': len(self.meta_history),
+            'first_epoch_effectiveness': first_avg,
+            'last_epoch_effectiveness': last_avg,
+            'improvement': improvement,
+            'learning_velocity': improvement / len(self.meta_history) if len(self.meta_history) > 0 else 0
+        }
+
+    def get_stats(self) -> Dict:
+        """Get meta-learner statistics"""
+        return {
+            'epoch': self.epoch,
+            'source_stats': self.source_stats,
+            'attention_weights': self.attention_weights,
+            'learning_rates': self.learning_rates,
+            'calibration': self.get_calibration_report(),
+            'best_strategies': self.get_best_strategies()[:3],
+            'improvement_trend': self.get_improvement_trend()
+        }
+
+    def format_for_context(self) -> str:
+        """Format meta-learning insights for inclusion in context"""
+        lines = ["## Meta-Learning Insights (How I Learn)"]
+
+        # Best strategies
+        strategies = self.get_best_strategies()[:3]
+        if strategies:
+            lines.append("\n**Most Effective Learning Strategies:**")
+            for s in strategies:
+                lines.append(f"- {s['strategy']}: {s['avg_outcome']:.0%} success rate")
+
+        # Source recommendations
+        lines.append("\n**Knowledge Source Effectiveness:**")
+        for source, weight in sorted(self.attention_weights.items(), key=lambda x: x[1], reverse=True):
+            stats = self.source_stats.get(source, {'uses': 0, 'successes': 0})
+            if stats['uses'] > 0:
+                lines.append(f"- {source}: {stats['successes']}/{stats['uses']} successes (weight: {weight:.2f})")
+
+        # Calibration status
+        calibration = self.get_calibration_report()
+        if calibration:
+            lines.append("\n**Confidence Calibration:**")
+            for bucket, data in calibration.items():
+                lines.append(f"- {bucket} confidence: {data['status']}")
+
+        return "\n".join(lines)
+
+
 class PredictionTracker:
     """
     Tracks the brain's own predictions to learn from outcomes.
@@ -568,6 +853,7 @@ class UnifiedBrain:
         self.memory = MemorySystem()
         self.predictions = PredictionTracker()  # Self-learning from predictions
         self.knowledge = KnowledgeDistiller()   # Claude → Brain knowledge transfer
+        self.meta_learner = MetaLearner()       # Learning how to learn
 
         # External references (set by server.py)
         self.ml_brain = None  # Reference to MYNDBrain for neural ops
@@ -576,7 +862,7 @@ class UnifiedBrain:
         self.context_requests = 0
         self.growth_events_today = 0
 
-        print("🧠 UnifiedBrain initialized")
+        print("🧠 UnifiedBrain initialized with MetaLearner")
 
     def set_ml_brain(self, ml_brain):
         """Connect to the ML brain for neural operations"""
@@ -626,7 +912,13 @@ class UnifiedBrain:
         context_parts.append(("request", request_ctx))
         token_breakdown['request'] = len(request_ctx) // 4
 
-        # 6. Neural insights (if available and requested)
+        # 6. Meta-learning insights (how I learn)
+        meta_ctx = self.meta_learner.format_for_context()
+        if meta_ctx and self.meta_learner.epoch > 0:  # Only include if we have learning history
+            context_parts.append(("meta_learning", meta_ctx))
+            token_breakdown['meta_learning'] = len(meta_ctx) // 4
+
+        # 7. Neural insights (if available and requested)
         if include.get('neural_insights', True) and self.ml_brain and request.map_data:
             insights = self._get_neural_insights(request)
             if insights:
@@ -742,7 +1034,7 @@ class UnifiedBrain:
     def _combine_context(self, parts: List[tuple], request_type: str) -> str:
         """Combine all context parts into a single document"""
         # Order matters - most important first
-        order = ['self_awareness', 'distilled_knowledge', 'request', 'map_context', 'memories', 'neural_insights']
+        order = ['self_awareness', 'distilled_knowledge', 'meta_learning', 'request', 'map_context', 'memories', 'neural_insights']
 
         ordered_parts = []
         for name in order:
@@ -770,7 +1062,11 @@ class UnifiedBrain:
             'prediction_accuracy': self.predictions.get_accuracy(),
             'distilled_facts': len(self.knowledge.distilled_knowledge),
             'patterns_learned': len(self.knowledge.patterns_learned),
-            'capabilities': self.self_awareness.capabilities
+            'capabilities': self.self_awareness.capabilities,
+            # Meta-learner stats
+            'meta_epoch': self.meta_learner.epoch,
+            'meta_improvement': self.meta_learner.get_improvement_trend(),
+            'attention_weights': self.meta_learner.attention_weights
         }
 
         # Add ML brain stats if available
@@ -838,6 +1134,27 @@ class UnifiedBrain:
         # Check if this was predicted
         result = self.predictions.check_connection(source_id, target_id)
 
+        # ═══ META-LEARNER INTEGRATION ═══
+        # Record prediction source effectiveness
+        self.meta_learner.record_source_usage(
+            'predictions',
+            success=result['was_predicted'],
+            context={'source': source_id, 'target': target_id}
+        )
+
+        # Record confidence calibration
+        if result['prediction_score'] > 0:
+            self.meta_learner.record_confidence_outcome(
+                result['prediction_score'],
+                result['was_predicted']
+            )
+
+        # Record strategy effectiveness
+        if result['was_predicted']:
+            self.meta_learner.record_strategy_outcome('reinforce_correct', 1.0)
+        else:
+            self.meta_learner.record_strategy_outcome('learn_from_miss', 0.7)  # Still learning
+
         # Record growth event
         self.self_awareness.record_growth({
             'type': 'connection_learning',
@@ -850,15 +1167,16 @@ class UnifiedBrain:
 
         self.growth_events_today += 1
 
-        # Store in memory with high importance if we learned something
-        importance = 0.8 if result['was_predicted'] else 0.6
+        # Store in memory - importance influenced by meta-learner
+        memory_weight = self.meta_learner.attention_weights.get('memories', 1.0)
+        importance = (0.8 if result['was_predicted'] else 0.6) * memory_weight
         self.memory.remember({
             'type': 'connection_created',
             'source_id': source_id,
             'target_id': target_id,
             'was_predicted': result['was_predicted'],
             'learning_signal': result['learning_signal']
-        }, importance=importance)
+        }, importance=min(1.0, importance))
 
         # Log learning
         if result['was_predicted']:
@@ -913,6 +1231,36 @@ class UnifiedBrain:
         # Extract and distill knowledge
         extracted = self.knowledge.receive_claude_response(claude_response)
 
+        # ═══ META-LEARNER INTEGRATION ═══
+        # Track knowledge source effectiveness
+        has_useful_knowledge = (
+            len(extracted['insights']) > 0 or
+            len(extracted['patterns']) > 0 or
+            len(extracted['corrections']) > 0
+        )
+
+        self.meta_learner.record_source_usage(
+            'distilled_knowledge',
+            success=has_useful_knowledge,
+            context={'response_length': len(claude_response.get('response', ''))}
+        )
+
+        # Record pattern source effectiveness if patterns received
+        if extracted['patterns']:
+            self.meta_learner.record_source_usage('patterns', success=True)
+            self.meta_learner.record_strategy_outcome(
+                'pattern_matching',
+                1.0 if len(extracted['patterns']) > 1 else 0.7
+            )
+
+        # Record correction source effectiveness
+        if extracted['corrections']:
+            self.meta_learner.record_source_usage('corrections', success=True)
+            # Corrections are high value - record with high outcome
+            for correction in extracted['corrections']:
+                confidence = correction.get('importance', 0.7)
+                self.meta_learner.record_confidence_outcome(confidence, True)
+
         # Record this as a growth event
         self.self_awareness.record_growth({
             'type': 'claude_teaching',
@@ -923,20 +1271,27 @@ class UnifiedBrain:
 
         self.growth_events_today += 1
 
-        # Store the interaction in memory
+        # Store in memory - importance weighted by meta-learner
+        knowledge_weight = self.meta_learner.attention_weights.get('distilled_knowledge', 1.0)
         self.memory.remember({
             'type': 'claude_response',
             'had_insights': len(extracted['insights']) > 0,
             'had_patterns': len(extracted['patterns']) > 0,
             'response_preview': claude_response.get('response', '')[:100]
-        }, importance=0.7)
+        }, importance=min(1.0, 0.7 * knowledge_weight))
+
+        # Save meta-learning epoch after significant learning
+        if has_useful_knowledge and self.growth_events_today % 5 == 0:
+            self.meta_learner.save_epoch()
+            print(f"🧠 Meta-learning: Saved epoch {self.meta_learner.epoch}")
 
         print(f"🧠 Received from Claude: {len(extracted['insights'])} insights, {len(extracted['patterns'])} patterns")
 
         return {
             'status': 'processed',
             'extracted': extracted,
-            'knowledge_stats': self.knowledge.get_stats()
+            'knowledge_stats': self.knowledge.get_stats(),
+            'meta_stats': self.meta_learner.get_stats()  # Include meta-learning stats
         }
 
     def ask_claude_to_teach(self, topic: str) -> Dict:
@@ -1035,5 +1390,107 @@ I will distill high-confidence insights into permanent knowledge.
                 'short_term': len(self.memory.short_term),
                 'working': len(self.memory.working)
             },
-            'growth_events': len(self.self_awareness.growth_events)
+            'growth_events': len(self.self_awareness.growth_events),
+            'meta_learning': self.meta_learner.get_stats()  # Include meta-learning stats
         }
+
+    # ═══════════════════════════════════════════════════════════════════
+    # META-LEARNING - Learning how to learn
+    # ═══════════════════════════════════════════════════════════════════
+
+    def get_meta_stats(self) -> Dict:
+        """Get detailed meta-learning statistics"""
+        return self.meta_learner.get_stats()
+
+    def get_source_recommendations(self, context: str = "") -> Dict:
+        """
+        Get recommendations on which knowledge sources to prioritize.
+        This influences how the brain builds context.
+        """
+        return self.meta_learner.get_source_recommendation(context)
+
+    def get_calibration_report(self) -> Dict:
+        """
+        Get confidence calibration report.
+        Shows if we're over/under confident in our predictions.
+        """
+        return self.meta_learner.get_calibration_report()
+
+    def get_improvement_trend(self) -> Dict:
+        """
+        Get improvement trend over time.
+        Shows if the brain is learning to learn better.
+        """
+        return self.meta_learner.get_improvement_trend()
+
+    def save_meta_epoch(self) -> Dict:
+        """
+        Manually save a meta-learning epoch.
+        Useful after significant learning events.
+        """
+        epoch = self.meta_learner.save_epoch()
+        print(f"🧠 Meta-learning: Manually saved epoch {self.meta_learner.epoch}")
+        return epoch
+
+    def record_source_feedback(self, source: str, success: bool, context: Dict = None) -> Dict:
+        """
+        Record feedback on a knowledge source's effectiveness.
+        Called when we know a source helped or didn't help.
+        """
+        self.meta_learner.record_source_usage(source, success, context)
+        return {
+            'source': source,
+            'success': success,
+            'new_weight': self.meta_learner.attention_weights.get(source, 1.0)
+        }
+
+    def adjust_learning_rate(self, domain: str, delta: float) -> Dict:
+        """
+        Adjust the learning rate for a domain.
+        Positive delta = learn faster, negative = learn slower.
+        """
+        old_rate = self.meta_learner.get_learning_rate(domain)
+        self.meta_learner.adjust_learning_rate(domain, delta)
+        new_rate = self.meta_learner.get_learning_rate(domain)
+        return {
+            'domain': domain,
+            'old_rate': old_rate,
+            'new_rate': new_rate,
+            'delta': delta
+        }
+
+    def get_meta_learning_summary(self) -> str:
+        """
+        Get a human-readable summary of meta-learning state.
+        Useful for debugging and understanding brain behavior.
+        """
+        stats = self.meta_learner.get_stats()
+        trend = stats['improvement_trend']
+        calibration = stats['calibration']
+
+        lines = ["## Meta-Learning Summary"]
+        lines.append(f"\n**Epoch**: {stats['epoch']}")
+        lines.append(f"**Status**: {trend['status']}")
+
+        if trend.get('improvement'):
+            lines.append(f"**Improvement**: {trend['improvement']:.1%}")
+
+        lines.append("\n### Attention Weights (How I prioritize sources)")
+        for source, weight in sorted(stats['attention_weights'].items(), key=lambda x: x[1], reverse=True):
+            bar = "█" * int(weight * 10) + "░" * (10 - int(weight * 10))
+            lines.append(f"  {source}: {bar} {weight:.2f}")
+
+        lines.append("\n### Learning Rates")
+        for domain, rate in stats['learning_rates'].items():
+            lines.append(f"  {domain}: {rate:.3f}")
+
+        lines.append("\n### Best Strategies")
+        for s in stats['best_strategies'][:3]:
+            lines.append(f"  - {s['strategy']}: {s['avg_outcome']:.0%} success")
+
+        if calibration:
+            lines.append("\n### Confidence Calibration")
+            for bucket, data in calibration.items():
+                lines.append(f"  {bucket}: {data['status']}")
+
+        return "\n".join(lines)
