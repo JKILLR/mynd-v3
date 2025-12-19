@@ -33,6 +33,7 @@ from models.embeddings import EmbeddingEngine
 from models.graph_transformer import MYNDGraphTransformer
 from models.voice import VoiceTranscriber
 from models.vision import VisionEngine
+from brain import UnifiedBrain, ContextRequest, ContextResponse
 
 # ═══════════════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -89,7 +90,9 @@ class EmbedResponse(BaseModel):
 class NodeData(BaseModel):
     id: str
     label: str
+    description: Optional[str] = None
     parentId: Optional[str] = None
+    depth: Optional[int] = None
     children: Optional[List[str]] = []
     embedding: Optional[List[float]] = None
 
@@ -110,6 +113,21 @@ class ConnectionPrediction(BaseModel):
 class PredictResponse(BaseModel):
     connections: List[ConnectionPrediction]
     attention_weights: Optional[Dict[str, float]] = None
+    time_ms: float
+
+class PredictCategoryRequest(BaseModel):
+    text: str
+    map_data: MapData
+    top_k: int = 5
+
+class CategoryPrediction(BaseModel):
+    category: str  # Node label (top-level parent)
+    node_id: str
+    confidence: float
+
+class PredictCategoryResponse(BaseModel):
+    predictions: List[CategoryPrediction]
+    embedding_used: bool
     time_ms: float
 
 class TrainFeedbackRequest(BaseModel):
@@ -159,6 +177,28 @@ class ImageEmbedRequest(BaseModel):
 class ImageEmbedResponse(BaseModel):
     embedding: List[float]
     dim: int
+    time_ms: float
+
+# Unified Brain models
+class BrainContextInclude(BaseModel):
+    self_awareness: bool = True
+    map_context: bool = True
+    memories: bool = True
+    user_profile: bool = True
+    neural_insights: bool = True
+
+class BrainContextRequest(BaseModel):
+    request_type: str = "chat"  # chat, action, code_review, self_improve
+    user_message: str = ""
+    selected_node_id: Optional[str] = None
+    map_data: Optional[MapData] = None
+    include: Optional[BrainContextInclude] = None
+
+class BrainContextResponse(BaseModel):
+    context_document: str
+    token_count: int
+    breakdown: Dict[str, int]
+    brain_state: Dict[str, Any]
     time_ms: float
 
 # ═══════════════════════════════════════════════════════════════════
@@ -530,14 +570,25 @@ class MYNDBrain:
 # FASTAPI APP
 # ═══════════════════════════════════════════════════════════════════
 
-# Global brain instance
+# Global brain instances
 brain: Optional[MYNDBrain] = None
+unified_brain: Optional[UnifiedBrain] = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize brain on startup, cleanup on shutdown."""
-    global brain
+    global brain, unified_brain
+
+    # Initialize ML brain
     brain = MYNDBrain()
+
+    # Initialize unified brain with reference to ML brain
+    base_dir = pathlib.Path(__file__).parent.parent
+    unified_brain = UnifiedBrain(base_dir, device=str(config.get_device()))
+    unified_brain.set_ml_brain(brain)
+
+    print("🧠 Unified Brain connected to ML Brain")
+
     yield
     # Cleanup
     print("🧠 MYND Brain shutting down...")
@@ -587,17 +638,61 @@ async def root():
     """Root endpoint with info."""
     return {
         "name": "MYND Brain",
-        "version": "0.3.0",
+        "version": "0.6.0",  # Self-improvement + Vision update
         "status": "running",
-        "endpoints": [
-            "/health",
-            "/map/sync", "/map/analyze",  # BAPI full context
-            "/embed", "/embed/batch",
-            "/predict/connections",
-            "/train/feedback",
-            "/voice/transcribe",
-            "/image/describe", "/image/embed"
-        ]
+        "endpoints": {
+            "unified_brain": [
+                "/brain/context",           # THE unified context endpoint
+                "/brain/state",             # Brain introspection
+                "/brain/feedback",          # Learning from user
+                "/brain/predictions",       # Record predictions for self-learning
+                "/brain/learn-connection",  # Learn from connections
+                "/brain/learning",          # View learning stats
+                "/brain/receive-from-claude", # Claude teaches brain
+                "/brain/ask-to-teach",      # Request teaching
+                "/brain/knowledge",         # View distilled knowledge
+                "/brain/teaching-prompt",   # Get teaching instructions
+                "/brain/full-stats"         # Comprehensive stats
+            ],
+            "meta_learning": [
+                "/brain/meta",              # Detailed meta-learning stats
+                "/brain/meta/summary",      # Human-readable summary
+                "/brain/meta/calibration",  # Confidence calibration report
+                "/brain/meta/improvement",  # Improvement trend over time
+                "/brain/meta/recommendations", # Source priority recommendations
+                "/brain/meta/feedback",     # Record source effectiveness
+                "/brain/meta/learning-rate", # Adjust learning rates
+                "/brain/meta/save-epoch"    # Save learning checkpoint
+            ],
+            "self_improvement": [
+                "/brain/analyze",           # Run self-analysis
+                "/brain/suggestions",       # Get improvement suggestions
+                "/brain/suggestions/top",   # Get top suggestions
+                "/brain/suggestions/summary", # Human-readable summary
+                "/brain/suggestions/status", # Mark suggestion status
+                "/brain/improvement-stats"  # Self-improvement statistics
+            ],
+            "vision": [
+                "/brain/vision",            # Get/set vision statement
+                "/brain/vision/goals"       # Add/remove goals
+            ],
+            "ml_processing": [
+                "/embed", "/embed/batch",
+                "/predict/connections",
+                "/map/sync", "/map/analyze",
+            ],
+            "multimodal": [
+                "/voice/transcribe",
+                "/image/describe", "/image/embed"
+            ],
+            "code_analysis": [
+                "/code/parse",
+                "/code/self-awareness"
+            ],
+            "system": [
+                "/health"
+            ]
+        }
     }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -643,6 +738,606 @@ async def map_status():
         "synced": brain.map_state is not None,
         "node_count": len(brain.map_state.nodes) if brain.map_state else 0,
         "last_sync": brain.map_last_sync
+    }
+
+# ═══════════════════════════════════════════════════════════════════
+# UNIFIED BRAIN - Complete Self-Aware Context
+# ═══════════════════════════════════════════════════════════════════
+
+@app.post("/brain/context", response_model=BrainContextResponse)
+async def get_brain_context(request: BrainContextRequest):
+    """
+    THE unified context endpoint.
+    One call = complete context for Claude.
+
+    This replaces 19+ fragmented context providers with ONE call that includes:
+    - Self-awareness (who am I?)
+    - Code understanding (how do I work?)
+    - Map context (what is the user looking at?)
+    - Memories (what do I remember?)
+    - Neural insights (what do my models see?)
+
+    Use this for ALL Claude API calls to give Claude complete self-awareness.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    start = time.time()
+
+    # Convert Pydantic request to dataclass
+    include_dict = {}
+    if request.include:
+        include_dict = {
+            'self_awareness': request.include.self_awareness,
+            'map_context': request.include.map_context,
+            'memories': request.include.memories,
+            'user_profile': request.include.user_profile,
+            'neural_insights': request.include.neural_insights
+        }
+
+    map_dict = None
+    if request.map_data:
+        map_dict = {
+            'nodes': [n.model_dump() for n in request.map_data.nodes]
+        }
+
+    ctx_request = ContextRequest(
+        request_type=request.request_type,
+        user_message=request.user_message,
+        selected_node_id=request.selected_node_id,
+        map_data=map_dict,
+        include=include_dict
+    )
+
+    # Get unified context
+    response = unified_brain.get_context(ctx_request)
+
+    elapsed = (time.time() - start) * 1000
+    print(f"🧠 Brain context: {response.token_count} tokens in {elapsed:.0f}ms")
+
+    return BrainContextResponse(
+        context_document=response.context_document,
+        token_count=response.token_count,
+        breakdown=response.breakdown,
+        brain_state=response.brain_state,
+        time_ms=elapsed
+    )
+
+@app.get("/brain/state")
+async def get_brain_state():
+    """
+    Get current brain state for debugging/display.
+    Shows what the brain knows about itself.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return {
+        "state": unified_brain._get_brain_state(),
+        "capabilities": unified_brain.self_awareness.capabilities,
+        "limitations": unified_brain.self_awareness.limitations,
+        "recent_memories": [
+            {k: v for k, v in m.items() if k != 'embedding'}
+            for m in unified_brain.memory.get_recent(5)
+        ],
+        "growth_events": len(unified_brain.self_awareness.growth_events)
+    }
+
+@app.post("/brain/feedback")
+async def record_brain_feedback(
+    node_id: str,
+    action: str,  # 'accepted', 'rejected', 'corrected'
+    context: Optional[Dict[str, Any]] = None
+):
+    """
+    Record feedback for the brain's learning.
+    Call this when the user accepts, rejects, or corrects something.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    unified_brain.record_feedback(node_id, action, context or {})
+
+    return {
+        "status": "recorded",
+        "growth_events_today": unified_brain.growth_events_today
+    }
+
+# ═══════════════════════════════════════════════════════════════════
+# SELF-LEARNING - Brain learns from its own predictions
+# ═══════════════════════════════════════════════════════════════════
+
+class PredictionRecord(BaseModel):
+    source_id: str
+    predictions: List[Dict[str, Any]]
+
+class ConnectionLearning(BaseModel):
+    source_id: str
+    target_id: str
+    connection_type: str = "manual"
+
+@app.post("/brain/predictions")
+async def record_predictions(record: PredictionRecord):
+    """
+    Record predictions made by the Graph Transformer.
+    Call this whenever predictions are shown to the user.
+    This enables the brain to learn from whether predictions were correct.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    unified_brain.record_predictions(record.source_id, record.predictions)
+
+    return {
+        "status": "recorded",
+        "predictions_tracked": len(record.predictions),
+        "total_predictions": unified_brain.predictions.total_predictions
+    }
+
+@app.post("/brain/learn-connection")
+async def learn_from_connection(learning: ConnectionLearning):
+    """
+    Tell the brain about a new connection.
+    The brain checks if it predicted this and learns accordingly.
+
+    This is the KEY self-learning endpoint:
+    - If predicted: Reinforces the pattern (brain was right!)
+    - If not predicted: Learns new pattern (brain missed this)
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    result = unified_brain.learn_from_connection(
+        learning.source_id,
+        learning.target_id,
+        learning.connection_type
+    )
+
+    return {
+        "status": "learned",
+        "was_predicted": result['was_predicted'],
+        "prediction_score": result['prediction_score'],
+        "learning_signal": result['learning_signal'],
+        "accuracy": unified_brain.predictions.get_accuracy()
+    }
+
+@app.get("/brain/learning")
+async def get_learning_stats():
+    """
+    Get the brain's learning statistics.
+    Shows prediction accuracy and what the brain has learned.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return {
+        "stats": unified_brain.get_prediction_accuracy(),
+        "summary": unified_brain.get_learning_summary(),
+        "growth_events_today": unified_brain.growth_events_today
+    }
+
+# ═══════════════════════════════════════════════════════════════════
+# CLAUDE ↔ BRAIN - Bidirectional Learning & Knowledge Distillation
+# ═══════════════════════════════════════════════════════════════════
+
+class ClaudeResponse(BaseModel):
+    """Structured response from Claude with learning data"""
+    response: str  # The actual text response
+    insights: Optional[List[Dict[str, Any]]] = None
+    patterns: Optional[List[Dict[str, Any]]] = None
+    corrections: Optional[List[Dict[str, Any]]] = None
+    explanations: Optional[Dict[str, str]] = None
+
+class TeachRequest(BaseModel):
+    topic: str
+
+@app.post("/brain/receive-from-claude")
+async def receive_from_claude(claude_response: ClaudeResponse):
+    """
+    Receive Claude's response and extract learnable information.
+    This is how Claude TEACHES the brain.
+
+    Claude should include:
+    - insights: Key facts with confidence scores
+    - patterns: Behavioral or structural patterns
+    - corrections: Things Claude corrected
+    - explanations: Concept explanations
+
+    The brain will distill high-confidence information into permanent knowledge.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    result = unified_brain.receive_from_claude(claude_response.model_dump())
+
+    return {
+        "status": "learned",
+        **result
+    }
+
+@app.post("/brain/ask-to-teach")
+async def ask_claude_to_teach(request: TeachRequest):
+    """
+    Generate a context/prompt designed to have Claude teach the brain.
+    Returns a structured request that will elicit teaching behavior.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    teaching_request = unified_brain.ask_claude_to_teach(request.topic)
+
+    return {
+        "teaching_request": teaching_request,
+        "instructions_for_claude": unified_brain.get_claude_teaching_prompt()
+    }
+
+@app.get("/brain/knowledge")
+async def get_brain_knowledge():
+    """
+    Get all knowledge the brain has learned from Claude.
+    Shows distilled facts, patterns, corrections, and explanations.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return {
+        "stats": unified_brain.knowledge.get_stats(),
+        "patterns": unified_brain.knowledge.get_learned_patterns()[:10],
+        "recent_corrections": unified_brain.knowledge.corrections[-5:],
+        "explanations": dict(list(unified_brain.knowledge.explanations.items())[:5]),
+        "distilled_count": len(unified_brain.knowledge.distilled_knowledge)
+    }
+
+@app.get("/brain/teaching-prompt")
+async def get_teaching_prompt():
+    """
+    Get the instructions that should be included in Claude's system prompt
+    to enable structured teaching/learning.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return {
+        "prompt": unified_brain.get_claude_teaching_prompt(),
+        "usage": "Include this in Claude's system prompt to enable knowledge distillation"
+    }
+
+@app.get("/brain/full-stats")
+async def get_full_brain_stats():
+    """
+    Get comprehensive brain statistics including all learning systems.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return unified_brain.get_knowledge_stats()
+
+# ═══════════════════════════════════════════════════════════════════
+# META-LEARNING - Learning how to learn
+# ═══════════════════════════════════════════════════════════════════
+
+class SourceFeedback(BaseModel):
+    source: str  # 'predictions', 'distilled_knowledge', 'patterns', 'corrections', 'memories'
+    success: bool
+    context: Optional[Dict[str, Any]] = None
+
+class LearningRateAdjustment(BaseModel):
+    domain: str  # 'connections', 'patterns', 'corrections', 'insights'
+    delta: float  # positive = learn faster, negative = learn slower
+
+@app.get("/brain/meta")
+async def get_meta_learning_stats():
+    """
+    Get detailed meta-learning statistics.
+    Shows how the brain is learning to learn.
+
+    Includes:
+    - Source effectiveness (which knowledge sources work best)
+    - Confidence calibration (is the brain over/under confident)
+    - Learning rates per domain
+    - Best learning strategies
+    - Improvement trend over time
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return unified_brain.get_meta_stats()
+
+@app.get("/brain/meta/summary")
+async def get_meta_learning_summary():
+    """
+    Get a human-readable summary of meta-learning state.
+    Useful for debugging and understanding brain behavior.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return {
+        "summary": unified_brain.get_meta_learning_summary()
+    }
+
+@app.get("/brain/meta/calibration")
+async def get_calibration_report():
+    """
+    Check if the brain's confidence scores are calibrated.
+    Shows whether it's over-confident, under-confident, or well-calibrated.
+
+    Good calibration means:
+    - When brain says 80% confident, it's right ~80% of the time
+    - This is critical for trustworthy predictions
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return {
+        "calibration": unified_brain.get_calibration_report()
+    }
+
+@app.get("/brain/meta/improvement")
+async def get_improvement_trend():
+    """
+    Check if the brain is improving over time.
+    Shows learning velocity and effectiveness trends.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return unified_brain.get_improvement_trend()
+
+@app.get("/brain/meta/recommendations")
+async def get_source_recommendations(context: str = ""):
+    """
+    Get recommendations on which knowledge sources to prioritize.
+    The meta-learner tracks which sources are most effective
+    and adjusts attention weights accordingly.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return unified_brain.get_source_recommendations(context)
+
+@app.post("/brain/meta/feedback")
+async def record_source_feedback(feedback: SourceFeedback):
+    """
+    Record feedback on a knowledge source's effectiveness.
+    Call this when you know a source helped or didn't help.
+
+    This updates the meta-learner's attention weights -
+    effective sources get prioritized in future context building.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    result = unified_brain.record_source_feedback(
+        feedback.source,
+        feedback.success,
+        feedback.context
+    )
+
+    return {
+        "status": "recorded",
+        **result
+    }
+
+@app.post("/brain/meta/learning-rate")
+async def adjust_learning_rate(adjustment: LearningRateAdjustment):
+    """
+    Adjust the learning rate for a domain.
+    Positive delta = learn faster, negative = learn slower.
+
+    Domains:
+    - connections: How fast to update connection predictions
+    - patterns: How fast to trust new patterns
+    - corrections: How fast to apply corrections
+    - insights: How fast to integrate insights
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    result = unified_brain.adjust_learning_rate(adjustment.domain, adjustment.delta)
+
+    return {
+        "status": "adjusted",
+        **result
+    }
+
+@app.post("/brain/meta/save-epoch")
+async def save_meta_epoch():
+    """
+    Manually save a meta-learning epoch.
+    Epochs capture the brain's learning state at a point in time.
+    Useful after significant learning events.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    epoch = unified_brain.save_meta_epoch()
+
+    return {
+        "status": "saved",
+        "epoch": epoch
+    }
+
+# ═══════════════════════════════════════════════════════════════════
+# SELF-IMPROVEMENT - Analyze weaknesses and suggest improvements
+# ═══════════════════════════════════════════════════════════════════
+
+class SuggestionStatus(BaseModel):
+    suggestion_id: str
+    status: str  # 'accepted', 'rejected', 'implemented'
+    notes: Optional[str] = ""
+
+class VisionUpdate(BaseModel):
+    statement: Optional[str] = None
+    goals: Optional[List[str]] = None
+    priorities: Optional[List[str]] = None
+
+class VisionGoal(BaseModel):
+    goal: str
+
+@app.post("/brain/analyze")
+async def run_self_analysis():
+    """
+    Run a complete self-analysis of the brain.
+    Generates improvement suggestions based on:
+    - Prediction accuracy
+    - Confidence calibration
+    - Source effectiveness
+    - Learning velocity
+    - Vision statement goals
+
+    Returns findings and prioritized suggestions.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    analysis = unified_brain.run_self_analysis()
+
+    return analysis
+
+@app.get("/brain/suggestions")
+async def get_improvement_suggestions(category: str = None, priority: str = None):
+    """
+    Get current improvement suggestions.
+
+    Optional filters:
+    - category: architecture, training, integration, data_flow, user_experience, performance, accuracy
+    - priority: high, medium, low
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    suggestions = unified_brain.get_improvement_suggestions(category, priority)
+
+    return {
+        "suggestions": suggestions,
+        "count": len(suggestions)
+    }
+
+@app.get("/brain/suggestions/top")
+async def get_top_suggestions(limit: int = 5):
+    """
+    Get top improvement suggestions by priority.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return {
+        "suggestions": unified_brain.get_top_improvements(limit)
+    }
+
+@app.get("/brain/suggestions/summary")
+async def get_improvement_summary():
+    """
+    Get a human-readable summary of all improvement suggestions.
+    Formatted in markdown, grouped by priority.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return {
+        "summary": unified_brain.get_improvement_summary()
+    }
+
+@app.post("/brain/suggestions/status")
+async def mark_suggestion_status(status_update: SuggestionStatus):
+    """
+    Mark a suggestion's status.
+
+    Statuses:
+    - accepted: User plans to implement this
+    - rejected: User decided not to implement
+    - implemented: Changes have been made
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    success = unified_brain.mark_suggestion_status(
+        status_update.suggestion_id,
+        status_update.status,
+        status_update.notes
+    )
+
+    return {
+        "status": "updated" if success else "not_found",
+        "suggestion_id": status_update.suggestion_id
+    }
+
+@app.get("/brain/improvement-stats")
+async def get_improvement_stats():
+    """
+    Get self-improvement statistics.
+    Shows analysis count, suggestion breakdown by priority/category.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return unified_brain.get_improvement_stats()
+
+# ═══════════════════════════════════════════════════════════════════
+# VISION - User-editable goals and priorities
+# ═══════════════════════════════════════════════════════════════════
+
+@app.get("/brain/vision")
+async def get_vision():
+    """
+    Get the brain's vision statement, goals, and priorities.
+    This guides what improvements the brain suggests.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return unified_brain.get_vision()
+
+@app.put("/brain/vision")
+async def set_vision(update: VisionUpdate):
+    """
+    Update the vision statement, goals, or priorities.
+
+    All fields are optional - only provided fields will be updated.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    result = unified_brain.set_vision(
+        statement=update.statement,
+        goals=update.goals,
+        priorities=update.priorities
+    )
+
+    return {
+        "status": "updated",
+        "vision": result
+    }
+
+@app.post("/brain/vision/goals")
+async def add_vision_goal(goal: VisionGoal):
+    """
+    Add a new goal to the vision.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    result = unified_brain.add_vision_goal(goal.goal)
+
+    return {
+        "status": "added",
+        "goals": result['goals']
+    }
+
+@app.delete("/brain/vision/goals")
+async def remove_vision_goal(goal: str):
+    """
+    Remove a goal from the vision.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    result = unified_brain.remove_vision_goal(goal)
+
+    return {
+        "status": "removed",
+        "goals": result['goals']
     }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1166,6 +1861,56 @@ async def predict_connections(request: PredictConnectionsRequest):
         attention_weights=result["attention_weights"],
         time_ms=elapsed
     )
+
+@app.post("/predict/category", response_model=PredictCategoryResponse)
+async def predict_category(request: PredictCategoryRequest):
+    """
+    Predict best category (top-level parent) for new text.
+    Uses embeddings to find semantically similar categories.
+    Replaces browser-side TensorFlow.js category prediction.
+    """
+    if brain is None:
+        raise HTTPException(status_code=503, detail="Brain not initialized")
+
+    start = time.time()
+
+    try:
+        # Get embedding for input text
+        text_embedding = brain.embedder.embed(request.text)
+
+        # Extract top-level nodes (categories) from map
+        categories = []
+        for node in request.map_data.nodes:
+            # Top-level nodes have depth 1 (children of root)
+            if node.depth == 1:
+                # Get embedding for category
+                category_text = f"{node.label}. {node.description}" if node.description else node.label
+                cat_embedding = brain.embedder.embed(category_text)
+
+                # Compute cosine similarity
+                similarity = float(np.dot(text_embedding, cat_embedding) /
+                                 (np.linalg.norm(text_embedding) * np.linalg.norm(cat_embedding) + 1e-8))
+
+                categories.append({
+                    "category": node.label,
+                    "node_id": node.id,
+                    "confidence": max(0.0, similarity)  # Clamp to non-negative
+                })
+
+        # Sort by confidence and take top_k
+        categories.sort(key=lambda x: x["confidence"], reverse=True)
+        top_categories = categories[:request.top_k]
+
+        elapsed = (time.time() - start) * 1000
+
+        return PredictCategoryResponse(
+            predictions=[CategoryPrediction(**c) for c in top_categories],
+            embedding_used=True,
+            time_ms=elapsed
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Category prediction failed: {str(e)}")
 
 @app.post("/train/feedback")
 async def train_feedback(request: TrainFeedbackRequest):

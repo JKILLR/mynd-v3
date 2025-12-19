@@ -235,6 +235,80 @@ const LocalBrain = {
     },
 
     /**
+     * Predict category for text (replaces browser TensorFlow.js)
+     * @param {string} text - Text to categorize
+     * @param {Object} mapData - Map data (store.data format)
+     * @param {number} topK - Number of predictions to return
+     * @returns {Promise<Array<{category: string, node_id: string, confidence: number}>>}
+     */
+    async predictCategory(text, mapData, topK = 5) {
+        if (!this.isAvailable) {
+            return null; // Fall back to browser
+        }
+
+        try {
+            const start = performance.now();
+            const formattedMap = this._formatMapForServerWithDepth(mapData);
+
+            const res = await fetch(`${this.serverUrl}/predict/category`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                signal: AbortSignal.timeout(10000), // 10 second timeout
+                body: JSON.stringify({
+                    text: text,
+                    map_data: formattedMap,
+                    top_k: topK
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                const elapsed = performance.now() - start;
+                console.log(`🧠 LocalBrain.predictCategory: ${result.predictions.length} predictions in ${elapsed.toFixed(1)}ms`);
+
+                // Convert to browser format: [{category, confidence}]
+                return result.predictions.map(p => ({
+                    category: p.category,
+                    confidence: p.confidence,
+                    nodeId: p.node_id
+                }));
+            }
+        } catch (e) {
+            console.warn('LocalBrain.predictCategory failed:', e);
+        }
+
+        return null; // Fall back to browser
+    },
+
+    /**
+     * Format map data with depth info for category prediction
+     */
+    _formatMapForServerWithDepth(mapData) {
+        const nodes = [];
+
+        const traverse = (node, parentId = null, depth = 0) => {
+            nodes.push({
+                id: node.id,
+                label: node.label,
+                description: node.description || '',
+                parentId: parentId,
+                depth: depth,
+                children: node.children?.map(c => c.id) || []
+            });
+
+            if (node.children) {
+                node.children.forEach(child => traverse(child, node.id, depth + 1));
+            }
+        };
+
+        if (mapData.id) {
+            traverse(mapData);
+        }
+
+        return { nodes };
+    },
+
+    /**
      * Format map data for the server
      */
     _formatMapForServer(mapData) {
@@ -353,7 +427,850 @@ const LocalBrain = {
     },
 
     // ═══════════════════════════════════════════════════════════════════
-    // CODE SELF-AWARENESS - Deep Code Understanding for Claude
+    // UNIFIED BRAIN - Complete Self-Aware Context
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Get complete context for Claude from the Unified Brain.
+     * This is THE method to use for all Claude API calls.
+     * One call = complete self-awareness.
+     *
+     * @param {Object} options
+     * @param {string} options.requestType - 'chat', 'action', 'code_review', 'self_improve'
+     * @param {string} options.userMessage - The user's message
+     * @param {string} options.selectedNodeId - Currently selected node ID
+     * @param {Object} options.mapData - Map data (store.data format)
+     * @param {Object} options.include - What to include in context
+     * @returns {Promise<{contextDocument: string, tokenCount: number, brainState: Object}>}
+     */
+    async getBrainContext(options = {}) {
+        if (!this.isAvailable) {
+            console.log('🧠 LocalBrain.getBrainContext: Server not available');
+            return { contextDocument: null, error: 'Server not available' };
+        }
+
+        try {
+            const start = performance.now();
+
+            // Format map data if provided
+            let mapData = null;
+            if (options.mapData) {
+                mapData = this._formatMapForServer(options.mapData);
+            }
+
+            const res = await fetch(`${this.serverUrl}/brain/context`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                signal: AbortSignal.timeout(30000), // 30 second timeout
+                body: JSON.stringify({
+                    request_type: options.requestType || 'chat',
+                    user_message: options.userMessage || '',
+                    selected_node_id: options.selectedNodeId || null,
+                    map_data: mapData,
+                    include: options.include || {
+                        self_awareness: true,
+                        map_context: true,
+                        memories: true,
+                        user_profile: true,
+                        neural_insights: true
+                    }
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                const latency = performance.now() - start;
+                console.log(`🧠 Brain context: ${result.token_count} tokens in ${latency.toFixed(0)}ms`);
+
+                return {
+                    contextDocument: result.context_document,
+                    tokenCount: result.token_count,
+                    breakdown: result.breakdown,
+                    brainState: result.brain_state,
+                    timeMs: result.time_ms
+                };
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getBrainContext failed:', e);
+        }
+
+        return { contextDocument: null, error: 'Failed to get brain context' };
+    },
+
+    /**
+     * Get current brain state for debugging/display
+     */
+    async getBrainState() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/state`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getBrainState failed:', e);
+        }
+
+        return { error: 'Failed to get brain state' };
+    },
+
+    /**
+     * Record feedback for brain learning
+     * Call this when user accepts, rejects, or corrects something
+     */
+    async recordBrainFeedback(nodeId, action, context = {}) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/feedback`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    node_id: nodeId,
+                    action: action,
+                    context: context
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🧠 Brain feedback recorded: ${action}`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.recordBrainFeedback failed:', e);
+        }
+
+        return { error: 'Failed to record feedback' };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SELF-LEARNING - Brain learns from its own predictions
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Record predictions made by the Graph Transformer.
+     * Call this when predictions are generated/shown to user.
+     * This enables the brain to learn from prediction outcomes.
+     *
+     * @param {string} sourceId - The node predictions were made for
+     * @param {Array} predictions - Array of {target_id, target_label, score}
+     */
+    async recordPredictions(sourceId, predictions) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/predictions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    source_id: sourceId,
+                    predictions: predictions
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🧠 Predictions recorded: ${predictions.length} for node ${sourceId}`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.recordPredictions failed:', e);
+        }
+
+        return { error: 'Failed to record predictions' };
+    },
+
+    /**
+     * Tell the brain about a new connection being created.
+     * The brain checks if it predicted this and learns accordingly.
+     *
+     * This is the KEY self-learning method:
+     * - If brain predicted this: Reinforces the pattern
+     * - If brain missed this: Learns the new pattern
+     *
+     * @param {string} sourceId - Source node of connection
+     * @param {string} targetId - Target node of connection
+     * @param {string} connectionType - 'manual', 'suggested', 'ai'
+     * @returns {Promise<{was_predicted, learning_signal, accuracy}>}
+     */
+    async learnFromConnection(sourceId, targetId, connectionType = 'manual') {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/learn-connection`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    source_id: sourceId,
+                    target_id: targetId,
+                    connection_type: connectionType
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                if (result.was_predicted) {
+                    console.log(`🧠 Self-learning: Brain correctly predicted this connection! (accuracy: ${(result.accuracy * 100).toFixed(1)}%)`);
+                } else {
+                    console.log(`🧠 Self-learning: Brain learned new pattern from this connection`);
+                }
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.learnFromConnection failed:', e);
+        }
+
+        return { error: 'Failed to learn from connection' };
+    },
+
+    /**
+     * Get the brain's learning statistics
+     * Shows prediction accuracy and learning history
+     */
+    async getLearningStats() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/learning`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getLearningStats failed:', e);
+        }
+
+        return { error: 'Failed to get learning stats' };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CLAUDE ↔ BRAIN - Bidirectional Learning & Knowledge Distillation
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Send Claude's response to the brain for knowledge extraction.
+     * This is how Claude TEACHES the brain.
+     *
+     * @param {Object} claudeResponse - Structured response from Claude
+     * @param {string} claudeResponse.response - The text response
+     * @param {Array} claudeResponse.insights - Key facts with confidence
+     * @param {Array} claudeResponse.patterns - Patterns identified
+     * @param {Array} claudeResponse.corrections - Things corrected
+     * @param {Object} claudeResponse.explanations - Concept explanations
+     */
+    async sendToBrain(claudeResponse) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/receive-from-claude`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(claudeResponse)
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                const stats = result.knowledge_stats || {};
+                console.log(`🧠 Brain learned from Claude: ${stats.distilled_facts || 0} facts, ${stats.patterns_learned || 0} patterns`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.sendToBrain failed:', e);
+        }
+
+        return { error: 'Failed to send to brain' };
+    },
+
+    /**
+     * Get a teaching prompt for Claude.
+     * Use this to have Claude teach the brain about a topic.
+     *
+     * @param {string} topic - What to learn about
+     * @returns {Promise<{teaching_request, instructions_for_claude}>}
+     */
+    async askClaudeToTeach(topic) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/ask-to-teach`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ topic })
+            });
+
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.askClaudeToTeach failed:', e);
+        }
+
+        return { error: 'Failed to generate teaching request' };
+    },
+
+    /**
+     * Get all knowledge the brain has learned from Claude.
+     */
+    async getBrainKnowledge() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/knowledge`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getBrainKnowledge failed:', e);
+        }
+
+        return { error: 'Failed to get brain knowledge' };
+    },
+
+    /**
+     * Get the teaching prompt to include in Claude's system prompt.
+     * This enables structured knowledge transfer.
+     */
+    async getTeachingPrompt() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/teaching-prompt`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getTeachingPrompt failed:', e);
+        }
+
+        return { error: 'Failed to get teaching prompt' };
+    },
+
+    /**
+     * Get comprehensive brain statistics.
+     */
+    async getFullBrainStats() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/full-stats`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getFullBrainStats failed:', e);
+        }
+
+        return { error: 'Failed to get brain stats' };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // META-LEARNING - Learning how to learn
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Get detailed meta-learning statistics.
+     * Shows how the brain is learning to learn:
+     * - Source effectiveness (which knowledge sources work best)
+     * - Confidence calibration (is the brain over/under confident)
+     * - Learning rates per domain
+     * - Best learning strategies
+     * - Improvement trend over time
+     */
+    async getMetaStats() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/meta`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getMetaStats failed:', e);
+        }
+
+        return { error: 'Failed to get meta-learning stats' };
+    },
+
+    /**
+     * Get a human-readable summary of meta-learning state.
+     * Useful for debugging and displaying brain behavior.
+     */
+    async getMetaSummary() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/meta/summary`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getMetaSummary failed:', e);
+        }
+
+        return { error: 'Failed to get meta-learning summary' };
+    },
+
+    /**
+     * Check if the brain's confidence scores are calibrated.
+     * Shows whether it's over-confident, under-confident, or well-calibrated.
+     *
+     * Good calibration means:
+     * - When brain says 80% confident, it's right ~80% of the time
+     */
+    async getCalibrationReport() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/meta/calibration`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getCalibrationReport failed:', e);
+        }
+
+        return { error: 'Failed to get calibration report' };
+    },
+
+    /**
+     * Check if the brain is improving over time.
+     * Shows learning velocity and effectiveness trends.
+     */
+    async getImprovementTrend() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/meta/improvement`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getImprovementTrend failed:', e);
+        }
+
+        return { error: 'Failed to get improvement trend' };
+    },
+
+    /**
+     * Get recommendations on which knowledge sources to prioritize.
+     * The meta-learner tracks which sources are most effective
+     * and adjusts attention weights accordingly.
+     *
+     * @param {string} context - Optional context for recommendations
+     */
+    async getSourceRecommendations(context = '') {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const url = context
+                ? `${this.serverUrl}/brain/meta/recommendations?context=${encodeURIComponent(context)}`
+                : `${this.serverUrl}/brain/meta/recommendations`;
+            const res = await fetch(url);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getSourceRecommendations failed:', e);
+        }
+
+        return { error: 'Failed to get source recommendations' };
+    },
+
+    /**
+     * Record feedback on a knowledge source's effectiveness.
+     * Call this when you know a source helped or didn't help.
+     *
+     * This updates the meta-learner's attention weights -
+     * effective sources get prioritized in future context building.
+     *
+     * @param {string} source - 'predictions', 'distilled_knowledge', 'patterns', 'corrections', 'memories'
+     * @param {boolean} success - Whether the source helped
+     * @param {Object} context - Optional context about the usage
+     */
+    async recordSourceFeedback(source, success, context = null) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/meta/feedback`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    source,
+                    success,
+                    context
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🧠 Meta-learning: Recorded ${source} ${success ? 'success' : 'failure'} (new weight: ${result.new_weight?.toFixed(2)})`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.recordSourceFeedback failed:', e);
+        }
+
+        return { error: 'Failed to record source feedback' };
+    },
+
+    /**
+     * Adjust the learning rate for a domain.
+     * Positive delta = learn faster, negative = learn slower.
+     *
+     * @param {string} domain - 'connections', 'patterns', 'corrections', 'insights'
+     * @param {number} delta - Adjustment amount (e.g., 0.05 or -0.02)
+     */
+    async adjustLearningRate(domain, delta) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/meta/learning-rate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domain, delta })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🧠 Meta-learning: ${domain} learning rate ${result.old_rate.toFixed(3)} → ${result.new_rate.toFixed(3)}`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.adjustLearningRate failed:', e);
+        }
+
+        return { error: 'Failed to adjust learning rate' };
+    },
+
+    /**
+     * Manually save a meta-learning epoch.
+     * Epochs capture the brain's learning state at a point in time.
+     * Useful after significant learning events.
+     */
+    async saveMetaEpoch() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/meta/save-epoch`, {
+                method: 'POST'
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🧠 Meta-learning: Saved epoch ${result.epoch?.epoch}`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.saveMetaEpoch failed:', e);
+        }
+
+        return { error: 'Failed to save meta epoch' };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SELF-IMPROVEMENT - Analyze weaknesses and suggest improvements
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Run a complete self-analysis of the brain.
+     * Generates improvement suggestions based on performance metrics.
+     * Uses the vision statement to prioritize suggestions.
+     */
+    async runSelfAnalysis() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/analyze`, {
+                method: 'POST'
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🔍 Self-analysis: ${result.suggestion_count} suggestions generated`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.runSelfAnalysis failed:', e);
+        }
+
+        return { error: 'Failed to run self-analysis' };
+    },
+
+    /**
+     * Get current improvement suggestions.
+     * @param {string} category - Optional: architecture, training, integration, data_flow, user_experience, performance, accuracy
+     * @param {string} priority - Optional: high, medium, low
+     */
+    async getImprovementSuggestions(category = null, priority = null) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            let url = `${this.serverUrl}/brain/suggestions`;
+            const params = [];
+            if (category) params.push(`category=${encodeURIComponent(category)}`);
+            if (priority) params.push(`priority=${encodeURIComponent(priority)}`);
+            if (params.length) url += '?' + params.join('&');
+
+            const res = await fetch(url);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getImprovementSuggestions failed:', e);
+        }
+
+        return { error: 'Failed to get suggestions' };
+    },
+
+    /**
+     * Get top improvement suggestions by priority.
+     * @param {number} limit - Max number of suggestions to return
+     */
+    async getTopSuggestions(limit = 5) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/suggestions/top?limit=${limit}`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getTopSuggestions failed:', e);
+        }
+
+        return { error: 'Failed to get top suggestions' };
+    },
+
+    /**
+     * Get a human-readable summary of improvement suggestions.
+     * Returns markdown formatted by priority.
+     */
+    async getImprovementSummary() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/suggestions/summary`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getImprovementSummary failed:', e);
+        }
+
+        return { error: 'Failed to get improvement summary' };
+    },
+
+    /**
+     * Mark a suggestion's status.
+     * @param {string} suggestionId - The suggestion ID
+     * @param {string} status - 'accepted', 'rejected', or 'implemented'
+     * @param {string} notes - Optional notes about the decision
+     */
+    async markSuggestionStatus(suggestionId, status, notes = '') {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/suggestions/status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    suggestion_id: suggestionId,
+                    status,
+                    notes
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🔍 Suggestion ${suggestionId}: ${status}`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.markSuggestionStatus failed:', e);
+        }
+
+        return { error: 'Failed to mark suggestion status' };
+    },
+
+    /**
+     * Get self-improvement statistics.
+     */
+    async getImprovementStats() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/improvement-stats`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getImprovementStats failed:', e);
+        }
+
+        return { error: 'Failed to get improvement stats' };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // VISION - User-editable goals and priorities
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Get the brain's vision statement, goals, and priorities.
+     * This guides what improvements the brain suggests.
+     */
+    async getVision() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/vision`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getVision failed:', e);
+        }
+
+        return { error: 'Failed to get vision' };
+    },
+
+    /**
+     * Update the vision statement, goals, or priorities.
+     * @param {Object} updates
+     * @param {string} updates.statement - The vision statement text
+     * @param {string[]} updates.goals - Array of goals
+     * @param {string[]} updates.priorities - Array of priorities in order
+     */
+    async setVision(updates) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/vision`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log('🎯 Vision updated');
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.setVision failed:', e);
+        }
+
+        return { error: 'Failed to update vision' };
+    },
+
+    /**
+     * Add a goal to the vision.
+     * @param {string} goal - The goal to add
+     */
+    async addVisionGoal(goal) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/vision/goals`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ goal })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🎯 Goal added: ${goal}`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.addVisionGoal failed:', e);
+        }
+
+        return { error: 'Failed to add goal' };
+    },
+
+    /**
+     * Remove a goal from the vision.
+     * @param {string} goal - The goal to remove
+     */
+    async removeVisionGoal(goal) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/vision/goals?goal=${encodeURIComponent(goal)}`, {
+                method: 'DELETE'
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🎯 Goal removed: ${goal}`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.removeVisionGoal failed:', e);
+        }
+
+        return { error: 'Failed to remove goal' };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CODE SELF-AWARENESS - Deep Code Understanding for Claude (Legacy)
     // ═══════════════════════════════════════════════════════════════════
 
     /**

@@ -2202,7 +2202,7 @@
                         'anthropic-dangerous-direct-browser-access': 'true'
                     },
                     body: JSON.stringify({
-                        model: 'claude-sonnet-4-20250514',
+                        model: CONFIG.CLAUDE_MODEL,
                         max_tokens: 300,
                         messages: [{
                             role: 'user',
@@ -2274,7 +2274,7 @@
                         'anthropic-dangerous-direct-browser-access': 'true'
                     },
                     body: JSON.stringify({
-                        model: 'claude-sonnet-4-20250514',
+                        model: CONFIG.CLAUDE_MODEL,
                         max_tokens: 300,
                         messages: [{
                             role: 'user',
@@ -2914,7 +2914,7 @@
                         'anthropic-dangerous-direct-browser-access': 'true'
                     },
                     body: JSON.stringify({
-                        model: 'claude-sonnet-4-20250514',
+                        model: CONFIG.CLAUDE_MODEL,
                         max_tokens: 1024,
                         messages: [{
                             role: 'user',
@@ -6619,7 +6619,29 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
         async initialize() {
             try {
                 console.log('🧠 Initializing Personal Neural Network...');
-                
+
+                // ═══════════════════════════════════════════════════════════════
+                // SERVER-FIRST: Skip TensorFlow.js if LocalBrain server is available
+                // ═══════════════════════════════════════════════════════════════
+                if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                    console.log('🧠 LocalBrain server available - skipping browser TensorFlow.js');
+                    console.log('   ✓ Embeddings → server (sentence-transformers)');
+                    console.log('   ✓ Category prediction → server (PyTorch)');
+                    console.log('   ✓ Connection prediction → server (Graph Transformer)');
+
+                    this.isReady = true;
+                    this.usingServer = true;
+                    this.isInitializing = false;
+
+                    // Still load saved patterns/weights for compatibility
+                    await this.loadModels();
+
+                    this.emit('onReady', { source: 'server', device: LocalBrain.status.device });
+                    return true;
+                }
+
+                this.usingServer = false;
+
                 // Lazy load TensorFlow.js if not already loaded
                 if (!TensorFlowLoader.isLoaded()) {
                     try {
@@ -8344,28 +8366,44 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
 
         // Predict the best category for new text
         async predictCategory(text) {
+            // ═══════════════════════════════════════════════════════════════
+            // SERVER-FIRST: Route to LocalBrain if available (PyTorch on GPU)
+            // ═══════════════════════════════════════════════════════════════
+            if (this.usingServer && typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                try {
+                    const serverResult = await LocalBrain.predictCategory(text, store.data, 5);
+                    if (serverResult && serverResult.length > 0) {
+                        this.emit('onPrediction', { type: 'category', results: serverResult, source: 'server' });
+                        return serverResult;
+                    }
+                } catch (e) {
+                    console.warn('Server category prediction failed, falling back to browser:', e);
+                }
+            }
+
+            // Browser fallback
             if (!this.categoryModel || !this.encoder) return null;
-            
+
             try {
                 const embedding = await this.getEmbedding(text);
                 if (!embedding) return null;
-                
+
                 const input = tf.tensor2d([embedding]);
                 const prediction = this.categoryModel.predict(input);
                 const probs = await prediction.array();
-                
+
                 input.dispose();
                 prediction.dispose();
-                
+
                 // Get top predictions
                 const results = this.categories.map((cat, i) => ({
                     category: cat,
                     confidence: probs[0][i]
                 })).sort((a, b) => b.confidence - a.confidence);
-                
-                this.emit('onPrediction', { type: 'category', results });
+
+                this.emit('onPrediction', { type: 'category', results, source: 'browser' });
                 return results;
-                
+
             } catch (error) {
                 console.error('Category prediction error:', error);
                 return null;
@@ -9067,7 +9105,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                         'anthropic-dangerous-direct-browser-access': 'true'
                     },
                     body: JSON.stringify({
-                        model: 'claude-sonnet-4-20250514',
+                        model: CONFIG.CLAUDE_MODEL,
                         max_tokens: 500,
                         messages: [{
                             role: 'user',
@@ -20130,7 +20168,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                     'anthropic-dangerous-direct-browser-access': 'true'
                 },
                 body: JSON.stringify({
-                    model: 'claude-sonnet-4-20250514',
+                    model: CONFIG.CLAUDE_MODEL,
                     max_tokens: 8192,
                     messages: [{
                         role: 'user',
@@ -25649,7 +25687,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                     'anthropic-dangerous-direct-browser-access': 'true'
                 },
                 body: JSON.stringify({
-                    model: 'claude-sonnet-4-20250514',
+                    model: CONFIG.CLAUDE_MODEL,
                     max_tokens: 300,
                     messages: [{
                         role: 'user',
@@ -26146,11 +26184,22 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         if (styleTransfer.initialized) {
             styleTransfer.learnFromCreation(node, parent, store);
         }
-        
+
+        // Unified Brain: Learn from parent-child connection
+        if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+            LocalBrain.learnFromConnection(parent.id, node.id, node.source || 'manual')
+                .then(result => {
+                    if (result.was_predicted) {
+                        console.log(`🧠 Brain predicted this connection! Accuracy: ${(result.accuracy * 100).toFixed(1)}%`);
+                    }
+                })
+                .catch(e => console.warn('Brain connection learning failed:', e));
+        }
+
         // Update UI stats
         NeuralUI.updateStatus();
     });
-    
+
     // CGT: Track node deletion
     bus.on('node:deleted', ({ parentId, node }) => {
         cognitiveGT.recordAction('delete', node.id, { 
@@ -26161,14 +26210,25 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
     
     // CGT: Track node moved (reparented)
     bus.on('node:moved', ({ nodeId, oldParentId, newParentId }) => {
-        cognitiveGT.recordAction('reparent', nodeId, { 
+        cognitiveGT.recordAction('reparent', nodeId, {
             oldParentId,
             newParentId
         });
-        
+
         // StyleTransfer: Learn from reorganization
         if (styleTransfer.initialized) {
             styleTransfer.learnFromReorg();
+        }
+
+        // Unified Brain: Learn from new parent-child connection
+        if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+            LocalBrain.learnFromConnection(newParentId, nodeId, 'reparent')
+                .then(result => {
+                    if (result.learning_signal > 0) {
+                        console.log(`🧠 Brain learned from reparent (signal: ${result.learning_signal.toFixed(2)})`);
+                    }
+                })
+                .catch(e => console.warn('Brain reparent learning failed:', e));
         }
     });
     
@@ -28420,6 +28480,37 @@ You are a trusted guide, not a data harvester.
                 return { role: m.role, content };
             });
             
+            // ═══════════════════════════════════════════════════════════════
+            // UNIFIED BRAIN CONTEXT - Self-aware brain with meta-learning
+            // ═══════════════════════════════════════════════════════════════
+            let brainContext = '';
+            let brainState = null;
+            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                try {
+                    const brainResult = await LocalBrain.getBrainContext({
+                        requestType: 'chat',
+                        userMessage: userMessage,
+                        selectedNodeId: selectedNodeData?.id,
+                        mapData: store.data,
+                        include: {
+                            self_awareness: true,
+                            map_context: true,
+                            memories: true,
+                            user_profile: true,
+                            neural_insights: true
+                        }
+                    });
+
+                    if (brainResult.contextDocument) {
+                        brainContext = brainResult.contextDocument;
+                        brainState = brainResult.brainState;
+                        console.log(`🧠 UnifiedBrain context: ${brainContext.length} chars, ${brainResult.timeMs?.toFixed(1)}ms`);
+                    }
+                } catch (e) {
+                    console.warn('UnifiedBrain context error:', e);
+                }
+            }
+
             // Gather neural context from all intelligence systems
             let neuralContext = '';
             
@@ -29162,6 +29253,11 @@ ${goalsContext}` : ''}
 ${loadedSourceContext ? `
 LOADED SOURCE FILE FOR REVIEW:
 ${loadedSourceContext}` : ''}
+${brainContext ? `
+═══════════════════════════════════════════════════════════════
+UNIFIED BRAIN - Self-Aware Intelligence Core
+═══════════════════════════════════════════════════════════════
+${brainContext}` : ''}
 
 YOUR CAPABILITIES:
 1. **Smart Map Context**: You see the most RELEVANT nodes via semantic search (top-level branches + nodes related to the query). For large maps this optimizes token usage while maintaining full awareness
@@ -29707,7 +29803,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
 
                 // Build request body - only include web search for non-code-review requests
                 const requestBody = {
-                    model: 'claude-sonnet-4-20250514',
+                    model: CONFIG.CLAUDE_MODEL,
                     max_tokens: 8192,
                     messages: messages
                 };
@@ -29751,19 +29847,20 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
             }
             
             // Parse JSON response - handle markdown code blocks and text before JSON
+            let parsedResult = null;
             try {
                 // Remove markdown code block markers if present
                 let cleanedResponse = responseText
                     .replace(/```json\s*/gi, '')
                     .replace(/```\s*/g, '')
                     .trim();
-                
+
                 // Try to find JSON starting with {"message" (our expected format)
                 const jsonStartIndex = cleanedResponse.indexOf('{"message"');
                 if (jsonStartIndex !== -1) {
                     // Extract from {"message" to the end and find the matching closing brace
                     const jsonPart = cleanedResponse.substring(jsonStartIndex);
-                    
+
                     // Find the matching closing brace by counting braces
                     let braceCount = 0;
                     let endIndex = -1;
@@ -29775,14 +29872,14 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                             break;
                         }
                     }
-                    
+
                     if (endIndex > 0) {
                         const jsonString = jsonPart.substring(0, endIndex);
                         const parsed = JSON.parse(jsonString);
-                        
+
                         if (parsed && typeof parsed.message === 'string') {
                             console.log('Parsed AI response:', parsed);
-                            return {
+                            parsedResult = {
                                 message: parsed.message,
                                 actions: Array.isArray(parsed.actions) ? parsed.actions : [],
                                 suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : []
@@ -29790,25 +29887,57 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                         }
                     }
                 }
-                
+
                 // Fallback: try generic JSON extraction
-                const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    const parsed = JSON.parse(jsonMatch[0]);
-                    if (parsed && typeof parsed.message === 'string') {
-                        return {
-                            message: parsed.message,
-                            actions: Array.isArray(parsed.actions) ? parsed.actions : [],
-                            suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : []
-                        };
+                if (!parsedResult) {
+                    const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        const parsed = JSON.parse(jsonMatch[0]);
+                        if (parsed && typeof parsed.message === 'string') {
+                            parsedResult = {
+                                message: parsed.message,
+                                actions: Array.isArray(parsed.actions) ? parsed.actions : [],
+                                suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : []
+                            };
+                        }
                     }
                 }
             } catch (e) {
                 console.error('Failed to parse AI response:', e, responseText);
             }
-            
-            // Fallback - return full response if JSON parsing failed
-            return { message: responseText, actions: [], suggestions: [] };
+
+            // Fallback - use full response if JSON parsing failed
+            if (!parsedResult) {
+                parsedResult = { message: responseText, actions: [], suggestions: [] };
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // UNIFIED BRAIN LEARNING - Distill knowledge from Claude's response
+            // ═══════════════════════════════════════════════════════════════
+            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable && parsedResult.message) {
+                // Fire and forget - don't block the response
+                LocalBrain.sendToBrain({
+                    response: parsedResult.message,
+                    insights: [], // Claude doesn't provide structured insights yet
+                    patterns: [], // Could extract patterns from actions in future
+                    corrections: [],
+                    explanations: {},
+                    // Additional context for the brain
+                    metadata: {
+                        userQuery: userMessage,
+                        actions: parsedResult.actions || [],
+                        selectedNode: selectedNodeData?.label,
+                        mapSize: totalNodes,
+                        timestamp: Date.now()
+                    }
+                }).then(result => {
+                    if (result.knowledge_stats) {
+                        console.log(`🧠 Brain learned: ${result.knowledge_stats.distilled_facts || 0} facts, ${result.knowledge_stats.patterns_learned || 0} patterns`);
+                    }
+                }).catch(e => console.warn('Brain learning failed:', e));
+            }
+
+            return parsedResult;
         },
         
         async executeActions(actions) {
@@ -31542,7 +31671,7 @@ Respond with JSON only:`;
                             'anthropic-dangerous-direct-browser-access': 'true'
                         },
                         body: JSON.stringify({
-                            model: 'claude-sonnet-4-20250514',
+                            model: CONFIG.CLAUDE_MODEL,
                             max_tokens: 1024,
                             tools: [{
                                 type: 'web_search_20250305',
@@ -33961,7 +34090,7 @@ MYND is your second brain - an intelligent extension of your memory and thinking
                         'anthropic-dangerous-direct-browser-access': 'true'
                     },
                     body: JSON.stringify({
-                        model: 'claude-sonnet-4-20250514',
+                        model: CONFIG.CLAUDE_MODEL,
                         max_tokens: 8192,
                         messages: [{
                             role: 'user',
@@ -34761,7 +34890,7 @@ Guidelines:
                     'anthropic-dangerous-direct-browser-access': 'true'
                 },
                 body: JSON.stringify({
-                    model: 'claude-sonnet-4-20250514',
+                    model: CONFIG.CLAUDE_MODEL,
                     max_tokens: 4000,
                     temperature: 0,
                     system: `You create mind map structures as JSON. You ALWAYS include nested children. You NEVER create flat structures. Every node at level 1 MUST have children, and those children MUST have their own children. You ALWAYS create EXACTLY 4 top-level nodes.`,
@@ -37578,7 +37707,7 @@ IMPORTANT: In the "items" array, use ONLY the exact node label (the part before 
                 'anthropic-dangerous-direct-browser-access': 'true'
             },
             body: JSON.stringify({
-                model: 'claude-sonnet-4-20250514',
+                model: CONFIG.CLAUDE_MODEL,
                 max_tokens: maxTokens,
                 messages: [{ role: 'user', content: aiPrompt }]
             })
@@ -38496,7 +38625,7 @@ Consider these learned patterns when generating suggestions.`;
                             'anthropic-dangerous-direct-browser-access': 'true'
                         },
                         body: JSON.stringify({
-                            model: 'claude-sonnet-4-20250514',
+                            model: CONFIG.CLAUDE_MODEL,
                             max_tokens: 300,
                             messages: [{
                                 role: 'user',
@@ -38764,7 +38893,7 @@ Return ONLY JSON:
                         'anthropic-dangerous-direct-browser-access': 'true'
                     },
                     body: JSON.stringify({
-                        model: 'claude-sonnet-4-20250514',
+                        model: CONFIG.CLAUDE_MODEL,
                         max_tokens: 500,
                         messages: [{
                             role: 'user',

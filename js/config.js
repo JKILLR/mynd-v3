@@ -10,6 +10,9 @@ const CONFIG = {
     THEME_KEY: 'mynd-theme-v8',
     API_KEY: 'mynd-api-key',
 
+    // Claude AI Model
+    CLAUDE_MODEL: 'claude-opus-4-5-20251101',
+
     // Supabase Configuration
     SUPABASE_URL: 'https://diqjasswlujwtdgsreab.supabase.co',
     SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRpcWphc3N3bHVqd3RkZ3NyZWFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0MjQyNTksImV4cCI6MjA4MTAwMDI1OX0._APhMDa1-FooORV_s5-ki6HF02TAlc_TX5CvqC7yKr4',
