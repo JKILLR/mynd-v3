@@ -4216,6 +4216,322 @@
             background-color: white;
         }
 
+        /* ═══════════════════════════════════════════════════════════
+           Reflection Daemon UI Styles
+           ═══════════════════════════════════════════════════════════ */
+
+        /* Status indicator dot */
+        #reflection-status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-left: auto;
+            transition: all 0.3s ease;
+        }
+        #reflection-status-indicator.status-inactive {
+            background: var(--text-muted);
+        }
+        #reflection-status-indicator.status-active {
+            background: #10b981;
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+        }
+        #reflection-status-indicator.reflecting {
+            background: #8b5cf6;
+            animation: pulse-reflection 1s ease-in-out infinite;
+        }
+        @keyframes pulse-reflection {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.2); }
+        }
+
+        /* Notification badge */
+        .reflection-notification-badge {
+            position: absolute;
+            top: -8px;
+            right: -12px;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+            color: white;
+            font-size: 10px;
+            font-weight: 600;
+            border-radius: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
+        }
+
+        /* Reflection Queue Panel */
+        .reflection-queue-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 420px;
+            max-width: 100vw;
+            height: 100vh;
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border-left: 1px solid var(--glass-border);
+            z-index: var(--z-modal);
+            transform: translateX(100%);
+            transition: transform 0.3s var(--ease-out);
+            display: flex;
+            flex-direction: column;
+            box-shadow: -4px 0 24px rgba(0, 0, 0, 0.1);
+        }
+        .reflection-queue-panel.visible {
+            transform: translateX(0);
+        }
+
+        .queue-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .queue-header h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+            color: var(--text-primary);
+        }
+        .queue-close-btn {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            font-size: 20px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .queue-close-btn:hover {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+        }
+
+        .queue-tabs {
+            display: flex;
+            padding: 12px 24px;
+            gap: 8px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .queue-tab {
+            padding: 8px 16px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .queue-tab:hover {
+            background: var(--bg-tertiary);
+        }
+        .queue-tab.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        .queue-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 24px;
+        }
+        .queue-content.hidden {
+            display: none;
+        }
+
+        .queue-empty {
+            text-align: center;
+            padding: 48px 24px;
+            color: var(--text-muted);
+        }
+        .queue-empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        .queue-empty-hint {
+            font-size: 12px;
+            margin-top: 8px;
+        }
+
+        .queue-items {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .queue-item {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid var(--glass-border);
+            transition: all 0.2s;
+        }
+        .queue-item:hover {
+            border-color: var(--accent);
+        }
+        .queue-item.priority-high {
+            border-left: 3px solid #ef4444;
+        }
+        .queue-item.priority-medium {
+            border-left: 3px solid #f59e0b;
+        }
+        .queue-item.priority-low {
+            border-left: 3px solid #10b981;
+        }
+
+        .queue-item-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .queue-item-type {
+            font-size: 16px;
+        }
+        .queue-item-title {
+            flex: 1;
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+        .queue-item-priority {
+            font-size: 10px;
+            text-transform: uppercase;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+        }
+
+        .queue-item-body {
+            margin-bottom: 12px;
+        }
+        .queue-item-description {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            margin: 0;
+        }
+        .queue-item-related {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 8px;
+        }
+
+        .queue-item-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .queue-item-time {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        .queue-item-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .queue-action-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .queue-action-btn.dismiss {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+        }
+        .queue-action-btn.dismiss:hover {
+            background: var(--bg-elevated);
+        }
+        .queue-action-btn.approve {
+            background: var(--accent);
+            color: white;
+        }
+        .queue-action-btn.approve:hover {
+            filter: brightness(1.1);
+        }
+        .queue-action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .queue-footer {
+            display: flex;
+            gap: 8px;
+            padding: 16px 24px;
+            border-top: 1px solid var(--glass-border);
+        }
+        .queue-btn {
+            flex: 1;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .queue-btn.secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+        }
+        .queue-btn.secondary:hover {
+            background: var(--bg-elevated);
+        }
+        .queue-btn.primary {
+            background: var(--accent);
+            color: white;
+        }
+        .queue-btn.primary:hover {
+            filter: brightness(1.1);
+        }
+
+        /* Activity log */
+        .activity-log {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .log-entry {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            padding: 8px;
+            background: var(--bg-secondary);
+            border-radius: 6px;
+        }
+        .log-time {
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        .log-message {
+            color: var(--text-secondary);
+        }
+
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            .reflection-queue-panel {
+                width: 100vw;
+            }
+        }
+
         .neural-progress {
             width: 100%;
             height: 6px;
@@ -8833,7 +9149,58 @@
             <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">Your Strengths</div>
             <div id="meta-strengths" style="display: flex; flex-wrap: wrap; gap: 4px;"></div>
         </div>
-        
+
+        <!-- Autonomous Reflection Section -->
+        <div class="neural-status" id="neural-reflection-stats" style="margin-top: 12px; border-top: 1px solid var(--bg-tertiary); padding-top: 12px;" role="region" aria-labelledby="reflection-section-title">
+            <div id="reflection-section-title" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 6v6l4 2"/>
+                </svg>
+                Autonomous Reflection
+                <span id="reflection-status-indicator" class="status-inactive" title="Autonomous mode inactive" role="status" aria-live="polite"></span>
+            </div>
+            <div class="neural-status-row">
+                <span id="reflection-mode-label">Mode</span>
+                <span class="neural-status-value" id="reflection-mode-status" aria-labelledby="reflection-mode-label">Off</span>
+            </div>
+            <div class="neural-status-row">
+                <span id="reflection-total-label">Total Reflections</span>
+                <span class="neural-status-value" id="reflection-total-count" aria-labelledby="reflection-total-label">0</span>
+            </div>
+            <div class="neural-status-row">
+                <span id="reflection-pending-label">Pending Insights</span>
+                <span class="neural-status-value" id="reflection-pending-count" style="position: relative;" aria-labelledby="reflection-pending-label">
+                    0
+                    <span id="reflection-badge" class="reflection-notification-badge" style="display: none;" role="status" aria-live="polite" aria-label="Pending insights count">0</span>
+                </span>
+            </div>
+            <div class="neural-status-row">
+                <span id="reflection-last-label">Last Reflection</span>
+                <span class="neural-status-value" id="reflection-last-time" aria-labelledby="reflection-last-label">Never</span>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 12px;">
+                <label class="toggle-switch" style="margin: 0;">
+                    <input type="checkbox" id="reflection-toggle-panel" aria-label="Enable autonomous reflection mode" aria-describedby="reflection-toggle-description">
+                    <span class="toggle-slider" aria-hidden="true"></span>
+                </label>
+                <span id="reflection-toggle-description" style="font-size: 11px; color: var(--text-secondary);">Enable autonomous mode</span>
+            </div>
+            <button class="neural-btn" id="reflection-queue-btn" style="margin-top: 8px; background: linear-gradient(135deg, #8b5cf6, #a78bfa);" aria-label="View Reflection Queue">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 6v6l4 2"/>
+                </svg>
+                View Reflection Queue
+            </button>
+            <button class="neural-btn" id="reflection-trigger-btn" style="margin-top: 4px; background: linear-gradient(135deg, #10b981, #34d399);" aria-label="Trigger reflection now">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;" aria-hidden="true">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+                Reflect Now
+            </button>
+        </div>
+
         <div class="neural-categories" id="neural-categories" style="display: none;">
             <div class="neural-categories-title">Learned Categories</div>
             <div class="neural-category-list" id="neural-category-list"></div>
@@ -43319,5 +43686,8 @@ Summary:`
     <!-- External modules -->
     <script src="js/goal-system.js"></script>
     <script src="js/demo-map.js"></script>
+    <script src="js/local-brain-client.js"></script>
+    <script src="js/reflection-daemon.js"></script>
+    <script src="js/reflection-ui.js"></script>
 </body>
 </html>

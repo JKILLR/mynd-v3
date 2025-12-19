@@ -35737,28 +35737,94 @@ showKeyboardHints();
                 if (!gpuCompute.initialized) {
                     await gpuCompute.initialize();
                 }
-                
+
                 showToast('Running GPU benchmark...', 'info');
-                
+
                 try {
                     const results = await gpuCompute.benchmark(200, 128);
-                    
+
                     // Display results in toast
                     if (gpuCompute.supported) {
                         showToast(`GPU ${results.batchSimilarity.speedup} faster! (${results.batchSimilarity.gpu} vs CPU ${results.batchSimilarity.cpu})`, 'success');
                     } else {
                         showToast(`CPU mode: ${results.batchSimilarity.cpu} for 200 vectors`, 'info');
                     }
-                    
+
                     // Update stats
                     this.updateStatus();
-                    
+
                 } catch (e) {
                     console.error('Benchmark failed:', e);
                     showToast('Benchmark failed', 'error');
                 }
             });
-            
+
+            // ═══════════════════════════════════════════════════════════════════
+            // Reflection Daemon UI Handlers
+            // ═══════════════════════════════════════════════════════════════════
+
+            // Reflection toggle in neural panel
+            document.getElementById('reflection-toggle-panel')?.addEventListener('change', function() {
+                if (typeof ReflectionDaemon !== 'undefined') {
+                    if (this.checked) {
+                        ReflectionDaemon.start();
+                    } else {
+                        ReflectionDaemon.stop();
+                    }
+                    NeuralUI.updateReflectionStatus();
+                }
+            });
+
+            // View Reflection Queue button
+            document.getElementById('reflection-queue-btn')?.addEventListener('click', () => {
+                if (typeof ReflectionUI !== 'undefined') {
+                    ReflectionUI.showQueuePanel();
+                }
+            });
+
+            // Reflect Now button
+            document.getElementById('reflection-trigger-btn')?.addEventListener('click', async () => {
+                if (typeof ReflectionDaemon !== 'undefined') {
+                    const btn = document.getElementById('reflection-trigger-btn');
+                    btn.disabled = true;
+                    btn.innerHTML = `
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; animation: spin 1s linear infinite;">
+                            <circle cx="12" cy="12" r="10" stroke-dasharray="30 60"/>
+                        </svg>
+                        Reflecting...
+                    `;
+
+                    try {
+                        await ReflectionDaemon.triggerReflection('manual');
+                    } catch (error) {
+                        console.error('Reflection failed:', error);
+                        if (typeof showToast === 'function') {
+                            showToast('Reflection failed: ' + error.message, 'error');
+                        }
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = `
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                            Reflect Now
+                        `;
+                        NeuralUI.updateReflectionStatus();
+                    }
+                }
+            });
+
+            // Listen for reflection events to update UI
+            document.addEventListener('reflection:reflectionComplete', () => {
+                NeuralUI.updateReflectionStatus();
+            });
+            document.addEventListener('reflection:started', () => {
+                NeuralUI.updateReflectionStatus();
+            });
+            document.addEventListener('reflection:stopped', () => {
+                NeuralUI.updateReflectionStatus();
+            });
+
             // Semantic Engine - Load Model button
             document.getElementById('semantic-load-btn')?.addEventListener('click', async () => {
                 const btn = document.getElementById('semantic-load-btn');
@@ -36832,11 +36898,80 @@ showKeyboardHints();
                     }
                 }
             }
+
+            // Update Reflection Daemon stats
+            this.updateReflectionStatus();
+        },
+
+        // Update Reflection Daemon UI status
+        updateReflectionStatus() {
+            if (typeof ReflectionDaemon === 'undefined') return;
+
+            try {
+                const status = ReflectionDaemon.getStatus();
+
+                // Update mode status
+                const modeEl = document.getElementById('reflection-mode-status');
+                if (modeEl) {
+                    modeEl.textContent = status.enabled ? 'Active' : 'Off';
+                    modeEl.style.color = status.enabled ? '#22c55e' : 'var(--text-muted)';
+                }
+
+                // Update total reflections
+                const totalEl = document.getElementById('reflection-total-count');
+                if (totalEl) {
+                    totalEl.textContent = status.stats.totalReflections;
+                }
+
+                // Update pending count and badge
+                ReflectionDaemon.getPendingCount().then(count => {
+                    const pendingEl = document.getElementById('reflection-pending-count');
+                    const badgeEl = document.getElementById('reflection-badge');
+
+                    if (pendingEl && pendingEl.childNodes && pendingEl.childNodes[0]) {
+                        // Update the text node, not the badge
+                        pendingEl.childNodes[0].textContent = count;
+                    }
+
+                    if (badgeEl) {
+                        if (count > 0) {
+                            badgeEl.textContent = count > 99 ? '99+' : count;
+                            badgeEl.style.display = 'flex';
+                        } else {
+                            badgeEl.style.display = 'none';
+                        }
+                    }
+                }).catch(error => {
+                    console.warn('Failed to update pending count:', error);
+                });
+
+                // Update last reflection time
+                const lastTimeEl = document.getElementById('reflection-last-time');
+                if (lastTimeEl) {
+                    lastTimeEl.textContent = status.lastReflectionAgo;
+                }
+
+                // Update toggle state
+                const toggleEl = document.getElementById('reflection-toggle-panel');
+                if (toggleEl) {
+                    toggleEl.checked = status.enabled;
+                }
+
+                // Update status indicator
+                const indicatorEl = document.getElementById('reflection-status-indicator');
+                if (indicatorEl) {
+                    indicatorEl.className = status.enabled ? 'status-active' : 'status-inactive';
+                    indicatorEl.title = status.enabled ? 'Autonomous mode active' : 'Autonomous mode inactive';
+                }
+
+            } catch (e) {
+                console.warn('Failed to update reflection status:', e);
+            }
         },
 
         async trainNetwork() {
             if (neuralNet.isTraining) return;
-            
+
             // Ensure TensorFlow is loaded
             const ready = await this.ensureNeuralNetReady();
             if (!ready) {
@@ -40303,6 +40438,17 @@ Summary:`
 
     queueInit('AutonomousEvolution', async () => {
         await AutonomousEvolution.initialize();
+    });
+
+    // ReflectionDaemon - Autonomous reflection during idle periods
+    queueInit('ReflectionDaemon', async () => {
+        if (typeof ReflectionDaemon !== 'undefined') {
+            await ReflectionDaemon.init();
+            if (typeof ReflectionUI !== 'undefined') {
+                ReflectionUI.init();
+            }
+            console.log('🔮 ReflectionDaemon initialized');
+        }
     });
 
     // VisionCore is important - load with higher priority
