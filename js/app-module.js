@@ -27792,6 +27792,12 @@ You are a trusted guide, not a data harvester.
             this.scrollToBottom();
         },
 
+        // Format timestamp for display
+        formatTime(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        },
+
         close() {
             this.isOpen = false;
             this.panel.classList.remove('open');
