@@ -235,6 +235,79 @@ const LocalBrain = {
     },
 
     /**
+     * Predict category for text (replaces browser TensorFlow.js)
+     * @param {string} text - Text to categorize
+     * @param {Object} mapData - Map data (store.data format)
+     * @param {number} topK - Number of predictions to return
+     * @returns {Promise<Array<{category: string, node_id: string, confidence: number}>>}
+     */
+    async predictCategory(text, mapData, topK = 5) {
+        if (!this.isAvailable) {
+            return null; // Fall back to browser
+        }
+
+        try {
+            const start = performance.now();
+            const formattedMap = this._formatMapForServerWithDepth(mapData);
+
+            const res = await fetch(`${this.serverUrl}/predict/category`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: text,
+                    map_data: formattedMap,
+                    top_k: topK
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                const elapsed = performance.now() - start;
+                console.log(`🧠 LocalBrain.predictCategory: ${result.predictions.length} predictions in ${elapsed.toFixed(1)}ms`);
+
+                // Convert to browser format: [{category, confidence}]
+                return result.predictions.map(p => ({
+                    category: p.category,
+                    confidence: p.confidence,
+                    nodeId: p.node_id
+                }));
+            }
+        } catch (e) {
+            console.warn('LocalBrain.predictCategory failed:', e);
+        }
+
+        return null; // Fall back to browser
+    },
+
+    /**
+     * Format map data with depth info for category prediction
+     */
+    _formatMapForServerWithDepth(mapData) {
+        const nodes = [];
+
+        const traverse = (node, parentId = null, depth = 0) => {
+            nodes.push({
+                id: node.id,
+                label: node.label,
+                description: node.description || '',
+                parentId: parentId,
+                depth: depth,
+                children: node.children?.map(c => c.id) || []
+            });
+
+            if (node.children) {
+                node.children.forEach(child => traverse(child, node.id, depth + 1));
+            }
+        };
+
+        if (mapData.id) {
+            traverse(mapData);
+        }
+
+        return { nodes };
+    },
+
+    /**
      * Format map data for the server
      */
     _formatMapForServer(mapData) {

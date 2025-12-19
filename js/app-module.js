@@ -6619,7 +6619,29 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
         async initialize() {
             try {
                 console.log('🧠 Initializing Personal Neural Network...');
-                
+
+                // ═══════════════════════════════════════════════════════════════
+                // SERVER-FIRST: Skip TensorFlow.js if LocalBrain server is available
+                // ═══════════════════════════════════════════════════════════════
+                if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                    console.log('🧠 LocalBrain server available - skipping browser TensorFlow.js');
+                    console.log('   ✓ Embeddings → server (sentence-transformers)');
+                    console.log('   ✓ Category prediction → server (PyTorch)');
+                    console.log('   ✓ Connection prediction → server (Graph Transformer)');
+
+                    this.isReady = true;
+                    this.usingServer = true;
+                    this.isInitializing = false;
+
+                    // Still load saved patterns/weights for compatibility
+                    await this.loadModels();
+
+                    this.emit('onReady', { source: 'server', device: LocalBrain.status.device });
+                    return true;
+                }
+
+                this.usingServer = false;
+
                 // Lazy load TensorFlow.js if not already loaded
                 if (!TensorFlowLoader.isLoaded()) {
                     try {
@@ -8344,28 +8366,44 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
 
         // Predict the best category for new text
         async predictCategory(text) {
+            // ═══════════════════════════════════════════════════════════════
+            // SERVER-FIRST: Route to LocalBrain if available (PyTorch on GPU)
+            // ═══════════════════════════════════════════════════════════════
+            if (this.usingServer && typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                try {
+                    const serverResult = await LocalBrain.predictCategory(text, store.data, 5);
+                    if (serverResult && serverResult.length > 0) {
+                        this.emit('onPrediction', { type: 'category', results: serverResult, source: 'server' });
+                        return serverResult;
+                    }
+                } catch (e) {
+                    console.warn('Server category prediction failed, falling back to browser:', e);
+                }
+            }
+
+            // Browser fallback
             if (!this.categoryModel || !this.encoder) return null;
-            
+
             try {
                 const embedding = await this.getEmbedding(text);
                 if (!embedding) return null;
-                
+
                 const input = tf.tensor2d([embedding]);
                 const prediction = this.categoryModel.predict(input);
                 const probs = await prediction.array();
-                
+
                 input.dispose();
                 prediction.dispose();
-                
+
                 // Get top predictions
                 const results = this.categories.map((cat, i) => ({
                     category: cat,
                     confidence: probs[0][i]
                 })).sort((a, b) => b.confidence - a.confidence);
-                
-                this.emit('onPrediction', { type: 'category', results });
+
+                this.emit('onPrediction', { type: 'category', results, source: 'browser' });
                 return results;
-                
+
             } catch (error) {
                 console.error('Category prediction error:', error);
                 return null;

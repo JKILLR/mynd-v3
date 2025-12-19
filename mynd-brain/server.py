@@ -113,6 +113,21 @@ class PredictResponse(BaseModel):
     attention_weights: Optional[Dict[str, float]] = None
     time_ms: float
 
+class PredictCategoryRequest(BaseModel):
+    text: str
+    map_data: MapData
+    top_k: int = 5
+
+class CategoryPrediction(BaseModel):
+    category: str  # Node label (top-level parent)
+    node_id: str
+    confidence: float
+
+class PredictCategoryResponse(BaseModel):
+    predictions: List[CategoryPrediction]
+    embedding_used: bool
+    time_ms: float
+
 class TrainFeedbackRequest(BaseModel):
     node_id: str
     action: str  # 'accepted', 'rejected', 'corrected'
@@ -1844,6 +1859,56 @@ async def predict_connections(request: PredictConnectionsRequest):
         attention_weights=result["attention_weights"],
         time_ms=elapsed
     )
+
+@app.post("/predict/category", response_model=PredictCategoryResponse)
+async def predict_category(request: PredictCategoryRequest):
+    """
+    Predict best category (top-level parent) for new text.
+    Uses embeddings to find semantically similar categories.
+    Replaces browser-side TensorFlow.js category prediction.
+    """
+    if brain is None:
+        raise HTTPException(status_code=503, detail="Brain not initialized")
+
+    start = time.time()
+
+    try:
+        # Get embedding for input text
+        text_embedding = brain.embedder.embed(request.text)
+
+        # Extract top-level nodes (categories) from map
+        categories = []
+        for node in request.map_data.nodes:
+            # Top-level nodes have depth 1 (children of root)
+            if node.depth == 1:
+                # Get embedding for category
+                category_text = f"{node.label}. {node.description}" if node.description else node.label
+                cat_embedding = brain.embedder.embed(category_text)
+
+                # Compute cosine similarity
+                similarity = float(np.dot(text_embedding, cat_embedding) /
+                                 (np.linalg.norm(text_embedding) * np.linalg.norm(cat_embedding) + 1e-8))
+
+                categories.append({
+                    "category": node.label,
+                    "node_id": node.id,
+                    "confidence": max(0.0, similarity)  # Clamp to non-negative
+                })
+
+        # Sort by confidence and take top_k
+        categories.sort(key=lambda x: x["confidence"], reverse=True)
+        top_categories = categories[:request.top_k]
+
+        elapsed = (time.time() - start) * 1000
+
+        return PredictCategoryResponse(
+            predictions=[CategoryPrediction(**c) for c in top_categories],
+            embedding_used=True,
+            time_ms=elapsed
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Category prediction failed: {str(e)}")
 
 @app.post("/train/feedback")
 async def train_feedback(request: TrainFeedbackRequest):
