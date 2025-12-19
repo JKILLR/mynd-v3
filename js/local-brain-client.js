@@ -33,6 +33,9 @@ const LocalBrain = {
         visionAvailable: false
     },
 
+    // Track if initial map sync has been done
+    _initialSyncDone: false,
+
     /**
      * Initialize and check server availability
      */
@@ -65,6 +68,7 @@ const LocalBrain = {
 
             if (res.ok) {
                 const health = await res.json();
+                const wasConnected = this.isAvailable;
                 this.isAvailable = true;
                 this.status.connected = true;
                 this.status.device = health.device;
@@ -73,6 +77,15 @@ const LocalBrain = {
                 this.status.voiceAvailable = !!health.voice_model;
                 this.status.visionAvailable = !!health.vision_model;
                 this.lastCheck = Date.now();
+
+                // Initial map sync when first connected
+                if (!wasConnected && !this._initialSyncDone) {
+                    this._doInitialMapSync().then(() => {
+                        this._initialSyncDone = true;
+                    }).catch(() => {
+                        // Will retry on next checkAvailability
+                    });
+                }
                 return true;
             }
         } catch (e) {
@@ -1668,6 +1681,487 @@ const LocalBrain = {
             serverUrl: this.serverUrl,
             lastCheck: this.lastCheck ? new Date(this.lastCheck).toISOString() : null
         };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CONVERSATION STORAGE - Import and search AI conversations
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Import a conversation from any AI chat (Claude, ChatGPT, Grok, etc.)
+     * Full text is stored and embedded for semantic search.
+     *
+     * @param {string} text - Full conversation text
+     * @param {string} source - Source AI: 'claude', 'chatgpt', 'grok', etc.
+     * @param {string} title - Optional title for the conversation
+     * @returns {Promise<{status, id, title, chars}>}
+     */
+    async importConversation(text, source = 'unknown', title = null) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const start = performance.now();
+            const res = await fetch(`${this.serverUrl}/conversations/import`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, source, title })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`💬 Conversation imported: "${result.title}" (${result.chars} chars)`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.importConversation failed:', e);
+        }
+
+        return { error: 'Failed to import conversation' };
+    },
+
+    /**
+     * List all stored conversations.
+     * @param {string} source - Optional filter by source
+     * @returns {Promise<{conversations: Array, stats: Object}>}
+     */
+    async listConversations(source = null) {
+        if (!this.isAvailable) {
+            return { conversations: [], stats: {}, error: 'Server not available' };
+        }
+
+        try {
+            const url = source
+                ? `${this.serverUrl}/conversations?source=${encodeURIComponent(source)}`
+                : `${this.serverUrl}/conversations`;
+            const res = await fetch(url);
+
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.listConversations failed:', e);
+        }
+
+        return { conversations: [], stats: {}, error: 'Failed to list conversations' };
+    },
+
+    /**
+     * Get a specific conversation by ID.
+     * @param {string} convId - Conversation ID
+     * @returns {Promise<Object>} Full conversation data
+     */
+    async getConversation(convId) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/conversations/${convId}`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getConversation failed:', e);
+        }
+
+        return { error: 'Failed to get conversation' };
+    },
+
+    /**
+     * Search conversations by semantic similarity.
+     * @param {string} query - Search query
+     * @param {number} topK - Max results to return
+     * @param {string} source - Optional source filter
+     * @returns {Promise<{results: Array, query: string}>}
+     */
+    async searchConversations(query, topK = 5, source = null) {
+        if (!this.isAvailable) {
+            return { results: [], error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/conversations/search`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query, top_k: topK, source_filter: source })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`💬 Found ${result.results.length} relevant conversations for: "${query}"`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.searchConversations failed:', e);
+        }
+
+        return { results: [], error: 'Search failed' };
+    },
+
+    /**
+     * Get relevant context from past conversations for injection into Claude.
+     * This is THE key method for unified context.
+     *
+     * @param {string} query - The user's current query/message
+     * @param {number} maxTokens - Approximate max tokens for context
+     * @param {boolean} includeFullText - Include full conversations or just summaries
+     * @returns {Promise<{context: string, chars: number}>}
+     */
+    async getConversationContext(query, maxTokens = 4000, includeFullText = false) {
+        if (!this.isAvailable) {
+            return { context: '', error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/conversations/context`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query,
+                    max_tokens: maxTokens,
+                    include_full_text: includeFullText
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                if (result.chars > 0) {
+                    console.log(`💬 Retrieved ${result.chars} chars of conversation context`);
+                }
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getConversationContext failed:', e);
+        }
+
+        return { context: '', error: 'Failed to get context' };
+    },
+
+    /**
+     * Get conversation storage statistics.
+     * @returns {Promise<{total_conversations, total_chars, total_mb, sources}>}
+     */
+    async getConversationStats() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/conversations/stats`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getConversationStats failed:', e);
+        }
+
+        return { error: 'Failed to get stats' };
+    },
+
+    /**
+     * Internal: Perform initial map sync when server connects.
+     * Uses window.store if available (set by app-module.js).
+     */
+    async _doInitialMapSync() {
+        // Wait a bit for store to be ready
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        if (typeof window !== 'undefined' && window.store && window.store.data) {
+            try {
+                console.log('🔄 LocalBrain: Performing initial map sync...');
+                const result = await this.syncMapToServer(window.store.data);
+                if (result.status === 'synced') {
+                    console.log(`✅ LocalBrain: Initial sync complete - ${result.nodes} nodes`);
+                }
+            } catch (e) {
+                console.warn('LocalBrain: Initial map sync failed:', e.message);
+            }
+        } else {
+            console.log('⚠️ LocalBrain: No store available for initial sync');
+        }
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // UNIFIED SYSTEM - Map as Vector Database
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Sync the browser's map to the server's unified graph.
+     * This makes the map the source of truth for the vector database.
+     * @param {Object} mapData - The map data (recursive node structure)
+     * @param {boolean} reEmbedAll - Whether to regenerate all embeddings
+     * @returns {Promise<{status, nodes, embedded, time_ms}>}
+     */
+    async syncMapToServer(mapData, reEmbedAll = false) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/unified/map/sync`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    map_data: mapData,
+                    re_embed_all: reEmbedAll
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🗺️ Map synced to server: ${result.nodes} nodes, ${result.embedded} embedded`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.syncMapToServer failed:', e);
+        }
+
+        return { error: 'Failed to sync map' };
+    },
+
+    /**
+     * Export the server's unified graph to browser map format.
+     * Use this to initialize the browser from server state.
+     * @returns {Promise<{map_data, stats}>}
+     */
+    async exportMapFromServer() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/unified/map/export`);
+            if (res.ok) {
+                const result = await res.json();
+                if (result.map_data) {
+                    console.log(`🗺️ Map exported from server: ${result.stats?.total_nodes} nodes`);
+                }
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.exportMapFromServer failed:', e);
+        }
+
+        return { error: 'Failed to export map' };
+    },
+
+    /**
+     * Semantic search across the unified map.
+     * @param {string} query - Search query
+     * @param {number} topK - Maximum results
+     * @param {number} threshold - Minimum similarity threshold
+     * @param {string[]} nodeTypes - Filter by node types
+     * @returns {Promise<{results, query, time_ms}>}
+     */
+    async searchUnifiedMap(query, topK = 10, threshold = 0.35, nodeTypes = null) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available', results: [] };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/unified/map/search`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query,
+                    top_k: topK,
+                    threshold,
+                    node_types: nodeTypes
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`🔍 Map search: ${result.results?.length} results for "${query}"`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.searchUnifiedMap failed:', e);
+        }
+
+        return { error: 'Failed to search map', results: [] };
+    },
+
+    /**
+     * Get unified context for RAG from the map.
+     * This is THE method to call before every Claude request.
+     * @param {string} query - Query to find relevant context for
+     * @param {number} maxTokens - Maximum tokens to return
+     * @param {boolean} includeSources - Whether to include source excerpts
+     * @returns {Promise<{context, nodes_used, chars, time_ms}>}
+     */
+    async getUnifiedContext(query, maxTokens = 8000, includeSources = false) {
+        if (!this.isAvailable) {
+            return { context: '', error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/unified/context`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query,
+                    max_tokens: maxTokens,
+                    include_sources: includeSources
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                if (result.chars > 0) {
+                    console.log(`🧠 Unified context: ${result.chars} chars from ${result.nodes_used} nodes`);
+                }
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getUnifiedContext failed:', e);
+        }
+
+        return { context: '', error: 'Failed to get context' };
+    },
+
+    /**
+     * Get unified map statistics.
+     * @returns {Promise<{total_nodes, embedded_nodes, type_counts}>}
+     */
+    async getUnifiedMapStats() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/unified/map/stats`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getUnifiedMapStats failed:', e);
+        }
+
+        return { error: 'Failed to get stats' };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CONVERSATION ARCHIVE + KNOWLEDGE EXTRACTION
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Import a conversation and extract knowledge into the map.
+     * @param {string} text - Full conversation text
+     * @param {string} source - Source AI (claude, chatgpt, grok)
+     * @param {string} title - Optional title
+     * @param {boolean} processImmediately - Extract knowledge now
+     * @returns {Promise<{conversation_id, nodes_created, nodes_enriched}>}
+     */
+    async importConversationUnified(text, source = 'unknown', title = null, processImmediately = true) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/unified/conversations/import`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text,
+                    source,
+                    title,
+                    process_immediately: processImmediately
+                })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                if (result.processed) {
+                    console.log(`📚 Conversation imported: ${result.concepts_extracted} concepts → ${result.nodes_created} new, ${result.nodes_enriched} enriched`);
+                } else {
+                    console.log(`📚 Conversation archived: ${result.title}`);
+                }
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.importConversationUnified failed:', e);
+        }
+
+        return { error: 'Failed to import conversation' };
+    },
+
+    /**
+     * List archived conversations.
+     * @param {string} source - Filter by source
+     * @param {boolean} processed - Filter by processed status
+     * @returns {Promise<{conversations, stats}>}
+     */
+    async listArchivedConversations(source = null, processed = null) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available', conversations: [] };
+        }
+
+        try {
+            const params = new URLSearchParams();
+            if (source) params.set('source', source);
+            if (processed !== null) params.set('processed', processed);
+
+            const res = await fetch(`${this.serverUrl}/unified/conversations?${params}`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.listArchivedConversations failed:', e);
+        }
+
+        return { error: 'Failed to list conversations', conversations: [] };
+    },
+
+    /**
+     * Process pending (unprocessed) conversations.
+     * Extracts knowledge and integrates into the map.
+     * @param {number} limit - Maximum conversations to process
+     * @returns {Promise<{processed, results}>}
+     */
+    async processPendingConversations(limit = 5) {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/unified/conversations/process-pending?limit=${limit}`, {
+                method: 'POST'
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`⚙️ Processed ${result.processed} pending conversations`);
+                return result;
+            }
+        } catch (e) {
+            console.warn('LocalBrain.processPendingConversations failed:', e);
+        }
+
+        return { error: 'Failed to process conversations' };
+    },
+
+    /**
+     * Get conversation archive statistics.
+     * @returns {Promise<{total_conversations, processed, unprocessed, sources}>}
+     */
+    async getArchiveStats() {
+        if (!this.isAvailable) {
+            return { error: 'Server not available' };
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/unified/conversations/stats`);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.warn('LocalBrain.getArchiveStats failed:', e);
+        }
+
+        return { error: 'Failed to get stats' };
     }
 };
 

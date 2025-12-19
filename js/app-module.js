@@ -21045,9 +21045,31 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                     // Sync to cloud (debounced) - disabled in Self Developer Mode
                     SupabaseSync.scheduleSave(this.exportData(), this.data?.label || 'My Mind');
                 }
+
+                // Sync to LocalBrain server (debounced) - browser is source of truth
+                if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                    this._scheduleLocalBrainSync();
+                }
             } catch (e) {
                 console.warn('Failed to save data:', e.message);
             }
+        }
+
+        _scheduleLocalBrainSync() {
+            // Debounce: wait 2 seconds after last change before syncing
+            if (this._localBrainSyncTimeout) {
+                clearTimeout(this._localBrainSyncTimeout);
+            }
+            this._localBrainSyncTimeout = setTimeout(async () => {
+                try {
+                    const result = await LocalBrain.syncMapToServer(this.data);
+                    if (result.status === 'synced') {
+                        console.log(`🔄 Map synced to LocalBrain: ${result.nodes} nodes`);
+                    }
+                } catch (e) {
+                    console.warn('LocalBrain sync failed:', e.message);
+                }
+            }, 2000);
         }
         
         saveSnapshot(name = 'change') {
@@ -28518,6 +28540,27 @@ You are a trusted guide, not a data harvester.
                 }
             }
 
+            // ═══════════════════════════════════════════════════════════════
+            // CONVERSATION CONTEXT - Past AI conversations for unified understanding
+            // ═══════════════════════════════════════════════════════════════
+            let conversationContext = '';
+            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                try {
+                    const convResult = await LocalBrain.getConversationContext(
+                        userMessage,
+                        8000,  // max tokens for conversation context
+                        false  // summaries only (use true for full text on synthesis requests)
+                    );
+
+                    if (convResult.context && convResult.chars > 0) {
+                        conversationContext = convResult.context;
+                        console.log(`💬 Conversation context: ${convResult.chars} chars from past AI discussions`);
+                    }
+                } catch (e) {
+                    console.warn('Conversation context error:', e);
+                }
+            }
+
             // Gather neural context from all intelligence systems
             let neuralContext = '';
             
@@ -29265,6 +29308,11 @@ ${brainContext ? `
 UNIFIED BRAIN - Self-Aware Intelligence Core
 ═══════════════════════════════════════════════════════════════
 ${brainContext}` : ''}
+${conversationContext ? `
+═══════════════════════════════════════════════════════════════
+PAST AI CONVERSATIONS - Context from prior discussions
+═══════════════════════════════════════════════════════════════
+${conversationContext}` : ''}
 
 YOUR CAPABILITIES:
 1. **Smart Map Context**: You see the most RELEVANT nodes via semantic search (top-level branches + nodes related to the query). For large maps this optimizes token usage while maintaining full awareness

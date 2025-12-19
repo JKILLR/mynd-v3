@@ -35,6 +35,11 @@ from models.voice import VoiceTranscriber
 from models.vision import VisionEngine
 from brain import UnifiedBrain, ContextRequest, ContextResponse
 
+# Unified system imports
+from models.map_vector_db import MapVectorDB, UnifiedNode, SourceRef
+from models.conversation_archive import ConversationArchive, ArchivedConversation
+from models.knowledge_extractor import KnowledgeExtractor
+
 # ═══════════════════════════════════════════════════════════════════
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════
@@ -44,7 +49,7 @@ class Config:
     HOST = "0.0.0.0"  # Listen on all interfaces for network access
 
     # Model settings
-    EMBEDDING_MODEL = "all-MiniLM-L6-v2"  # Fast, good quality
+    EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"  # Fast, best retrieval quality
     EMBEDDING_DIM = 384
 
     # Graph Transformer v2 settings
@@ -200,6 +205,267 @@ class BrainContextResponse(BaseModel):
     breakdown: Dict[str, int]
     brain_state: Dict[str, Any]
     time_ms: float
+
+# ═══════════════════════════════════════════════════════════════════
+# CONVERSATION STORAGE MODELS
+# ═══════════════════════════════════════════════════════════════════
+
+class ConversationImport(BaseModel):
+    """Import a conversation from any AI chat"""
+    text: str  # Full conversation text
+    source: str = "unknown"  # claude, grok, chatgpt, etc.
+    title: Optional[str] = None  # Optional title
+    metadata: Optional[Dict[str, Any]] = None
+
+class ConversationInsight(BaseModel):
+    """A key insight extracted from a conversation"""
+    content: str
+    type: str = "insight"  # insight, decision, question, problem, solution
+    confidence: float = 0.8
+
+class StoredConversation(BaseModel):
+    """A stored conversation with all its data"""
+    id: str
+    text: str
+    source: str
+    title: str
+    summary: Optional[str] = None
+    insights: List[ConversationInsight] = []
+    embedding: Optional[List[float]] = None
+    timestamp: float
+    metadata: Optional[Dict[str, Any]] = None
+
+class ConversationSearchRequest(BaseModel):
+    """Search conversations by semantic similarity"""
+    query: str
+    top_k: int = 5
+    source_filter: Optional[str] = None  # Filter by source
+
+class ConversationContextRequest(BaseModel):
+    """Get relevant context from past conversations"""
+    query: str
+    max_tokens: int = 4000  # Approximate token limit for context
+    include_full_text: bool = False  # Include full conversations or just summaries
+
+# ═══════════════════════════════════════════════════════════════════
+# CONVERSATION STORE - File-based storage with embeddings
+# ═══════════════════════════════════════════════════════════════════
+
+import json
+import uuid
+import pathlib
+
+class ConversationStore:
+    """
+    Stores conversations as JSON files with embeddings for semantic search.
+    Location: mynd-brain/data/conversations/
+    """
+
+    def __init__(self, base_dir: pathlib.Path, embedder=None):
+        self.data_dir = base_dir / "data" / "conversations"
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.embedder = embedder
+        self.index_path = self.data_dir / "_index.json"
+        self.embeddings_cache = {}  # id -> embedding
+        self._load_index()
+
+    def _load_index(self):
+        """Load the conversation index"""
+        if self.index_path.exists():
+            try:
+                with open(self.index_path, 'r') as f:
+                    self.index = json.load(f)
+            except json.JSONDecodeError as e:
+                print(f"⚠️ Corrupted conversation index, resetting: {e}")
+                self.index = {"conversations": [], "total_chars": 0}
+        else:
+            self.index = {"conversations": [], "total_chars": 0}
+
+    def _save_index(self):
+        """Save the conversation index"""
+        with open(self.index_path, 'w') as f:
+            json.dump(self.index, f, indent=2)
+
+    async def store(self, conversation: ConversationImport) -> StoredConversation:
+        """Store a new conversation"""
+        conv_id = str(uuid.uuid4())[:8]
+        timestamp = time.time()
+
+        # Generate title if not provided
+        title = conversation.title or self._generate_title(conversation.text)
+
+        # Generate summary (first 500 chars for now, could use LLM later)
+        summary = self._generate_summary(conversation.text)
+
+        # Generate embedding for search
+        embedding = None
+        if self.embedder:
+            # Embed the summary + title for better search
+            embed_text = f"{title}. {summary}"
+            embedding = self.embedder.embed(embed_text).tolist()
+            self.embeddings_cache[conv_id] = embedding
+
+        # Create stored conversation object
+        stored = StoredConversation(
+            id=conv_id,
+            text=conversation.text,
+            source=conversation.source,
+            title=title,
+            summary=summary,
+            insights=[],  # Will be populated by Claude later
+            embedding=embedding,
+            timestamp=timestamp,
+            metadata=conversation.metadata
+        )
+
+        # Save to file
+        conv_path = self.data_dir / f"{conv_id}.json"
+        with open(conv_path, 'w') as f:
+            json.dump(stored.model_dump(), f, indent=2)
+
+        # Update index
+        self.index["conversations"].append({
+            "id": conv_id,
+            "title": title,
+            "source": conversation.source,
+            "timestamp": timestamp,
+            "chars": len(conversation.text)
+        })
+        self.index["total_chars"] = sum(c["chars"] for c in self.index["conversations"])
+        self._save_index()
+
+        return stored
+
+    def _generate_title(self, text: str) -> str:
+        """Generate a title from conversation text"""
+        # Take first meaningful line
+        lines = [line.strip() for line in text.split('\n') if line.strip() and len(line.strip()) > 10]
+        if lines:
+            first_line = lines[0][:100]
+            return first_line + ("..." if len(lines[0]) > 100 else "")
+        return f"Conversation {time.strftime('%Y-%m-%d %H:%M')}"
+
+    def _generate_summary(self, text: str) -> str:
+        """Generate a summary (basic for now)"""
+        # Take first 500 chars, try to end at sentence
+        if len(text) <= 500:
+            return text
+        summary = text[:500]
+        last_period = summary.rfind('.')
+        if last_period > 300:
+            return summary[:last_period + 1]
+        return summary + "..."
+
+    def get(self, conv_id: str) -> Optional[StoredConversation]:
+        """Get a conversation by ID"""
+        conv_path = self.data_dir / f"{conv_id}.json"
+        if not conv_path.exists():
+            return None
+        try:
+            with open(conv_path, 'r') as f:
+                data = json.load(f)
+            return StoredConversation(**data)
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            print(f"⚠️ Failed to load conversation {conv_id}: {e}")
+            return None
+
+    def list_all(self, source_filter: Optional[str] = None) -> List[Dict]:
+        """List all conversations (metadata only)"""
+        convos = self.index.get("conversations", [])
+        if source_filter:
+            convos = [c for c in convos if c["source"] == source_filter]
+        return sorted(convos, key=lambda x: x["timestamp"], reverse=True)
+
+    async def search(self, query: str, top_k: int = 5, source_filter: Optional[str] = None) -> List[Dict]:
+        """Search conversations by semantic similarity"""
+        if not self.embedder:
+            return []
+
+        # Get query embedding
+        query_embedding = self.embedder.embed(query)
+
+        # Load all embeddings
+        results = []
+        for conv_meta in self.index.get("conversations", []):
+            if source_filter and conv_meta["source"] != source_filter:
+                continue
+
+            conv_id = conv_meta["id"]
+
+            # Get embedding from cache or load
+            if conv_id in self.embeddings_cache:
+                conv_embedding = np.array(self.embeddings_cache[conv_id])
+            else:
+                conv = self.get(conv_id)
+                if conv and conv.embedding:
+                    conv_embedding = np.array(conv.embedding)
+                    self.embeddings_cache[conv_id] = conv.embedding
+                else:
+                    continue
+
+            # Compute cosine similarity
+            similarity = float(np.dot(query_embedding, conv_embedding) /
+                             (np.linalg.norm(query_embedding) * np.linalg.norm(conv_embedding) + 1e-8))
+
+            results.append({
+                "id": conv_id,
+                "title": conv_meta["title"],
+                "source": conv_meta["source"],
+                "timestamp": conv_meta["timestamp"],
+                "similarity": similarity
+            })
+
+        # Sort by similarity and return top_k
+        results.sort(key=lambda x: x["similarity"], reverse=True)
+        return results[:top_k]
+
+    async def get_relevant_context(self, query: str, max_tokens: int = 4000, include_full_text: bool = False) -> str:
+        """Get relevant context from past conversations for injection into prompts"""
+        search_results = await self.search(query, top_k=10)
+
+        context_parts = []
+        current_tokens = 0
+
+        def token_estimate(s: str) -> int:
+            """Rough token estimate (4 chars per token)"""
+            return len(s) // 4
+
+        for result in search_results:
+            if result["similarity"] < 0.3:  # Skip low relevance
+                continue
+
+            conv = self.get(result["id"])
+            if not conv:
+                continue
+
+            if include_full_text:
+                text = f"### {conv.title} (from {conv.source})\n{conv.text}\n"
+            else:
+                text = f"### {conv.title} (from {conv.source})\n{conv.summary}\n"
+
+            tokens = token_estimate(text)
+            if current_tokens + tokens > max_tokens:
+                break
+
+            context_parts.append(text)
+            current_tokens += tokens
+
+        if not context_parts:
+            return ""
+
+        return "## Relevant Past Conversations\n\n" + "\n---\n".join(context_parts)
+
+    def get_stats(self) -> Dict:
+        """Get storage statistics"""
+        return {
+            "total_conversations": len(self.index.get("conversations", [])),
+            "total_chars": self.index.get("total_chars", 0),
+            "total_mb": round(self.index.get("total_chars", 0) / 1024 / 1024, 2),
+            "sources": list(set(c["source"] for c in self.index.get("conversations", [])))
+        }
+
+# Global conversation store
+conversation_store: Optional[ConversationStore] = None
 
 # ═══════════════════════════════════════════════════════════════════
 # BRAIN - The ML Engine
@@ -574,10 +840,16 @@ class MYNDBrain:
 brain: Optional[MYNDBrain] = None
 unified_brain: Optional[UnifiedBrain] = None
 
+# Unified system instances
+map_vector_db: Optional[MapVectorDB] = None
+conversation_archive: Optional[ConversationArchive] = None
+knowledge_extractor: Optional[KnowledgeExtractor] = None
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize brain on startup, cleanup on shutdown."""
-    global brain, unified_brain
+    global brain, unified_brain, conversation_store
+    global map_vector_db, conversation_archive, knowledge_extractor
 
     # Initialize ML brain
     brain = MYNDBrain()
@@ -589,8 +861,34 @@ async def lifespan(app: FastAPI):
 
     print("🧠 Unified Brain connected to ML Brain")
 
+    # Initialize conversation store (legacy)
+    brain_dir = pathlib.Path(__file__).parent
+    conversation_store = ConversationStore(brain_dir, embedder=brain.embedder)
+    print(f"💬 Conversation Store initialized ({conversation_store.get_stats()['total_conversations']} conversations)")
+
+    # ═══════════════════════════════════════════════════════════════════
+    # UNIFIED SYSTEM - Map is the vector database
+    # ═══════════════════════════════════════════════════════════════════
+    data_dir = pathlib.Path(__file__).parent / "data"
+
+    # Initialize unified map vector database
+    map_vector_db = MapVectorDB(data_dir, embedder=brain.embedder)
+    print(f"🗺️ MapVectorDB initialized ({map_vector_db.get_stats()['total_nodes']} nodes)")
+
+    # Initialize conversation archive
+    conversation_archive = ConversationArchive(data_dir, embedder=brain.embedder)
+    print(f"📚 Conversation Archive initialized ({conversation_archive.get_stats()['total_conversations']} conversations)")
+
+    # Initialize knowledge extractor (API key optional - uses rule-based fallback)
+    api_key = os.environ.get('ANTHROPIC_API_KEY')
+    knowledge_extractor = KnowledgeExtractor(map_vector_db, api_key=api_key)
+    print(f"🧠 Knowledge Extractor initialized (AI: {'enabled' if api_key else 'disabled - using rule-based'})")
+
     yield
     # Cleanup
+    if map_vector_db:
+        map_vector_db.save()
+        print("💾 MapVectorDB saved")
     print("🧠 MYND Brain shutting down...")
 
 app = FastAPI(
@@ -688,6 +986,14 @@ async def root():
             "code_analysis": [
                 "/code/parse",
                 "/code/self-awareness"
+            ],
+            "conversations": [
+                "/conversations/import",    # Import AI chat conversations
+                "/conversations",           # List all conversations
+                "/conversations/{id}",      # Get specific conversation
+                "/conversations/search",    # Semantic search
+                "/conversations/context",   # Get relevant context for prompts
+                "/conversations/stats"      # Storage statistics
             ],
             "system": [
                 "/health"
@@ -1339,6 +1645,140 @@ async def remove_vision_goal(goal: str):
         "status": "removed",
         "goals": result['goals']
     }
+
+# ═══════════════════════════════════════════════════════════════════
+# CONVERSATION STORAGE - Import and search AI conversations
+# ═══════════════════════════════════════════════════════════════════
+
+@app.post("/conversations/import")
+async def import_conversation(conversation: ConversationImport):
+    """
+    Import a conversation from any AI chat (Claude, ChatGPT, Grok, etc.)
+
+    The full text is stored and embedded for semantic search.
+    Use this to build your unified context across all AI conversations.
+
+    Example:
+    ```json
+    {
+        "text": "User: How should I structure the app?\\nAssistant: ...",
+        "source": "claude",
+        "title": "App Architecture Discussion"
+    }
+    ```
+    """
+    if conversation_store is None:
+        raise HTTPException(status_code=503, detail="Conversation store not initialized")
+
+    start = time.time()
+    stored = await conversation_store.store(conversation)
+    elapsed = (time.time() - start) * 1000
+
+    return {
+        "status": "stored",
+        "id": stored.id,
+        "title": stored.title,
+        "chars": len(stored.text),
+        "time_ms": elapsed
+    }
+
+@app.get("/conversations")
+async def list_conversations(source: Optional[str] = None):
+    """
+    List all stored conversations.
+
+    Optional filter by source (claude, chatgpt, grok, etc.)
+    """
+    if conversation_store is None:
+        raise HTTPException(status_code=503, detail="Conversation store not initialized")
+
+    convos = conversation_store.list_all(source_filter=source)
+    stats = conversation_store.get_stats()
+
+    return {
+        "conversations": convos,
+        "stats": stats
+    }
+
+@app.get("/conversations/{conv_id}")
+async def get_conversation(conv_id: str):
+    """
+    Get a specific conversation by ID.
+    Returns full text, summary, and any extracted insights.
+    """
+    if conversation_store is None:
+        raise HTTPException(status_code=503, detail="Conversation store not initialized")
+
+    conv = conversation_store.get(conv_id)
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    return conv.model_dump()
+
+@app.post("/conversations/search")
+async def search_conversations(request: ConversationSearchRequest):
+    """
+    Search conversations by semantic similarity.
+
+    Returns conversations most relevant to your query.
+    Use this to find past discussions about specific topics.
+    """
+    if conversation_store is None:
+        raise HTTPException(status_code=503, detail="Conversation store not initialized")
+
+    start = time.time()
+    results = await conversation_store.search(
+        request.query,
+        top_k=request.top_k,
+        source_filter=request.source_filter
+    )
+    elapsed = (time.time() - start) * 1000
+
+    return {
+        "results": results,
+        "query": request.query,
+        "time_ms": elapsed
+    }
+
+@app.post("/conversations/context")
+async def get_conversation_context(request: ConversationContextRequest):
+    """
+    Get relevant context from past conversations for injection into prompts.
+
+    This is THE key endpoint for unified context:
+    - Searches all stored conversations
+    - Returns relevant summaries (or full text)
+    - Formatted for direct injection into Claude's context
+
+    Use this before every AI call to give Claude awareness of past discussions.
+    """
+    if conversation_store is None:
+        raise HTTPException(status_code=503, detail="Conversation store not initialized")
+
+    start = time.time()
+    context = await conversation_store.get_relevant_context(
+        request.query,
+        max_tokens=request.max_tokens,
+        include_full_text=request.include_full_text
+    )
+    elapsed = (time.time() - start) * 1000
+
+    return {
+        "context": context,
+        "query": request.query,
+        "chars": len(context),
+        "time_ms": elapsed
+    }
+
+@app.get("/conversations/stats")
+async def get_conversation_stats():
+    """
+    Get conversation storage statistics.
+    """
+    if conversation_store is None:
+        raise HTTPException(status_code=503, detail="Conversation store not initialized")
+
+    return conversation_store.get_stats()
 
 # ═══════════════════════════════════════════════════════════════════
 # CODE EMBEDDING - Parse codebase into map structure
@@ -2115,6 +2555,271 @@ async def describe_image_file(file: UploadFile = File(...)):
             "error": str(e),
             "time_ms": (time.time() - start) * 1000
         }
+
+# ═══════════════════════════════════════════════════════════════════
+# UNIFIED SYSTEM - Map as Vector Database
+# ═══════════════════════════════════════════════════════════════════
+
+class MapSyncRequest(BaseModel):
+    """Sync map data from browser to server"""
+    map_data: Dict[str, Any]  # Recursive node structure
+    re_embed_all: bool = False
+
+class MapSearchRequest(BaseModel):
+    """Search the unified map"""
+    query: str
+    top_k: int = 10
+    threshold: float = 0.35
+    node_types: Optional[List[str]] = None
+
+class UnifiedContextRequest(BaseModel):
+    """Get unified context for RAG"""
+    query: str
+    max_tokens: int = 8000
+    include_sources: bool = False
+
+class ConversationImportRequest(BaseModel):
+    """Import a conversation for processing"""
+    text: str
+    source: str = "unknown"  # claude, chatgpt, grok
+    title: Optional[str] = None
+    process_immediately: bool = True  # Extract knowledge now
+
+@app.post("/unified/map/sync")
+async def sync_map_to_server(request: MapSyncRequest):
+    """
+    Sync the browser's map to the server's unified graph.
+    This makes the map the source of truth for the vector database.
+    """
+    if map_vector_db is None:
+        raise HTTPException(status_code=503, detail="MapVectorDB not initialized")
+
+    start = time.time()
+
+    map_vector_db.import_from_browser_map(
+        request.map_data,
+        re_embed_all=request.re_embed_all
+    )
+
+    stats = map_vector_db.get_stats()
+    elapsed = (time.time() - start) * 1000
+
+    return {
+        "status": "synced",
+        "nodes": stats['total_nodes'],
+        "embedded": stats['embedded_nodes'],
+        "time_ms": elapsed
+    }
+
+@app.get("/unified/map/export")
+async def export_map_from_server():
+    """
+    Export the server's unified graph to browser map format.
+    Use this to initialize the browser from server state.
+    """
+    if map_vector_db is None:
+        raise HTTPException(status_code=503, detail="MapVectorDB not initialized")
+
+    map_data = map_vector_db.export_to_browser_map()
+
+    if not map_data:
+        return {"map_data": None, "message": "No graph data on server"}
+
+    return {
+        "map_data": map_data,
+        "stats": map_vector_db.get_stats()
+    }
+
+@app.post("/unified/map/search")
+async def search_unified_map(request: MapSearchRequest):
+    """
+    Semantic search across the unified map.
+    Returns nodes most relevant to the query.
+    """
+    if map_vector_db is None:
+        raise HTTPException(status_code=503, detail="MapVectorDB not initialized")
+
+    start = time.time()
+
+    results = map_vector_db.search(
+        query=request.query,
+        top_k=request.top_k,
+        threshold=request.threshold,
+        node_types=request.node_types
+    )
+
+    # Convert nodes to dicts for JSON
+    serialized_results = []
+    for r in results:
+        node = r['node']
+        serialized_results.append({
+            'node_id': r['node_id'],
+            'label': node.label,
+            'description': node.description,
+            'type': node.type,
+            'similarity': r['similarity'],
+            'path': [n.label for n in map_vector_db.get_path(r['node_id'])]
+        })
+
+    elapsed = (time.time() - start) * 1000
+
+    return {
+        "results": serialized_results,
+        "query": request.query,
+        "time_ms": elapsed
+    }
+
+@app.post("/unified/context")
+async def get_unified_context(request: UnifiedContextRequest):
+    """
+    Get unified context for RAG from the map.
+    This is THE endpoint to call before every Claude request.
+    Returns relevant context from the entire knowledge graph.
+    """
+    if map_vector_db is None:
+        raise HTTPException(status_code=503, detail="MapVectorDB not initialized")
+
+    start = time.time()
+
+    result = map_vector_db.get_context(
+        query=request.query,
+        max_tokens=request.max_tokens,
+        include_sources=request.include_sources
+    )
+
+    elapsed = (time.time() - start) * 1000
+
+    return {
+        "context": result['context'],
+        "nodes_used": result['nodes_used'],
+        "chars": result['chars'],
+        "time_ms": elapsed
+    }
+
+@app.get("/unified/map/stats")
+async def get_unified_map_stats():
+    """Get statistics about the unified map."""
+    if map_vector_db is None:
+        raise HTTPException(status_code=503, detail="MapVectorDB not initialized")
+
+    return map_vector_db.get_stats()
+
+# ═══════════════════════════════════════════════════════════════════
+# CONVERSATION ARCHIVE + KNOWLEDGE EXTRACTION
+# ═══════════════════════════════════════════════════════════════════
+
+@app.post("/unified/conversations/import")
+async def import_unified_conversation(request: ConversationImportRequest):
+    """
+    Import a conversation and optionally extract knowledge into the map.
+
+    This is the main flow:
+    1. Store conversation in archive
+    2. Extract concepts using AI or rules
+    3. Integrate concepts into the map (find similar or create new nodes)
+    4. Return list of nodes created/enriched
+    """
+    if conversation_archive is None:
+        raise HTTPException(status_code=503, detail="Conversation archive not initialized")
+
+    start = time.time()
+
+    # Store in archive
+    conv = conversation_archive.add(
+        text=request.text,
+        source=request.source,
+        title=request.title
+    )
+
+    result = {
+        "conversation_id": conv.id,
+        "title": conv.title,
+        "char_count": conv.char_count,
+        "archived": True
+    }
+
+    # Extract knowledge if requested
+    if request.process_immediately and knowledge_extractor is not None:
+        extraction_result = await knowledge_extractor.process_conversation(conv)
+
+        # Mark conversation as processed
+        conversation_archive.mark_processed(
+            conv.id,
+            extraction_result['node_ids']
+        )
+
+        result.update({
+            "processed": True,
+            "concepts_extracted": extraction_result['concepts_extracted'],
+            "nodes_created": extraction_result['nodes_created'],
+            "nodes_enriched": extraction_result['nodes_enriched'],
+            "node_ids": extraction_result['node_ids']
+        })
+    else:
+        result["processed"] = False
+
+    result["time_ms"] = (time.time() - start) * 1000
+
+    return result
+
+@app.get("/unified/conversations")
+async def list_archived_conversations(
+    source: Optional[str] = None,
+    processed: Optional[bool] = None
+):
+    """List all archived conversations."""
+    if conversation_archive is None:
+        raise HTTPException(status_code=503, detail="Conversation archive not initialized")
+
+    conversations = conversation_archive.list_all(source=source, processed=processed)
+
+    return {
+        "conversations": conversations,
+        "stats": conversation_archive.get_stats()
+    }
+
+@app.post("/unified/conversations/process-pending")
+async def process_pending_conversations(limit: int = 5):
+    """
+    Process unprocessed conversations in the archive.
+    Extracts knowledge and integrates into the map.
+    """
+    if conversation_archive is None or knowledge_extractor is None:
+        raise HTTPException(status_code=503, detail="System not initialized")
+
+    start = time.time()
+
+    # Get unprocessed conversations
+    pending = conversation_archive.get_unprocessed(limit=limit)
+
+    if not pending:
+        return {"message": "No unprocessed conversations", "processed": 0}
+
+    # Process each
+    results = await knowledge_extractor.process_batch(pending)
+
+    # Mark as processed
+    for result in results:
+        conversation_archive.mark_processed(
+            result['conversation_id'],
+            result['node_ids']
+        )
+
+    elapsed = (time.time() - start) * 1000
+
+    return {
+        "processed": len(results),
+        "results": results,
+        "time_ms": elapsed
+    }
+
+@app.get("/unified/conversations/stats")
+async def get_archive_stats():
+    """Get conversation archive statistics."""
+    if conversation_archive is None:
+        raise HTTPException(status_code=503, detail="Conversation archive not initialized")
+
+    return conversation_archive.get_stats()
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
