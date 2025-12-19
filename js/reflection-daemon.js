@@ -361,31 +361,8 @@ const ReflectionDaemon = {
             context.mapContext = this.buildMapContext(allNodes, store.data);
         }
 
-        // 2. Code chunks from CodeRAG
-        if (typeof codeRAG !== 'undefined' && codeRAG.initialized) {
-            // Search for key systems
-            const searches = ['reflection', 'neural', 'AI', 'store', 'evolution'];
-            const codeChunks = [];
-
-            for (const query of searches) {
-                const results = codeRAG.search(query, 3);
-                if (results && results.length > 0) {
-                    codeChunks.push(...results.slice(0, 2));
-                }
-            }
-
-            // Deduplicate and format
-            const seen = new Set();
-            context.codeContext = codeChunks
-                .filter(c => {
-                    if (seen.has(c.id)) return false;
-                    seen.add(c.id);
-                    return true;
-                })
-                .slice(0, 10)
-                .map(c => `[${c.section || 'Code'}] ${c.name || c.id}:\n${c.code?.substring(0, 500) || ''}`)
-                .join('\n\n---\n\n');
-        }
+        // 2. Comprehensive code context from CodeRAG
+        context.codeContext = await this.gatherCodeContext();
 
         // 3. Neural insights if available
         if (typeof neuralNet !== 'undefined') {
@@ -457,6 +434,133 @@ const ReflectionDaemon = {
         }
 
         return depth;
+    },
+
+    /**
+     * Gather comprehensive code context from CodeRAG
+     * Provides full access to all indexed code sections
+     */
+    async gatherCodeContext() {
+        // Check if CodeRAG is available and initialized
+        if (typeof codeRAG === 'undefined' || !codeRAG.initialized) {
+            // Try to initialize CodeRAG if available but not initialized
+            if (typeof codeRAG !== 'undefined' && !codeRAG.initialized) {
+                try {
+                    await codeRAG.initialize();
+                } catch (e) {
+                    console.warn('Failed to initialize CodeRAG:', e);
+                    return 'CodeRAG not available';
+                }
+            } else {
+                return 'CodeRAG not available';
+            }
+        }
+
+        const sections = [];
+        const maxTotalChars = 12000; // Increased limit for comprehensive analysis
+        let totalChars = 0;
+
+        // 1. Check for selected source file from Self-Improvement Engine
+        const selectedFile = window.selfImprovementEngine?.selectedSourceFile;
+        if (selectedFile && selectedFile.content) {
+            sections.push(`== SELECTED SOURCE FILE: ${selectedFile.name} ==\n${selectedFile.content.substring(0, 4000)}`);
+            totalChars += Math.min(selectedFile.content.length, 4000);
+        }
+
+        // 2. Get ALL section overviews from CodeRAG for comprehensive coverage
+        const allChunks = codeRAG.chunks || [];
+        const sectionChunks = allChunks.filter(c => c.type === 'section');
+
+        if (sectionChunks.length > 0) {
+            sections.push(`\n== CODEBASE SECTIONS (${sectionChunks.length} total) ==`);
+
+            // Group chunks by section name for organized output
+            const sectionMap = new Map();
+            for (const chunk of sectionChunks) {
+                const name = chunk.section || chunk.name || 'Unknown';
+                if (!sectionMap.has(name)) {
+                    sectionMap.set(name, chunk);
+                }
+            }
+
+            // Add section summaries
+            for (const [name, chunk] of sectionMap) {
+                if (totalChars >= maxTotalChars) break;
+                const summary = `\n[${name}] Lines ${chunk.startLine}-${chunk.endLine}`;
+                sections.push(summary);
+                totalChars += summary.length;
+            }
+        }
+
+        // 3. Get function/method chunks for detailed code analysis
+        const functionChunks = allChunks.filter(c => c.type === 'function' || c.type === 'method');
+
+        if (functionChunks.length > 0) {
+            sections.push(`\n== KEY FUNCTIONS (${functionChunks.length} total) ==`);
+
+            // Prioritize important-sounding functions
+            const priorityKeywords = ['init', 'main', 'render', 'update', 'process', 'handle', 'create', 'save', 'load'];
+            const sortedFunctions = functionChunks.sort((a, b) => {
+                const aScore = priorityKeywords.filter(kw => (a.name || '').toLowerCase().includes(kw)).length;
+                const bScore = priorityKeywords.filter(kw => (b.name || '').toLowerCase().includes(kw)).length;
+                return bScore - aScore;
+            });
+
+            // Include detailed code for top functions
+            const maxFunctions = 20;
+            for (let i = 0; i < Math.min(sortedFunctions.length, maxFunctions); i++) {
+                if (totalChars >= maxTotalChars) break;
+
+                const chunk = sortedFunctions[i];
+                const codeSnippet = chunk.code?.substring(0, 800) || '';
+                const entry = `\n[${chunk.section || 'Code'}] ${chunk.name || chunk.id}:\n${codeSnippet}`;
+
+                if (totalChars + entry.length <= maxTotalChars) {
+                    sections.push(entry);
+                    totalChars += entry.length;
+                }
+            }
+        }
+
+        // 4. Semantic search for additional relevant chunks based on map content
+        const store = window.app?.store;
+        if (store && codeRAG.search) {
+            const topNodes = store.data?.children?.slice(0, 5) || [];
+            const searchTerms = topNodes.map(n => n.label).filter(Boolean);
+
+            if (searchTerms.length > 0) {
+                sections.push(`\n== MAP-RELEVANT CODE ==`);
+                const seen = new Set();
+
+                for (const term of searchTerms) {
+                    if (totalChars >= maxTotalChars) break;
+
+                    try {
+                        const results = await codeRAG.search(term, 3);
+                        for (const result of results || []) {
+                            if (seen.has(result.id) || totalChars >= maxTotalChars) continue;
+                            seen.add(result.id);
+
+                            if (result.similarity > 0.3) {
+                                const entry = `\n[Match: "${term}" → ${result.section || 'Code'}] ${result.name || result.id} (${Math.round(result.similarity * 100)}% match):\n${(result.code || '').substring(0, 500)}`;
+                                if (totalChars + entry.length <= maxTotalChars) {
+                                    sections.push(entry);
+                                    totalChars += entry.length;
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        // Search failed, continue
+                    }
+                }
+            }
+        }
+
+        // 5. Add codebase statistics
+        const stats = `\n== CODEBASE STATS ==\nTotal chunks: ${allChunks.length}\nSections: ${sectionChunks.length}\nFunctions: ${functionChunks.length}\nContext chars: ${totalChars}`;
+        sections.push(stats);
+
+        return sections.join('\n');
     },
 
     async callClaudeForReflection(context, apiKey) {
