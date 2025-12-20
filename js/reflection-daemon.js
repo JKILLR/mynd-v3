@@ -581,9 +581,16 @@ const ReflectionDaemon = {
 
             // 2. Call Claude with reflection prompt
             const response = await this.callClaudeForReflection(context, apiKey, session);
+            console.log('🔮 Reflection raw response:', response?.substring(0, 500));
 
             // 3. Parse and queue results
             const results = this.parseReflectionResponse(response);
+            console.log('🔮 Parsed results:', {
+                insights: results.insights.length,
+                improvements: results.improvements.length,
+                connections: results.connections.length,
+                codeIssues: results.codeIssues.length
+            });
             await this.queueResults(results);
 
             // 4. Optionally add to map
