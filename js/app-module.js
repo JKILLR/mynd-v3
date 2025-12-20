@@ -29860,42 +29860,121 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                     max_tokens: 8192,
                     messages: messages
                 };
+
+                // Build tools array
+                const tools = [];
                 if (shouldUseWebSearch) {
-                    requestBody.tools = [{
+                    tools.push({
                         type: 'web_search_20250305',
                         name: 'web_search',
                         max_uses: 3
-                    }];
+                    });
                 }
 
-                const response = await fetch('https://api.anthropic.com/v1/messages', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': apiKey.trim(),
-                        'anthropic-version': '2023-06-01',
-                        'anthropic-dangerous-direct-browser-access': 'true'
-                    },
-                    body: JSON.stringify(requestBody)
-                });
-                
-                if (!response.ok) {
-                    throw new Error('API request failed');
-                }
-                
-                const data = await response.json();
-
-                // Check for truncation
-                if (data.stop_reason === 'max_tokens') {
-                    console.warn('⚠️ Chat response was truncated due to max_tokens limit');
+                // Add GitHub tools if configured
+                if (typeof ReflectionDaemon !== 'undefined' && ReflectionDaemon.isGithubConfigured()) {
+                    const githubTools = ReflectionDaemon.TOOLS.filter(t => t.name.startsWith('github_'));
+                    tools.push(...githubTools);
+                    console.log('🔧 GitHub tools enabled for chat');
                 }
 
-                // Extract text from response
-                if (Array.isArray(data.content)) {
-                    const textBlock = data.content.find(b => b.type === 'text');
-                    responseText = textBlock?.text || '';
-                } else {
-                    responseText = data.content?.[0]?.text || '';
+                // Add codebase tools if available
+                if (typeof ReflectionDaemon !== 'undefined') {
+                    const codeTools = ReflectionDaemon.TOOLS.filter(t =>
+                        ['read_file', 'search_code', 'list_files', 'get_codebase_overview', 'get_function_definition'].includes(t.name)
+                    );
+                    tools.push(...codeTools);
+                    console.log('🔧 Codebase tools enabled for chat');
+                }
+
+                if (tools.length > 0) {
+                    requestBody.tools = tools;
+                }
+
+                // Agentic loop for tool execution
+                let iterations = 0;
+                const maxIterations = 10;
+                let currentMessages = [...messages];
+
+                while (iterations < maxIterations) {
+                    iterations++;
+
+                    const response = await fetch('https://api.anthropic.com/v1/messages', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': apiKey.trim(),
+                            'anthropic-version': '2023-06-01',
+                            'anthropic-dangerous-direct-browser-access': 'true'
+                        },
+                        body: JSON.stringify({
+                            ...requestBody,
+                            messages: currentMessages
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('API request failed');
+                    }
+
+                    const data = await response.json();
+
+                    // Check for tool use
+                    const toolUseBlocks = data.content?.filter(b => b.type === 'tool_use') || [];
+                    const textBlocks = data.content?.filter(b => b.type === 'text') || [];
+
+                    // If no tool calls, we're done
+                    if (toolUseBlocks.length === 0 || data.stop_reason === 'end_turn') {
+                        // Check for truncation
+                        if (data.stop_reason === 'max_tokens') {
+                            console.warn('⚠️ Chat response was truncated due to max_tokens limit');
+                        }
+                        responseText = textBlocks.map(b => b.text).join('\n');
+                        break;
+                    }
+
+                    // Execute tools
+                    console.log(`🔧 Chat: Executing ${toolUseBlocks.length} tool(s)...`);
+
+                    // Add assistant's response with tool calls
+                    currentMessages.push({ role: 'assistant', content: data.content });
+
+                    // Execute each tool and collect results
+                    const toolResults = [];
+                    for (const toolUse of toolUseBlocks) {
+                        let result;
+
+                        // web_search is handled by Anthropic, skip local execution
+                        if (toolUse.name === 'web_search') {
+                            continue;
+                        }
+
+                        // Execute custom tools via ReflectionDaemon
+                        if (typeof ReflectionDaemon !== 'undefined') {
+                            result = await ReflectionDaemon.executeTool(toolUse.name, toolUse.input);
+                        } else {
+                            result = { error: 'Tool execution not available' };
+                        }
+
+                        toolResults.push({
+                            type: 'tool_result',
+                            tool_use_id: toolUse.id,
+                            content: JSON.stringify(result, null, 2)
+                        });
+                    }
+
+                    // Add tool results to messages
+                    if (toolResults.length > 0) {
+                        currentMessages.push({ role: 'user', content: toolResults });
+                    } else {
+                        // web_search only, extract text
+                        responseText = textBlocks.map(b => b.text).join('\n');
+                        break;
+                    }
+                }
+
+                if (iterations >= maxIterations) {
+                    console.warn('⚠️ Chat: Hit max tool iterations');
                 }
             }
             
