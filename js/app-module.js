@@ -6649,6 +6649,17 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
 
                 this.usingServer = false;
 
+                // ═══════════════════════════════════════════════════════════════
+                // DISABLED: Browser TensorFlow.js fallback
+                // When server is unavailable, browser training can freeze the system
+                // ═══════════════════════════════════════════════════════════════
+                console.warn('⚠️ LocalBrain server not available - ML features disabled');
+                console.warn('   Start the MYND Brain server for neural features');
+                this.loadError = 'Server unavailable - browser training disabled';
+                this.isReady = false;
+                return false;
+
+                /* DISABLED - Browser fallback freezes system when server crashes
                 // Lazy load TensorFlow.js if not already loaded
                 if (!TensorFlowLoader.isLoaded()) {
                     try {
@@ -6659,6 +6670,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                         return false;
                     }
                 }
+                */
                 
                 // Start embedding worker in background
                 if (typeof Worker !== 'undefined') {
