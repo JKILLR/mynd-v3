@@ -715,7 +715,9 @@ const ReflectionDaemon = {
 
         // Fallback: try to fetch from server if available
         try {
-            const response = await fetch(`/js/${path}`);
+            // Handle path resolution correctly - don't assume /js/ prefix
+            const fetchPath = path.startsWith('/') ? path : '/' + path;
+            const response = await fetch(fetchPath);
             if (response.ok) {
                 let content = await response.text();
                 if (start_line || end_line) {
@@ -738,22 +740,42 @@ const ReflectionDaemon = {
         return { error: `File not found: ${path}. Available files can be found with list_files tool.` };
     },
 
+    // Helper to escape regex special characters
+    escapeRegex(str) {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    },
+
     async toolSearchCode({ query, file_pattern, max_results = 20 }) {
         const results = [];
 
         if (typeof codeRAG !== 'undefined' && codeRAG.initialized) {
             const chunks = codeRAG.chunks || [];
-            const regex = new RegExp(query, 'gi');
+
+            // Safely create regex - fallback to escaped literal on failure
+            let regex;
+            try {
+                regex = new RegExp(query, 'gi');
+            } catch (e) {
+                // Invalid regex syntax - escape and treat as literal
+                console.warn(`Invalid regex "${query}", treating as literal`);
+                regex = new RegExp(this.escapeRegex(query), 'gi');
+            }
 
             for (const chunk of chunks) {
                 // Apply file pattern filter
                 if (file_pattern) {
                     const pattern = file_pattern.replace(/\*/g, '.*');
-                    if (!new RegExp(pattern).test(chunk.file || '')) continue;
+                    try {
+                        if (!new RegExp(pattern).test(chunk.file || '')) continue;
+                    } catch (e) {
+                        // Invalid pattern, skip filter
+                    }
                 }
 
                 const lines = (chunk.content || '').split('\n');
                 for (let i = 0; i < lines.length; i++) {
+                    // Reset lastIndex to avoid skipping matches due to global flag
+                    regex.lastIndex = 0;
                     if (regex.test(lines[i])) {
                         // Get context (2 lines before and after)
                         const contextStart = Math.max(0, i - 2);
@@ -907,9 +929,10 @@ const ReflectionDaemon = {
                 };
             }
 
-            // Fallback to text search
+            // Fallback to text search - escape name for safe regex interpolation
+            const escapedName = this.escapeRegex(name);
             const searchResults = await this.toolSearchCode({
-                query: `function ${name}|${name}\\s*[=:]\\s*function|${name}\\s*\\(|class ${name}`,
+                query: `function ${escapedName}|${escapedName}\\s*[=:]\\s*function|${escapedName}\\s*\\(|class ${escapedName}`,
                 max_results: 5
             });
 

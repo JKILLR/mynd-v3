@@ -167,7 +167,7 @@ const ReflectionUI = {
     updateStatusIndicator(isRunning) {
         const indicator = document.getElementById('reflection-status-indicator');
         if (indicator) {
-            indicator.className = isRunning ? 'status-active' : 'status-inactive';
+            indicator.className = isRunning ? 'reflection-status-active' : 'reflection-status-inactive';
             indicator.title = isRunning ? 'Autonomous mode active' : 'Autonomous mode inactive';
         }
     },
@@ -458,7 +458,7 @@ const ReflectionUI = {
                 <div class="queue-item-body">
                     <p class="queue-item-description">${safeDescription}</p>
                     ${safeVisionConnection ? `
-                        <div class="queue-item-vision" style="font-size: 11px; color: var(--accent); margin-top: 6px; font-style: italic;">
+                        <div class="queue-item-vision">
                             ↳ ${safeVisionConnection}
                         </div>
                     ` : ''}
