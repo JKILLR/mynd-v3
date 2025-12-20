@@ -9051,10 +9051,10 @@
                 <span id="maintenance-status-indicator" class="reflection-status-inactive" title="Map maintenance inactive" role="status" aria-live="polite"></span>
             </div>
             <div class="neural-status-row">
-                <span>Map Health</span>
+                <span id="maintenance-health-label">Map Health</span>
                 <span class="neural-status-value" id="maintenance-health-score" style="display: flex; align-items: center; gap: 4px;">
                     <span id="maintenance-health-value">—</span>
-                    <span id="maintenance-health-bar" style="width: 40px; height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden;">
+                    <span id="maintenance-health-bar" role="progressbar" aria-labelledby="maintenance-health-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="width: 40px; height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden;">
                         <span id="maintenance-health-fill" style="display: block; height: 100%; width: 0%; background: #10b981; transition: width 0.3s;"></span>
                     </span>
                 </span>

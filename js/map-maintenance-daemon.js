@@ -273,8 +273,10 @@ When analyzing the map, prioritize:
             this.stats.issuesDetected += report.structuralIssues.length + report.gaps.length;
             this.lastMaintenanceTime = Date.now();
 
-            // Queue items for review or auto-apply
-            await this.processFindings(report);
+            // Queue items for review or auto-apply (unless skipQueue is true)
+            if (!options.skipQueue) {
+                await this.processFindings(report);
+            }
 
             this.log(`Scan complete: ${report.duplicates.length} duplicates, ${report.structuralIssues.length} issues, ${report.suggestions.length} suggestions`);
             this.saveToStorage();
@@ -873,7 +875,6 @@ When analyzing the map, prioritize:
         ];
 
         const nodeLabels = nodes.map(n => n.label.toLowerCase());
-        const nodeMap = new Map(nodes.map(n => [n.label.toLowerCase(), n]));
 
         for (const pattern of commonPatterns) {
             const hasPrefix = nodeLabels.some(l => l.includes(pattern.prefix));
@@ -1200,7 +1201,7 @@ When analyzing the map, prioritize:
     // ═══════════════════════════════════════════════════════════════════
 
     generateId() {
-        return `maint_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        return `maint_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
     },
 
     log(message) {
@@ -1220,9 +1221,20 @@ When analyzing the map, prioritize:
 
     saveToStorage() {
         try {
+            // Create a serializable version of config (exclude RegExp patterns)
+            const serializableConfig = {
+                enabled: this.config.enabled,
+                autoApply: this.config.autoApply,
+                checkIntervalMs: this.config.checkIntervalMs,
+                minIdleTimeMs: this.config.minIdleTimeMs,
+                features: this.config.features,
+                thresholds: this.config.thresholds
+                // Note: protectedPatterns excluded - contains RegExp objects that don't serialize
+            };
+
             const data = {
                 version: this.VERSION,
-                config: this.config,
+                config: serializableConfig,
                 stats: this.stats,
                 maintenanceQueue: this.maintenanceQueue,
                 lastMaintenanceTime: this.lastMaintenanceTime,
@@ -1240,7 +1252,13 @@ When analyzing the map, prioritize:
             const data = localStorage.getItem(this.STORAGE_KEY);
             if (data) {
                 const parsed = JSON.parse(data);
-                this.config = { ...this.config, ...parsed.config };
+                // Merge config but preserve protectedPatterns (RegExp objects don't serialize)
+                const savedConfig = parsed.config || {};
+                this.config = {
+                    ...this.config,
+                    ...savedConfig,
+                    protectedPatterns: this.config.protectedPatterns // Always use default patterns
+                };
                 this.stats = { ...this.stats, ...parsed.stats };
                 this.maintenanceQueue = parsed.maintenanceQueue || [];
                 this.lastMaintenanceTime = parsed.lastMaintenanceTime || 0;

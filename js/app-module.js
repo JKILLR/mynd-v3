@@ -28219,6 +28219,8 @@ You are a trusted guide, not a data harvester.
                             if (memory) {
                                 console.log(`💬 Conversation stored & embedded: "${userQuestion.slice(0, 40)}..." (id: ${memory.id})`);
                             }
+                        }).catch(e => {
+                            console.warn('SemanticMemory conversation storage failed:', e);
                         });
 
                         // Also try to save to LocalBrain for persistent storage
@@ -37643,19 +37645,28 @@ showKeyboardHints();
             try {
                 const status = MapMaintenanceDaemon.getStatus();
 
-                // Update health score
+                // Update health score with ARIA accessibility
                 const healthValueEl = document.getElementById('maintenance-health-value');
                 const healthFillEl = document.getElementById('maintenance-health-fill');
+                const healthBarEl = document.getElementById('maintenance-health-bar');
                 if (healthValueEl && healthFillEl) {
                     if (status.lastMaintenanceTime > 0) {
                         // Calculate health from stats
                         const health = Math.max(0, 100 - (status.stats.duplicatesFound + status.stats.issuesDetected) * 2);
                         healthValueEl.textContent = health + '%';
                         healthFillEl.style.width = health + '%';
+                        // Color: green >70, yellow 40-70, red <40
                         healthFillEl.style.background = health > 70 ? '#10b981' : health > 40 ? '#f59e0b' : '#ef4444';
+                        // Update ARIA for accessibility
+                        if (healthBarEl) {
+                            healthBarEl.setAttribute('aria-valuenow', health);
+                        }
                     } else {
                         healthValueEl.textContent = '—';
                         healthFillEl.style.width = '0%';
+                        if (healthBarEl) {
+                            healthBarEl.setAttribute('aria-valuenow', '0');
+                        }
                     }
                 }
 
@@ -37717,7 +37728,15 @@ showKeyboardHints();
             const queue = MapMaintenanceDaemon.getQueue();
             const status = MapMaintenanceDaemon.getStatus();
 
-            // Create modal content
+            // HTML escape utility to prevent XSS
+            const escapeHtml = (str) => {
+                if (!str || typeof str !== 'string') return '';
+                const div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            };
+
+            // Create modal content with escaped values
             const modalContent = `
                 <div style="max-height: 70vh; overflow-y: auto;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -37747,25 +37766,33 @@ showKeyboardHints();
                                 <circle cx="12" cy="12" r="10"/>
                             </svg>
                             <p style="margin: 0;">Your map is healthy! No suggestions at this time.</p>
-                            <button onclick="MapMaintenanceDaemon.runMaintenance().then(() => NeuralUI.showMaintenancePanel())" style="margin-top: 12px; padding: 8px 16px; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer;">
+                            <button class="maintenance-run-scan-btn" style="margin-top: 12px; padding: 8px 16px; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer;">
                                 Run Scan
                             </button>
                         </div>
                     ` : `
                         <div style="display: flex; flex-direction: column; gap: 8px;">
-                            ${queue.map(suggestion => `
-                                <div class="maintenance-suggestion" data-id="${suggestion.id}" style="background: var(--bg-tertiary); border-radius: 8px; padding: 12px; border-left: 3px solid ${suggestion.priority === 'high' ? '#ef4444' : suggestion.priority === 'medium' ? '#f59e0b' : '#3b82f6'};">
+                            ${queue.map(suggestion => {
+                                const safeId = escapeHtml(suggestion.id);
+                                const safeTitle = escapeHtml(suggestion.title);
+                                const safeDescription = escapeHtml(suggestion.description);
+                                const safePriority = escapeHtml(suggestion.priority);
+                                const priorityColor = suggestion.priority === 'high' ? '#ef4444' : suggestion.priority === 'medium' ? '#f59e0b' : '#3b82f6';
+                                const priorityBg = suggestion.priority === 'high' ? 'rgba(239,68,68,0.2)' : suggestion.priority === 'medium' ? 'rgba(245,158,11,0.2)' : 'rgba(59,130,246,0.2)';
+
+                                return `
+                                <div class="maintenance-suggestion" data-suggestion-id="${safeId}" style="background: var(--bg-tertiary); border-radius: 8px; padding: 12px; border-left: 3px solid ${priorityColor};">
                                     <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
-                                        <div style="font-weight: 500; font-size: 13px;">${suggestion.title}</div>
-                                        <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: ${suggestion.priority === 'high' ? 'rgba(239,68,68,0.2)' : suggestion.priority === 'medium' ? 'rgba(245,158,11,0.2)' : 'rgba(59,130,246,0.2)'}; color: ${suggestion.priority === 'high' ? '#ef4444' : suggestion.priority === 'medium' ? '#f59e0b' : '#3b82f6'};">${suggestion.priority}</span>
+                                        <div style="font-weight: 500; font-size: 13px;">${safeTitle}</div>
+                                        <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: ${priorityBg}; color: ${priorityColor};">${safePriority}</span>
                                     </div>
-                                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">${suggestion.description}</div>
+                                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">${safeDescription}</div>
                                     <div style="display: flex; gap: 8px;">
-                                        <button onclick="NeuralUI.approveMaintenance('${suggestion.id}')" style="flex: 1; padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Apply</button>
-                                        <button onclick="NeuralUI.dismissMaintenance('${suggestion.id}')" style="flex: 1; padding: 6px 12px; background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; font-size: 12px;">Dismiss</button>
+                                        <button class="maintenance-approve-btn" data-id="${safeId}" style="flex: 1; padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Apply</button>
+                                        <button class="maintenance-dismiss-btn" data-id="${safeId}" style="flex: 1; padding: 6px 12px; background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; font-size: 12px;">Dismiss</button>
                                     </div>
                                 </div>
-                            `).join('')}
+                            `}).join('')}
                         </div>
                     `}
                 </div>
@@ -37788,6 +37815,19 @@ showKeyboardHints();
                 overlay.appendChild(modal);
                 document.body.appendChild(overlay);
             }
+
+            // Use event delegation for button clicks (safer than inline onclick)
+            setTimeout(() => {
+                document.querySelectorAll('.maintenance-approve-btn').forEach(btn => {
+                    btn.onclick = () => this.approveMaintenance(btn.dataset.id);
+                });
+                document.querySelectorAll('.maintenance-dismiss-btn').forEach(btn => {
+                    btn.onclick = () => this.dismissMaintenance(btn.dataset.id);
+                });
+                document.querySelector('.maintenance-run-scan-btn')?.addEventListener('click', () => {
+                    MapMaintenanceDaemon.runMaintenance().then(() => this.showMaintenancePanel());
+                });
+            }, 0);
         },
 
         // Approve a maintenance suggestion
@@ -37797,8 +37837,8 @@ showKeyboardHints();
             const success = await MapMaintenanceDaemon.approveSuggestion(suggestionId);
             if (success) {
                 showToast('Suggestion applied', 'success');
-                // Refresh the panel
-                const suggestionEl = document.querySelector(`[data-id="${suggestionId}"]`);
+                // Refresh the panel - use data-suggestion-id attribute
+                const suggestionEl = document.querySelector(`[data-suggestion-id="${suggestionId}"]`);
                 if (suggestionEl) {
                     suggestionEl.style.opacity = '0.5';
                     suggestionEl.style.pointerEvents = 'none';
@@ -37817,8 +37857,8 @@ showKeyboardHints();
             MapMaintenanceDaemon.dismissSuggestion(suggestionId);
             showToast('Suggestion dismissed', 'info');
 
-            // Remove from UI
-            const suggestionEl = document.querySelector(`[data-id="${suggestionId}"]`);
+            // Remove from UI - use data-suggestion-id attribute
+            const suggestionEl = document.querySelector(`[data-suggestion-id="${suggestionId}"]`);
             if (suggestionEl) {
                 suggestionEl.style.opacity = '0';
                 setTimeout(() => suggestionEl.remove(), 200);
