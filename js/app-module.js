@@ -29982,28 +29982,81 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
             let responseText;
 
             if (session?.access_token) {
-                // Use Edge Function
-                const response = await fetch(CONFIG.EDGE_FUNCTION_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${session.access_token}`
-                    },
-                    body: JSON.stringify({
-                        type: 'chat',
-                        messages: messages,
-                        maxTokens: 8192,
-                        webSearch: shouldUseWebSearch
-                    })
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.error || 'Failed to get response');
+                // Use Edge Function with full tool support
+
+                // Get GitHub config if available
+                let githubConfig = {};
+                if (typeof ReflectionDaemon !== 'undefined' && ReflectionDaemon.isGithubConfigured && ReflectionDaemon.isGithubConfigured()) {
+                    githubConfig = {
+                        githubToken: ReflectionDaemon.githubToken,
+                        githubOwner: ReflectionDaemon.config.github.owner,
+                        githubRepo: ReflectionDaemon.config.github.repo,
+                        githubBaseBranch: ReflectionDaemon.config.github.baseBranch || 'main'
+                    };
+                    console.log('🔧 GitHub config included for Edge Function');
                 }
-                
-                const data = await response.json();
-                responseText = data.response;
+
+                // Agentic loop for Edge Function with tool support
+                let iterations = 0;
+                const maxIterations = 10;
+                let currentMessages = [...messages];
+
+                while (iterations < maxIterations) {
+                    iterations++;
+
+                    const response = await fetch(CONFIG.EDGE_FUNCTION_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${session.access_token}`
+                        },
+                        body: JSON.stringify({
+                            type: 'chat',
+                            messages: currentMessages,
+                            maxTokens: 8192,
+                            webSearch: shouldUseWebSearch,
+                            enableCodebaseTools: typeof ReflectionDaemon !== 'undefined',
+                            enableGithubTools: !!githubConfig.githubToken,
+                            ...githubConfig
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.error || 'Failed to get response');
+                    }
+
+                    const data = await response.json();
+
+                    // Check if there are codebase tools that need client-side execution
+                    if (data.pendingTools && data.pendingTools.length > 0) {
+                        // Execute codebase tools client-side
+                        const toolResults = [];
+                        for (const pendingTool of data.pendingTools) {
+                            if (typeof ReflectionDaemon !== 'undefined') {
+                                const result = await ReflectionDaemon.executeTool(pendingTool.name, pendingTool.input);
+                                toolResults.push({
+                                    type: 'tool_result',
+                                    tool_use_id: pendingTool.id,
+                                    content: JSON.stringify(result, null, 2)
+                                });
+                            }
+                        }
+
+                        // Add results to messages and continue loop
+                        currentMessages = data.currentMessages || currentMessages;
+                        currentMessages.push({ role: 'user', content: toolResults });
+                        continue;
+                    }
+
+                    // No pending tools - we have the final response
+                    responseText = data.response;
+                    break;
+                }
+
+                if (iterations >= maxIterations) {
+                    console.warn('⚠️ Edge Function: Hit max tool iterations');
+                }
             } else {
                 // Direct API call
                 const apiKey = localStorage.getItem(CONFIG.API_KEY);
