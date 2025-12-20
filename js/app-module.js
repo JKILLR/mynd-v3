@@ -36844,28 +36844,36 @@ showKeyboardHints();
                 }
             });
         },
-        
+
         async initNeuralNetwork() {
-            // Initialize preference tracker, semantic memory, and user profile first (don't need TensorFlow)
-            await preferenceTracker.init();
-            await semanticMemory.init();
-            await userProfile.init();
-            await conceptAbstractor.init();
-            await metaLearner.init();
+            console.log('🧠 initNeuralNetwork starting...');
+            try {
+                // Initialize preference tracker, semantic memory, and user profile first (don't need TensorFlow)
+                await preferenceTracker.init();
+                await semanticMemory.init();
+                await userProfile.init();
+                await conceptAbstractor.init();
+                await metaLearner.init();
 
-            // Initialize Map Maintenance Daemon
-            if (typeof MapMaintenanceDaemon !== 'undefined') {
-                await MapMaintenanceDaemon.init();
-                window.mapMaintenanceDaemon = MapMaintenanceDaemon;
-                console.log('✓ Map Maintenance Daemon initialized');
+                // Initialize Map Maintenance Daemon
+                console.log('🔧 Checking for MapMaintenanceDaemon...', typeof MapMaintenanceDaemon);
+                if (typeof MapMaintenanceDaemon !== 'undefined') {
+                    await MapMaintenanceDaemon.init();
+                    window.mapMaintenanceDaemon = MapMaintenanceDaemon;
+                    console.log('✓ Map Maintenance Daemon initialized');
 
-                // Wire up maintenance UI
-                this.setupMaintenanceUI();
+                    // Wire up maintenance UI
+                    this.setupMaintenanceUI();
+                } else {
+                    console.warn('⚠️ MapMaintenanceDaemon not found - script may not be loaded');
+                }
+
+                // DON'T initialize neural network here - defer until first AI feature use
+                // This saves ~10MB download and several seconds on mobile
+                console.log('✓ Preference systems ready (TensorFlow deferred)');
+            } catch (error) {
+                console.error('❌ initNeuralNetwork failed:', error);
             }
-
-            // DON'T initialize neural network here - defer until first AI feature use
-            // This saves ~10MB download and several seconds on mobile
-            console.log('✓ Preference systems ready (TensorFlow deferred)');
         },
         
         async ensureNeuralNetReady() {
