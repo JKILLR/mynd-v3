@@ -6716,6 +6716,11 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
 
                         // Share encoder with CodeRAG system
                         codeRAG.setEncoder(this.encoder);
+
+                        // Share encoder with Map Maintenance Daemon
+                        if (typeof MapMaintenanceDaemon !== 'undefined') {
+                            MapMaintenanceDaemon.setEncoder(this.encoder);
+                        }
                     } catch (loadError) {
                         // Model fetch blocked (common in preview environments)
                         console.warn('⚠️ Neural network: Model loading blocked (preview environment)');
@@ -21073,6 +21078,12 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                     if (result.status === 'synced') {
                         console.log(`🔄 Map synced to LocalBrain: ${result.nodes} nodes`);
                     }
+
+                    // Also sync to BAPI (Graph Transformer) for full map awareness
+                    const bapiResult = await LocalBrain.syncMap(this.data);
+                    if (bapiResult.synced > 0) {
+                        console.log(`🧠 BAPI synced: ${bapiResult.synced} nodes`);
+                    }
                 } catch (e) {
                     console.warn('LocalBrain sync failed:', e.message);
                 }
@@ -28204,7 +28215,13 @@ You are a trusted guide, not a data harvester.
                                 assistantMessage: content.slice(0, 1000),
                                 timestamp: Date.now()
                             }
-                        );
+                        ).then(memory => {
+                            if (memory) {
+                                console.log(`💬 Conversation stored & embedded: "${userQuestion.slice(0, 40)}..." (id: ${memory.id})`);
+                            }
+                        }).catch(e => {
+                            console.warn('SemanticMemory conversation storage failed:', e);
+                        });
 
                         // Also try to save to LocalBrain for persistent storage
                         if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
@@ -30297,7 +30314,12 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
 
                         // Add tool results to messages and continue loop
                         if (toolResults.length > 0) {
-                            currentMessages.push({ role: 'user', content: toolResults });
+                            // Add JSON format reminder after tool results to prevent Claude from responding with prose
+                            const jsonReminder = {
+                                type: 'text',
+                                text: 'REMINDER: Now respond with ONLY a valid JSON object in the format: {"message": "...", "actions": [...], "suggestions": [...]}. No markdown, no explanations - just the JSON.'
+                            };
+                            currentMessages.push({ role: 'user', content: [...toolResults, jsonReminder] });
                         } else {
                             // web_search only - use text so far
                             responseText = data.textSoFar || '';
@@ -30438,7 +30460,12 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
 
                     // Add tool results to messages
                     if (toolResults.length > 0) {
-                        currentMessages.push({ role: 'user', content: toolResults });
+                        // Add JSON format reminder after tool results to prevent Claude from responding with prose
+                        const jsonReminder = {
+                            type: 'text',
+                            text: 'REMINDER: Now respond with ONLY a valid JSON object in the format: {"message": "...", "actions": [...], "suggestions": [...]}. No markdown, no explanations - just the JSON.'
+                        };
+                        currentMessages.push({ role: 'user', content: [...toolResults, jsonReminder] });
                     } else {
                         // web_search only, extract text
                         responseText = textBlocks.map(b => b.text).join('\n');
@@ -36390,6 +36417,80 @@ showKeyboardHints();
                 NeuralUI.updateReflectionStatus();
             });
 
+            // ═══════════════════════════════════════════════════════════════════
+            // Map Maintenance Daemon UI Handlers
+            // ═══════════════════════════════════════════════════════════════════
+
+            // Maintenance toggle in neural panel
+            document.getElementById('maintenance-toggle-panel')?.addEventListener('change', function() {
+                if (typeof MapMaintenanceDaemon !== 'undefined') {
+                    if (this.checked) {
+                        MapMaintenanceDaemon.start();
+                        showToast('Map maintenance enabled', 'success');
+                    } else {
+                        MapMaintenanceDaemon.stop();
+                        showToast('Map maintenance disabled', 'info');
+                    }
+                    NeuralUI.updateMaintenanceStatus();
+                }
+            });
+
+            // View maintenance suggestions button
+            document.getElementById('maintenance-queue-btn')?.addEventListener('click', () => {
+                if (typeof MapMaintenanceDaemon !== 'undefined') {
+                    NeuralUI.showMaintenancePanel();
+                }
+            });
+
+            // Scan Now button
+            document.getElementById('maintenance-scan-btn')?.addEventListener('click', async () => {
+                if (typeof MapMaintenanceDaemon !== 'undefined') {
+                    const btn = document.getElementById('maintenance-scan-btn');
+                    btn.disabled = true;
+                    btn.innerHTML = `
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; animation: spin 1s linear infinite;">
+                            <circle cx="12" cy="12" r="10" stroke-dasharray="30 60"/>
+                        </svg>
+                        Scanning...
+                    `;
+
+                    try {
+                        const report = await MapMaintenanceDaemon.runMaintenance();
+                        if (report) {
+                            const total = report.duplicates.length + report.structuralIssues.length + report.gaps.length;
+                            showToast(`Scan complete: ${total} findings`, total > 0 ? 'info' : 'success');
+                        }
+                    } catch (error) {
+                        console.error('Maintenance scan failed:', error);
+                        showToast('Scan failed: ' + error.message, 'error');
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = `
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                                <circle cx="11" cy="11" r="8"/>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                            </svg>
+                            Scan Now
+                        `;
+                        NeuralUI.updateMaintenanceStatus();
+                    }
+                }
+            });
+
+            // Listen for maintenance events to update UI
+            document.addEventListener('mapMaintenance:scanComplete', () => {
+                NeuralUI.updateMaintenanceStatus();
+            });
+            document.addEventListener('mapMaintenance:started', () => {
+                NeuralUI.updateMaintenanceStatus();
+            });
+            document.addEventListener('mapMaintenance:stopped', () => {
+                NeuralUI.updateMaintenanceStatus();
+            });
+            document.addEventListener('mapMaintenance:suggestionQueued', () => {
+                NeuralUI.updateMaintenanceStatus();
+            });
+
             // Semantic Engine - Load Model button
             document.getElementById('semantic-load-btn')?.addEventListener('click', async () => {
                 const btn = document.getElementById('semantic-load-btn');
@@ -37466,6 +37567,9 @@ showKeyboardHints();
 
             // Update Reflection Daemon stats
             this.updateReflectionStatus();
+
+            // Update Map Maintenance Daemon stats
+            this.updateMaintenanceStatus();
         },
 
         // Update Reflection Daemon UI status
@@ -37532,6 +37636,234 @@ showKeyboardHints();
             } catch (e) {
                 console.warn('Failed to update reflection status:', e);
             }
+        },
+
+        // Update Map Maintenance Daemon UI status
+        updateMaintenanceStatus() {
+            if (typeof MapMaintenanceDaemon === 'undefined') return;
+
+            try {
+                const status = MapMaintenanceDaemon.getStatus();
+
+                // Update health score with ARIA accessibility
+                const healthValueEl = document.getElementById('maintenance-health-value');
+                const healthFillEl = document.getElementById('maintenance-health-fill');
+                const healthBarEl = document.getElementById('maintenance-health-bar');
+                if (healthValueEl && healthFillEl) {
+                    if (status.lastMaintenanceTime > 0) {
+                        // Calculate health from stats
+                        const health = Math.max(0, 100 - (status.stats.duplicatesFound + status.stats.issuesDetected) * 2);
+                        healthValueEl.textContent = health + '%';
+                        healthFillEl.style.width = health + '%';
+                        // Color: green >70, yellow 40-70, red <40
+                        healthFillEl.style.background = health > 70 ? '#10b981' : health > 40 ? '#f59e0b' : '#ef4444';
+                        // Update ARIA for accessibility
+                        if (healthBarEl) {
+                            healthBarEl.setAttribute('aria-valuenow', health);
+                        }
+                    } else {
+                        healthValueEl.textContent = '—';
+                        healthFillEl.style.width = '0%';
+                        if (healthBarEl) {
+                            healthBarEl.setAttribute('aria-valuenow', '0');
+                        }
+                    }
+                }
+
+                // Update duplicate count
+                const dupEl = document.getElementById('maintenance-duplicate-count');
+                if (dupEl) {
+                    dupEl.textContent = status.stats.duplicatesFound;
+                }
+
+                // Update issues count
+                const issueEl = document.getElementById('maintenance-issue-count');
+                if (issueEl) {
+                    issueEl.textContent = status.stats.issuesDetected;
+                }
+
+                // Update queue count and badge
+                const queueEl = document.getElementById('maintenance-queue-count');
+                const badgeEl = document.getElementById('maintenance-badge');
+                if (queueEl && queueEl.childNodes && queueEl.childNodes[0]) {
+                    queueEl.childNodes[0].textContent = status.queueSize;
+                }
+                if (badgeEl) {
+                    if (status.queueSize > 0) {
+                        badgeEl.textContent = status.queueSize > 99 ? '99+' : status.queueSize;
+                        badgeEl.style.display = 'flex';
+                    } else {
+                        badgeEl.style.display = 'none';
+                    }
+                }
+
+                // Update last scan time
+                const lastTimeEl = document.getElementById('maintenance-last-time');
+                if (lastTimeEl) {
+                    lastTimeEl.textContent = status.lastMaintenanceAgo;
+                }
+
+                // Update toggle state
+                const toggleEl = document.getElementById('maintenance-toggle-panel');
+                if (toggleEl) {
+                    toggleEl.checked = status.enabled;
+                }
+
+                // Update status indicator
+                const indicatorEl = document.getElementById('maintenance-status-indicator');
+                if (indicatorEl) {
+                    indicatorEl.className = status.enabled ? 'reflection-status-active' : 'reflection-status-inactive';
+                    indicatorEl.title = status.enabled ? 'Auto-maintenance active' : 'Auto-maintenance inactive';
+                }
+
+            } catch (e) {
+                console.warn('Failed to update maintenance status:', e);
+            }
+        },
+
+        // Show maintenance suggestions panel
+        showMaintenancePanel() {
+            if (typeof MapMaintenanceDaemon === 'undefined') return;
+
+            const queue = MapMaintenanceDaemon.getQueue();
+            const status = MapMaintenanceDaemon.getStatus();
+
+            // HTML escape utility to prevent XSS
+            const escapeHtml = (str) => {
+                if (!str || typeof str !== 'string') return '';
+                const div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            };
+
+            // Create modal content with escaped values
+            const modalContent = `
+                <div style="max-height: 70vh; overflow-y: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3 style="margin: 0; font-size: 16px;">Map Maintenance</h3>
+                        <span style="font-size: 12px; color: var(--text-muted);">${queue.length} suggestion${queue.length !== 1 ? 's' : ''}</span>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 20px; font-weight: 600;">${status.stats.totalScans}</div>
+                            <div style="font-size: 11px; color: var(--text-muted);">Total Scans</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 20px; font-weight: 600;">${status.stats.userApproved}</div>
+                            <div style="font-size: 11px; color: var(--text-muted);">Approved</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 20px; font-weight: 600;">${status.stats.autoFixed}</div>
+                            <div style="font-size: 11px; color: var(--text-muted);">Auto-Fixed</div>
+                        </div>
+                    </div>
+
+                    ${queue.length === 0 ? `
+                        <div style="text-align: center; padding: 32px; color: var(--text-muted);">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.5;">
+                                <path d="M9 12l2 2 4-4"/>
+                                <circle cx="12" cy="12" r="10"/>
+                            </svg>
+                            <p style="margin: 0;">Your map is healthy! No suggestions at this time.</p>
+                            <button class="maintenance-run-scan-btn" style="margin-top: 12px; padding: 8px 16px; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                Run Scan
+                            </button>
+                        </div>
+                    ` : `
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            ${queue.map(suggestion => {
+                                const safeId = escapeHtml(suggestion.id);
+                                const safeTitle = escapeHtml(suggestion.title);
+                                const safeDescription = escapeHtml(suggestion.description);
+                                const safePriority = escapeHtml(suggestion.priority);
+                                const priorityColor = suggestion.priority === 'high' ? '#ef4444' : suggestion.priority === 'medium' ? '#f59e0b' : '#3b82f6';
+                                const priorityBg = suggestion.priority === 'high' ? 'rgba(239,68,68,0.2)' : suggestion.priority === 'medium' ? 'rgba(245,158,11,0.2)' : 'rgba(59,130,246,0.2)';
+
+                                return `
+                                <div class="maintenance-suggestion" data-suggestion-id="${safeId}" style="background: var(--bg-tertiary); border-radius: 8px; padding: 12px; border-left: 3px solid ${priorityColor};">
+                                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                                        <div style="font-weight: 500; font-size: 13px;">${safeTitle}</div>
+                                        <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: ${priorityBg}; color: ${priorityColor};">${safePriority}</span>
+                                    </div>
+                                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">${safeDescription}</div>
+                                    <div style="display: flex; gap: 8px;">
+                                        <button class="maintenance-approve-btn" data-id="${safeId}" style="flex: 1; padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Apply</button>
+                                        <button class="maintenance-dismiss-btn" data-id="${safeId}" style="flex: 1; padding: 6px 12px; background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; font-size: 12px;">Dismiss</button>
+                                    </div>
+                                </div>
+                            `}).join('')}
+                        </div>
+                    `}
+                </div>
+            `;
+
+            // Show in modal (using existing modal system)
+            if (typeof showModal === 'function') {
+                showModal('Map Maintenance', modalContent);
+            } else {
+                // Fallback: create simple modal
+                const overlay = document.createElement('div');
+                overlay.id = 'maintenance-modal-overlay';
+                overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+                overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+                const modal = document.createElement('div');
+                modal.style.cssText = 'background: var(--bg-primary); border-radius: 12px; padding: 20px; max-width: 500px; width: 90%; max-height: 80vh; overflow: hidden;';
+                modal.innerHTML = modalContent;
+
+                overlay.appendChild(modal);
+                document.body.appendChild(overlay);
+            }
+
+            // Use event delegation for button clicks (safer than inline onclick)
+            setTimeout(() => {
+                document.querySelectorAll('.maintenance-approve-btn').forEach(btn => {
+                    btn.onclick = () => this.approveMaintenance(btn.dataset.id);
+                });
+                document.querySelectorAll('.maintenance-dismiss-btn').forEach(btn => {
+                    btn.onclick = () => this.dismissMaintenance(btn.dataset.id);
+                });
+                document.querySelector('.maintenance-run-scan-btn')?.addEventListener('click', () => {
+                    MapMaintenanceDaemon.runMaintenance().then(() => this.showMaintenancePanel());
+                });
+            }, 0);
+        },
+
+        // Approve a maintenance suggestion
+        async approveMaintenance(suggestionId) {
+            if (typeof MapMaintenanceDaemon === 'undefined') return;
+
+            const success = await MapMaintenanceDaemon.approveSuggestion(suggestionId);
+            if (success) {
+                showToast('Suggestion applied', 'success');
+                // Refresh the panel - use data-suggestion-id attribute
+                const suggestionEl = document.querySelector(`[data-suggestion-id="${suggestionId}"]`);
+                if (suggestionEl) {
+                    suggestionEl.style.opacity = '0.5';
+                    suggestionEl.style.pointerEvents = 'none';
+                    setTimeout(() => suggestionEl.remove(), 300);
+                }
+                this.updateMaintenanceStatus();
+            } else {
+                showToast('Failed to apply suggestion', 'error');
+            }
+        },
+
+        // Dismiss a maintenance suggestion
+        dismissMaintenance(suggestionId) {
+            if (typeof MapMaintenanceDaemon === 'undefined') return;
+
+            MapMaintenanceDaemon.dismissSuggestion(suggestionId);
+            showToast('Suggestion dismissed', 'info');
+
+            // Remove from UI - use data-suggestion-id attribute
+            const suggestionEl = document.querySelector(`[data-suggestion-id="${suggestionId}"]`);
+            if (suggestionEl) {
+                suggestionEl.style.opacity = '0';
+                setTimeout(() => suggestionEl.remove(), 200);
+            }
+            this.updateMaintenanceStatus();
         },
 
         async trainNetwork() {
@@ -41013,6 +41345,14 @@ Summary:`
                 ReflectionUI.init();
             }
             console.log('🔮 ReflectionDaemon initialized');
+        }
+    });
+
+    // MapMaintenanceDaemon - Autonomous map maintenance
+    queueInit('MapMaintenanceDaemon', async () => {
+        if (typeof MapMaintenanceDaemon !== 'undefined') {
+            await MapMaintenanceDaemon.init();
+            console.log('🔧 MapMaintenanceDaemon initialized');
         }
     });
 

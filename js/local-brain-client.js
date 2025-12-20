@@ -1871,9 +1871,18 @@ const LocalBrain = {
         if (typeof window !== 'undefined' && window.store && window.store.data) {
             try {
                 console.log('🔄 LocalBrain: Performing initial map sync...');
-                const result = await this.syncMapToServer(window.store.data);
-                if (result.status === 'synced') {
-                    console.log(`✅ LocalBrain: Initial sync complete - ${result.nodes} nodes`);
+
+                // Run both syncs in parallel for better performance
+                const [unifiedResult, bapiResult] = await Promise.all([
+                    this.syncMapToServer(window.store.data),
+                    this.syncMap(window.store.data)
+                ]);
+
+                if (unifiedResult.status === 'synced') {
+                    console.log(`✅ LocalBrain: Initial sync complete - ${unifiedResult.nodes} nodes`);
+                }
+                if (bapiResult.synced > 0) {
+                    console.log(`🧠 BAPI: Map synced - ${bapiResult.synced} nodes in ${bapiResult.time_ms?.toFixed(0) || 0}ms`);
                 }
             } catch (e) {
                 console.warn('LocalBrain: Initial map sync failed:', e.message);
