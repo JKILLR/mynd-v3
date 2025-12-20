@@ -30,7 +30,7 @@ const ReflectionDaemon = {
         minReflectionIntervalMs: 15 * 60 * 1000, // 15 min minimum (rate limit)
         maxTokensPerReflection: 16000,     // Increased for agentic reasoning
         maxContextChars: 50000,            // Increased context window
-        maxToolIterations: 25,             // Max tool use iterations per reflection
+        maxToolIterations: 50,             // Max tool use iterations per reflection
         autoAddToMap: false,               // Auto-add reflection log nodes
         frequencies: {
             '15min': 15 * 60 * 1000,
