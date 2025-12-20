@@ -29982,21 +29982,17 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
             let responseText;
 
             if (session?.access_token) {
-                // Use Edge Function with full tool support
+                // Use Edge Function with tools - client handles the agentic loop
 
-                // Get GitHub config if available
-                let githubConfig = {};
-                if (typeof ReflectionDaemon !== 'undefined' && ReflectionDaemon.isGithubConfigured && ReflectionDaemon.isGithubConfigured()) {
-                    githubConfig = {
-                        githubToken: ReflectionDaemon.githubToken,
-                        githubOwner: ReflectionDaemon.config.github.owner,
-                        githubRepo: ReflectionDaemon.config.github.repo,
-                        githubBaseBranch: ReflectionDaemon.config.github.baseBranch || 'main'
-                    };
-                    console.log('🔧 GitHub config included for Edge Function');
+                const hasGithubTools = typeof ReflectionDaemon !== 'undefined' &&
+                    ReflectionDaemon.isGithubConfigured &&
+                    ReflectionDaemon.isGithubConfigured();
+
+                if (hasGithubTools) {
+                    console.log('🔧 GitHub tools enabled for Edge Function');
                 }
 
-                // Agentic loop for Edge Function with tool support
+                // Agentic loop - client handles tool execution
                 let iterations = 0;
                 const maxIterations = 10;
                 let currentMessages = [...messages];
@@ -30011,13 +30007,11 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                             'Authorization': `Bearer ${session.access_token}`
                         },
                         body: JSON.stringify({
-                            type: 'chat',
                             messages: currentMessages,
                             maxTokens: 8192,
                             webSearch: shouldUseWebSearch,
                             enableCodebaseTools: typeof ReflectionDaemon !== 'undefined',
-                            enableGithubTools: !!githubConfig.githubToken,
-                            ...githubConfig
+                            enableGithubTools: hasGithubTools
                         })
                     });
 
@@ -30028,29 +30022,48 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
 
                     const data = await response.json();
 
-                    // Check if there are codebase tools that need client-side execution
-                    if (data.pendingTools && data.pendingTools.length > 0) {
-                        // Execute codebase tools client-side
+                    // Check if tools need to be executed
+                    if (data.needsToolExecution && data.toolCalls && data.toolCalls.length > 0) {
+                        console.log(`🔧 Edge Function: Executing ${data.toolCalls.length} tool(s) client-side...`);
+
+                        // Add assistant's response with tool calls to messages
+                        currentMessages.push({ role: 'assistant', content: data.content });
+
+                        // Execute tools client-side
                         const toolResults = [];
-                        for (const pendingTool of data.pendingTools) {
-                            if (typeof ReflectionDaemon !== 'undefined') {
-                                const result = await ReflectionDaemon.executeTool(pendingTool.name, pendingTool.input);
-                                toolResults.push({
-                                    type: 'tool_result',
-                                    tool_use_id: pendingTool.id,
-                                    content: JSON.stringify(result, null, 2)
-                                });
+                        for (const toolCall of data.toolCalls) {
+                            // Skip web_search - handled by Anthropic
+                            if (toolCall.name === 'web_search') {
+                                continue;
                             }
+
+                            let result;
+                            if (typeof ReflectionDaemon !== 'undefined') {
+                                result = await ReflectionDaemon.executeTool(toolCall.name, toolCall.input);
+                            } else {
+                                result = { error: 'Tool execution not available' };
+                            }
+
+                            toolResults.push({
+                                type: 'tool_result',
+                                tool_use_id: toolCall.id,
+                                content: JSON.stringify(result, null, 2)
+                            });
                         }
 
-                        // Add results to messages and continue loop
-                        currentMessages = data.currentMessages || currentMessages;
-                        currentMessages.push({ role: 'user', content: toolResults });
+                        // Add tool results to messages and continue loop
+                        if (toolResults.length > 0) {
+                            currentMessages.push({ role: 'user', content: toolResults });
+                        } else {
+                            // web_search only - use text so far
+                            responseText = data.textSoFar || '';
+                            break;
+                        }
                         continue;
                     }
 
-                    // No pending tools - we have the final response
-                    responseText = data.response;
+                    // No tools needed - we have the final response
+                    responseText = data.response || data.textSoFar || '';
                     break;
                 }
 
