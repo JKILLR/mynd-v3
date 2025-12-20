@@ -554,10 +554,16 @@ const ReflectionDaemon = {
             return null;
         }
 
-        // Check for API key
+        // Check for Supabase session or API key
+        let session = null;
+        if (typeof supabase !== 'undefined' && supabase !== null) {
+            const { data } = await supabase.auth.getSession();
+            session = data?.session;
+        }
+
         const apiKey = localStorage.getItem(CONFIG.API_KEY);
-        if (!apiKey) {
-            this.log('Reflection skipped (no API key)');
+        if (!session?.access_token && !apiKey) {
+            this.log('Reflection skipped (no API key or session)');
             return null;
         }
 
@@ -570,7 +576,7 @@ const ReflectionDaemon = {
             const context = await this.gatherContext();
 
             // 2. Call Claude with reflection prompt
-            const response = await this.callClaudeForReflection(context, apiKey);
+            const response = await this.callClaudeForReflection(context, apiKey, session);
 
             // 3. Parse and queue results
             const results = this.parseReflectionResponse(response);
@@ -1614,7 +1620,7 @@ WHAT DOESN'T MATTER:
 - Busywork optimizations with no tangible benefit
 - Observations without actionable next steps`,
 
-    async callClaudeForReflection(context, apiKey) {
+    async callClaudeForReflection(context, apiKey, session = null) {
         const systemPrompt = `You are MYND's autonomous reflection engine — a MANIFESTATION ENGINE with full coding capabilities.
 
 ═══════════════════════════════════════════════════════════════════
@@ -1760,23 +1766,54 @@ You have tools available to explore the codebase further. Use them to investigat
             const timeoutId = setTimeout(() => controller.abort(), 120000);
 
             try {
-                const response = await fetch('https://api.anthropic.com/v1/messages', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': apiKey,
-                        'anthropic-version': '2023-06-01',
-                        'anthropic-dangerous-direct-browser-access': 'true'
-                    },
-                    body: JSON.stringify({
-                        model: CONFIG.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
-                        max_tokens: this.config.maxTokensPerReflection,
-                        system: systemPrompt,
-                        tools: this.getAvailableTools(),
-                        messages: messages
-                    }),
-                    signal: controller.signal
-                });
+                let response;
+                const requestBody = {
+                    model: CONFIG.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+                    max_tokens: this.config.maxTokensPerReflection,
+                    system: systemPrompt,
+                    tools: this.getAvailableTools(),
+                    messages: messages,
+                    enableCodebaseTools: true,
+                    enableGithubTools: this.isGithubConfigured()
+                };
+
+                if (session?.access_token) {
+                    // Use Edge Function (secure, no API key exposed)
+                    response = await fetch(CONFIG.EDGE_FUNCTION_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${session.access_token}`
+                        },
+                        body: JSON.stringify({
+                            messages: messages,
+                            systemPrompt: systemPrompt,
+                            maxTokens: this.config.maxTokensPerReflection,
+                            enableCodebaseTools: true,
+                            enableGithubTools: this.isGithubConfigured()
+                        }),
+                        signal: controller.signal
+                    });
+                } else {
+                    // Direct API call with local key
+                    response = await fetch('https://api.anthropic.com/v1/messages', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': apiKey,
+                            'anthropic-version': '2023-06-01',
+                            'anthropic-dangerous-direct-browser-access': 'true'
+                        },
+                        body: JSON.stringify({
+                            model: CONFIG.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+                            max_tokens: this.config.maxTokensPerReflection,
+                            system: systemPrompt,
+                            tools: this.getAvailableTools(),
+                            messages: messages
+                        }),
+                        signal: controller.signal
+                    });
+                }
 
                 clearTimeout(timeoutId);
 
@@ -1787,24 +1824,49 @@ You have tools available to explore the codebase further. Use them to investigat
 
                 const data = await response.json();
 
-                // Check if response contains tool use
-                const toolUseBlocks = data.content?.filter(block => block.type === 'tool_use') || [];
-                const textBlocks = data.content?.filter(block => block.type === 'text') || [];
+                // Handle Edge Function response format vs direct API format
+                let toolUseBlocks, textBlocks;
+
+                if (data.needsToolExecution) {
+                    // Edge Function format
+                    toolUseBlocks = data.toolCalls || [];
+                    textBlocks = data.textSoFar ? [{ text: data.textSoFar }] : [];
+                    // Also need to handle content for messages
+                    if (data.content) {
+                        messages.push({ role: 'assistant', content: data.content });
+                    }
+                } else if (data.content) {
+                    // Direct API format
+                    toolUseBlocks = data.content.filter(block => block.type === 'tool_use') || [];
+                    textBlocks = data.content.filter(block => block.type === 'text') || [];
+                } else if (data.message) {
+                    // Edge Function final response
+                    finalResponse = data.message;
+                    break;
+                } else {
+                    toolUseBlocks = [];
+                    textBlocks = [];
+                }
 
                 // If there are tool calls, execute them
                 if (toolUseBlocks.length > 0) {
                     console.log(`🔧 Iteration ${iterations}: ${toolUseBlocks.length} tool call(s)`);
 
-                    // Add assistant's response to messages
-                    messages.push({ role: 'assistant', content: data.content });
+                    // Add assistant's response to messages (if not already added for Edge Function)
+                    if (!data.needsToolExecution && data.content) {
+                        messages.push({ role: 'assistant', content: data.content });
+                    }
 
                     // Execute each tool and collect results
                     const toolResults = [];
                     for (const toolUse of toolUseBlocks) {
-                        const result = await this.executeTool(toolUse.name, toolUse.input);
+                        const toolName = toolUse.name;
+                        const toolInput = toolUse.input;
+                        const toolId = toolUse.id;
+                        const result = await this.executeTool(toolName, toolInput);
                         toolResults.push({
                             type: 'tool_result',
-                            tool_use_id: toolUse.id,
+                            tool_use_id: toolId,
                             content: JSON.stringify(result, null, 2)
                         });
                     }
