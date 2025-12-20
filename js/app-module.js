@@ -30207,7 +30207,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
 
                 // Agentic loop - client handles tool execution
                 let iterations = 0;
-                const maxIterations = 10;
+                const maxIterations = 20;
                 // Validate messages - filter out any with missing/invalid content
                 let currentMessages = [...messages].filter(m => {
                     if (!m.content) return false;
@@ -30340,7 +30340,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
 
                 // Agentic loop for tool execution
                 let iterations = 0;
-                const maxIterations = 10;
+                const maxIterations = 20;
                 let currentMessages = [...messages];
 
                 while (iterations < maxIterations) {
