@@ -21142,7 +21142,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
             };
             build(this.data, id);
             return path;
-        },
+        }
 
         getAllNodes(node = this.data, result = []) {
             result.push(node);
@@ -21150,7 +21150,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                 node.children.forEach(c => this.getAllNodes(c, result));
             }
             return result;
-        },
+        }
 
         searchNodes(query) {
             const q = query.toLowerCase();
@@ -21158,7 +21158,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                 n.label.toLowerCase().includes(q) || 
                 (n.description && n.description.toLowerCase().includes(q))
             );
-        },
+        }
 
         addNode(parentId, nodeData) {
             const parent = this.findNode(parentId);
@@ -21198,7 +21198,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
             this.save();
             bus.emit('node:added', { parent, node: newNode });
             return newNode;
-        },
+        }
 
         // Get all nodes created from conversations, sorted by time (newest first)
         getConversationCreatedNodes() {
@@ -21210,7 +21210,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                     timestamp: n.provenance?.conversationTimestamp || new Date(n.createdAt).getTime()
                 }))
                 .sort((a, b) => b.timestamp - a.timestamp);
-        },
+        }
 
         // Get timeline grouped by conversation
         getNodeTimeline() {
@@ -21233,7 +21233,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
             }
 
             return Array.from(timeline.values()).sort((a, b) => b.timestamp - a.timestamp);
-        },
+        }
 
         // Get origin info for a specific node
         getNodeOrigin(nodeId) {
@@ -21256,7 +21256,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                 createdAt: node.createdAt,
                 timeAgo: this.formatTimeAgo(new Date(node.createdAt).getTime())
             };
-        },
+        }
 
         // Format timestamp as relative time
         formatTimeAgo(timestamp) {
@@ -21266,7 +21266,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
             if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
             if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
             return new Date(timestamp).toLocaleDateString();
-        },
+        }
 
         updateNode(id, updates) {
             const node = this.findNode(id);
@@ -21277,7 +21277,7 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
             this.save();
             bus.emit('node:updated', { node });
             return node;
-        },
+        }
 
         deleteNode(id) {
             if (id === this.data.id) return false;
