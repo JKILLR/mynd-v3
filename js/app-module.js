@@ -21142,24 +21142,24 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
             };
             build(this.data, id);
             return path;
-        }
-        
+        },
+
         getAllNodes(node = this.data, result = []) {
             result.push(node);
             if (node.children) {
                 node.children.forEach(c => this.getAllNodes(c, result));
             }
             return result;
-        }
-        
+        },
+
         searchNodes(query) {
             const q = query.toLowerCase();
             return this.getAllNodes().filter(n => 
                 n.label.toLowerCase().includes(q) || 
                 (n.description && n.description.toLowerCase().includes(q))
             );
-        }
-        
+        },
+
         addNode(parentId, nodeData) {
             const parent = this.findNode(parentId);
             if (!parent) return null;
