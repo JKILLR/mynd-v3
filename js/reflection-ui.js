@@ -646,6 +646,166 @@ const ReflectionUI = {
     }
 };
 
+// ═══════════════════════════════════════════════════════════════════
+// GITHUB CONFIG UI FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Toggle GitHub config panel visibility
+ */
+function toggleGithubConfig() {
+    const panel = document.getElementById('github-config-panel');
+    const chevron = document.getElementById('github-config-chevron');
+
+    if (panel && chevron) {
+        const isVisible = panel.style.display !== 'none';
+        panel.style.display = isVisible ? 'none' : 'block';
+        chevron.style.transform = isVisible ? '' : 'rotate(180deg)';
+
+        // Load existing config if opening
+        if (!isVisible) {
+            loadGithubConfig();
+        }
+    }
+}
+
+/**
+ * Load existing GitHub config into form
+ */
+function loadGithubConfig() {
+    if (typeof ReflectionDaemon === 'undefined') return;
+
+    const status = ReflectionDaemon.getStatus();
+    const github = status.github || {};
+
+    const repoInput = document.getElementById('github-repo-input');
+    const branchInput = document.getElementById('github-branch-input');
+    const tokenInput = document.getElementById('github-token-input');
+
+    if (repoInput && github.owner && github.repo) {
+        repoInput.value = `${github.owner}/${github.repo}`;
+    }
+
+    if (branchInput && ReflectionDaemon.config?.github?.baseBranch) {
+        branchInput.value = ReflectionDaemon.config.github.baseBranch;
+    }
+
+    // Token is stored securely, show placeholder if configured
+    if (tokenInput && github.configured) {
+        tokenInput.placeholder = '••••••••••••••••';
+    }
+
+    updateGithubStatusIndicator(github.configured);
+}
+
+/**
+ * Save GitHub config
+ */
+function saveGithubConfig() {
+    if (typeof ReflectionDaemon === 'undefined') {
+        showGithubStatus('ReflectionDaemon not loaded', 'error');
+        return;
+    }
+
+    const repoInput = document.getElementById('github-repo-input');
+    const tokenInput = document.getElementById('github-token-input');
+    const branchInput = document.getElementById('github-branch-input');
+
+    const repoValue = repoInput?.value?.trim() || '';
+    const tokenValue = tokenInput?.value?.trim() || '';
+    const branchValue = branchInput?.value?.trim() || 'main';
+
+    // Parse owner/repo
+    const repoParts = repoValue.split('/');
+    if (repoParts.length !== 2) {
+        showGithubStatus('Invalid format. Use: owner/repo', 'error');
+        return;
+    }
+
+    const [owner, repo] = repoParts;
+
+    // Get existing token if not provided
+    const existingToken = ReflectionDaemon.githubToken;
+    const token = tokenValue || existingToken;
+
+    if (!token) {
+        showGithubStatus('Token is required', 'error');
+        return;
+    }
+
+    try {
+        const result = ReflectionDaemon.configureGithub({
+            owner: owner.trim(),
+            repo: repo.trim(),
+            token: token,
+            baseBranch: branchValue
+        });
+
+        if (result.enabled) {
+            showGithubStatus('GitHub connected successfully!', 'success');
+            updateGithubStatusIndicator(true);
+            // Clear token field for security
+            if (tokenInput) tokenInput.value = '';
+            if (tokenInput) tokenInput.placeholder = '••••••••••••••••';
+        } else {
+            showGithubStatus('Configuration saved but not enabled', 'warning');
+            updateGithubStatusIndicator(false);
+        }
+    } catch (error) {
+        showGithubStatus(`Error: ${error.message}`, 'error');
+        updateGithubStatusIndicator(false);
+    }
+}
+
+/**
+ * Update GitHub status indicator color
+ */
+function updateGithubStatusIndicator(isConfigured) {
+    const indicator = document.getElementById('github-status-indicator');
+    if (indicator) {
+        indicator.style.background = isConfigured ? '#10b981' : 'var(--text-muted)';
+        indicator.title = isConfigured ? 'Connected' : 'Not configured';
+    }
+}
+
+/**
+ * Show status message in GitHub config panel
+ */
+function showGithubStatus(message, type = 'info') {
+    const statusEl = document.getElementById('github-config-status');
+    if (!statusEl) return;
+
+    const colors = {
+        success: '#10b981',
+        error: '#ef4444',
+        warning: '#f59e0b',
+        info: 'var(--text-muted)'
+    };
+
+    statusEl.textContent = message;
+    statusEl.style.color = colors[type] || colors.info;
+
+    // Auto-clear after 5 seconds
+    setTimeout(() => {
+        if (statusEl.textContent === message) {
+            statusEl.textContent = '';
+        }
+    }, 5000);
+}
+
+/**
+ * Initialize GitHub config on page load
+ */
+document.addEventListener('DOMContentLoaded', () => {
+    // Delay to ensure ReflectionDaemon is loaded
+    setTimeout(() => {
+        if (typeof ReflectionDaemon !== 'undefined') {
+            const status = ReflectionDaemon.getStatus();
+            updateGithubStatusIndicator(status.github?.configured || false);
+        }
+    }, 1000);
+});
+
 // Export for module systems
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = ReflectionUI;
