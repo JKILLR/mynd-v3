@@ -1875,6 +1875,12 @@ const LocalBrain = {
                 if (result.status === 'synced') {
                     console.log(`✅ LocalBrain: Initial sync complete - ${result.nodes} nodes`);
                 }
+
+                // Also sync to BAPI (Graph Transformer) for full map awareness
+                const bapiResult = await this.syncMap(window.store.data);
+                if (bapiResult.synced > 0) {
+                    console.log(`🧠 BAPI: Map synced - ${bapiResult.synced} nodes in ${bapiResult.time_ms.toFixed(0)}ms`);
+                }
             } catch (e) {
                 console.warn('LocalBrain: Initial map sync failed:', e.message);
             }

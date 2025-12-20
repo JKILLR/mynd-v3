@@ -21078,6 +21078,12 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                     if (result.status === 'synced') {
                         console.log(`🔄 Map synced to LocalBrain: ${result.nodes} nodes`);
                     }
+
+                    // Also sync to BAPI (Graph Transformer) for full map awareness
+                    const bapiResult = await LocalBrain.syncMap(this.data);
+                    if (bapiResult.synced > 0) {
+                        console.log(`🧠 BAPI synced: ${bapiResult.synced} nodes`);
+                    }
                 } catch (e) {
                     console.warn('LocalBrain sync failed:', e.message);
                 }
