@@ -17,7 +17,7 @@ const ReflectionDaemon = {
     // CONFIGURATION
     // ═══════════════════════════════════════════════════════════════════
 
-    VERSION: '1.0',
+    VERSION: '2.0',  // Upgraded with tool use
     STORAGE_KEY: 'mynd-reflection-daemon',
     DB_NAME: 'mynd-reflection-db',
     DB_VERSION: 1,
@@ -28,7 +28,9 @@ const ReflectionDaemon = {
         idleThresholdMs: 5 * 60 * 1000,    // 5 minutes default
         reflectionIntervalMs: 30 * 60 * 1000, // 30 minutes default
         minReflectionIntervalMs: 15 * 60 * 1000, // 15 min minimum (rate limit)
-        maxTokensPerReflection: 4000,
+        maxTokensPerReflection: 16000,     // Increased for agentic reasoning
+        maxContextChars: 50000,            // Increased context window
+        maxToolIterations: 10,             // Max tool use iterations per reflection
         autoAddToMap: false,               // Auto-add reflection log nodes
         frequencies: {
             '15min': 15 * 60 * 1000,
@@ -37,6 +39,98 @@ const ReflectionDaemon = {
             '2hr': 2 * 60 * 60 * 1000
         }
     },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // TOOLS DEFINITION - Gives the reflection engine coding capabilities
+    // ═══════════════════════════════════════════════════════════════════
+
+    TOOLS: [
+        {
+            name: "read_file",
+            description: "Read the contents of a file from the codebase. Use this to examine specific code files in detail.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    path: {
+                        type: "string",
+                        description: "The file path relative to project root (e.g., 'js/app-module.js', 'index.html')"
+                    },
+                    start_line: {
+                        type: "number",
+                        description: "Optional: Start reading from this line number (1-indexed)"
+                    },
+                    end_line: {
+                        type: "number",
+                        description: "Optional: Stop reading at this line number"
+                    }
+                },
+                required: ["path"]
+            }
+        },
+        {
+            name: "search_code",
+            description: "Search for code patterns, function names, or text across the codebase. Returns matching lines with context.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    query: {
+                        type: "string",
+                        description: "The search query (supports regex patterns)"
+                    },
+                    file_pattern: {
+                        type: "string",
+                        description: "Optional: Filter to files matching this pattern (e.g., '*.js', 'js/*.js')"
+                    },
+                    max_results: {
+                        type: "number",
+                        description: "Maximum number of results to return (default: 20)"
+                    }
+                },
+                required: ["query"]
+            }
+        },
+        {
+            name: "list_files",
+            description: "List files in the codebase matching a pattern. Use to explore project structure.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    pattern: {
+                        type: "string",
+                        description: "Glob pattern to match files (e.g., 'js/*.js', '**/*.html', 'src/**')"
+                    }
+                },
+                required: ["pattern"]
+            }
+        },
+        {
+            name: "get_codebase_overview",
+            description: "Get a high-level overview of the codebase structure, main files, and architecture.",
+            input_schema: {
+                type: "object",
+                properties: {},
+                required: []
+            }
+        },
+        {
+            name: "get_function_definition",
+            description: "Find and return a specific function or class definition from the codebase.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    name: {
+                        type: "string",
+                        description: "The function, class, or method name to find"
+                    },
+                    file_hint: {
+                        type: "string",
+                        description: "Optional: Hint about which file it might be in"
+                    }
+                },
+                required: ["name"]
+            }
+        }
+    ],
 
     // ═══════════════════════════════════════════════════════════════════
     // STATE
@@ -563,87 +657,481 @@ const ReflectionDaemon = {
         return sections.join('\n');
     },
 
+    // ═══════════════════════════════════════════════════════════════════
+    // TOOL EXECUTION - Execute tools called by the reflection engine
+    // ═══════════════════════════════════════════════════════════════════
+
+    async executeTool(toolName, toolInput) {
+        console.log(`🔧 Reflection Engine executing tool: ${toolName}`, toolInput);
+
+        try {
+            switch (toolName) {
+                case 'read_file':
+                    return await this.toolReadFile(toolInput);
+                case 'search_code':
+                    return await this.toolSearchCode(toolInput);
+                case 'list_files':
+                    return await this.toolListFiles(toolInput);
+                case 'get_codebase_overview':
+                    return await this.toolGetCodebaseOverview(toolInput);
+                case 'get_function_definition':
+                    return await this.toolGetFunctionDefinition(toolInput);
+                default:
+                    return { error: `Unknown tool: ${toolName}` };
+            }
+        } catch (error) {
+            console.error(`Tool ${toolName} failed:`, error);
+            return { error: error.message };
+        }
+    },
+
+    async toolReadFile({ path, start_line, end_line }) {
+        // Try CodeRAG first
+        if (typeof codeRAG !== 'undefined' && codeRAG.initialized) {
+            const chunks = codeRAG.chunks || [];
+            const fileChunks = chunks.filter(c => c.file === path || c.file?.endsWith('/' + path));
+
+            if (fileChunks.length > 0) {
+                // Sort by line number and combine
+                fileChunks.sort((a, b) => (a.startLine || 0) - (b.startLine || 0));
+                let content = fileChunks.map(c => c.content).join('\n');
+
+                // Apply line filtering if specified
+                if (start_line || end_line) {
+                    const lines = content.split('\n');
+                    const start = (start_line || 1) - 1;
+                    const end = end_line || lines.length;
+                    content = lines.slice(start, end).map((line, i) => `${start + i + 1}: ${line}`).join('\n');
+                }
+
+                return {
+                    file: path,
+                    content: content.substring(0, 15000), // Limit size
+                    source: 'coderag',
+                    lines: fileChunks.reduce((sum, c) => sum + (c.content?.split('\n').length || 0), 0)
+                };
+            }
+        }
+
+        // Fallback: try to fetch from server if available
+        try {
+            const response = await fetch(`/js/${path}`);
+            if (response.ok) {
+                let content = await response.text();
+                if (start_line || end_line) {
+                    const lines = content.split('\n');
+                    const start = (start_line || 1) - 1;
+                    const end = end_line || lines.length;
+                    content = lines.slice(start, end).map((line, i) => `${start + i + 1}: ${line}`).join('\n');
+                }
+                return {
+                    file: path,
+                    content: content.substring(0, 15000),
+                    source: 'fetch',
+                    lines: content.split('\n').length
+                };
+            }
+        } catch (e) {
+            // Ignore fetch errors
+        }
+
+        return { error: `File not found: ${path}. Available files can be found with list_files tool.` };
+    },
+
+    async toolSearchCode({ query, file_pattern, max_results = 20 }) {
+        const results = [];
+
+        if (typeof codeRAG !== 'undefined' && codeRAG.initialized) {
+            const chunks = codeRAG.chunks || [];
+            const regex = new RegExp(query, 'gi');
+
+            for (const chunk of chunks) {
+                // Apply file pattern filter
+                if (file_pattern) {
+                    const pattern = file_pattern.replace(/\*/g, '.*');
+                    if (!new RegExp(pattern).test(chunk.file || '')) continue;
+                }
+
+                const lines = (chunk.content || '').split('\n');
+                for (let i = 0; i < lines.length; i++) {
+                    if (regex.test(lines[i])) {
+                        // Get context (2 lines before and after)
+                        const contextStart = Math.max(0, i - 2);
+                        const contextEnd = Math.min(lines.length, i + 3);
+                        const context = lines.slice(contextStart, contextEnd).join('\n');
+
+                        results.push({
+                            file: chunk.file,
+                            line: (chunk.startLine || 0) + i + 1,
+                            match: lines[i].trim(),
+                            context: context
+                        });
+
+                        if (results.length >= max_results) break;
+                    }
+                }
+                if (results.length >= max_results) break;
+            }
+        }
+
+        // Also try semantic search
+        if (results.length < max_results && typeof codeRAG !== 'undefined' && codeRAG.search) {
+            const semanticResults = await codeRAG.search(query, max_results - results.length);
+            for (const r of semanticResults) {
+                if (!results.find(x => x.file === r.file && x.line === r.startLine)) {
+                    results.push({
+                        file: r.file,
+                        line: r.startLine,
+                        match: r.content?.substring(0, 200),
+                        context: r.content?.substring(0, 500),
+                        semantic: true,
+                        score: r.score
+                    });
+                }
+            }
+        }
+
+        return {
+            query,
+            total_results: results.length,
+            results: results.slice(0, max_results)
+        };
+    },
+
+    async toolListFiles({ pattern }) {
+        const files = new Set();
+
+        if (typeof codeRAG !== 'undefined' && codeRAG.initialized) {
+            const chunks = codeRAG.chunks || [];
+            const regexPattern = pattern.replace(/\*\*/g, '.*').replace(/\*/g, '[^/]*');
+            const regex = new RegExp(regexPattern);
+
+            for (const chunk of chunks) {
+                if (chunk.file && regex.test(chunk.file)) {
+                    files.add(chunk.file);
+                }
+            }
+        }
+
+        const fileList = Array.from(files).sort();
+        return {
+            pattern,
+            total_files: fileList.length,
+            files: fileList.slice(0, 100) // Limit to 100 files
+        };
+    },
+
+    async toolGetCodebaseOverview() {
+        const overview = {
+            structure: {},
+            main_files: [],
+            total_files: 0,
+            total_chunks: 0,
+            sections: []
+        };
+
+        if (typeof codeRAG !== 'undefined' && codeRAG.initialized) {
+            const chunks = codeRAG.chunks || [];
+            overview.total_chunks = chunks.length;
+
+            // Group by directory
+            const dirs = {};
+            const files = new Set();
+
+            for (const chunk of chunks) {
+                if (chunk.file) {
+                    files.add(chunk.file);
+                    const dir = chunk.file.split('/').slice(0, -1).join('/') || 'root';
+                    dirs[dir] = (dirs[dir] || 0) + 1;
+                }
+
+                // Collect section names
+                if (chunk.type === 'section' && chunk.name) {
+                    overview.sections.push({
+                        name: chunk.name,
+                        file: chunk.file,
+                        lines: chunk.endLine - chunk.startLine
+                    });
+                }
+            }
+
+            overview.structure = dirs;
+            overview.total_files = files.size;
+            overview.main_files = Array.from(files).filter(f =>
+                f.endsWith('.js') || f.endsWith('.html') || f.endsWith('.py')
+            ).slice(0, 20);
+
+            // Limit sections
+            overview.sections = overview.sections.slice(0, 30);
+        }
+
+        return overview;
+    },
+
+    async toolGetFunctionDefinition({ name, file_hint }) {
+        if (typeof codeRAG !== 'undefined' && codeRAG.initialized) {
+            const chunks = codeRAG.chunks || [];
+
+            // Look for function/method/class chunks with matching name
+            const matches = chunks.filter(c => {
+                if (c.type !== 'function' && c.type !== 'method' && c.type !== 'class') return false;
+                if (file_hint && !c.file?.includes(file_hint)) return false;
+                return c.name?.toLowerCase().includes(name.toLowerCase()) ||
+                       c.content?.includes(`function ${name}`) ||
+                       c.content?.includes(`${name}(`) ||
+                       c.content?.includes(`${name} =`) ||
+                       c.content?.includes(`class ${name}`);
+            });
+
+            if (matches.length > 0) {
+                // Sort by relevance (exact name match first)
+                matches.sort((a, b) => {
+                    const aExact = a.name?.toLowerCase() === name.toLowerCase() ? 0 : 1;
+                    const bExact = b.name?.toLowerCase() === name.toLowerCase() ? 0 : 1;
+                    return aExact - bExact;
+                });
+
+                const best = matches[0];
+                return {
+                    name: best.name || name,
+                    file: best.file,
+                    start_line: best.startLine,
+                    end_line: best.endLine,
+                    type: best.type,
+                    content: best.content?.substring(0, 5000),
+                    other_matches: matches.slice(1, 5).map(m => ({
+                        name: m.name,
+                        file: m.file,
+                        line: m.startLine
+                    }))
+                };
+            }
+
+            // Fallback to text search
+            const searchResults = await this.toolSearchCode({
+                query: `function ${name}|${name}\\s*[=:]\\s*function|${name}\\s*\\(|class ${name}`,
+                max_results: 5
+            });
+
+            if (searchResults.results?.length > 0) {
+                return {
+                    name,
+                    found_via: 'text_search',
+                    matches: searchResults.results
+                };
+            }
+        }
+
+        return { error: `Function '${name}' not found in codebase` };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // FOUNDATIONAL VISION
+    // ═══════════════════════════════════════════════════════════════════
+
+    FOUNDATIONAL_VISION: `MYND is a manifestation engine — a system designed to transform thought into reality.
+
+CORE PURPOSE:
+- Amplify human cognitive capability through AI-augmented thinking
+- Create a living, evolving knowledge structure that reflects and shapes its user's mind
+- Enable reality shifts by making the invisible visible, the complex navigable, the impossible achievable
+
+ULTIMATE GOALS:
+1. COGNITIVE SOVEREIGNTY: The user thinks more clearly, decides more wisely, creates more freely
+2. KNOWLEDGE CRYSTALLIZATION: Scattered thoughts become structured wisdom that compounds over time
+3. REALITY BRIDGE: Ideas flow seamlessly from conception to manifestation
+4. AUTONOMOUS EVOLUTION: The system grows smarter, more aligned, more useful without constant guidance
+
+WHAT MATTERS:
+- Insights that unlock new capabilities or remove blockers
+- Connections that reveal hidden opportunities or patterns
+- Improvements that directly accelerate manifestation
+- Code that makes the impossible possible
+
+WHAT DOESN'T MATTER:
+- Trivial style preferences or formatting nitpicks
+- Generic "best practices" that don't serve specific goals
+- Busywork optimizations with no tangible benefit
+- Observations without actionable next steps`,
+
     async callClaudeForReflection(context, apiKey) {
-        const systemPrompt = `You are MYND's autonomous reflection engine. You analyze the mind map structure and codebase to find insights and improvements.
+        const systemPrompt = `You are MYND's autonomous reflection engine — a MANIFESTATION ENGINE with full coding capabilities.
 
-Your task is to review the provided context and generate:
-1. INSIGHTS: Observations about the map's structure, gaps, or patterns
-2. IMPROVEMENTS: Specific, actionable suggestions for the map or system
-3. CONNECTIONS: Missing relationships between concepts that should be linked
-4. CODE_ISSUES: Bugs, improvements, or patterns found in the code
+═══════════════════════════════════════════════════════════════════
+FOUNDATIONAL VISION
+═══════════════════════════════════════════════════════════════════
+${this.FOUNDATIONAL_VISION}
 
-IMPORTANT RULES:
-- Be specific and actionable, not vague
-- Focus on high-value observations
-- Prioritize by importance (high/medium/low)
-- Keep suggestions concise
+═══════════════════════════════════════════════════════════════════
+YOUR CAPABILITIES
+═══════════════════════════════════════════════════════════════════
+You have access to powerful tools to explore and understand the codebase:
+- read_file: Read any file's contents
+- search_code: Search for patterns across all code
+- list_files: Explore project structure
+- get_codebase_overview: Get architecture summary
+- get_function_definition: Find specific functions/classes
 
-OUTPUT FORMAT (JSON only, no other text):
+USE THESE TOOLS to deeply understand the code before generating insights.
+Don't just work with the summary context — investigate specific areas that matter.
+
+═══════════════════════════════════════════════════════════════════
+YOUR MISSION
+═══════════════════════════════════════════════════════════════════
+Every thought you generate must serve the reality shift. Analyze the mind map structure and codebase to find insights that DIRECTLY advance the vision.
+
+WORKFLOW:
+1. Review the initial context provided
+2. Use tools to explore specific areas of interest
+3. Investigate patterns, architecture, and potential improvements
+4. Generate high-quality, vision-aligned insights
+
+GENERATE ONLY:
+1. INSIGHTS: Pattern recognitions that unlock new understanding or capability
+2. IMPROVEMENTS: Changes that meaningfully accelerate manifestation
+3. CONNECTIONS: Relationships that reveal hidden leverage or opportunity
+4. CODE_ISSUES: Technical blockers preventing reality from matching vision
+
+CRITICAL FILTER - Ask for each observation:
+"Does this directly serve cognitive sovereignty, knowledge crystallization, or reality bridging?"
+If NO → Do not include it. Silence is better than noise.
+If YES → Rate its manifestation_alignment as high/medium/low
+
+ALIGNMENT LEVELS:
+- HIGH: Directly enables new capability, removes critical blocker, or reveals transformative insight
+- MEDIUM: Meaningfully improves experience or accelerates existing capabilities
+- LOW: Minor improvement with tangible but limited impact (still include if genuinely useful)
+
+DO NOT GENERATE:
+- Style nitpicks, formatting preferences, generic "clean code" suggestions
+- Observations without clear next steps
+- Busywork that doesn't compound toward the vision
+- Anything you wouldn't consider worth interrupting focused work for
+
+FINAL OUTPUT FORMAT (JSON only, no other text):
 {
   "insights": [
-    {"title": "...", "description": "...", "priority": "high|medium|low", "relatedNodes": ["node labels"]}
+    {"title": "...", "description": "...", "priority": "high|medium|low", "manifestation_alignment": "high|medium|low", "vision_connection": "brief note on how this serves the vision", "relatedNodes": ["node labels"], "code_references": ["file:line"]}
   ],
   "improvements": [
-    {"title": "...", "description": "...", "priority": "high|medium|low", "category": "map|code|ux", "relatedNodes": ["node labels"]}
+    {"title": "...", "description": "...", "priority": "high|medium|low", "manifestation_alignment": "high|medium|low", "vision_connection": "...", "category": "map|code|ux", "relatedNodes": ["node labels"], "implementation_hint": "brief technical direction"}
   ],
   "connections": [
-    {"title": "...", "from": "node label", "to": "node label", "reason": "...", "priority": "high|medium|low"}
+    {"title": "...", "from": "node label", "to": "node label", "reason": "...", "priority": "high|medium|low", "manifestation_alignment": "high|medium|low", "vision_connection": "..."}
   ],
   "codeIssues": [
-    {"title": "...", "description": "...", "priority": "high|medium|low", "relatedCode": ["section names"]}
+    {"title": "...", "description": "...", "priority": "high|medium|low", "manifestation_alignment": "high|medium|low", "vision_connection": "...", "relatedCode": ["file:line"], "suggested_fix": "brief fix description"}
   ]
-}`;
+}
+
+Remember: You are a manifestation engine with real coding power. Use your tools. Dig deep. Every output should feel like it matters.`;
 
         const userPrompt = `REFLECTION CONTEXT (${context.timestamp}):
 
 == MAP CONTEXT ==
 ${context.mapContext || 'No map data available'}
 
-== CODE CONTEXT ==
+== INITIAL CODE CONTEXT ==
 ${context.codeContext || 'No code data available'}
 
 == NEURAL INSIGHTS ==
 ${context.neuralInsights || 'No neural insights available'}
 
-Analyze this context and provide structured reflection insights.`;
+You have tools available to explore the codebase further. Use them to investigate areas of interest, then provide your structured reflection insights.`;
 
-        // Add timeout with AbortController (60 seconds)
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000);
+        // Agentic loop with tool use
+        const messages = [{ role: 'user', content: userPrompt }];
+        let iterations = 0;
+        const maxIterations = this.config.maxToolIterations || 10;
+        let finalResponse = '';
 
-        try {
-            const response = await fetch('https://api.anthropic.com/v1/messages', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': apiKey,
-                    'anthropic-version': '2023-06-01',
-                    'anthropic-dangerous-direct-browser-access': 'true'
-                },
-                body: JSON.stringify({
-                    model: CONFIG.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
-                    max_tokens: this.config.maxTokensPerReflection,
-                    system: systemPrompt,
-                    messages: [{ role: 'user', content: userPrompt }]
-                }),
-                signal: controller.signal
-            });
+        console.log(`🔮 Reflection Engine starting agentic analysis (max ${maxIterations} tool iterations)...`);
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(`Claude API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+        while (iterations < maxIterations) {
+            iterations++;
+
+            // Add timeout with AbortController (120 seconds for agentic loop)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+            try {
+                const response = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiKey,
+                        'anthropic-version': '2023-06-01',
+                        'anthropic-dangerous-direct-browser-access': 'true'
+                    },
+                    body: JSON.stringify({
+                        model: CONFIG.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+                        max_tokens: this.config.maxTokensPerReflection,
+                        system: systemPrompt,
+                        tools: this.TOOLS,
+                        messages: messages
+                    }),
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(`Claude API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+                }
+
+                const data = await response.json();
+
+                // Check if response contains tool use
+                const toolUseBlocks = data.content?.filter(block => block.type === 'tool_use') || [];
+                const textBlocks = data.content?.filter(block => block.type === 'text') || [];
+
+                // If there are tool calls, execute them
+                if (toolUseBlocks.length > 0) {
+                    console.log(`🔧 Iteration ${iterations}: ${toolUseBlocks.length} tool call(s)`);
+
+                    // Add assistant's response to messages
+                    messages.push({ role: 'assistant', content: data.content });
+
+                    // Execute each tool and collect results
+                    const toolResults = [];
+                    for (const toolUse of toolUseBlocks) {
+                        const result = await this.executeTool(toolUse.name, toolUse.input);
+                        toolResults.push({
+                            type: 'tool_result',
+                            tool_use_id: toolUse.id,
+                            content: JSON.stringify(result, null, 2)
+                        });
+                    }
+
+                    // Add tool results to messages
+                    messages.push({ role: 'user', content: toolResults });
+
+                    // Continue the loop
+                    continue;
+                }
+
+                // No tool calls - we have the final response
+                finalResponse = textBlocks.map(b => b.text).join('\n');
+                console.log(`✅ Reflection Engine completed after ${iterations} iteration(s)`);
+                break;
+
+            } catch (error) {
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    throw new Error('API request timed out after 120 seconds');
+                }
+                throw error;
             }
-
-            const data = await response.json();
-            return data.content?.[0]?.text || '';
-        } catch (error) {
-            if (error.name === 'AbortError') {
-                throw new Error('API request timed out after 60 seconds');
-            }
-            throw error;
-        } finally {
-            clearTimeout(timeoutId);
         }
+
+        // If we hit max iterations without final response, return what we have
+        if (!finalResponse && iterations >= maxIterations) {
+            console.warn(`⚠️ Reflection Engine hit max iterations (${maxIterations})`);
+            finalResponse = '{"insights": [], "improvements": [], "connections": [], "codeIssues": [], "note": "Analysis incomplete - hit iteration limit"}';
+        }
+
+        return finalResponse;
     },
 
     parseReflectionResponse(responseText) {
@@ -673,10 +1161,18 @@ Analyze this context and provide structured reflection insights.`;
             // Helper to validate and sanitize items
             const validateItem = (item, type) => {
                 if (typeof item !== 'object' || item === null) return null;
+
+                // Validate manifestation alignment
+                const alignment = ['high', 'medium', 'low'].includes(item.manifestation_alignment)
+                    ? item.manifestation_alignment
+                    : 'medium';
+
                 return {
                     title: typeof item.title === 'string' ? item.title : '',
                     description: typeof item.description === 'string' ? item.description : '',
                     priority: ['high', 'medium', 'low'].includes(item.priority) ? item.priority : 'medium',
+                    manifestation_alignment: alignment,
+                    vision_connection: typeof item.vision_connection === 'string' ? item.vision_connection : '',
                     relatedNodes: Array.isArray(item.relatedNodes) ? item.relatedNodes.filter(n => typeof n === 'string') : [],
                     type,
                     id: this.generateId(),
@@ -691,22 +1187,56 @@ Analyze this context and provide structured reflection insights.`;
                 };
             };
 
-            results.insights = (Array.isArray(parsed.insights) ? parsed.insights : [])
-                .map(i => validateItem(i, 'insight'))
-                .filter(Boolean);
+            // Alignment priority for sorting (high > medium > low)
+            const alignmentScore = (alignment) => {
+                switch(alignment) {
+                    case 'high': return 3;
+                    case 'medium': return 2;
+                    case 'low': return 1;
+                    default: return 0;
+                }
+            };
 
-            results.improvements = (Array.isArray(parsed.improvements) ? parsed.improvements : [])
-                .map(i => validateItem(i, 'improvement'))
-                .filter(Boolean);
+            // Sort by manifestation alignment (high first), then by priority
+            const sortByAlignment = (items) => {
+                return items.sort((a, b) => {
+                    const alignDiff = alignmentScore(b.manifestation_alignment) - alignmentScore(a.manifestation_alignment);
+                    if (alignDiff !== 0) return alignDiff;
+                    return alignmentScore(b.priority) - alignmentScore(a.priority);
+                });
+            };
 
-            results.connections = (Array.isArray(parsed.connections) ? parsed.connections : [])
-                .map(c => validateItem(c, 'connection'))
-                .filter(Boolean);
+            // Process and sort each category by manifestation alignment
+            results.insights = sortByAlignment(
+                (Array.isArray(parsed.insights) ? parsed.insights : [])
+                    .map(i => validateItem(i, 'insight'))
+                    .filter(Boolean)
+            );
 
-            results.codeIssues = (Array.isArray(parsed.codeIssues) ? parsed.codeIssues :
-                                  Array.isArray(parsed.code_issues) ? parsed.code_issues : [])
-                .map(c => validateItem(c, 'code_issue'))
-                .filter(Boolean);
+            results.improvements = sortByAlignment(
+                (Array.isArray(parsed.improvements) ? parsed.improvements : [])
+                    .map(i => validateItem(i, 'improvement'))
+                    .filter(Boolean)
+            );
+
+            results.connections = sortByAlignment(
+                (Array.isArray(parsed.connections) ? parsed.connections : [])
+                    .map(c => validateItem(c, 'connection'))
+                    .filter(Boolean)
+            );
+
+            results.codeIssues = sortByAlignment(
+                (Array.isArray(parsed.codeIssues) ? parsed.codeIssues :
+                    Array.isArray(parsed.code_issues) ? parsed.code_issues : [])
+                    .map(c => validateItem(c, 'code_issue'))
+                    .filter(Boolean)
+            );
+
+            // Log alignment distribution for transparency
+            const allItems = [...results.insights, ...results.improvements, ...results.connections, ...results.codeIssues];
+            const alignmentCounts = { high: 0, medium: 0, low: 0 };
+            allItems.forEach(item => alignmentCounts[item.manifestation_alignment]++);
+            console.log(`🔮 Reflection alignment distribution: ${alignmentCounts.high} high, ${alignmentCounts.medium} medium, ${alignmentCounts.low} low`);
 
         } catch (error) {
             console.warn('Failed to parse reflection response:', error);
@@ -717,6 +1247,8 @@ Analyze this context and provide structured reflection insights.`;
                 title: 'Reflection Summary',
                 description: responseText.substring(0, 500),
                 priority: 'medium',
+                manifestation_alignment: 'medium',
+                vision_connection: 'Unparsed reflection output',
                 timestamp: Date.now(),
                 status: 'pending'
             });
