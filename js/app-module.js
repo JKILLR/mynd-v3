@@ -36958,7 +36958,7 @@ showKeyboardHints();
                 // Update status indicator
                 const indicatorEl = document.getElementById('reflection-status-indicator');
                 if (indicatorEl) {
-                    indicatorEl.className = status.enabled ? 'status-active' : 'status-inactive';
+                    indicatorEl.className = status.enabled ? 'reflection-status-active' : 'reflection-status-inactive';
                     indicatorEl.title = status.enabled ? 'Autonomous mode active' : 'Autonomous mode inactive';
                 }
 

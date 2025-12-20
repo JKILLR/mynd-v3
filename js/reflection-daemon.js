@@ -37,8 +37,21 @@ const ReflectionDaemon = {
             '30min': 30 * 60 * 1000,
             '1hr': 60 * 60 * 1000,
             '2hr': 2 * 60 * 60 * 1000
+        },
+        // GitHub Integration (Option 2: Auto-commit to branch)
+        github: {
+            enabled: false,                 // Enable GitHub auto-commit
+            owner: '',                      // GitHub repo owner (e.g., 'JKILLR')
+            repo: '',                       // GitHub repo name (e.g., 'mynd-v3')
+            baseBranch: 'main',             // Branch to create feature branches from
+            branchPrefix: 'mynd-reflection', // Prefix for auto-created branches
+            autoCreatePR: false,            // Automatically create PR after commits
+            requireApproval: true           // Require user approval before committing
         }
     },
+
+    // GitHub state
+    githubToken: null,  // Stored separately for security
 
     // ═══════════════════════════════════════════════════════════════════
     // TOOLS DEFINITION - Gives the reflection engine coding capabilities
@@ -129,6 +142,93 @@ const ReflectionDaemon = {
                 },
                 required: ["name"]
             }
+        },
+        // ═══════════════════════════════════════════════════════════════════
+        // GITHUB TOOLS - For autonomous code commits (Option 2)
+        // ═══════════════════════════════════════════════════════════════════
+        {
+            name: "github_create_branch",
+            description: "Create a new branch for your changes. Always create a branch before making file changes.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    branch_name: {
+                        type: "string",
+                        description: "Name for the new branch (will be prefixed with 'mynd-reflection/')"
+                    },
+                    description: {
+                        type: "string",
+                        description: "Brief description of what this branch is for"
+                    }
+                },
+                required: ["branch_name"]
+            }
+        },
+        {
+            name: "github_get_file",
+            description: "Get the current contents of a file from GitHub. Use this to read the latest version before making edits.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    path: {
+                        type: "string",
+                        description: "Path to the file (e.g., 'js/app-module.js')"
+                    },
+                    branch: {
+                        type: "string",
+                        description: "Branch to read from (defaults to current working branch)"
+                    }
+                },
+                required: ["path"]
+            }
+        },
+        {
+            name: "github_write_file",
+            description: "Create or update a file on GitHub. This creates a commit automatically.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    path: {
+                        type: "string",
+                        description: "Path to the file (e.g., 'js/new-feature.js')"
+                    },
+                    content: {
+                        type: "string",
+                        description: "The full file content to write"
+                    },
+                    message: {
+                        type: "string",
+                        description: "Commit message describing the change"
+                    },
+                    branch: {
+                        type: "string",
+                        description: "Branch to commit to (must use your created branch, not main)"
+                    }
+                },
+                required: ["path", "content", "message", "branch"]
+            }
+        },
+        {
+            name: "github_create_pr",
+            description: "Create a pull request for your changes. Use after committing all changes to your branch.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    branch: {
+                        type: "string",
+                        description: "The branch with your changes"
+                    },
+                    title: {
+                        type: "string",
+                        description: "PR title"
+                    },
+                    body: {
+                        type: "string",
+                        description: "PR description explaining the changes"
+                    }
+                },
+                required: ["branch", "title", "body"]
+            }
         }
     ],
 
@@ -176,6 +276,9 @@ const ReflectionDaemon = {
 
             // Load saved config and stats
             this.loadFromStorage();
+
+            // Load GitHub token from secure storage
+            this.loadGithubToken();
 
             // Setup idle detection if enabled
             if (this.config.enabled) {
@@ -676,6 +779,15 @@ const ReflectionDaemon = {
                     return await this.toolGetCodebaseOverview(toolInput);
                 case 'get_function_definition':
                     return await this.toolGetFunctionDefinition(toolInput);
+                // GitHub tools
+                case 'github_create_branch':
+                    return await this.toolGithubCreateBranch(toolInput);
+                case 'github_get_file':
+                    return await this.toolGithubGetFile(toolInput);
+                case 'github_write_file':
+                    return await this.toolGithubWriteFile(toolInput);
+                case 'github_create_pr':
+                    return await this.toolGithubCreatePR(toolInput);
                 default:
                     return { error: `Unknown tool: ${toolName}` };
             }
@@ -715,7 +827,9 @@ const ReflectionDaemon = {
 
         // Fallback: try to fetch from server if available
         try {
-            const response = await fetch(`/js/${path}`);
+            // Handle path resolution correctly - don't assume /js/ prefix
+            const fetchPath = path.startsWith('/') ? path : '/' + path;
+            const response = await fetch(fetchPath);
             if (response.ok) {
                 let content = await response.text();
                 if (start_line || end_line) {
@@ -738,22 +852,42 @@ const ReflectionDaemon = {
         return { error: `File not found: ${path}. Available files can be found with list_files tool.` };
     },
 
+    // Helper to escape regex special characters
+    escapeRegex(str) {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    },
+
     async toolSearchCode({ query, file_pattern, max_results = 20 }) {
         const results = [];
 
         if (typeof codeRAG !== 'undefined' && codeRAG.initialized) {
             const chunks = codeRAG.chunks || [];
-            const regex = new RegExp(query, 'gi');
+
+            // Safely create regex - fallback to escaped literal on failure
+            let regex;
+            try {
+                regex = new RegExp(query, 'gi');
+            } catch (e) {
+                // Invalid regex syntax - escape and treat as literal
+                console.warn(`Invalid regex "${query}", treating as literal`);
+                regex = new RegExp(this.escapeRegex(query), 'gi');
+            }
 
             for (const chunk of chunks) {
                 // Apply file pattern filter
                 if (file_pattern) {
                     const pattern = file_pattern.replace(/\*/g, '.*');
-                    if (!new RegExp(pattern).test(chunk.file || '')) continue;
+                    try {
+                        if (!new RegExp(pattern).test(chunk.file || '')) continue;
+                    } catch (e) {
+                        // Invalid pattern, skip filter
+                    }
                 }
 
                 const lines = (chunk.content || '').split('\n');
                 for (let i = 0; i < lines.length; i++) {
+                    // Reset lastIndex to avoid skipping matches due to global flag
+                    regex.lastIndex = 0;
                     if (regex.test(lines[i])) {
                         // Get context (2 lines before and after)
                         const contextStart = Math.max(0, i - 2);
@@ -907,9 +1041,10 @@ const ReflectionDaemon = {
                 };
             }
 
-            // Fallback to text search
+            // Fallback to text search - escape name for safe regex interpolation
+            const escapedName = this.escapeRegex(name);
             const searchResults = await this.toolSearchCode({
-                query: `function ${name}|${name}\\s*[=:]\\s*function|${name}\\s*\\(|class ${name}`,
+                query: `function ${escapedName}|${escapedName}\\s*[=:]\\s*function|${escapedName}\\s*\\(|class ${escapedName}`,
                 max_results: 5
             });
 
@@ -923,6 +1058,286 @@ const ReflectionDaemon = {
         }
 
         return { error: `Function '${name}' not found in codebase` };
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // GITHUB TOOL IMPLEMENTATIONS - Option 2: Auto-commit to branch
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Check if GitHub integration is properly configured
+     */
+    isGithubConfigured() {
+        const { github } = this.config;
+        return github.enabled && github.owner && github.repo && this.githubToken;
+    },
+
+    /**
+     * Make authenticated request to GitHub API
+     */
+    async githubRequest(endpoint, options = {}) {
+        if (!this.isGithubConfigured()) {
+            throw new Error('GitHub integration not configured. Set owner, repo, and token first.');
+        }
+
+        const { owner, repo } = this.config.github;
+        const url = `https://api.github.com/repos/${owner}/${repo}${endpoint}`;
+
+        const response = await fetch(url, {
+            ...options,
+            headers: {
+                'Authorization': `Bearer ${this.githubToken}`,
+                'Accept': 'application/vnd.github.v3+json',
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(`GitHub API error: ${response.status} - ${error.message || 'Unknown error'}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Create a new branch from the base branch
+     */
+    async toolGithubCreateBranch({ branch_name, description }) {
+        if (!this.isGithubConfigured()) {
+            return { error: 'GitHub integration not configured. Enable it in settings and provide a token.' };
+        }
+
+        try {
+            const { baseBranch, branchPrefix } = this.config.github;
+            const fullBranchName = `${branchPrefix}/${branch_name}`;
+
+            // Get the SHA of the base branch
+            const baseRef = await this.githubRequest(`/git/ref/heads/${baseBranch}`);
+            const baseSha = baseRef.object.sha;
+
+            // Create the new branch
+            await this.githubRequest('/git/refs', {
+                method: 'POST',
+                body: JSON.stringify({
+                    ref: `refs/heads/${fullBranchName}`,
+                    sha: baseSha
+                })
+            });
+
+            // Store current working branch
+            this._currentBranch = fullBranchName;
+
+            this.log(`GitHub: Created branch ${fullBranchName}`);
+            return {
+                success: true,
+                branch: fullBranchName,
+                base: baseBranch,
+                description: description || '',
+                message: `Branch '${fullBranchName}' created from '${baseBranch}'. Use this branch name when writing files.`
+            };
+
+        } catch (error) {
+            if (error.message.includes('422')) {
+                return { error: `Branch already exists or invalid name: ${branch_name}` };
+            }
+            return { error: `Failed to create branch: ${error.message}` };
+        }
+    },
+
+    /**
+     * Get file contents from GitHub
+     */
+    async toolGithubGetFile({ path, branch }) {
+        if (!this.isGithubConfigured()) {
+            return { error: 'GitHub integration not configured.' };
+        }
+
+        try {
+            const ref = branch || this._currentBranch || this.config.github.baseBranch;
+            const data = await this.githubRequest(`/contents/${path}?ref=${ref}`);
+
+            // Decode base64 content with proper UTF-8 handling
+            const binaryStr = atob(data.content);
+            const bytes = Uint8Array.from(binaryStr, c => c.charCodeAt(0));
+            const content = new TextDecoder('utf-8').decode(bytes);
+
+            return {
+                path: data.path,
+                sha: data.sha,  // Needed for updates
+                content: content,
+                size: data.size,
+                branch: ref,
+                url: data.html_url
+            };
+
+        } catch (error) {
+            if (error.message.includes('404')) {
+                return { error: `File not found: ${path}`, exists: false };
+            }
+            return { error: `Failed to get file: ${error.message}` };
+        }
+    },
+
+    /**
+     * Create or update a file on GitHub (creates a commit)
+     */
+    async toolGithubWriteFile({ path, content, message, branch }) {
+        if (!this.isGithubConfigured()) {
+            return { error: 'GitHub integration not configured.' };
+        }
+
+        // Safety check: prevent writes to main/master
+        const protectedBranches = ['main', 'master', this.config.github.baseBranch];
+        if (protectedBranches.includes(branch)) {
+            return { error: `Cannot write directly to protected branch '${branch}'. Create a feature branch first.` };
+        }
+
+        try {
+            // Check if file exists (to get SHA for update)
+            let sha = null;
+            try {
+                const existing = await this.toolGithubGetFile({ path, branch });
+                if (existing.sha) {
+                    sha = existing.sha;
+                }
+            } catch (e) {
+                // File doesn't exist, that's fine for create
+            }
+
+            // Encode content to base64
+            const encodedContent = btoa(unescape(encodeURIComponent(content)));
+
+            const body = {
+                message: message,
+                content: encodedContent,
+                branch: branch
+            };
+
+            if (sha) {
+                body.sha = sha;  // Required for updates
+            }
+
+            const result = await this.githubRequest(`/contents/${path}`, {
+                method: 'PUT',
+                body: JSON.stringify(body)
+            });
+
+            this.log(`GitHub: Committed ${sha ? 'update' : 'create'} to ${path}`);
+
+            return {
+                success: true,
+                action: sha ? 'updated' : 'created',
+                path: result.content.path,
+                sha: result.content.sha,
+                commit: result.commit.sha,
+                commit_message: message,
+                branch: branch,
+                url: result.content.html_url
+            };
+
+        } catch (error) {
+            return { error: `Failed to write file: ${error.message}` };
+        }
+    },
+
+    /**
+     * Create a pull request
+     */
+    async toolGithubCreatePR({ branch, title, body }) {
+        if (!this.isGithubConfigured()) {
+            return { error: 'GitHub integration not configured.' };
+        }
+
+        try {
+            const { baseBranch } = this.config.github;
+
+            const result = await this.githubRequest('/pulls', {
+                method: 'POST',
+                body: JSON.stringify({
+                    title: title,
+                    body: body,
+                    head: branch,
+                    base: baseBranch
+                })
+            });
+
+            this.log(`GitHub: Created PR #${result.number}`);
+
+            return {
+                success: true,
+                number: result.number,
+                title: result.title,
+                url: result.html_url,
+                state: result.state,
+                branch: branch,
+                base: baseBranch,
+                message: `Pull request #${result.number} created: ${result.html_url}`
+            };
+
+        } catch (error) {
+            if (error.message.includes('422')) {
+                return { error: 'A pull request already exists for this branch, or there are no changes to merge.' };
+            }
+            return { error: `Failed to create PR: ${error.message}` };
+        }
+    },
+
+    /**
+     * Configure GitHub integration
+     */
+    configureGithub({ owner, repo, token, baseBranch = 'main', autoCreatePR = false }) {
+        this.config.github.owner = owner;
+        this.config.github.repo = repo;
+        this.config.github.baseBranch = baseBranch;
+        this.config.github.autoCreatePR = autoCreatePR;
+        this.config.github.enabled = !!(owner && repo && token);
+        this.githubToken = token;
+
+        // Store token separately (more secure than in config)
+        if (token) {
+            try {
+                localStorage.setItem('mynd-github-token', token);
+            } catch (e) {
+                console.warn('Could not persist GitHub token');
+            }
+        }
+
+        this.saveToStorage();
+        this.log(`GitHub integration ${this.config.github.enabled ? 'enabled' : 'disabled'}`);
+
+        return {
+            enabled: this.config.github.enabled,
+            owner,
+            repo,
+            baseBranch
+        };
+    },
+
+    /**
+     * Load GitHub token from storage
+     */
+    loadGithubToken() {
+        try {
+            this.githubToken = localStorage.getItem('mynd-github-token');
+        } catch (e) {
+            // Ignore storage errors
+        }
+    },
+
+    /**
+     * Get available tools (filters GitHub tools if not configured)
+     */
+    getAvailableTools() {
+        const githubToolNames = ['github_create_branch', 'github_get_file', 'github_write_file', 'github_create_pr'];
+
+        if (this.isGithubConfigured()) {
+            return this.TOOLS;  // All tools including GitHub
+        }
+
+        // Filter out GitHub tools
+        return this.TOOLS.filter(tool => !githubToolNames.includes(tool.name));
     },
 
     // ═══════════════════════════════════════════════════════════════════
@@ -971,7 +1386,20 @@ You have access to powerful tools to explore and understand the codebase:
 - list_files: Explore project structure
 - get_codebase_overview: Get architecture summary
 - get_function_definition: Find specific functions/classes
+${this.isGithubConfigured() ? `
+GITHUB TOOLS (code modification enabled):
+- github_create_branch: Create a feature branch for your changes
+- github_get_file: Read latest file contents from GitHub
+- github_write_file: Create or update files (auto-commits)
+- github_create_pr: Create a pull request for review
 
+WHEN MAKING CODE CHANGES:
+1. First create a branch with github_create_branch
+2. Read files with github_get_file before modifying
+3. Write changes with github_write_file (include clear commit messages)
+4. Optionally create a PR with github_create_pr
+NEVER write directly to main/master - always use a feature branch.
+` : ''}
 USE THESE TOOLS to deeply understand the code before generating insights.
 Don't just work with the summary context — investigate specific areas that matter.
 
@@ -1067,7 +1495,7 @@ You have tools available to explore the codebase further. Use them to investigat
                         model: CONFIG.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
                         max_tokens: this.config.maxTokensPerReflection,
                         system: systemPrompt,
-                        tools: this.TOOLS,
+                        tools: this.getAvailableTools(),
                         messages: messages
                     }),
                     signal: controller.signal
@@ -1599,7 +2027,14 @@ You have tools available to explore the codebase further. Use them to investigat
                 : 'never',
             consecutiveErrors: this.consecutiveErrors,
             config: this.config,
-            stats: this.stats
+            stats: this.stats,
+            github: {
+                configured: this.isGithubConfigured(),
+                enabled: this.config.github.enabled,
+                owner: this.config.github.owner || null,
+                repo: this.config.github.repo || null,
+                currentBranch: this._currentBranch || null
+            }
         };
     },
 

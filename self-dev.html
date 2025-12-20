@@ -7566,7 +7566,8 @@
             color: var(--text-secondary);
         }
         .queue-item.alignment-low {
-            opacity: 0.7;
+            opacity: 0.85;
+            background: rgba(128, 128, 128, 0.05);
         }
         .queue-item.alignment-low .queue-item-alignment {
             color: var(--text-muted);
@@ -7606,6 +7607,12 @@
             color: var(--text-secondary);
             line-height: 1.5;
             margin: 0;
+        }
+        .queue-item-vision {
+            font-size: 11px;
+            color: var(--accent);
+            margin-top: 6px;
+            font-style: italic;
         }
         .queue-item-related {
             font-size: 11px;
@@ -7711,14 +7718,14 @@
             justify-content: center;
             padding: 0 4px;
         }
-        .status-active {
+        .reflection-status-active {
             width: 8px;
             height: 8px;
             background: #10b981;
             border-radius: 50%;
             animation: pulse 2s infinite;
         }
-        .status-inactive {
+        .reflection-status-inactive {
             width: 8px;
             height: 8px;
             background: var(--text-muted);
@@ -9201,7 +9208,7 @@ Things to avoid..."></textarea>
                     <path d="M12 6v6l4 2"/>
                 </svg>
                 Autonomous Reflection
-                <span id="reflection-status-indicator" class="status-inactive" title="Autonomous mode inactive" role="status" aria-live="polite"></span>
+                <span id="reflection-status-indicator" class="reflection-status-inactive" title="Autonomous mode inactive" role="status" aria-live="polite"></span>
             </div>
             <div class="neural-status-row">
                 <span id="reflection-mode-label">Mode</span>
