@@ -21176,16 +21176,21 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                 createdAt: nodeData.createdAt || new Date().toISOString(),
                 children: []
             };
-            
+
             // Include link data if present
             if (nodeData.link) {
                 newNode.link = nodeData.link;
                 newNode.source = nodeData.source || 'link';
             }
-            
+
             // Include importance if specified
             if (nodeData.importance) {
                 newNode.importance = nodeData.importance;
+            }
+
+            // Include provenance for conversation-created nodes
+            if (nodeData.provenance) {
+                newNode.provenance = nodeData.provenance;
             }
             
             parent.children.push(newNode);
@@ -21193,8 +21198,76 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
             this.save();
             bus.emit('node:added', { parent, node: newNode });
             return newNode;
-        }
-        
+        },
+
+        // Get all nodes created from conversations, sorted by time (newest first)
+        getConversationCreatedNodes() {
+            const allNodes = this.getAllNodes();
+            return allNodes
+                .filter(n => n.provenance || n.source === 'conversation')
+                .map(n => ({
+                    ...n,
+                    timestamp: n.provenance?.conversationTimestamp || new Date(n.createdAt).getTime()
+                }))
+                .sort((a, b) => b.timestamp - a.timestamp);
+        },
+
+        // Get timeline grouped by conversation
+        getNodeTimeline() {
+            const nodes = this.getConversationCreatedNodes();
+            const timeline = new Map();
+
+            for (const node of nodes) {
+                const timestamp = node.provenance?.conversationTimestamp || new Date(node.createdAt).getTime();
+                // Group by conversation (within 5 minute window)
+                const windowKey = Math.floor(timestamp / (5 * 60 * 1000));
+
+                if (!timeline.has(windowKey)) {
+                    timeline.set(windowKey, {
+                        timestamp,
+                        userMessage: node.provenance?.triggeredBy || 'Manual creation',
+                        nodes: []
+                    });
+                }
+                timeline.get(windowKey).nodes.push(node);
+            }
+
+            return Array.from(timeline.values()).sort((a, b) => b.timestamp - a.timestamp);
+        },
+
+        // Get origin info for a specific node
+        getNodeOrigin(nodeId) {
+            const node = this.findNode(nodeId);
+            if (!node) return null;
+
+            if (node.provenance) {
+                return {
+                    type: 'conversation',
+                    timestamp: node.provenance.conversationTimestamp,
+                    triggeredBy: node.provenance.triggeredBy,
+                    aiResponse: node.provenance.aiResponse,
+                    createdAt: node.createdAt,
+                    timeAgo: this.formatTimeAgo(node.provenance.conversationTimestamp)
+                };
+            }
+
+            return {
+                type: node.source || 'manual',
+                createdAt: node.createdAt,
+                timeAgo: this.formatTimeAgo(new Date(node.createdAt).getTime())
+            };
+        },
+
+        // Format timestamp as relative time
+        formatTimeAgo(timestamp) {
+            const seconds = Math.floor((Date.now() - timestamp) / 1000);
+            if (seconds < 60) return 'just now';
+            if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+            if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+            if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+            return new Date(timestamp).toLocaleDateString();
+        },
+
         updateNode(id, updates) {
             const node = this.findNode(id);
             if (!node) return null;
@@ -25989,7 +26062,29 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         } else {
             pathSection.style.display = 'none';
         }
-        
+
+        // Show/hide origin section (for conversation-created nodes)
+        const originSection = document.getElementById('info-origin-section');
+        const originTime = document.getElementById('info-origin-time');
+        const originContext = document.getElementById('info-origin-context');
+
+        if (data.provenance || data.source === 'conversation') {
+            originSection.style.display = 'block';
+            const timestamp = data.provenance?.conversationTimestamp || new Date(data.createdAt).getTime();
+            originTime.textContent = `Created from chat ${store.formatTimeAgo(timestamp)}`;
+
+            if (data.provenance?.triggeredBy) {
+                const truncatedMessage = data.provenance.triggeredBy.length > 100
+                    ? data.provenance.triggeredBy.slice(0, 100) + '...'
+                    : data.provenance.triggeredBy;
+                originContext.innerHTML = `"<em>${truncatedMessage}</em>"`;
+            } else {
+                originContext.textContent = 'Created during a conversation';
+            }
+        } else {
+            originSection.style.display = 'none';
+        }
+
         // Show/hide link info (collapsed view)
         const linkSection = document.getElementById('info-link');
         const addLinkSection = document.getElementById('info-add-link-section');
@@ -27636,7 +27731,11 @@ You are a trusted guide, not a data harvester.
             this.clearBtn = document.getElementById('chat-clear');
             this.ttsToggleBtn = document.getElementById('chat-tts-toggle');
             this.suggestionsContainer = document.getElementById('chat-suggestions');
-            
+            this.timelineToggleBtn = document.getElementById('chat-timeline-toggle');
+            this.timelinePanel = document.getElementById('chat-timeline-panel');
+            this.timelineContent = document.getElementById('chat-timeline-content');
+            this.timelineCloseBtn = document.getElementById('chat-timeline-close');
+
             this.setupEventListeners();
             this.loadConversation();
             
@@ -27673,7 +27772,11 @@ You are a trusted guide, not a data harvester.
                 voiceAI.toggleTTS();
                 this.updateTTSButton();
             });
-            
+
+            // Timeline toggle
+            this.timelineToggleBtn.addEventListener('click', () => this.toggleTimeline());
+            this.timelineCloseBtn.addEventListener('click', () => this.closeTimeline());
+
             // Send message
             this.sendBtn.addEventListener('click', () => this.sendMessage());
             
@@ -27853,7 +27956,72 @@ You are a trusted guide, not a data harvester.
                     </svg>`;
             }
         },
-        
+
+        toggleTimeline() {
+            if (this.timelinePanel.classList.contains('active')) {
+                this.closeTimeline();
+            } else {
+                this.openTimeline();
+            }
+        },
+
+        openTimeline() {
+            this.timelinePanel.classList.add('active');
+            this.timelineToggleBtn.classList.add('active');
+            this.populateTimeline();
+        },
+
+        closeTimeline() {
+            this.timelinePanel.classList.remove('active');
+            this.timelineToggleBtn.classList.remove('active');
+        },
+
+        populateTimeline() {
+            const timeline = store.getNodeTimeline();
+
+            if (timeline.length === 0) {
+                this.timelineContent.innerHTML = `
+                    <div class="chat-timeline-empty">
+                        <p>No nodes created from conversations yet.</p>
+                        <p style="font-size: 11px; margin-top: 8px;">
+                            When you ask me to create nodes, they'll appear here with their origin context.
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+
+            this.timelineContent.innerHTML = timeline.map(group => `
+                <div class="chat-timeline-group">
+                    <div class="chat-timeline-group-header">
+                        <span class="chat-timeline-group-time">${store.formatTimeAgo(group.timestamp)}</span>
+                        <span class="chat-timeline-group-context">${group.userMessage}</span>
+                    </div>
+                    <div class="chat-timeline-nodes">
+                        ${group.nodes.map(node => `
+                            <div class="chat-timeline-node" data-node-id="${node.id}">
+                                <span class="chat-timeline-node-color" style="background: ${node.color || '#888888'}"></span>
+                                <span class="chat-timeline-node-label">${node.label || 'Untitled'}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+
+            // Add click handlers to navigate to nodes
+            this.timelineContent.querySelectorAll('.chat-timeline-node').forEach(el => {
+                el.addEventListener('click', () => {
+                    const nodeId = el.dataset.nodeId;
+                    const nodeMesh = window.nodes?.get(nodeId);
+                    if (nodeMesh && window.selectNode && window.focusOnNode) {
+                        window.selectNode(nodeMesh);
+                        window.focusOnNode(nodeMesh);
+                        this.closeTimeline();
+                    }
+                });
+            });
+        },
+
         autoResize() {
             this.input.style.height = 'auto';
             this.input.style.height = Math.min(this.input.scrollHeight, 120) + 'px';
@@ -27915,7 +28083,13 @@ You are a trusted guide, not a data harvester.
                     if (response.actions && response.actions.length > 0) {
                         console.log(`Executing ${response.actions.length} actions...`);
                         showToast(`Executing ${response.actions.length} action${response.actions.length > 1 ? 's' : ''}...`, 'info');
-                        actionResults = await this.executeActions(response.actions);
+                        // Pass conversation context for node provenance tracking
+                        const conversationContext = {
+                            timestamp: Date.now(),
+                            userMessage: content,
+                            assistantMessage: response.message?.slice(0, 200)
+                        };
+                        actionResults = await this.executeActions(response.actions, conversationContext);
                         console.log('Action results:', actionResults);
                         
                         // Show success/failure summary
@@ -30304,7 +30478,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
             return parsedResult;
         },
         
-        async executeActions(actions) {
+        async executeActions(actions, conversationContext = null) {
             const results = [];
             const createdNodes = [];
             
@@ -30369,12 +30543,23 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                         const newNode = store.addNode(parentId, {
                             label: action.label,
                             description: action.description || '',
-                            color: action.color || null
+                            color: action.color || null,
+                            // Provenance tracking - link node to its origin conversation
+                            ...(conversationContext && {
+                                source: 'conversation',
+                                provenance: {
+                                    conversationTimestamp: conversationContext.timestamp,
+                                    triggeredBy: conversationContext.userMessage?.slice(0, 500),
+                                    aiResponse: conversationContext.assistantMessage?.slice(0, 200),
+                                    createdVia: 'chat'
+                                }
+                            })
                         });
                         if (newNode) {
                             createdNodes.push(newNode);
                             result.success = true;
                             result.description = `Added "${action.label}"`;
+                            result.nodeId = newNode.id; // Track created node ID for timeline
                         }
                     } else if (action.action === 'edit') {
                         const targetId = resolveId(action.targetId);
