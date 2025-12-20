@@ -28204,7 +28204,11 @@ You are a trusted guide, not a data harvester.
                                 assistantMessage: content.slice(0, 1000),
                                 timestamp: Date.now()
                             }
-                        );
+                        ).then(memory => {
+                            if (memory) {
+                                console.log(`💬 Conversation stored & embedded: "${userQuestion.slice(0, 40)}..." (id: ${memory.id})`);
+                            }
+                        });
 
                         // Also try to save to LocalBrain for persistent storage
                         if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
@@ -30297,7 +30301,12 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
 
                         // Add tool results to messages and continue loop
                         if (toolResults.length > 0) {
-                            currentMessages.push({ role: 'user', content: toolResults });
+                            // Add JSON format reminder after tool results to prevent Claude from responding with prose
+                            const jsonReminder = {
+                                type: 'text',
+                                text: 'REMINDER: Now respond with ONLY a valid JSON object in the format: {"message": "...", "actions": [...], "suggestions": [...]}. No markdown, no explanations - just the JSON.'
+                            };
+                            currentMessages.push({ role: 'user', content: [...toolResults, jsonReminder] });
                         } else {
                             // web_search only - use text so far
                             responseText = data.textSoFar || '';
@@ -30438,7 +30447,12 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
 
                     // Add tool results to messages
                     if (toolResults.length > 0) {
-                        currentMessages.push({ role: 'user', content: toolResults });
+                        // Add JSON format reminder after tool results to prevent Claude from responding with prose
+                        const jsonReminder = {
+                            type: 'text',
+                            text: 'REMINDER: Now respond with ONLY a valid JSON object in the format: {"message": "...", "actions": [...], "suggestions": [...]}. No markdown, no explanations - just the JSON.'
+                        };
+                        currentMessages.push({ role: 'user', content: [...toolResults, jsonReminder] });
                     } else {
                         // web_search only, extract text
                         responseText = textBlocks.map(b => b.text).join('\n');
