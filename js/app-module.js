@@ -29195,6 +29195,12 @@ You have access to powerful tools to explore and modify the MYND codebase:
 - github_write_file: Create/update files (auto-commits)
 - github_create_pr: Create a pull request
 
+**GITHUB HISTORY TOOLS (view commits, branches, diffs):**
+- github_list_branches: List all branches in the repository
+- github_list_commits: List recent commits (filter by branch, path, author)
+- github_get_commit: Get full details of a commit including diff
+- github_compare: Compare two branches or commits
+
 **WORKFLOW FOR CODE CHANGES:**
 1. Create a branch with github_create_branch
 2. Read files with github_get_file before editing

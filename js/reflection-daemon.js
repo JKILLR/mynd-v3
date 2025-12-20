@@ -229,6 +229,81 @@ const ReflectionDaemon = {
                 },
                 required: ["branch", "title", "body"]
             }
+        },
+        // ═══════════════════════════════════════════════════════════════════
+        // GITHUB HISTORY TOOLS - For viewing commits, branches, and history
+        // ═══════════════════════════════════════════════════════════════════
+        {
+            name: "github_list_branches",
+            description: "List all branches in the repository. Use this to see what branches exist.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    per_page: {
+                        type: "number",
+                        description: "Number of branches to return (default 30, max 100)"
+                    }
+                },
+                required: []
+            }
+        },
+        {
+            name: "github_list_commits",
+            description: "List recent commits. Can filter by branch, path, or author.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    branch: {
+                        type: "string",
+                        description: "Branch name to list commits from (defaults to main)"
+                    },
+                    path: {
+                        type: "string",
+                        description: "Only commits affecting this file path"
+                    },
+                    author: {
+                        type: "string",
+                        description: "GitHub username to filter by author"
+                    },
+                    per_page: {
+                        type: "number",
+                        description: "Number of commits to return (default 10, max 100)"
+                    }
+                },
+                required: []
+            }
+        },
+        {
+            name: "github_get_commit",
+            description: "Get detailed information about a specific commit, including the full diff of changes.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    sha: {
+                        type: "string",
+                        description: "The commit SHA (full or abbreviated)"
+                    }
+                },
+                required: ["sha"]
+            }
+        },
+        {
+            name: "github_compare",
+            description: "Compare two branches or commits to see the differences.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    base: {
+                        type: "string",
+                        description: "Base branch or commit SHA"
+                    },
+                    head: {
+                        type: "string",
+                        description: "Head branch or commit SHA to compare"
+                    }
+                },
+                required: ["base", "head"]
+            }
         }
     ],
 
@@ -788,6 +863,15 @@ const ReflectionDaemon = {
                     return await this.toolGithubWriteFile(toolInput);
                 case 'github_create_pr':
                     return await this.toolGithubCreatePR(toolInput);
+                // GitHub history tools
+                case 'github_list_branches':
+                    return await this.toolGithubListBranches(toolInput);
+                case 'github_list_commits':
+                    return await this.toolGithubListCommits(toolInput);
+                case 'github_get_commit':
+                    return await this.toolGithubGetCommit(toolInput);
+                case 'github_compare':
+                    return await this.toolGithubCompare(toolInput);
                 default:
                     return { error: `Unknown tool: ${toolName}` };
             }
@@ -1284,6 +1368,167 @@ const ReflectionDaemon = {
         }
     },
 
+    // ═══════════════════════════════════════════════════════════════════
+    // GITHUB HISTORY TOOL IMPLEMENTATIONS
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * List all branches in the repository
+     */
+    async toolGithubListBranches({ per_page = 30 }) {
+        if (!this.isGithubConfigured()) {
+            return { error: 'GitHub integration not configured.' };
+        }
+
+        try {
+            const branches = await this.githubRequest(`/branches?per_page=${Math.min(per_page, 100)}`);
+
+            return {
+                success: true,
+                count: branches.length,
+                branches: branches.map(b => ({
+                    name: b.name,
+                    sha: b.commit.sha.substring(0, 7),
+                    protected: b.protected
+                })),
+                message: `Found ${branches.length} branches in repository`
+            };
+
+        } catch (error) {
+            return { error: `Failed to list branches: ${error.message}` };
+        }
+    },
+
+    /**
+     * List commits with optional filters
+     */
+    async toolGithubListCommits({ branch, path, author, per_page = 10 }) {
+        if (!this.isGithubConfigured()) {
+            return { error: 'GitHub integration not configured.' };
+        }
+
+        try {
+            const params = new URLSearchParams();
+            params.set('per_page', Math.min(per_page, 100).toString());
+
+            if (branch) params.set('sha', branch);
+            if (path) params.set('path', path);
+            if (author) params.set('author', author);
+
+            const commits = await this.githubRequest(`/commits?${params.toString()}`);
+
+            return {
+                success: true,
+                count: commits.length,
+                branch: branch || this.config.github.baseBranch,
+                commits: commits.map(c => ({
+                    sha: c.sha.substring(0, 7),
+                    full_sha: c.sha,
+                    message: c.commit.message.split('\n')[0], // First line only
+                    author: c.commit.author.name,
+                    date: c.commit.author.date,
+                    url: c.html_url
+                })),
+                message: `Found ${commits.length} commits${branch ? ` on ${branch}` : ''}${path ? ` affecting ${path}` : ''}`
+            };
+
+        } catch (error) {
+            return { error: `Failed to list commits: ${error.message}` };
+        }
+    },
+
+    /**
+     * Get detailed information about a specific commit including diff
+     */
+    async toolGithubGetCommit({ sha }) {
+        if (!this.isGithubConfigured()) {
+            return { error: 'GitHub integration not configured.' };
+        }
+
+        try {
+            const commit = await this.githubRequest(`/commits/${sha}`);
+
+            // Format the files changed
+            const files = commit.files.map(f => ({
+                filename: f.filename,
+                status: f.status,
+                additions: f.additions,
+                deletions: f.deletions,
+                patch: f.patch ? f.patch.substring(0, 2000) : null // Limit patch size
+            }));
+
+            return {
+                success: true,
+                sha: commit.sha,
+                short_sha: commit.sha.substring(0, 7),
+                message: commit.commit.message,
+                author: {
+                    name: commit.commit.author.name,
+                    email: commit.commit.author.email,
+                    date: commit.commit.author.date
+                },
+                stats: {
+                    additions: commit.stats.additions,
+                    deletions: commit.stats.deletions,
+                    total: commit.stats.total
+                },
+                files_changed: commit.files.length,
+                files: files,
+                url: commit.html_url,
+                parents: commit.parents.map(p => p.sha.substring(0, 7))
+            };
+
+        } catch (error) {
+            if (error.message.includes('404')) {
+                return { error: `Commit not found: ${sha}` };
+            }
+            return { error: `Failed to get commit: ${error.message}` };
+        }
+    },
+
+    /**
+     * Compare two branches or commits
+     */
+    async toolGithubCompare({ base, head }) {
+        if (!this.isGithubConfigured()) {
+            return { error: 'GitHub integration not configured.' };
+        }
+
+        try {
+            const comparison = await this.githubRequest(`/compare/${base}...${head}`);
+
+            return {
+                success: true,
+                status: comparison.status, // ahead, behind, diverged, identical
+                ahead_by: comparison.ahead_by,
+                behind_by: comparison.behind_by,
+                total_commits: comparison.total_commits,
+                commits: comparison.commits.slice(0, 20).map(c => ({
+                    sha: c.sha.substring(0, 7),
+                    message: c.commit.message.split('\n')[0],
+                    author: c.commit.author.name,
+                    date: c.commit.author.date
+                })),
+                files_changed: comparison.files.length,
+                files: comparison.files.slice(0, 30).map(f => ({
+                    filename: f.filename,
+                    status: f.status,
+                    additions: f.additions,
+                    deletions: f.deletions
+                })),
+                diff_url: comparison.diff_url,
+                html_url: comparison.html_url,
+                message: `${head} is ${comparison.ahead_by} commits ahead, ${comparison.behind_by} behind ${base}`
+            };
+
+        } catch (error) {
+            if (error.message.includes('404')) {
+                return { error: `Could not compare: invalid branch or commit reference` };
+            }
+            return { error: `Failed to compare: ${error.message}` };
+        }
+    },
+
     /**
      * Configure GitHub integration
      */
@@ -1418,6 +1663,12 @@ GITHUB TOOLS (code modification enabled):
 - github_get_file: Read latest file contents from GitHub
 - github_write_file: Create or update files (auto-commits)
 - github_create_pr: Create a pull request for review
+
+GITHUB HISTORY TOOLS (view commits, branches, diffs):
+- github_list_branches: List all branches in the repository
+- github_list_commits: List recent commits (filter by branch, path, author)
+- github_get_commit: Get full details of a specific commit including diff
+- github_compare: Compare two branches or commits to see differences
 
 WHEN MAKING CODE CHANGES:
 1. First create a branch with github_create_branch
