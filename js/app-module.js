@@ -22710,16 +22710,27 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         const isMobile = window.innerWidth <= 768;
         camera.position.set(0, isMobile ? 18 : 14, isMobile ? 50 : 40);
         
-        // Renderer
-        renderer = new THREE.WebGLRenderer({ 
-            antialias: true, 
+        // Renderer - use 'default' power preference to reduce GPU contention with ML server
+        renderer = new THREE.WebGLRenderer({
+            antialias: true,
             alpha: true,
-            powerPreference: 'high-performance'
+            powerPreference: 'default'  // Changed from 'high-performance' to reduce GPU pressure
         });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));  // Reduced from 2 to save GPU memory
         renderer.setClearColor(0x000000, 0);
         document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        // Handle WebGL context loss gracefully (can happen when GPU is under pressure)
+        renderer.domElement.addEventListener('webglcontextlost', (event) => {
+            event.preventDefault();
+            console.warn('⚠️ WebGL context lost - GPU may be under pressure. Pausing render.');
+            window._webglContextLost = true;
+        });
+        renderer.domElement.addEventListener('webglcontextrestored', () => {
+            console.log('✓ WebGL context restored - resuming render.');
+            window._webglContextLost = false;
+        });
         
         // Add click handler for node selection
         renderer.domElement.addEventListener('pointerdown', onPointerDown);
@@ -24884,9 +24895,13 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         
         // Update animation controller with count of animating nodes
         AnimationController.setAnimatingCount(animatingCount);
-        
+
         controls.update();
-        renderer.render(scene, camera);
+
+        // Skip render if WebGL context was lost (GPU under pressure)
+        if (!window._webglContextLost) {
+            renderer.render(scene, camera);
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════
