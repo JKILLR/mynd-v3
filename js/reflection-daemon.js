@@ -72,7 +72,7 @@ const ReflectionDaemon = {
             .trim();
     },
 
-    // Check if a similar search was already done
+    // Check if an identical search was already done
     findSimilarSearch(query, file_pattern) {
         const normalizedQuery = this.normalizeSearchQuery(query);
         const now = Date.now();
@@ -84,17 +84,12 @@ const ReflectionDaemon = {
             }
         }
 
-        // Look for exact or similar match
+        // Look for exact match only (prevents false positives like "render" matching "renderComponent")
         for (const [key, entry] of this.searchCache) {
             const cachedNormalized = this.normalizeSearchQuery(entry.query);
-            // Check for exact match or if one contains the other
-            if (cachedNormalized === normalizedQuery ||
-                cachedNormalized.includes(normalizedQuery) ||
-                normalizedQuery.includes(cachedNormalized)) {
-                if (entry.file_pattern === file_pattern) {
-                    console.log(`🔍 Search cache hit: "${query}" similar to cached "${entry.query}"`);
-                    return entry.results;
-                }
+            if (cachedNormalized === normalizedQuery && entry.file_pattern === file_pattern) {
+                console.log(`🔍 Search cache hit: "${query}" matches cached "${entry.query}"`);
+                return entry.results;
             }
         }
         return null;
@@ -1094,8 +1089,8 @@ const ReflectionDaemon = {
             timestamp: Date.now()
         });
 
-        // Trim cache if too large
-        if (this.searchCache.size > this.searchCacheMaxSize) {
+        // Trim cache if at max size
+        if (this.searchCache.size >= this.searchCacheMaxSize) {
             const firstKey = this.searchCache.keys().next().value;
             this.searchCache.delete(firstKey);
         }

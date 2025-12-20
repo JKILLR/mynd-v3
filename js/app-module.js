@@ -30228,6 +30228,8 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 }
 
                 // Agentic loop - client handles tool execution
+                // High limit (100) needed for complex code exploration tasks with multiple tool calls
+                // System prompt guides efficient tool usage to minimize actual iterations needed
                 let iterations = 0;
                 const maxIterations = 100;
                 // Validate messages - filter out any with missing/invalid content
@@ -30361,6 +30363,8 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 }
 
                 // Agentic loop for tool execution
+                // High limit (100) needed for complex code exploration tasks with multiple tool calls
+                // System prompt guides efficient tool usage to minimize actual iterations needed
                 let iterations = 0;
                 const maxIterations = 100;
                 let currentMessages = [...messages];
