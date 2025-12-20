@@ -1158,8 +1158,10 @@ const ReflectionDaemon = {
             const ref = branch || this._currentBranch || this.config.github.baseBranch;
             const data = await this.githubRequest(`/contents/${path}?ref=${ref}`);
 
-            // Decode base64 content
-            const content = atob(data.content);
+            // Decode base64 content with proper UTF-8 handling
+            const binaryStr = atob(data.content);
+            const bytes = Uint8Array.from(binaryStr, c => c.charCodeAt(0));
+            const content = new TextDecoder('utf-8').decode(bytes);
 
             return {
                 path: data.path,
