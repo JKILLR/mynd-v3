@@ -6415,7 +6415,7 @@
             align-items: center;
             padding: 12px 16px;
             background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid var(--glass-border);
             font-size: 13px;
             font-weight: 500;
         }
@@ -6456,7 +6456,7 @@
             gap: 8px;
             margin-bottom: 10px;
             padding-bottom: 8px;
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid var(--glass-border);
         }
 
         .chat-timeline-group-time {
@@ -6479,7 +6479,7 @@
             flex-direction: column;
             gap: 6px;
             padding-left: 12px;
-            border-left: 2px solid var(--border);
+            border-left: 2px solid var(--glass-border);
         }
 
         .chat-timeline-node {
@@ -9457,7 +9457,7 @@
                         <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
                     </svg>
                 </button>
-                <button class="chat-header-btn" id="chat-timeline-toggle" title="View node timeline">
+                <button class="chat-header-btn" id="chat-timeline-toggle" title="View node timeline" aria-label="View node creation timeline">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="10"/>
                         <polyline points="12 6 12 12 16 14"/>
@@ -9475,7 +9475,7 @@
         <div class="chat-timeline-panel" id="chat-timeline-panel">
             <div class="chat-timeline-header">
                 <span>Node Creation Timeline</span>
-                <button class="chat-timeline-close" id="chat-timeline-close">×</button>
+                <button class="chat-timeline-close" id="chat-timeline-close" aria-label="Close timeline">×</button>
             </div>
             <div class="chat-timeline-content" id="chat-timeline-content">
                 <!-- Populated dynamically -->

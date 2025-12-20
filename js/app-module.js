@@ -21277,8 +21277,8 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
             this.save();
             bus.emit('node:updated', { node });
             return node;
-        }
-        
+        },
+
         deleteNode(id) {
             if (id === this.data.id) return false;
             
@@ -26077,7 +26077,8 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 const truncatedMessage = data.provenance.triggeredBy.length > 100
                     ? data.provenance.triggeredBy.slice(0, 100) + '...'
                     : data.provenance.triggeredBy;
-                originContext.innerHTML = `"<em>${truncatedMessage}</em>"`;
+                // Use textContent to prevent XSS, style with CSS
+                originContext.textContent = `"${truncatedMessage}"`;
             } else {
                 originContext.textContent = 'Created during a conversation';
             }
@@ -27976,6 +27977,13 @@ You are a trusted guide, not a data harvester.
             this.timelineToggleBtn.classList.remove('active');
         },
 
+        // Helper to sanitize color values
+        sanitizeColor(color) {
+            if (!color) return '#888888';
+            // Only allow valid hex colors
+            return /^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#888888';
+        },
+
         populateTimeline() {
             const timeline = store.getNodeTimeline();
 
@@ -27991,34 +27999,62 @@ You are a trusted guide, not a data harvester.
                 return;
             }
 
-            this.timelineContent.innerHTML = timeline.map(group => `
-                <div class="chat-timeline-group">
-                    <div class="chat-timeline-group-header">
-                        <span class="chat-timeline-group-time">${store.formatTimeAgo(group.timestamp)}</span>
-                        <span class="chat-timeline-group-context">${group.userMessage}</span>
-                    </div>
-                    <div class="chat-timeline-nodes">
-                        ${group.nodes.map(node => `
-                            <div class="chat-timeline-node" data-node-id="${node.id}">
-                                <span class="chat-timeline-node-color" style="background: ${node.color || '#888888'}"></span>
-                                <span class="chat-timeline-node-label">${node.label || 'Untitled'}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            `).join('');
+            // Clear and build DOM safely
+            this.timelineContent.innerHTML = '';
 
-            // Add click handlers to navigate to nodes
-            this.timelineContent.querySelectorAll('.chat-timeline-node').forEach(el => {
-                el.addEventListener('click', () => {
-                    const nodeId = el.dataset.nodeId;
-                    const nodeMesh = window.nodes?.get(nodeId);
-                    if (nodeMesh && window.selectNode && window.focusOnNode) {
-                        window.selectNode(nodeMesh);
-                        window.focusOnNode(nodeMesh);
-                        this.closeTimeline();
-                    }
+            timeline.forEach(group => {
+                const groupEl = document.createElement('div');
+                groupEl.className = 'chat-timeline-group';
+
+                const headerEl = document.createElement('div');
+                headerEl.className = 'chat-timeline-group-header';
+
+                const timeEl = document.createElement('span');
+                timeEl.className = 'chat-timeline-group-time';
+                timeEl.textContent = store.formatTimeAgo(group.timestamp);
+
+                const contextEl = document.createElement('span');
+                contextEl.className = 'chat-timeline-group-context';
+                contextEl.textContent = group.userMessage; // Safe: textContent escapes
+
+                headerEl.appendChild(timeEl);
+                headerEl.appendChild(contextEl);
+                groupEl.appendChild(headerEl);
+
+                const nodesEl = document.createElement('div');
+                nodesEl.className = 'chat-timeline-nodes';
+
+                group.nodes.forEach(node => {
+                    const nodeEl = document.createElement('div');
+                    nodeEl.className = 'chat-timeline-node';
+                    nodeEl.dataset.nodeId = node.id;
+
+                    const colorEl = document.createElement('span');
+                    colorEl.className = 'chat-timeline-node-color';
+                    colorEl.style.background = this.sanitizeColor(node.color);
+
+                    const labelEl = document.createElement('span');
+                    labelEl.className = 'chat-timeline-node-label';
+                    labelEl.textContent = node.label || 'Untitled'; // Safe: textContent escapes
+
+                    nodeEl.appendChild(colorEl);
+                    nodeEl.appendChild(labelEl);
+
+                    // Click handler
+                    nodeEl.addEventListener('click', () => {
+                        const nodeMesh = window.nodes?.get(node.id);
+                        if (nodeMesh && window.selectNode && window.focusOnNode) {
+                            window.selectNode(nodeMesh);
+                            window.focusOnNode(nodeMesh);
+                            this.closeTimeline();
+                        }
+                    });
+
+                    nodesEl.appendChild(nodeEl);
                 });
+
+                groupEl.appendChild(nodesEl);
+                this.timelineContent.appendChild(groupEl);
             });
         },
 
