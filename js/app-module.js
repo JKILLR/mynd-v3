@@ -36852,7 +36852,17 @@ showKeyboardHints();
             await userProfile.init();
             await conceptAbstractor.init();
             await metaLearner.init();
-            
+
+            // Initialize Map Maintenance Daemon
+            if (typeof MapMaintenanceDaemon !== 'undefined') {
+                await MapMaintenanceDaemon.init();
+                window.mapMaintenanceDaemon = MapMaintenanceDaemon;
+                console.log('✓ Map Maintenance Daemon initialized');
+
+                // Wire up maintenance UI
+                this.setupMaintenanceUI();
+            }
+
             // DON'T initialize neural network here - defer until first AI feature use
             // This saves ~10MB download and several seconds on mobile
             console.log('✓ Preference systems ready (TensorFlow deferred)');
@@ -36958,7 +36968,100 @@ showKeyboardHints();
                 }
             }
         },
-        
+
+        setupMaintenanceUI() {
+            const toggle = document.getElementById('maintenance-toggle-panel');
+            const scanBtn = document.getElementById('maintenance-scan-btn');
+            const viewBtn = document.getElementById('maintenance-view-suggestions');
+
+            if (toggle) {
+                toggle.checked = MapMaintenanceDaemon.config.enabled;
+                toggle.addEventListener('change', () => {
+                    MapMaintenanceDaemon.setEnabled(toggle.checked);
+                    this.updateMaintenanceStatus();
+                });
+            }
+
+            if (scanBtn) {
+                scanBtn.addEventListener('click', async () => {
+                    scanBtn.disabled = true;
+                    scanBtn.textContent = 'Scanning...';
+                    try {
+                        const report = await MapMaintenanceDaemon.runMaintenanceCheck();
+                        this.updateMaintenanceStatus();
+                        if (report) {
+                            const totalFindings = (report.duplicates?.length || 0) +
+                                (report.structuralIssues?.length || 0) +
+                                (report.gaps?.length || 0);
+                            showToast(`Scan complete: ${totalFindings} findings`, 'success');
+                        }
+                    } catch (e) {
+                        console.error('Maintenance scan error:', e);
+                        showToast('Scan failed', 'error');
+                    } finally {
+                        scanBtn.disabled = false;
+                        scanBtn.textContent = 'Scan Now';
+                    }
+                });
+            }
+
+            if (viewBtn) {
+                viewBtn.addEventListener('click', () => {
+                    this.showMaintenancePanel();
+                });
+            }
+
+            // Listen for daemon events
+            document.addEventListener('mapMaintenance:healthUpdated', (e) => {
+                this.updateMaintenanceHealth(e.detail.health);
+            });
+
+            document.addEventListener('mapMaintenance:checkComplete', () => {
+                this.updateMaintenanceStatus();
+            });
+
+            // Initial status update
+            this.updateMaintenanceStatus();
+        },
+
+        updateMaintenanceStatus() {
+            if (typeof MapMaintenanceDaemon === 'undefined') return;
+
+            const status = MapMaintenanceDaemon.getStatus();
+            const healthValue = document.getElementById('maintenance-health-value');
+            const healthFill = document.getElementById('maintenance-health-fill');
+            const healthBar = document.getElementById('maintenance-health-bar');
+            const queueBadge = document.getElementById('maintenance-queue-count');
+
+            if (healthValue && status.stats?.lastHealthScore !== undefined) {
+                const health = status.stats.lastHealthScore;
+                healthValue.textContent = `${health}%`;
+                if (healthFill) healthFill.style.width = `${health}%`;
+                if (healthBar) healthBar.setAttribute('aria-valuenow', health);
+            }
+
+            if (queueBadge) {
+                queueBadge.textContent = status.queueSize || 0;
+                queueBadge.style.display = status.queueSize > 0 ? 'inline' : 'none';
+            }
+        },
+
+        updateMaintenanceHealth(health) {
+            const healthValue = document.getElementById('maintenance-health-value');
+            const healthFill = document.getElementById('maintenance-health-fill');
+            const healthBar = document.getElementById('maintenance-health-bar');
+
+            if (healthValue) healthValue.textContent = `${health}%`;
+            if (healthFill) {
+                healthFill.style.width = `${health}%`;
+                // Color gradient based on health
+                if (health >= 80) healthFill.style.background = '#10b981';
+                else if (health >= 60) healthFill.style.background = '#f59e0b';
+                else healthFill.style.background = '#ef4444';
+            }
+            if (healthBar) healthBar.setAttribute('aria-valuenow', health);
+        },
+
         toggle() {
             if (this.isOpen) {
                 this.close();
@@ -36966,7 +37069,7 @@ showKeyboardHints();
                 this.open();
             }
         },
-        
+
         open() {
             // Close chat panel if open
             if (typeof chatManager !== 'undefined' && chatManager.isOpen) {
