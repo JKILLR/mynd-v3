@@ -28503,9 +28503,11 @@ You are a trusted guide, not a data harvester.
             // Build conversation history for Claude
             // Include completed actions so AI knows what was already done
             // Filter out 'bapi' role messages - only 'user' and 'assistant' are valid for Claude API
-            const historyForClaude = this.conversation.slice(-10).filter(m => m.role === 'user' || m.role === 'assistant').map(m => {
+            const historyForClaude = this.conversation.slice(-10)
+                .filter(m => (m.role === 'user' || m.role === 'assistant') && m.content)
+                .map(m => {
                 let content = m.content;
-                
+
                 // If assistant message had successful actions, append them to content
                 // This helps AI avoid repeating the same additions
                 if (m.role === 'assistant' && m.actions && m.actions.length > 0) {
@@ -28513,12 +28515,12 @@ You are a trusted guide, not a data harvester.
                         .filter(a => a.success)
                         .map(a => a.description)
                         .join(', ');
-                    
+
                     const skippedDupes = m.actions
                         .filter(a => a.skippedDuplicate)
                         .map(a => a.description)
                         .join(', ');
-                    
+
                     if (completedActions) {
                         content += `\n\n[COMPLETED ACTIONS: ${completedActions}]`;
                     }
@@ -28526,7 +28528,7 @@ You are a trusted guide, not a data harvester.
                         content += `\n[SKIPPED DUPLICATES: ${skippedDupes}]`;
                     }
                 }
-                
+
                 return { role: m.role, content };
             });
             
@@ -29995,7 +29997,14 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 // Agentic loop - client handles tool execution
                 let iterations = 0;
                 const maxIterations = 10;
-                let currentMessages = [...messages];
+                // Validate messages - filter out any with missing/invalid content
+                let currentMessages = [...messages].filter(m => {
+                    if (!m.content) return false;
+                    // Content can be string or array of content blocks
+                    if (typeof m.content === 'string') return m.content.length > 0;
+                    if (Array.isArray(m.content)) return m.content.length > 0;
+                    return false;
+                });
 
                 while (iterations < maxIterations) {
                     iterations++;
