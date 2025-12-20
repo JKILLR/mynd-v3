@@ -391,6 +391,7 @@
         
         try {
             supabase = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+            window.supabaseClient = supabase; // Expose for reflection daemon
             console.log('✓ Supabase client initialized');
             return supabase;
         } catch (error) {
