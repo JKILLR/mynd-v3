@@ -557,8 +557,8 @@ const ReflectionDaemon = {
         // Check for Supabase session or API key
         let session = null;
         try {
-            if (typeof window !== 'undefined' && window.supabase?.auth) {
-                const { data } = await window.supabase.auth.getSession();
+            if (typeof window !== 'undefined' && window.supabaseClient?.auth) {
+                const { data } = await window.supabaseClient.auth.getSession();
                 session = data?.session;
             }
         } catch (e) {
