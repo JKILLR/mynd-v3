@@ -29399,6 +29399,28 @@ You have access to powerful tools to explore and modify the MYND codebase:
 - list_files: List files matching a pattern (e.g., 'js/*.js')
 - get_codebase_overview: Get high-level architecture summary
 - get_function_definition: Find specific function/class definitions
+
+**EFFICIENT TOOL USAGE - CRITICAL:**
+You have LIMITED tool iterations. Be STRATEGIC and EFFICIENT:
+
+1. **START with get_codebase_overview** for any code exploration task - this tells you the file structure and main sections so you don't search blindly.
+
+2. **Use get_function_definition FIRST** when looking for specific functions, classes, or methods - it's faster than search_code.
+
+3. **Be TARGETED with search_code:**
+   - Use specific function/variable names, not vague patterns
+   - Use file_pattern to narrow scope (e.g., file_pattern: "app-module.js")
+   - NEVER repeat similar searches - if "displayMessage" didn't find it, don't try "display.*Message" or "message.*display"
+
+4. **Use read_file with line ranges** when you know the file - don't search for something you can read directly.
+
+5. **STOP searching after 3-5 attempts** - if you can't find it, tell the user what you searched for and ask for guidance.
+
+6. **The main files are:**
+   - js/app-module.js: Main application logic, Store class, chat UI, all features (~40k lines)
+   - js/reflection-daemon.js: AI reflection, tool execution, GitHub integration
+   - index.html / self-dev.html: Entry points
+   - supabase/functions/claude-chat/: Edge function for Claude API
 `;
                 if (typeof ReflectionDaemon !== 'undefined' && ReflectionDaemon.isGithubConfigured && ReflectionDaemon.isGithubConfigured()) {
                     toolsSection += `
@@ -30206,8 +30228,10 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 }
 
                 // Agentic loop - client handles tool execution
+                // High limit (100) needed for complex code exploration tasks with multiple tool calls
+                // System prompt guides efficient tool usage to minimize actual iterations needed
                 let iterations = 0;
-                const maxIterations = 50;
+                const maxIterations = 100;
                 // Validate messages - filter out any with missing/invalid content
                 let currentMessages = [...messages].filter(m => {
                     if (!m.content) return false;
@@ -30339,8 +30363,10 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 }
 
                 // Agentic loop for tool execution
+                // High limit (100) needed for complex code exploration tasks with multiple tool calls
+                // System prompt guides efficient tool usage to minimize actual iterations needed
                 let iterations = 0;
-                const maxIterations = 50;
+                const maxIterations = 100;
                 let currentMessages = [...messages];
 
                 while (iterations < maxIterations) {
