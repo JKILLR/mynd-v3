@@ -53,6 +53,53 @@ const ReflectionDaemon = {
     // GitHub state
     githubToken: null,  // Stored separately for security
 
+    // Search cache to prevent duplicate/similar searches
+    searchCache: new Map(),
+    searchCacheMaxAge: 5 * 60 * 1000, // 5 minutes
+    searchCacheMaxSize: 50,
+
+    // Clear search cache (call when starting new conversation)
+    clearSearchCache() {
+        this.searchCache.clear();
+        console.log('🔍 Search cache cleared');
+    },
+
+    // Normalize search query for cache key
+    normalizeSearchQuery(query) {
+        return query.toLowerCase()
+            .replace(/\s+/g, ' ')
+            .replace(/[.*+?^${}()|[\]\\]/g, '') // Remove regex special chars for comparison
+            .trim();
+    },
+
+    // Check if a similar search was already done
+    findSimilarSearch(query, file_pattern) {
+        const normalizedQuery = this.normalizeSearchQuery(query);
+        const now = Date.now();
+
+        // Clean old entries
+        for (const [key, entry] of this.searchCache) {
+            if (now - entry.timestamp > this.searchCacheMaxAge) {
+                this.searchCache.delete(key);
+            }
+        }
+
+        // Look for exact or similar match
+        for (const [key, entry] of this.searchCache) {
+            const cachedNormalized = this.normalizeSearchQuery(entry.query);
+            // Check for exact match or if one contains the other
+            if (cachedNormalized === normalizedQuery ||
+                cachedNormalized.includes(normalizedQuery) ||
+                normalizedQuery.includes(cachedNormalized)) {
+                if (entry.file_pattern === file_pattern) {
+                    console.log(`🔍 Search cache hit: "${query}" similar to cached "${entry.query}"`);
+                    return entry.results;
+                }
+            }
+        }
+        return null;
+    },
+
     // ═══════════════════════════════════════════════════════════════════
     // TOOLS DEFINITION - Gives the reflection engine coding capabilities
     // ═══════════════════════════════════════════════════════════════════
@@ -959,6 +1006,18 @@ const ReflectionDaemon = {
     },
 
     async toolSearchCode({ query, file_pattern, max_results = 20 }) {
+        // Check cache first for similar searches
+        const cachedResults = this.findSimilarSearch(query, file_pattern);
+        if (cachedResults) {
+            return {
+                query,
+                total_results: cachedResults.length,
+                results: cachedResults.slice(0, max_results),
+                cached: true,
+                hint: "This search is similar to a previous one. Results from cache. Try a different approach if you need more specific results."
+            };
+        }
+
         const results = [];
 
         if (typeof codeRAG !== 'undefined' && codeRAG.initialized) {
@@ -1024,6 +1083,21 @@ const ReflectionDaemon = {
                     });
                 }
             }
+        }
+
+        // Save to cache
+        const cacheKey = `${query}::${file_pattern || ''}`;
+        this.searchCache.set(cacheKey, {
+            query,
+            file_pattern,
+            results: results.slice(0, max_results),
+            timestamp: Date.now()
+        });
+
+        // Trim cache if too large
+        if (this.searchCache.size > this.searchCacheMaxSize) {
+            const firstKey = this.searchCache.keys().next().value;
+            this.searchCache.delete(firstKey);
         }
 
         return {
