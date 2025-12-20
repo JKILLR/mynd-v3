@@ -30192,7 +30192,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 console.log('🔍 Web search disabled for code review (using actual code instead)');
             }
 
-            let responseText;
+            let responseText = '';
 
             if (session?.access_token) {
                 // Use Edge Function with tools - client handles the agentic loop
@@ -30289,6 +30289,10 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
 
                 if (iterations >= maxIterations) {
                     console.warn('⚠️ Edge Function: Hit max tool iterations');
+                    // Provide fallback response if we hit the limit without a response
+                    if (!responseText) {
+                        responseText = '{"message": "I was working on your request but hit the tool iteration limit. Please try a simpler request.", "actions": [], "suggestions": []}';
+                    }
                 }
             } else {
                 // Direct API call
@@ -30418,9 +30422,13 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
 
                 if (iterations >= maxIterations) {
                     console.warn('⚠️ Chat: Hit max tool iterations');
+                    // Provide fallback response if we hit the limit without a response
+                    if (!responseText) {
+                        responseText = '{"message": "I was working on your request but hit the tool iteration limit. Please try a simpler request.", "actions": [], "suggestions": []}';
+                    }
                 }
             }
-            
+
             // Parse JSON response - handle markdown code blocks and text before JSON
             let parsedResult = null;
             try {
