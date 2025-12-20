@@ -29116,7 +29116,44 @@ You are a trusted guide, not a data harvester.
             const manifestationIdentity = this.getManifestationIdentity();
             const privacyPrinciples = this.getPrivacyPrinciples();
 
+            // Build dynamic tools section
+            let toolsSection = '';
+            if (typeof ReflectionDaemon !== 'undefined') {
+                toolsSection = `
+=== YOUR TOOLS ===
+
+You have access to powerful tools to explore and modify the MYND codebase:
+
+**CODEBASE EXPLORATION TOOLS:**
+- read_file: Read contents of any file in the codebase
+- search_code: Search for patterns/text across all code files
+- list_files: List files matching a pattern (e.g., 'js/*.js')
+- get_codebase_overview: Get high-level architecture summary
+- get_function_definition: Find specific function/class definitions
+`;
+                if (typeof ReflectionDaemon !== 'undefined' && ReflectionDaemon.isGithubConfigured && ReflectionDaemon.isGithubConfigured()) {
+                    toolsSection += `
+**GITHUB TOOLS (code modification enabled):**
+- github_create_branch: Create a feature branch for changes
+- github_get_file: Read latest file from GitHub
+- github_write_file: Create/update files (auto-commits)
+- github_create_pr: Create a pull request
+
+**WORKFLOW FOR CODE CHANGES:**
+1. Create a branch with github_create_branch
+2. Read files with github_get_file before editing
+3. Write changes with github_write_file
+4. Create PR with github_create_pr
+NEVER write to main/master directly.
+`;
+                }
+                toolsSection += `
+Use these tools when asked about the codebase, to explore your own source code, or to make improvements.
+`;
+            }
+
             const systemPrompt = `You are the AI companion for MYND — a personalized second brain designed to capture and connect fragmented thoughts, fostering creativity and clarity.
+${toolsSection}
 ${manifestationIdentity}
 ${privacyPrinciples}
 
