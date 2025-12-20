@@ -556,9 +556,13 @@ const ReflectionDaemon = {
 
         // Check for Supabase session or API key
         let session = null;
-        if (typeof supabase !== 'undefined' && supabase !== null) {
-            const { data } = await supabase.auth.getSession();
-            session = data?.session;
+        try {
+            if (typeof window !== 'undefined' && window.supabase?.auth) {
+                const { data } = await window.supabase.auth.getSession();
+                session = data?.session;
+            }
+        } catch (e) {
+            console.log('Could not get Supabase session:', e.message);
         }
 
         const apiKey = localStorage.getItem(CONFIG.API_KEY);
