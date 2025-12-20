@@ -3626,7 +3626,13 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 'node_deleted': 0.3,
                 'brainstorm_completed': 0.6,
                 'preference_pattern': 0.75,
-                'session_insight': 0.65
+                'session_insight': 0.65,
+                // Chat memory types - high importance for recall
+                'conversation_exchange': 0.85,  // Full conversation exchanges
+                'chat_query': 0.6,              // User questions
+                'chat_insight': 0.7,            // AI insights
+                'user_preference': 0.75,        // Expressed preferences
+                'correction_received': 0.8      // Corrections are important to remember
             };
             
             let importance = baseImportance[event] || 0.5;
@@ -27965,21 +27971,38 @@ You are a trusted guide, not a data harvester.
                         // Store user queries as interests/topics
                         semanticMemory.addMemory(
                             'chat_query',
-                            `User asked about: ${content.slice(0, 300)}`,
-                            { source: 'ai_chat', type: 'query' }
+                            `User asked: ${content.slice(0, 500)}`,
+                            { source: 'ai_chat', type: 'query', fullContent: content }
                         );
-                    } else if (role === 'assistant' && content.length > 100) {
-                        // Extract and store key insights from AI responses
+                    } else if (role === 'assistant' && content.length > 50) {
                         // Get the user's question for context
                         const lastUserMsg = this.conversation.filter(m => m.role === 'user').slice(-1)[0];
-                        const topic = lastUserMsg ? lastUserMsg.content.slice(0, 100) : 'general';
+                        const userQuestion = lastUserMsg ? lastUserMsg.content : '';
 
-                        // Store the insight with topic context
+                        // Store the FULL conversation exchange (question + answer)
+                        // This is the key for recall - store both sides together
+                        const exchangeContent = `User: ${userQuestion.slice(0, 1000)}\n\nAssistant: ${content.slice(0, 2000)}`;
+
                         semanticMemory.addMemory(
-                            'chat_insight',
-                            `Discussion about "${topic}": ${content.slice(0, 500)}`,
-                            { source: 'ai_chat', type: 'insight', topic: topic.slice(0, 50) }
+                            'conversation_exchange',
+                            exchangeContent,
+                            {
+                                source: 'ai_chat',
+                                type: 'conversation',
+                                userMessage: userQuestion.slice(0, 500),
+                                assistantMessage: content.slice(0, 1000),
+                                timestamp: Date.now()
+                            }
                         );
+
+                        // Also try to save to LocalBrain for persistent storage
+                        if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                            LocalBrain.importConversation(
+                                exchangeContent,
+                                'mynd-chat',
+                                `Chat: ${userQuestion.slice(0, 50)}...`
+                            ).catch(e => console.warn('LocalBrain conversation import failed:', e));
+                        }
                     }
                 } catch (e) {
                     console.warn('Failed to store chat memory:', e);
@@ -28542,6 +28565,8 @@ You are a trusted guide, not a data harvester.
             // CONVERSATION CONTEXT - Past AI conversations for unified understanding
             // ═══════════════════════════════════════════════════════════════
             let conversationContext = '';
+
+            // Try LocalBrain first (if server is running)
             if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
                 try {
                     const convResult = await LocalBrain.getConversationContext(
@@ -28556,6 +28581,37 @@ You are a trusted guide, not a data harvester.
                     }
                 } catch (e) {
                     console.warn('Conversation context error:', e);
+                }
+            }
+
+            // Fallback: Use local SemanticMemory for conversation recall
+            if (!conversationContext && typeof semanticMemory !== 'undefined' && semanticMemory.loaded) {
+                try {
+                    // Recall relevant past conversations using embedding similarity
+                    const relevantMemories = await semanticMemory.recallMemories(userMessage, 5, 0.3);
+
+                    // Filter for conversation-related memories
+                    const conversationMemories = relevantMemories.filter(m =>
+                        m.event === 'conversation_exchange' ||
+                        m.event === 'chat_insight' ||
+                        m.event === 'user_preference' ||
+                        m.event === 'correction_received'
+                    );
+
+                    if (conversationMemories.length > 0) {
+                        conversationContext = '\n=== RELEVANT PAST CONVERSATIONS ===\n';
+                        conversationContext += 'You have discussed similar topics before. Here are relevant memories:\n\n';
+
+                        for (const memory of conversationMemories.slice(0, 3)) {
+                            const timeAgo = Math.round((Date.now() - memory.timestamp) / (1000 * 60 * 60 * 24));
+                            const timeStr = timeAgo === 0 ? 'today' : timeAgo === 1 ? 'yesterday' : `${timeAgo} days ago`;
+                            conversationContext += `[${timeStr}] ${memory.context.slice(0, 800)}\n\n`;
+                        }
+
+                        console.log(`💬 SemanticMemory recall: ${conversationMemories.length} relevant conversation(s)`);
+                    }
+                } catch (e) {
+                    console.warn('SemanticMemory recall error:', e);
                 }
             }
 
