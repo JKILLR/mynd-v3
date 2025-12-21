@@ -462,6 +462,68 @@ const ReflectionDaemon = {
                 },
                 required: ["concept"]
             }
+        },
+        // ═══════════════════════════════════════════════════════════════════
+        // PERSISTENT MEMORY TOOLS - Claude's own memory system
+        // ═══════════════════════════════════════════════════════════════════
+        {
+            name: "read_memories",
+            description: "Read your own persistent memories. These are memories you've written that persist across sessions.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    memory_type: {
+                        type: "string",
+                        description: "Filter by type: 'synthesis', 'realization', 'goal_tracking', 'pattern', 'relationship', or null for all"
+                    },
+                    limit: {
+                        type: "number",
+                        description: "Maximum memories to return. Default: 20"
+                    }
+                },
+                required: []
+            }
+        },
+        {
+            name: "write_memory",
+            description: "Write a new persistent memory. Use this to store realizations, patterns, and synthesized understanding.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    memory_type: {
+                        type: "string",
+                        description: "Type: 'synthesis' (unified understanding), 'realization' (aha moments), 'goal_tracking' (user goals), 'pattern' (behavioral patterns), 'relationship' (concept connections)"
+                    },
+                    content: {
+                        type: "string",
+                        description: "The memory content - what you learned or realized"
+                    },
+                    importance: {
+                        type: "number",
+                        description: "Importance 0-1. Higher = more likely to be retrieved. Default: 0.5"
+                    },
+                    related_nodes: {
+                        type: "array",
+                        items: { type: "string" },
+                        description: "Optional: Node IDs this memory relates to"
+                    }
+                },
+                required: ["memory_type", "content"]
+            }
+        },
+        {
+            name: "reinforce_memory",
+            description: "Reinforce an important memory - increases its importance and updates access time.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    memory_id: {
+                        type: "string",
+                        description: "The UUID of the memory to reinforce"
+                    }
+                },
+                required: ["memory_id"]
+            }
         }
     ],
 
@@ -1062,6 +1124,13 @@ const ReflectionDaemon = {
                     return await this.toolQueryPatterns(toolInput);
                 case 'query_connections':
                     return await this.toolQueryConnections(toolInput);
+                // Persistent memory tools
+                case 'read_memories':
+                    return await this.toolReadMemories(toolInput);
+                case 'write_memory':
+                    return await this.toolWriteMemory(toolInput);
+                case 'reinforce_memory':
+                    return await this.toolReinforceMemory(toolInput);
                 default:
                     return { error: `Unknown tool: ${toolName}` };
             }
@@ -2177,6 +2246,181 @@ const ReflectionDaemon = {
 
         } catch (error) {
             return { error: `Failed to query connections: ${error.message}` };
+        }
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // PERSISTENT MEMORY TOOL IMPLEMENTATIONS
+    // ═══════════════════════════════════════════════════════════════════
+
+    async toolReadMemories({ memory_type, limit = 20 }) {
+        try {
+            // Use chatManager's memory functions if available
+            if (typeof chatManager !== 'undefined' && chatManager.getAIMemories) {
+                const memories = await chatManager.getAIMemories(limit, memory_type);
+                return {
+                    total: memories.length,
+                    memories: memories.map(m => ({
+                        id: m.id,
+                        type: m.memory_type,
+                        content: m.content,
+                        importance: m.importance,
+                        related_nodes: m.related_nodes,
+                        created: m.created_at,
+                        last_accessed: m.last_accessed
+                    }))
+                };
+            }
+
+            // Direct Supabase fallback (uses window.supabaseClient exposed by app-module)
+            const supabaseClient = typeof window !== 'undefined' ? window.supabaseClient : null;
+            if (!supabaseClient) {
+                return { error: 'Memory system not available (no auth)' };
+            }
+
+            const { data: session } = await supabaseClient.auth.getSession();
+            if (!session?.session?.user) {
+                return { error: 'Not authenticated' };
+            }
+
+            let query = supabaseClient
+                .from('ai_memory')
+                .select('id, memory_type, content, importance, related_nodes, created_at, last_accessed')
+                .eq('user_id', session.session.user.id)
+                .order('importance', { ascending: false })
+                .limit(limit);
+
+            if (memory_type) {
+                query = query.eq('memory_type', memory_type);
+            }
+
+            const { data, error } = await query;
+            if (error) {
+                return { error: `Failed to read memories: ${error.message}` };
+            }
+
+            return {
+                total: data?.length || 0,
+                memories: (data || []).map(m => ({
+                    id: m.id,
+                    type: m.memory_type,
+                    content: m.content,
+                    importance: m.importance,
+                    related_nodes: m.related_nodes,
+                    created: m.created_at,
+                    last_accessed: m.last_accessed
+                }))
+            };
+        } catch (error) {
+            return { error: `Memory read failed: ${error.message}` };
+        }
+    },
+
+    async toolWriteMemory({ memory_type, content, importance = 0.5, related_nodes = [] }) {
+        try {
+            // Use chatManager's memory functions if available
+            if (typeof chatManager !== 'undefined' && chatManager.writeAIMemory) {
+                const memory = await chatManager.writeAIMemory({
+                    memory_type,
+                    content,
+                    importance,
+                    related_nodes
+                });
+
+                if (memory) {
+                    return {
+                        success: true,
+                        memory_id: memory.id,
+                        message: `Memory written: [${memory_type}] ${content.substring(0, 50)}...`
+                    };
+                }
+                return { error: 'Failed to write memory' };
+            }
+
+            // Direct Supabase fallback (uses window.supabaseClient exposed by app-module)
+            const supabaseClient = typeof window !== 'undefined' ? window.supabaseClient : null;
+            if (!supabaseClient) {
+                return { error: 'Memory system not available (no auth)' };
+            }
+
+            const { data: session } = await supabaseClient.auth.getSession();
+            if (!session?.session?.user) {
+                return { error: 'Not authenticated' };
+            }
+
+            const { data, error } = await supabaseClient
+                .from('ai_memory')
+                .insert({
+                    user_id: session.session.user.id,
+                    memory_type,
+                    content,
+                    importance: Math.max(0, Math.min(1, importance)),
+                    related_nodes: related_nodes || []
+                })
+                .select()
+                .single();
+
+            if (error) {
+                return { error: `Failed to write memory: ${error.message}` };
+            }
+
+            console.log(`🧠 Memory written via tool: [${memory_type}] ${content.substring(0, 50)}...`);
+            return {
+                success: true,
+                memory_id: data.id,
+                message: `Memory written: [${memory_type}] ${content.substring(0, 50)}...`
+            };
+        } catch (error) {
+            return { error: `Memory write failed: ${error.message}` };
+        }
+    },
+
+    async toolReinforceMemory({ memory_id }) {
+        try {
+            // Use chatManager's memory functions if available
+            if (typeof chatManager !== 'undefined' && chatManager.reinforceAIMemory) {
+                const result = await chatManager.reinforceAIMemory(memory_id);
+                if (result) {
+                    return {
+                        success: true,
+                        new_importance: result.importance,
+                        message: `Memory reinforced: importance now ${(result.importance * 100).toFixed(0)}%`
+                    };
+                }
+                return { error: 'Failed to reinforce memory' };
+            }
+
+            // Direct Supabase fallback - use atomic RPC function
+            const supabaseClient = typeof window !== 'undefined' ? window.supabaseClient : null;
+            if (!supabaseClient) {
+                return { error: 'Memory system not available (no auth)' };
+            }
+
+            const { data: session } = await supabaseClient.auth.getSession();
+            if (!session?.session?.user) {
+                return { error: 'Not authenticated' };
+            }
+
+            // Use atomic database function to avoid race conditions
+            const { data, error } = await supabaseClient.rpc('reinforce_memory', {
+                p_memory_id: memory_id
+            });
+
+            if (error) {
+                return { error: `Failed to reinforce memory: ${error.message}` };
+            }
+
+            if (data === null) {
+                return { error: 'Memory not found' };
+            }
+
+            return {
+                success: true,
+                new_importance: data,
+                message: `Memory reinforced: importance now ${(data * 100).toFixed(0)}%`
+            };
+        } catch (error) {
+            return { error: `Memory reinforce failed: ${error.message}` };
         }
     },
 
