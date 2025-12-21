@@ -27973,7 +27973,9 @@ You are a trusted guide, not a data harvester.
 
             // Example buttons
             document.querySelectorAll('.chat-example-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     if (this.input) this.input.value = btn.textContent;
                     if (this.sendBtn) this.sendBtn.disabled = false;
                     this.sendMessage();
@@ -31898,16 +31900,18 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                         I can help you build and organize your mind map. Try asking me to:
                     </div>
                     <div class="chat-welcome-examples">
-                        <button class="chat-example-btn">Help me brainstorm ideas for my goals</button>
-                        <button class="chat-example-btn">What should I add to my fitness plan?</button>
-                        <button class="chat-example-btn">Organize my project nodes</button>
-                        <button class="chat-example-btn">What's the latest news on AI?</button>
+                        <button type="button" class="chat-example-btn">Help me brainstorm ideas for my goals</button>
+                        <button type="button" class="chat-example-btn">What should I add to my fitness plan?</button>
+                        <button type="button" class="chat-example-btn">Organize my project nodes</button>
+                        <button type="button" class="chat-example-btn">What's the latest news on AI?</button>
                     </div>
                 </div>
             `;
             // Re-attach example button handlers
             this.messagesContainer.querySelectorAll('.chat-example-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     this.input.value = btn.textContent;
                     this.sendBtn.disabled = false;
                     this.sendMessage();
