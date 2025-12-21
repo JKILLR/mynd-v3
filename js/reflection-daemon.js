@@ -2657,7 +2657,7 @@ You have tools available to explore the codebase further. Use them to investigat
             try {
                 let response;
                 const requestBody = {
-                    model: CONFIG.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+                    model: CONFIG.CLAUDE_MODEL || 'claude-opus-4-5-20250514',
                     max_tokens: this.config.maxTokensPerReflection,
                     system: systemPrompt,
                     tools: this.getAvailableTools(),
@@ -2694,7 +2694,7 @@ You have tools available to explore the codebase further. Use them to investigat
                             'anthropic-dangerous-direct-browser-access': 'true'
                         },
                         body: JSON.stringify({
-                            model: CONFIG.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+                            model: CONFIG.CLAUDE_MODEL || 'claude-opus-4-5-20250514',
                             max_tokens: this.config.maxTokensPerReflection,
                             system: systemPrompt,
                             tools: this.getAvailableTools(),
