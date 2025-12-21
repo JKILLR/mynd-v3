@@ -459,8 +459,8 @@ const GoalUI = {
 
 const GoalVisualization = {
     beacons: new Map(), // goalId -> { mesh, glow, label, rings }
-    baseDistance: 80, // How far goals float from center (distant beacon)
-    goalSize: 2.5, // Much larger than normal nodes (normal is ~0.5)
+    baseDistance: 150, // How far goals float from center (distant beacon)
+    goalSize: 3.5, // Much larger than normal nodes (normal is ~0.5)
 
     // Create a distant goal beacon
     createGoalBeacon(goal) {
@@ -739,6 +739,13 @@ const GoalVisualization = {
         });
 
         this.beacons.delete(goalId);
+    },
+
+    // Clear all beacons (for map reload)
+    clearAll() {
+        const goalIds = Array.from(this.beacons.keys());
+        goalIds.forEach(id => this.removeBeacon(id));
+        console.log('✓ Cleared all goal beacons');
     },
 
     // Restore beacons from saved goals

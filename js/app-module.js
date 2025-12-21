@@ -21823,18 +21823,48 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         
         // Export just the map data (for cloud sync)
         exportData() {
-            return JSON.parse(JSON.stringify(this.data));
+            const exportedData = JSON.parse(JSON.stringify(this.data));
+
+            // Include goals in export
+            if (typeof GoalRegistry !== 'undefined' && GoalRegistry.goals) {
+                exportedData.goals = Array.from(GoalRegistry.goals.entries());
+                exportedData.milestones = Array.from(GoalRegistry.milestones.entries());
+            }
+
+            return exportedData;
         }
-        
+
         // Import just the map data (from cloud sync)
         importData(mapData, skipSync = false) {
             if (!mapData || !mapData.id) {
                 console.error('Invalid map data for import');
                 return false;
             }
-            
+
             this.saveSnapshot('Cloud sync');
-            this.data = mapData;
+
+            // Restore goals if present
+            if (mapData.goals && typeof GoalRegistry !== 'undefined') {
+                GoalRegistry.goals = new Map(mapData.goals);
+                if (mapData.milestones) {
+                    GoalRegistry.milestones = new Map(mapData.milestones);
+                }
+                // Recreate goal visualizations
+                if (typeof GoalVisualization !== 'undefined') {
+                    GoalVisualization.clearAll();
+                    GoalRegistry.goals.forEach(goal => {
+                        GoalVisualization.createGoalBeacon(goal);
+                    });
+                }
+                console.log(`✓ Restored ${GoalRegistry.goals.size} goals from map`);
+            }
+
+            // Remove goals from data before storing (they're stored separately)
+            const cleanData = { ...mapData };
+            delete cleanData.goals;
+            delete cleanData.milestones;
+
+            this.data = cleanData;
             this.expandedNodes.clear();
             
             // Save locally but skip cloud sync to avoid loop
@@ -24959,14 +24989,23 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         
         raycaster.setFromCamera(mouse, camera);
-        const meshes = Array.from(nodes.values()).filter(m => m.visible);
+        let meshes = Array.from(nodes.values()).filter(m => m.visible);
+
+        // Include goal beacons in raycast
+        if (typeof GoalVisualization !== 'undefined' && GoalVisualization.beacons) {
+            GoalVisualization.beacons.forEach(beacon => {
+                if (beacon.mesh) meshes.push(beacon.mesh);
+            });
+        }
+
         const intersects = raycaster.intersectObjects(meshes, true); // Include children (labels)
-        
+
         if (intersects.length > 0) {
             // Get the intersected object - might be the label sprite or badge, not the mesh
             let mesh = intersects[0].object;
             let clickedOnContextBadge = false;
-            
+            let clickedOnGoalBeacon = false;
+
             // If we hit a sprite, get the parent mesh
             if (mesh.isSprite && mesh.parent && mesh.parent.userData?.id) {
                 // Check if this is the context badge
@@ -24975,7 +25014,21 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                 }
                 mesh = mesh.parent;
             }
-            
+
+            // Check if we clicked on a goal beacon
+            if (mesh.userData?.isGoalBeacon) {
+                clickedOnGoalBeacon = true;
+                const goal = mesh.userData.goal;
+                console.log('🎯 Goal clicked:', goal.label);
+                // Show goal info panel or modal
+                if (typeof GoalUI !== 'undefined' && GoalUI.showGoalDetails) {
+                    GoalUI.showGoalDetails(goal);
+                }
+                clickedOnEmpty = false;
+                lastClickedNodeId = null;
+                return;
+            }
+
             // Make sure we have a valid node mesh with userData
             if (!mesh.userData?.id) {
                 clickedOnEmpty = true;
@@ -28293,7 +28346,7 @@ You are a trusted guide, not a data harvester.
             // Process with AI
             this.isProcessing = true;
             try {
-                const response = await this.callAI(content);
+                const response = await this.callAI(content, imagesToSend);
                 this.hideTyping();
 
                 // ═══════════════════════════════════════════════════════════════
@@ -29044,7 +29097,7 @@ You are a trusted guide, not a data harvester.
             return line;
         },
 
-        async callAI(userMessage) {
+        async callAI(userMessage, images = []) {
             // Build context
             const allNodes = store.getAllNodes();
             const selectedNodeData = selectedNode ? store.findNode(selectedNode.userData.id) : null;
@@ -29074,7 +29127,7 @@ You are a trusted guide, not a data harvester.
             const historyForClaude = this.conversation.slice(-10)
                 .filter(m => (m.role === 'user' || m.role === 'assistant') && m.content)
                 .map(m => {
-                let content = m.content;
+                let textContent = m.content;
 
                 // If assistant message had successful actions, append them to content
                 // This helps AI avoid repeating the same additions
@@ -29090,14 +29143,44 @@ You are a trusted guide, not a data harvester.
                         .join(', ');
 
                     if (completedActions) {
-                        content += `\n\n[COMPLETED ACTIONS: ${completedActions}]`;
+                        textContent += `\n\n[COMPLETED ACTIONS: ${completedActions}]`;
                     }
                     if (skippedDupes) {
-                        content += `\n[SKIPPED DUPLICATES: ${skippedDupes}]`;
+                        textContent += `\n[SKIPPED DUPLICATES: ${skippedDupes}]`;
                     }
                 }
 
-                return { role: m.role, content };
+                // Include images from conversation history (Claude Vision format)
+                if (m.role === 'user' && m.images && m.images.length > 0) {
+                    const contentBlocks = [];
+
+                    // Add images first
+                    for (const img of m.images) {
+                        const dataUrl = img.dataUrl || img;
+                        if (typeof dataUrl === 'string') {
+                            const match = dataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/);
+                            if (match) {
+                                contentBlocks.push({
+                                    type: 'image',
+                                    source: {
+                                        type: 'base64',
+                                        media_type: match[1],
+                                        data: match[2]
+                                    }
+                                });
+                            }
+                        }
+                    }
+
+                    // Add text content
+                    if (textContent) {
+                        contentBlocks.push({ type: 'text', text: textContent });
+                    }
+
+                    return { role: m.role, content: contentBlocks };
+                }
+
+                return { role: m.role, content: textContent };
             });
             
             // ═══════════════════════════════════════════════════════════════
@@ -30558,12 +30641,44 @@ COLORS: Red #EF4444, Orange #EF8354, Yellow #F7B731, Green #26DE81, Teal #4ECDC4
 
 CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no explanation before or after. Just the raw JSON starting with { and ending with }.`;
 
+            // Build final user message with images if present (Claude Vision format)
+            let finalUserMessage;
+            if (images && images.length > 0) {
+                const contentBlocks = [];
+
+                // Add images first
+                for (const img of images) {
+                    const dataUrl = img.dataUrl || img;
+                    if (typeof dataUrl === 'string') {
+                        const match = dataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/);
+                        if (match) {
+                            contentBlocks.push({
+                                type: 'image',
+                                source: {
+                                    type: 'base64',
+                                    media_type: match[1],
+                                    data: match[2]
+                                }
+                            });
+                        }
+                    }
+                }
+
+                // Add text content
+                contentBlocks.push({ type: 'text', text: userMessage || 'Please describe what you see in this image.' });
+
+                finalUserMessage = { role: 'user', content: contentBlocks };
+                console.log(`📷 Including ${contentBlocks.length - 1} image(s) in message to Claude`);
+            } else {
+                finalUserMessage = { role: 'user', content: userMessage };
+            }
+
             // Build messages array
             const messages = [
                 { role: 'user', content: systemPrompt },
                 { role: 'assistant', content: '{"message": "I understand. I\'m ready to help with your mind map.", "actions": [], "suggestions": []}' },
                 ...historyForClaude,
-                { role: 'user', content: userMessage }
+                finalUserMessage
             ];
             
             // Get auth session
