@@ -172,6 +172,83 @@ const GITHUB_TOOLS = [
 ]
 
 // ═══════════════════════════════════════════════════════════════════
+// SELF-QUERY TOOLS (Inner Dialogue)
+// These enable Claude to query its own knowledge systems mid-reasoning
+// ═══════════════════════════════════════════════════════════════════
+
+const SELF_QUERY_TOOLS = [
+  {
+    name: "query_focus",
+    description: "Get current session context - recently viewed/edited nodes, active branch, what user is working on right now. Use to understand immediate context.",
+    input_schema: {
+      type: "object",
+      properties: {},
+      required: []
+    }
+  },
+  {
+    name: "query_similar",
+    description: "Find semantically similar nodes using embeddings. Use when looking for related concepts, potential duplicates, or connection opportunities.",
+    input_schema: {
+      type: "object",
+      properties: {
+        concept: { type: "string", description: "The concept or text to find similar nodes for" },
+        threshold: { type: "number", description: "Similarity threshold 0-1. Higher = more similar. Default: 0.6" },
+        limit: { type: "number", description: "Maximum results to return. Default: 5" }
+      },
+      required: ["concept"]
+    }
+  },
+  {
+    name: "query_insights",
+    description: "Retrieve taught neural insights - connections you've learned, patterns discovered, user goals. Use when you need your accumulated understanding.",
+    input_schema: {
+      type: "object",
+      properties: {
+        insight_type: { type: "string", description: "Type: 'connection_insight', 'user_goal', 'neural_insight', or 'all'. Default: all" },
+        related_to: { type: "string", description: "Optional: filter insights related to a specific concept" }
+      },
+      required: []
+    }
+  },
+  {
+    name: "query_memory",
+    description: "Search conversation history and past interactions. Use when you need to recall what the user has said about something before.",
+    input_schema: {
+      type: "object",
+      properties: {
+        topic: { type: "string", description: "The topic, concept, or keyword to search for in memory" },
+        limit: { type: "number", description: "Maximum results to return. Default: 5" }
+      },
+      required: ["topic"]
+    }
+  },
+  {
+    name: "query_patterns",
+    description: "Retrieve learned user preferences and behavioral patterns. Use when you need to understand how the user typically works or what they prefer.",
+    input_schema: {
+      type: "object",
+      properties: {
+        domain: { type: "string", description: "Domain: 'naming', 'colors', 'structure', 'categories', 'all'. Default: all" }
+      },
+      required: []
+    }
+  },
+  {
+    name: "query_connections",
+    description: "Find what connects to a concept or node - parents, children, semantic relationships. Use when understanding context around an idea.",
+    input_schema: {
+      type: "object",
+      properties: {
+        concept: { type: "string", description: "The concept or node label to find connections for" },
+        depth: { type: "number", description: "How many levels of connections to traverse. Default: 1" }
+      },
+      required: ["concept"]
+    }
+  }
+]
+
+// ═══════════════════════════════════════════════════════════════════
 // MAIN HANDLER - Simple proxy, client handles tool execution
 // ═══════════════════════════════════════════════════════════════════
 
@@ -195,7 +272,8 @@ serve(async (req) => {
       webSearch = false,
       systemPrompt,
       enableCodebaseTools = true,
-      enableGithubTools = false
+      enableGithubTools = false,
+      enableSelfQueryTools = true  // Inner dialogue tools - enabled by default
     } = await req.json()
 
     // Build tools array
@@ -218,6 +296,11 @@ serve(async (req) => {
     // GitHub tools
     if (enableGithubTools) {
       tools.push(...GITHUB_TOOLS)
+    }
+
+    // Self-query tools (inner dialogue)
+    if (enableSelfQueryTools) {
+      tools.push(...SELF_QUERY_TOOLS)
     }
 
     // Build request body
