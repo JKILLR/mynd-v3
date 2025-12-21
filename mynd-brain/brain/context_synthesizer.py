@@ -4,19 +4,21 @@ Context Synthesizer
 Unifies all context sources into ONE coherent context block.
 
 Instead of 19 separate layers dumping into the prompt, this synthesizer:
-1. Queries ALL sources with the SAME embedding
+1. Uses HYBRID SEARCH (vector similarity + BM25 keyword matching)
 2. Ranks results by relevance (not by source type)
-3. Builds a focused, unified context document
-4. Detects contradictions between sources
+3. Uses EXPONENTIAL DECAY for recency (half-life formula, not linear)
+4. Positions high-relevance items at START and END (avoids "Lost in the Middle")
 5. Links to active goals automatically
 
 This is the "funnel" that turns fragmented data into focused understanding.
 """
 
 import time
-import asyncio
+import math
+import re
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass, field
+from collections import Counter
 import numpy as np
 
 
@@ -95,7 +97,27 @@ class ContextSynthesizer:
             'distilled': 0.9
         }
 
-        print("🔀 ContextSynthesizer initialized")
+        # Hybrid search weights: vector similarity + BM25 keyword matching
+        self.vector_weight = 0.7
+        self.bm25_weight = 0.3
+
+        # Recency decay half-life in days (exponential decay)
+        self.recency_half_life_days = 7.0
+
+        # Common stop words to filter from BM25 scoring
+        self._stop_words = {
+            'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+            'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'been',
+            'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
+            'could', 'should', 'may', 'might', 'must', 'shall', 'can', 'need',
+            'it', 'its', 'this', 'that', 'these', 'those', 'i', 'you', 'he',
+            'she', 'we', 'they', 'what', 'which', 'who', 'whom', 'how', 'when',
+            'where', 'why', 'all', 'each', 'every', 'both', 'few', 'more', 'most',
+            'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same',
+            'so', 'than', 'too', 'very', 'just', 'also', 'now', 'here', 'there'
+        }
+
+        print("🔀 ContextSynthesizer initialized (hybrid search enabled)")
 
     def set_source_weights(self, weights: Dict[str, float]):
         """Update source weights from meta-learner"""
@@ -137,13 +159,9 @@ class ContextSynthesizer:
 
         # ═══ SEARCH ALL SOURCES IN PARALLEL (conceptually) ═══
 
-        # 1. Search map nodes
-        if map_data and self.map_db:
-            map_items = self._search_map_nodes(query_embedding, map_data)
-            all_items.extend(map_items)
-        elif map_data:
-            # Fallback: simple keyword search on map
-            map_items = self._search_map_simple(query, map_data)
+        # 1. Search map nodes (always use hybrid scoring now)
+        if map_data:
+            map_items = self._search_map_nodes(query_embedding, query, map_data)
             all_items.extend(map_items)
 
         # 2. Search AI memories (Supabase)
@@ -237,10 +255,95 @@ class ContextSynthesizer:
             return 0.0
         return float(np.dot(a, b) / (norm_a * norm_b))
 
-    def _search_map_nodes(self, query_embedding: np.ndarray, map_data: Dict) -> List[ContextItem]:
-        """Search map nodes by embedding similarity"""
+    def _tokenize(self, text: str) -> List[str]:
+        """Simple tokenization for BM25 scoring with stop-word filtering"""
+        # Lowercase, split on non-alphanumeric, filter short tokens and stop words
+        tokens = re.findall(r'\b[a-z0-9]+\b', text.lower())
+        return [t for t in tokens if len(t) > 2 and t not in self._stop_words]
+
+    def _calculate_bm25_score(self, query: str, document: str,
+                               corpus_size: int = 10,
+                               avg_doc_len: int = 100,
+                               k1: float = 1.5, b: float = 0.75) -> float:
+        """
+        Calculate BM25 score between query and document.
+
+        BM25 is the industry-standard keyword ranking algorithm used by
+        Elasticsearch, Lucene, etc. It handles exact term matching better
+        than pure vector similarity.
+
+        Args:
+            query: Search query
+            document: Document text to score
+            corpus_size: Number of documents in corpus (for IDF calculation)
+            avg_doc_len: Average document length in corpus
+            k1: Term frequency saturation parameter (1.2-2.0 typical)
+            b: Length normalization parameter (0.75 typical)
+
+        Returns:
+            BM25 score normalized to 0-1 range
+        """
+        query_tokens = self._tokenize(query)
+        doc_tokens = self._tokenize(document)
+
+        if not query_tokens or not doc_tokens:
+            return 0.0
+
+        # Build document term frequencies
+        doc_tf = Counter(doc_tokens)
+        doc_len = len(doc_tokens)
+
+        # Use provided corpus stats (local, not shared instance state)
+        num_docs = max(corpus_size, 10)  # Assume at least 10 docs
+
+        score = 0.0
+        for term in query_tokens:
+            if term not in doc_tf:
+                continue
+
+            tf = doc_tf[term]
+
+            # IDF: log((N - n + 0.5) / (n + 0.5))
+            # Estimate term document frequency as fraction of corpus
+            # (simplified - in production would track actual term frequencies)
+            doc_freq = max(1, num_docs * 0.1)  # Assume term in 10% of docs
+            idf = math.log((num_docs - doc_freq + 0.5) / (doc_freq + 0.5))
+
+            # BM25 term score
+            numerator = tf * (k1 + 1)
+            denominator = tf + k1 * (1 - b + b * (doc_len / max(avg_doc_len, 1)))
+            score += idf * (numerator / denominator)
+
+        # Normalize to 0-1 range (cap at reasonable max)
+        # Typical BM25 scores range 0-10+, normalize by query length
+        max_possible = len(query_tokens) * 3  # Rough estimate
+        normalized = min(1.0, max(0.0, score / max(max_possible, 1)))
+
+        return normalized
+
+    def _hybrid_score(self, vector_score: float, bm25_score: float) -> float:
+        """
+        Combine vector similarity and BM25 into hybrid relevance score.
+
+        This fixes the "exact keyword match fails" problem by ensuring
+        keyword matches contribute to relevance even when semantic
+        similarity is lower.
+
+        Formula: (vector * 0.7) + (bm25 * 0.3)
+        """
+        return (vector_score * self.vector_weight) + (bm25_score * self.bm25_weight)
+
+    def _search_map_nodes(self, query_embedding: np.ndarray, query: str, map_data: Dict) -> List[ContextItem]:
+        """Search map nodes using HYBRID scoring (vector + BM25)"""
         items = []
         nodes = map_data.get('nodes', [])
+
+        # Calculate local corpus stats for BM25 (not shared instance state)
+        corpus_size = len(nodes)
+        avg_doc_len = 50  # Default
+        if nodes:
+            total_len = sum(len(n.get('label', '')) + len(n.get('description', '')) for n in nodes)
+            avg_doc_len = max(20, total_len // len(nodes))
 
         for node in nodes:
             # Skip if no meaningful content
@@ -249,35 +352,42 @@ class ContextSynthesizer:
             if not label and not description:
                 continue
 
-            # Get node embedding
+            node_text = f"{label}. {description}" if description else label
+
+            # Get node embedding for vector similarity
             node_embedding = node.get('embedding')
             if node_embedding:
                 node_embedding = np.array(node_embedding)
             else:
-                # Generate embedding for node
-                node_text = f"{label}. {description}" if description else label
                 node_embedding = self._get_embedding(node_text)
 
+            # Calculate HYBRID score: vector + BM25
+            vector_score = 0.0
             if node_embedding is not None:
-                similarity = self._cosine_similarity(query_embedding, node_embedding)
+                vector_score = self._cosine_similarity(query_embedding, node_embedding)
 
-                if similarity > 0.3:  # Threshold for relevance
-                    content = f"[{label}]"
-                    if description:
-                        content += f": {description[:200]}"
+            bm25_score = self._calculate_bm25_score(query, node_text, corpus_size, avg_doc_len)
+            hybrid_score = self._hybrid_score(vector_score, bm25_score)
 
-                    items.append(ContextItem(
-                        content=content,
-                        source_type='map_node',
-                        relevance_score=similarity,
-                        importance=0.7,  # Map nodes are moderately important
-                        recency=1.0,  # Current map is always "now"
-                        metadata={
-                            'node_id': node.get('id'),
-                            'label': label,
-                            'parent_id': node.get('parentId')
-                        }
-                    ))
+            if hybrid_score > 0.25:  # Lower threshold for hybrid
+                content = f"[{label}]"
+                if description:
+                    content += f": {description[:200]}"
+
+                items.append(ContextItem(
+                    content=content,
+                    source_type='map_node',
+                    relevance_score=hybrid_score,
+                    importance=0.7,  # Map nodes are moderately important
+                    recency=1.0,  # Current map is always "now"
+                    metadata={
+                        'node_id': node.get('id'),
+                        'label': label,
+                        'parent_id': node.get('parentId'),
+                        'vector_score': vector_score,
+                        'bm25_score': bm25_score
+                    }
+                ))
 
         return items[:15]  # Limit map nodes
 
@@ -314,7 +424,7 @@ class ContextSynthesizer:
         return sorted(items, key=lambda x: x.relevance_score, reverse=True)[:10]
 
     def _search_ai_memories(self, query_embedding: np.ndarray, query: str, user_id: str) -> List[ContextItem]:
-        """Search Supabase AI memories"""
+        """Search Supabase AI memories using HYBRID scoring (vector + BM25)"""
         items = []
 
         try:
@@ -328,24 +438,29 @@ class ContextSynthesizer:
 
             memories = response.data if response.data else []
 
+            # Calculate local corpus stats for BM25 (not shared instance state)
+            corpus_size = len(memories)
+            avg_doc_len = 100  # Default
+            if memories:
+                total_len = sum(len(m.get('content', '')) for m in memories)
+                avg_doc_len = max(50, total_len // len(memories))
+
             for mem in memories:
                 content = mem.get('content', '')
                 if not content:
                     continue
 
-                # Calculate relevance via embedding if available
+                # Calculate HYBRID score: vector + BM25
+                vector_score = 0.0
                 mem_embedding = mem.get('embedding')
                 if mem_embedding:
                     mem_embedding = np.array(mem_embedding)
-                    relevance = self._cosine_similarity(query_embedding, mem_embedding)
-                else:
-                    # Fallback: keyword matching
-                    query_words = set(query.lower().split())
-                    content_lower = content.lower()
-                    matches = sum(1 for w in query_words if w in content_lower)
-                    relevance = min(1.0, matches / max(len(query_words), 1))
+                    vector_score = self._cosine_similarity(query_embedding, mem_embedding)
 
-                if relevance > 0.2:  # Lower threshold for memories
+                bm25_score = self._calculate_bm25_score(query, content, corpus_size, avg_doc_len)
+                hybrid_score = self._hybrid_score(vector_score, bm25_score)
+
+                if hybrid_score > 0.15:  # Lower threshold for memories
                     # Calculate recency (evergreen memories never decay)
                     is_evergreen = mem.get('evergreen', False)
                     created = mem.get('created_at', '')
@@ -359,14 +474,16 @@ class ContextSynthesizer:
                     items.append(ContextItem(
                         content=formatted,
                         source_type='ai_memory',
-                        relevance_score=relevance,
+                        relevance_score=hybrid_score,
                         importance=mem.get('importance', 0.5),
                         recency=recency,
                         metadata={
                             'memory_id': mem.get('id'),
                             'memory_type': mem_type,
                             'evergreen': is_evergreen,
-                            'related_nodes': mem.get('related_nodes', [])
+                            'related_nodes': mem.get('related_nodes', []),
+                            'vector_score': vector_score,
+                            'bm25_score': bm25_score
                         }
                     ))
 
@@ -568,11 +685,23 @@ class ContextSynthesizer:
 
     def _calculate_recency(self, timestamp, evergreen: bool = False) -> float:
         """
-        Calculate recency score (1 = now, 0 = very old)
+        Calculate recency score using EXPONENTIAL DECAY (half-life formula).
+
+        Formula: S(t) = S₀ × 2^(-t/h)
+        Where:
+            - S₀ = 1.0 (initial score)
+            - t = age in days
+            - h = half-life in days (default: 7 days)
+
+        This is more biomimetic than linear decay - memories fade quickly
+        at first, then level off (you don't completely forget old things).
 
         Args:
             timestamp: Creation or last_accessed time
             evergreen: If True, always returns 1.0 (foundational knowledge never decays)
+
+        Returns:
+            Recency score from 0.1 (floor) to 1.0 (brand new)
         """
         # Evergreen memories never decay
         if evergreen:
@@ -582,31 +711,88 @@ class ContextSynthesizer:
             return 0.5
 
         try:
+            from datetime import datetime, timezone
+
             # Handle various timestamp formats
             if isinstance(timestamp, (int, float)):
                 age_seconds = time.time() - timestamp
             else:
                 # Parse ISO string
-                from datetime import datetime
-                if 'T' in str(timestamp):
-                    dt = datetime.fromisoformat(str(timestamp).replace('Z', '+00:00'))
-                    age_seconds = (datetime.now(dt.tzinfo) - dt).total_seconds()
+                ts_str = str(timestamp)
+                if 'T' in ts_str:
+                    # Replace Z with +00:00 for proper parsing
+                    dt = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+
+                    # Handle naive timestamps (no timezone info)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                        now = datetime.now(timezone.utc)
+                    else:
+                        now = datetime.now(dt.tzinfo)
+
+                    age_seconds = (now - dt).total_seconds()
                 else:
                     return 0.5
 
-            # Decay: 1 day = 0.97, 1 week = 0.79, 1 month = 0.1
+            # EXPONENTIAL DECAY with half-life
+            # S(t) = 2^(-t/h) where h = half-life in days
             days_old = age_seconds / 86400
-            recency = max(0.1, 1.0 - (days_old * 0.03))  # 3% decay per day
-            return min(1.0, recency)
+            half_life = self.recency_half_life_days  # Default: 7 days
 
-        except:
+            # After 1 half-life (7 days): score = 0.5
+            # After 2 half-lives (14 days): score = 0.25
+            # After 3 half-lives (21 days): score = 0.125
+            # After 4 half-lives (28 days): score = 0.0625
+            recency = math.pow(2, -days_old / half_life)
+
+            # Floor at 0.1 to prevent memories from becoming completely invisible
+            return max(0.1, min(1.0, recency))
+
+        except Exception as e:
+            print(f"⚠️ Recency calculation error: {e}")
             return 0.5
+
+    def _reorder_for_attention(self, items: List[ContextItem]) -> List[ContextItem]:
+        """
+        Reorder items to combat "Lost in the Middle" problem.
+
+        LLMs pay more attention to the START and END of context windows.
+        This method places high-relevance items at both positions:
+
+        [HIGH relevance] → [MEDIUM relevance] → [HIGH relevance]
+
+        Research: https://arxiv.org/abs/2307.03172 "Lost in the Middle"
+        """
+        if len(items) <= 3:
+            return items  # Too few to reorder
+
+        # Sort by combined_score descending
+        sorted_items = sorted(items, key=lambda x: x.combined_score, reverse=True)
+
+        # Split into high (top 40%) and medium/low (bottom 60%)
+        split_point = max(2, len(sorted_items) * 2 // 5)  # At least 2 in high
+        high_relevance = sorted_items[:split_point]
+        medium_relevance = sorted_items[split_point:]
+
+        # Further split high relevance: half at start, half at end
+        mid_high = len(high_relevance) // 2
+        start_items = high_relevance[:mid_high]
+        end_items = high_relevance[mid_high:]
+
+        # Final order: [start_high] + [medium] + [end_high]
+        reordered = start_items + medium_relevance + end_items
+
+        return reordered
 
     def format_for_prompt(self, synthesized: SynthesizedContext) -> str:
         """
         Format synthesized context for inclusion in Claude prompt.
 
         This is the final output that goes to Claude - ONE unified context block.
+
+        IMPORTANT: Uses "Lost in the Middle" mitigation - high-relevance items
+        are positioned at START and END of context for better LLM attention.
+        Items are output in reordered sequence (not grouped by source).
         """
         lines = ["## Relevant Context (Synthesized from All Sources)"]
 
@@ -614,45 +800,36 @@ class ContextSynthesizer:
             lines.append("No specifically relevant context found.")
             return "\n".join(lines)
 
-        # Group by source type for readability
-        by_source: Dict[str, List[ContextItem]] = {}
-        for item in synthesized.items:
-            source = item.source_type
-            if source not in by_source:
-                by_source[source] = []
-            by_source[source].append(item)
+        # ═══ LOST IN THE MIDDLE FIX ═══
+        # Reorder items so high-relevance are at START and END
+        reordered_items = self._reorder_for_attention(synthesized.items)
 
-        # Format each group
+        # Source labels for inline display
         source_labels = {
-            'map_node': '📍 From Map',
-            'ai_memory': '🧠 From Memory',
-            'conversation': '💬 From Past Conversations',
-            'goal': '🎯 Related Goals',
-            'distilled': '📚 Learned Knowledge',
-            'pattern': '🔄 Recognized Patterns',
-            'session': '⚡ This Session'
+            'map_node': '📍',
+            'ai_memory': '🧠',
+            'conversation': '💬',
+            'goal': '🎯',
+            'distilled': '📚',
+            'pattern': '🔄',
+            'session': '⚡'
         }
 
-        for source_type in ['goal', 'ai_memory', 'map_node', 'conversation', 'distilled', 'pattern', 'session']:
-            if source_type not in by_source:
-                continue
+        # Output items in reordered sequence (preserving Lost in the Middle fix)
+        # DO NOT regroup by source - that would undo the attention optimization
+        for item in reordered_items[:20]:  # Max 20 items total
+            # Show relevance indicator
+            if item.combined_score > 0.8:
+                indicator = "★"  # High relevance
+            elif item.combined_score > 0.5:
+                indicator = "◆"  # Medium relevance
+            else:
+                indicator = "○"  # Lower relevance
 
-            items = by_source[source_type]
-            label = source_labels.get(source_type, source_type)
-            lines.append(f"\n### {label}")
+            source_icon = source_labels.get(item.source_type, '•')
+            lines.append(f"{indicator}{source_icon} {item.content}")
 
-            for item in items[:5]:  # Max 5 per source
-                # Show relevance indicator
-                if item.combined_score > 0.8:
-                    indicator = "★"  # High relevance
-                elif item.combined_score > 0.5:
-                    indicator = "◆"  # Medium relevance
-                else:
-                    indicator = "○"  # Lower relevance
-
-                lines.append(f"{indicator} {item.content}")
-
-        # Add active goal highlight if present
+        # Add active goal highlight if present (goals are important - at end)
         if synthesized.active_goal:
             lines.append(f"\n### 🎯 Active Goal: {synthesized.active_goal.get('title', 'Unknown')}")
             if synthesized.active_goal.get('description'):
@@ -665,6 +842,6 @@ class ContextSynthesizer:
                 lines.append(f"- {c.get('description', 'Conflict detected')}")
 
         # Token count note
-        lines.append(f"\n_Context: {len(synthesized.items)} items, ~{synthesized.token_estimate} tokens_")
+        lines.append(f"\n_Context: {len(reordered_items[:20])} items, ~{synthesized.token_estimate} tokens_")
 
         return "\n".join(lines)
