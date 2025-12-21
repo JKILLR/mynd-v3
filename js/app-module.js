@@ -28421,8 +28421,11 @@ You are a trusted guide, not a data harvester.
                 this.conversation = this.conversation.slice(-this.maxHistory);
             }
             
-            // Save conversation
+            // Save conversation to localStorage
             this.saveConversation();
+
+            // Sync to server (if signed in)
+            this.saveMessageToServer(message);
 
             // Store chat context in semantic memory for neural net learning
             if (typeof semanticMemory !== 'undefined' && semanticMemory.loaded && content && content.length > 20) {
@@ -31861,14 +31864,83 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
         
         saveConversation() {
             try {
+                // Always save to localStorage for offline access
                 localStorage.setItem('mynd-chat-history', JSON.stringify(this.conversation));
             } catch (e) {
-                console.warn('Failed to save chat history:', e);
+                console.warn('Failed to save chat history to localStorage:', e);
             }
         },
-        
-        loadConversation() {
+
+        // Save a single message to Supabase (called after each message)
+        async saveMessageToServer(message) {
             try {
+                if (!window.supabase) return;
+
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return; // Not signed in, localStorage only
+
+                const { error } = await supabase
+                    .from('chat_conversations')
+                    .insert({
+                        user_id: user.id,
+                        role: message.role,
+                        content: message.content,
+                        images: message.images || [],
+                        actions: message.actions || [],
+                        suggestions: message.suggestions || [],
+                        message_timestamp: message.timestamp
+                    });
+
+                if (error) {
+                    console.warn('Failed to save message to server:', error);
+                } else {
+                    console.log('💾 Message synced to server');
+                }
+            } catch (e) {
+                console.warn('Failed to sync message:', e);
+            }
+        },
+
+        async loadConversation() {
+            try {
+                // Try to load from server first (if signed in)
+                if (window.supabase) {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                        const { data, error } = await supabase
+                            .from('chat_conversations')
+                            .select('*')
+                            .eq('user_id', user.id)
+                            .order('message_timestamp', { ascending: true })
+                            .limit(100);
+
+                        if (!error && data && data.length > 0) {
+                            console.log(`📥 Loaded ${data.length} messages from server`);
+                            this.conversation = data.map(m => ({
+                                role: m.role,
+                                content: m.content,
+                                images: m.images || [],
+                                actions: m.actions || [],
+                                suggestions: m.suggestions || [],
+                                timestamp: m.message_timestamp
+                            }));
+
+                            // Update localStorage with server data
+                            localStorage.setItem('mynd-chat-history', JSON.stringify(this.conversation));
+
+                            // Render messages
+                            const welcome = this.messagesContainer.querySelector('.chat-welcome');
+                            if (this.conversation.length > 0 && welcome) {
+                                welcome.style.display = 'none';
+                            }
+                            this.conversation.forEach(m => this.renderMessage(m));
+                            this.scrollToBottom();
+                            return;
+                        }
+                    }
+                }
+
+                // Fall back to localStorage
                 const saved = localStorage.getItem('mynd-chat-history');
                 if (saved) {
                     this.conversation = JSON.parse(saved);
@@ -31879,15 +31951,82 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                     }
                     this.conversation.forEach(m => this.renderMessage(m));
                     this.scrollToBottom();
+
+                    // If user is signed in, sync localStorage to server
+                    this.syncLocalStorageToServer();
                 }
             } catch (e) {
                 console.warn('Failed to load chat history:', e);
             }
         },
+
+        // Sync localStorage conversations to server (called when user signs in)
+        async syncLocalStorageToServer() {
+            try {
+                if (!window.supabase) return;
+
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user || this.conversation.length === 0) return;
+
+                // Check if server already has messages
+                const { data: existing } = await supabase
+                    .from('chat_conversations')
+                    .select('message_timestamp')
+                    .eq('user_id', user.id)
+                    .limit(1);
+
+                if (existing && existing.length > 0) {
+                    console.log('Server already has conversation data, skipping sync');
+                    return;
+                }
+
+                console.log(`⬆️ Syncing ${this.conversation.length} messages to server...`);
+
+                // Batch insert all messages
+                const messages = this.conversation.map(m => ({
+                    user_id: user.id,
+                    role: m.role,
+                    content: m.content,
+                    images: m.images || [],
+                    actions: m.actions || [],
+                    suggestions: m.suggestions || [],
+                    message_timestamp: m.timestamp
+                }));
+
+                const { error } = await supabase
+                    .from('chat_conversations')
+                    .insert(messages);
+
+                if (error) {
+                    console.warn('Failed to sync to server:', error);
+                } else {
+                    console.log('✅ Conversation synced to server');
+                }
+            } catch (e) {
+                console.warn('Sync failed:', e);
+            }
+        },
         
-        clearConversation() {
+        async clearConversation() {
             this.conversation = [];
             localStorage.removeItem('mynd-chat-history');
+
+            // Also clear from server
+            try {
+                if (window.supabase) {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                        await supabase
+                            .from('chat_conversations')
+                            .delete()
+                            .eq('user_id', user.id);
+                        console.log('🗑️ Conversation cleared from server');
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to clear server conversation:', e);
+            }
+
             this.messagesContainer.innerHTML = `
                 <div class="chat-welcome">
                     <div class="chat-welcome-icon">
