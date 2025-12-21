@@ -346,6 +346,108 @@ const ReflectionDaemon = {
                 },
                 required: ["base", "head"]
             }
+        },
+        // ═══════════════════════════════════════════════════════════════════
+        // SELF-QUERY TOOLS (Inner Dialogue)
+        // ═══════════════════════════════════════════════════════════════════
+        {
+            name: "query_focus",
+            description: "Get current session context - recently viewed/edited nodes, active branch, what user is working on. Use to understand immediate context.",
+            input_schema: {
+                type: "object",
+                properties: {},
+                required: []
+            }
+        },
+        {
+            name: "query_similar",
+            description: "Find semantically similar nodes using embeddings. Use for related concepts, duplicates, or connection opportunities.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    concept: {
+                        type: "string",
+                        description: "The concept or text to find similar nodes for"
+                    },
+                    threshold: {
+                        type: "number",
+                        description: "Similarity threshold 0-1. Higher = more similar. Default: 0.6"
+                    },
+                    limit: {
+                        type: "number",
+                        description: "Maximum results to return. Default: 5"
+                    }
+                },
+                required: ["concept"]
+            }
+        },
+        {
+            name: "query_insights",
+            description: "Retrieve taught neural insights - connections learned, patterns discovered, user goals. Use for your accumulated understanding.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    insight_type: {
+                        type: "string",
+                        description: "Type: 'connection_insight', 'user_goal', 'neural_insight', or 'all'. Default: all"
+                    },
+                    related_to: {
+                        type: "string",
+                        description: "Optional: filter insights related to a specific concept"
+                    }
+                },
+                required: []
+            }
+        },
+        {
+            name: "query_memory",
+            description: "Search conversation history and past interactions. Use to recall what user said about something before.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    topic: {
+                        type: "string",
+                        description: "The topic, concept, or keyword to search for in memory"
+                    },
+                    limit: {
+                        type: "number",
+                        description: "Maximum results to return. Default: 5"
+                    }
+                },
+                required: ["topic"]
+            }
+        },
+        {
+            name: "query_patterns",
+            description: "Retrieve learned user preferences and behavioral patterns. Use to understand how user typically works.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    domain: {
+                        type: "string",
+                        description: "Domain: 'naming', 'colors', 'structure', 'categories', 'all'. Default: all"
+                    }
+                },
+                required: []
+            }
+        },
+        {
+            name: "query_connections",
+            description: "Find what connects to a concept or node - parents, children, semantic relationships.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    concept: {
+                        type: "string",
+                        description: "The concept or node label to find connections for"
+                    },
+                    depth: {
+                        type: "number",
+                        description: "How many levels of connections to traverse. Default: 1"
+                    }
+                },
+                required: ["concept"]
+            }
         }
     ],
 
@@ -931,6 +1033,19 @@ const ReflectionDaemon = {
                     return await this.toolGithubGetCommit(toolInput);
                 case 'github_compare':
                     return await this.toolGithubCompare(toolInput);
+                // Self-query tools (inner dialogue)
+                case 'query_focus':
+                    return await this.toolQueryFocus(toolInput);
+                case 'query_similar':
+                    return await this.toolQuerySimilar(toolInput);
+                case 'query_insights':
+                    return await this.toolQueryInsights(toolInput);
+                case 'query_memory':
+                    return await this.toolQueryMemory(toolInput);
+                case 'query_patterns':
+                    return await this.toolQueryPatterns(toolInput);
+                case 'query_connections':
+                    return await this.toolQueryConnections(toolInput);
                 default:
                     return { error: `Unknown tool: ${toolName}` };
             }
@@ -1612,6 +1727,399 @@ const ReflectionDaemon = {
                 return { error: `Could not compare: invalid branch or commit reference` };
             }
             return { error: `Failed to compare: ${error.message}` };
+        }
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SELF-QUERY TOOLS (Inner Dialogue)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Get current session focus - what user is working on right now
+     */
+    async toolQueryFocus() {
+        const result = {
+            timestamp: new Date().toISOString(),
+            session_context: {}
+        };
+
+        try {
+            const store = window.store;
+            if (store) {
+                // Get selected node
+                const selectedId = store.selectedNode;
+                if (selectedId) {
+                    const selectedNode = store.getNode(selectedId);
+                    if (selectedNode) {
+                        result.session_context.selected_node = {
+                            id: selectedId,
+                            label: selectedNode.label,
+                            description: selectedNode.description?.substring(0, 200),
+                            hasChildren: (selectedNode.children?.length || 0) > 0
+                        };
+
+                        // Get parent chain (breadcrumb)
+                        const breadcrumb = [];
+                        let current = selectedNode;
+                        while (current?.parentId) {
+                            const parent = store.getNode(current.parentId);
+                            if (parent) {
+                                breadcrumb.unshift(parent.label);
+                                current = parent;
+                            } else break;
+                        }
+                        if (breadcrumb.length > 0) {
+                            result.session_context.breadcrumb = breadcrumb.join(' > ');
+                        }
+
+                        // Get siblings
+                        if (selectedNode.parentId) {
+                            const parent = store.getNode(selectedNode.parentId);
+                            if (parent?.children) {
+                                result.session_context.siblings = parent.children
+                                    .filter(c => c.id !== selectedId)
+                                    .slice(0, 5)
+                                    .map(c => c.label);
+                            }
+                        }
+                    }
+                }
+
+                // Get expanded branches
+                const expandedNodes = Array.from(store.expandedNodes || []);
+                if (expandedNodes.length > 0) {
+                    result.session_context.expanded_branches = expandedNodes
+                        .slice(0, 10)
+                        .map(id => store.getNode(id)?.label)
+                        .filter(Boolean);
+                }
+
+                // Get root-level structure
+                if (store.data?.children) {
+                    result.session_context.top_level_branches = store.data.children
+                        .slice(0, 10)
+                        .map(c => ({ label: c.label, childCount: c.children?.length || 0 }));
+                }
+            }
+
+            // Get recent activity from chat
+            if (typeof chatManager !== 'undefined' && chatManager.conversation) {
+                const recentMessages = chatManager.conversation.slice(-3);
+                result.session_context.recent_topics = recentMessages
+                    .filter(m => m.role === 'user')
+                    .map(m => m.content?.substring(0, 100))
+                    .filter(Boolean);
+            }
+
+            return result;
+
+        } catch (error) {
+            return { error: `Failed to get focus: ${error.message}` };
+        }
+    },
+
+    /**
+     * Find semantically similar nodes
+     */
+    async toolQuerySimilar({ concept, threshold = 0.6, limit = 5 }) {
+        try {
+            const results = [];
+
+            // Try neural net first
+            if (typeof neuralNet !== 'undefined' && neuralNet.isReady) {
+                const store = window.store;
+                if (store) {
+                    const similar = await neuralNet.findSimilarNodes(concept, store, limit);
+                    if (similar?.length > 0) {
+                        for (const item of similar) {
+                            if (item.similarity >= threshold) {
+                                results.push({
+                                    label: item.label,
+                                    id: item.id,
+                                    similarity: Math.round(item.similarity * 100) / 100,
+                                    description: item.description?.substring(0, 150)
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Also try semantic memory recall
+            if (typeof semanticMemory !== 'undefined' && semanticMemory.loaded) {
+                const memories = await semanticMemory.recallMemories(concept, limit, threshold);
+                if (memories?.length > 0) {
+                    results.push({
+                        _type: 'related_memories',
+                        memories: memories.map(m => ({
+                            event: m.event,
+                            context: m.context?.substring(0, 200),
+                            similarity: Math.round(m.similarity * 100) / 100,
+                            age_days: Math.round((Date.now() - m.timestamp) / (1000 * 60 * 60 * 24))
+                        }))
+                    });
+                }
+            }
+
+            return {
+                concept,
+                threshold,
+                results_count: results.length,
+                results
+            };
+
+        } catch (error) {
+            return { error: `Failed to find similar: ${error.message}` };
+        }
+    },
+
+    /**
+     * Query taught insights (from teach_neural)
+     */
+    async toolQueryInsights({ insight_type = 'all', related_to = null }) {
+        try {
+            const insights = [];
+
+            if (typeof semanticMemory !== 'undefined' && semanticMemory.loaded) {
+                const targetTypes = insight_type === 'all'
+                    ? ['connection_insight', 'user_goal', 'neural_insight']
+                    : [insight_type];
+
+                for (const memory of semanticMemory.memories) {
+                    if (targetTypes.includes(memory.event)) {
+                        // Filter by related_to if specified
+                        if (related_to) {
+                            const context = (memory.context || '').toLowerCase();
+                            const metadata = memory.metadata || {};
+                            const searchTerm = related_to.toLowerCase();
+
+                            const isRelated = context.includes(searchTerm) ||
+                                (metadata.from || '').toLowerCase().includes(searchTerm) ||
+                                (metadata.to || '').toLowerCase().includes(searchTerm) ||
+                                (metadata.goal || '').toLowerCase().includes(searchTerm);
+
+                            if (!isRelated) continue;
+                        }
+
+                        insights.push({
+                            type: memory.event,
+                            context: memory.context?.substring(0, 300),
+                            importance: memory.importance,
+                            metadata: memory.metadata,
+                            age_days: Math.round((Date.now() - memory.timestamp) / (1000 * 60 * 60 * 24))
+                        });
+                    }
+                }
+
+                // Sort by importance
+                insights.sort((a, b) => b.importance - a.importance);
+            }
+
+            return {
+                filter: { insight_type, related_to },
+                count: insights.length,
+                insights: insights.slice(0, 10)
+            };
+
+        } catch (error) {
+            return { error: `Failed to query insights: ${error.message}` };
+        }
+    },
+
+    /**
+     * Search conversation memory
+     */
+    async toolQueryMemory({ topic, limit = 5 }) {
+        try {
+            const results = [];
+
+            if (typeof semanticMemory !== 'undefined' && semanticMemory.loaded) {
+                const memories = await semanticMemory.recallMemories(topic, limit, 0.3);
+
+                // Filter to conversation-related memories
+                const conversationTypes = ['conversation_exchange', 'chat_query', 'chat_insight',
+                                          'user_preference', 'correction_received'];
+
+                for (const memory of memories) {
+                    if (conversationTypes.includes(memory.event)) {
+                        results.push({
+                            type: memory.event,
+                            context: memory.context?.substring(0, 400),
+                            similarity: Math.round(memory.similarity * 100) / 100,
+                            importance: memory.importance,
+                            age_days: Math.round((Date.now() - memory.timestamp) / (1000 * 60 * 60 * 24))
+                        });
+                    }
+                }
+            }
+
+            return {
+                topic,
+                results_count: results.length,
+                results
+            };
+
+        } catch (error) {
+            return { error: `Failed to query memory: ${error.message}` };
+        }
+    },
+
+    /**
+     * Get user patterns and preferences
+     */
+    async toolQueryPatterns({ domain = 'all' }) {
+        try {
+            const patterns = {};
+
+            // Get from PreferenceTracker if available
+            if (typeof preferenceTracker !== 'undefined') {
+                const tracker = preferenceTracker;
+
+                if (domain === 'all' || domain === 'naming') {
+                    patterns.naming = {
+                        recent_labels: tracker.recentLabels?.slice(-10) || [],
+                        label_patterns: tracker.labelPatterns || {}
+                    };
+                }
+
+                if (domain === 'all' || domain === 'colors') {
+                    patterns.colors = {
+                        frequently_used: tracker.colorUsage || {},
+                        recent_colors: tracker.recentColors?.slice(-5) || []
+                    };
+                }
+
+                if (domain === 'all' || domain === 'structure') {
+                    patterns.structure = {
+                        avg_children_per_node: tracker.structureStats?.avgChildren || 0,
+                        max_depth: tracker.structureStats?.maxDepth || 0,
+                        common_structures: tracker.commonStructures || []
+                    };
+                }
+
+                if (domain === 'all' || domain === 'categories') {
+                    patterns.categories = {
+                        common_categories: tracker.categoryUsage || {},
+                        category_patterns: tracker.categoryPatterns || []
+                    };
+                }
+            }
+
+            // Get neural net stats if available
+            if (typeof neuralNet !== 'undefined' && neuralNet.isReady) {
+                patterns.neural_stats = {
+                    predictions_made: neuralNet.predictionCount || 0,
+                    acceptance_rate: neuralNet.acceptanceRate || 0,
+                    confidence_avg: neuralNet.avgConfidence || 0
+                };
+            }
+
+            // Get semantic memory stats
+            if (typeof semanticMemory !== 'undefined' && semanticMemory.loaded) {
+                patterns.memory_stats = semanticMemory.getStats?.() || {
+                    total_memories: semanticMemory.memories?.length || 0
+                };
+            }
+
+            return {
+                domain,
+                patterns
+            };
+
+        } catch (error) {
+            return { error: `Failed to query patterns: ${error.message}` };
+        }
+    },
+
+    /**
+     * Find connections to a concept
+     */
+    async toolQueryConnections({ concept, depth = 1 }) {
+        try {
+            const store = window.store;
+            if (!store) {
+                return { error: 'Store not available' };
+            }
+
+            // Find node(s) matching the concept
+            const allNodes = store.getAllNodes?.() || [];
+            const matchingNodes = allNodes.filter(n =>
+                n.label?.toLowerCase().includes(concept.toLowerCase()) ||
+                n.description?.toLowerCase().includes(concept.toLowerCase())
+            );
+
+            if (matchingNodes.length === 0) {
+                return {
+                    concept,
+                    found: false,
+                    message: `No nodes found matching "${concept}"`
+                };
+            }
+
+            const connections = [];
+
+            for (const node of matchingNodes.slice(0, 3)) {
+                const nodeConnections = {
+                    node: { id: node.id, label: node.label },
+                    parent: null,
+                    children: [],
+                    siblings: [],
+                    taught_connections: []
+                };
+
+                // Get parent
+                if (node.parentId) {
+                    const parent = store.getNode(node.parentId);
+                    if (parent) {
+                        nodeConnections.parent = { id: parent.id, label: parent.label };
+
+                        // Get siblings
+                        if (parent.children) {
+                            nodeConnections.siblings = parent.children
+                                .filter(c => c.id !== node.id)
+                                .slice(0, 5)
+                                .map(c => ({ id: c.id, label: c.label }));
+                        }
+                    }
+                }
+
+                // Get children
+                if (node.children?.length > 0) {
+                    nodeConnections.children = node.children
+                        .slice(0, 10)
+                        .map(c => ({ id: c.id, label: c.label, hasChildren: (c.children?.length || 0) > 0 }));
+                }
+
+                // Get taught connections from semantic memory
+                if (typeof semanticMemory !== 'undefined' && semanticMemory.loaded) {
+                    for (const memory of semanticMemory.memories) {
+                        if (memory.event === 'connection_insight') {
+                            const meta = memory.metadata || {};
+                            if ((meta.from || '').toLowerCase().includes(concept.toLowerCase()) ||
+                                (meta.to || '').toLowerCase().includes(concept.toLowerCase())) {
+                                nodeConnections.taught_connections.push({
+                                    from: meta.from,
+                                    to: meta.to,
+                                    relationship: meta.relationship,
+                                    reasoning: meta.reasoning?.substring(0, 100)
+                                });
+                            }
+                        }
+                    }
+                }
+
+                connections.push(nodeConnections);
+            }
+
+            return {
+                concept,
+                depth,
+                matches_found: matchingNodes.length,
+                connections
+            };
+
+        } catch (error) {
+            return { error: `Failed to query connections: ${error.message}` };
         }
     },
 
