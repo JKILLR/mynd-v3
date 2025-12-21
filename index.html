@@ -460,10 +460,10 @@
         /* ═══════════════════════════════════════════════════════════
            HEADER & BRANDING
            ═══════════════════════════════════════════════════════════ */
-        #header { 
-            position: fixed; 
-            top: var(--space-5); 
-            left: var(--space-5); 
+        #header {
+            position: fixed;
+            top: var(--space-5);
+            right: var(--space-5);
             z-index: var(--z-ui);
             display: flex;
             align-items: center;
@@ -527,7 +527,7 @@
         #top-controls {
             position: fixed;
             top: var(--space-5);
-            right: var(--space-5);
+            left: var(--space-5);
             z-index: var(--z-ui);
             display: flex;
             gap: var(--space-2);
@@ -2262,7 +2262,7 @@
         #user-dropdown {
             position: fixed;
             top: 60px;
-            right: var(--space-4);
+            left: var(--space-4);
             width: 280px;
             background: var(--bg-secondary);
             backdrop-filter: blur(30px);
@@ -5540,7 +5540,7 @@
         #theme-picker {
             position: fixed;
             top: 80px;
-            right: var(--space-5);
+            left: var(--space-5);
             z-index: var(--z-overlay);
             background: var(--glass-bg);
             backdrop-filter: blur(var(--glass-blur));
@@ -5600,7 +5600,7 @@
         #menu-dropdown {
             position: fixed;
             top: 80px;
-            right: var(--space-5);
+            left: var(--space-5);
             z-index: var(--z-overlay);
             background: var(--glass-bg);
             backdrop-filter: blur(30px);
@@ -6283,7 +6283,41 @@
         #ai-chat-panel.open {
             right: 0;
         }
-        
+
+        /* Expanded chat panel mode */
+        #ai-chat-panel.expanded {
+            width: 700px;
+            max-width: calc(100vw - 40px);
+            height: calc(100vh - 80px);
+            top: 40px;
+            bottom: 40px;
+            right: 20px;
+            border-radius: 16px;
+            border: 1px solid var(--glass-border);
+            background: rgba(18, 18, 24, 0.85);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5),
+                        0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+        }
+
+        #ai-chat-panel.expanded .chat-slide-toggle {
+            display: none;
+        }
+
+        #ai-chat-panel.expanded .chat-header {
+            border-radius: 16px 16px 0 0;
+        }
+
+        /* Expand button in header */
+        .chat-expand-btn svg {
+            transition: transform 0.2s;
+        }
+
+        #ai-chat-panel.expanded .chat-expand-btn svg {
+            transform: rotate(180deg);
+        }
+
         /* Slide toggle button on left edge of chat panel */
         .chat-slide-toggle {
             position: absolute;
@@ -6634,8 +6668,49 @@
             background: var(--bg-tertiary);
             color: var(--text-primary);
             border-bottom-left-radius: 4px;
+            position: relative;
         }
-        
+
+        .chat-copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 28px;
+            height: 28px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--glass-border);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+            transition: all 0.2s;
+            color: var(--text-secondary);
+        }
+
+        .chat-message.assistant:hover .chat-copy-btn {
+            opacity: 1;
+        }
+
+        .chat-copy-btn:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .chat-copy-btn.copied {
+            background: #22c55e;
+            color: white;
+            border-color: #22c55e;
+            opacity: 1;
+        }
+
+        .chat-copy-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
         .chat-message-time {
             font-size: 0.75rem;
             color: var(--text-muted);
@@ -6645,7 +6720,160 @@
         .chat-message.user .chat-message-time {
             text-align: right;
         }
-        
+
+        /* Images in messages */
+        .chat-message-images {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .chat-message-image {
+            max-width: 200px;
+            max-height: 150px;
+            border-radius: 8px;
+            object-fit: cover;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .chat-message-image:hover {
+            transform: scale(1.02);
+        }
+
+        /* Drag over effect for input */
+        .chat-input-container.drag-over {
+            border-color: var(--accent);
+            background: rgba(var(--accent-rgb), 0.05);
+        }
+
+        /* Enhanced markdown styles */
+        .code-block {
+            background: var(--bg-primary);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            margin: 8px 0;
+            overflow: hidden;
+        }
+
+        .code-block .code-lang {
+            display: block;
+            padding: 6px 12px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--glass-border);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 12px;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            white-space: pre;
+        }
+
+        .inline-code {
+            background: var(--bg-tertiary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 0.9em;
+            color: var(--accent);
+        }
+
+        .md-table-wrapper {
+            overflow-x: auto;
+            margin: 12px 0;
+        }
+
+        .md-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .md-table th,
+        .md-table td {
+            padding: 8px 12px;
+            border: 1px solid var(--glass-border);
+            text-align: left;
+        }
+
+        .md-table th {
+            background: var(--bg-tertiary);
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .md-table tr:nth-child(even) {
+            background: var(--bg-secondary);
+        }
+
+        .md-h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 16px 0 8px 0;
+            color: var(--text-primary);
+        }
+
+        .md-h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 12px 0 6px 0;
+            color: var(--text-primary);
+        }
+
+        .md-h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 10px 0 4px 0;
+            color: var(--text-primary);
+        }
+
+        .md-list {
+            margin: 8px 0;
+            padding-left: 24px;
+        }
+
+        .md-list li {
+            margin: 4px 0;
+        }
+
+        .md-quote {
+            border-left: 3px solid var(--accent);
+            margin: 12px 0;
+            padding: 8px 16px;
+            background: var(--bg-secondary);
+            border-radius: 0 8px 8px 0;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .md-hr {
+            border: none;
+            height: 1px;
+            background: var(--glass-border);
+            margin: 16px 0;
+        }
+
+        .md-link {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .md-link:hover {
+            text-decoration: underline;
+        }
+
         /* Action indicators in messages */
         .chat-actions-indicator {
             display: flex;
@@ -6829,7 +7057,79 @@
         .chat-send-btn:not(:disabled) {
             color: var(--accent);
         }
-        
+
+        .chat-upload-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chat-upload-btn:hover {
+            color: var(--accent);
+            background: var(--bg-tertiary);
+        }
+
+        /* Image preview area */
+        .chat-image-preview {
+            display: none;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--glass-border);
+            background: var(--bg-tertiary);
+            border-radius: 16px 16px 0 0;
+            margin: -8px -12px 8px -12px;
+        }
+
+        .chat-image-preview.has-images {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .chat-image-preview-item {
+            position: relative;
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+
+        .chat-image-preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .chat-image-preview-remove {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 18px;
+            height: 18px;
+            background: rgba(0, 0, 0, 0.7);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .chat-image-preview-remove:hover {
+            background: #EF4444;
+        }
+
         .chat-voice-btn.recording {
             color: #EF4444;
             background: rgba(239, 68, 68, 0.1);
@@ -8257,7 +8557,7 @@
         </div>
         <div class="voice-icon" id="voice-icon">
             <svg id="voice-icon-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-            <svg id="voice-icon-brain" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4c0 .74.2 1.43.56 2.02A4 4 0 0 0 6 12c0 1.2.52 2.27 1.35 3A4 4 0 0 0 6 18a4 4 0 0 0 4 4h.09c.49 0 .97-.07 1.41-.2"/><path d="M12 2a4 4 0 0 1 4 4c0 .74-.2 1.43-.56 2.02A4 4 0 0 1 18 12c0 1.2-.52 2.27-1.35 3A4 4 0 0 1 18 18a4 4 0 0 1-4 4h-.09c-.49 0-.97-.07-1.41-.2"/><path d="M12 2v20"/><path d="M9 10h6"/><path d="M9 14h6"/></svg>
+            <svg id="voice-icon-brain" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="12" rx="10" ry="4"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(120 12 12)"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
         </div>
         <div class="voice-status" id="voice-status">Listening...</div>
         <div class="voice-transcript" id="voice-transcript">Say something...</div>
@@ -8946,9 +9246,11 @@
     <div id="neural-panel">
         <div class="neural-header">
             <div class="neural-title">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 2a4 4 0 0 0-4 4c0 .74.2 1.43.56 2.02A4 4 0 0 0 6 12c0 1.2.52 2.27 1.35 3A4 4 0 0 0 6 18a4 4 0 0 0 4 4c.74 0 1.43-.2 2-.56A4 4 0 0 0 16 22a4 4 0 0 0 4-4c0-1.2-.52-2.27-1.35-3A4 4 0 0 0 20 12a4 4 0 0 0-2.56-3.98c.36-.59.56-1.28.56-2.02a4 4 0 0 0-4-4"/>
-                    <circle cx="12" cy="12" r="2"/>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <ellipse cx="12" cy="12" rx="10" ry="4"/>
+                    <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(60 12 12)"/>
+                    <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(120 12 12)"/>
+                    <circle cx="12" cy="12" r="2" fill="currentColor"/>
                 </svg>
                 Your Neural Net
             </div>
@@ -9522,6 +9824,14 @@
                 <span class="chat-title">MYND Chat</span>
             </div>
             <div class="chat-header-actions">
+                <button class="chat-header-btn chat-expand-btn" id="chat-expand-toggle" title="Expand chat">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 3 21 3 21 9"/>
+                        <polyline points="9 21 3 21 3 15"/>
+                        <line x1="21" y1="3" x2="14" y2="10"/>
+                        <line x1="3" y1="21" x2="10" y2="14"/>
+                    </svg>
+                </button>
                 <button class="chat-header-btn" id="chat-tts-toggle" title="Voice responses ON">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
@@ -9580,12 +9890,23 @@
         
         <div class="chat-input-area">
             <div class="chat-input-container">
-                <textarea 
-                    id="chat-input" 
-                    placeholder="Ask me anything..." 
+                <div class="chat-image-preview" id="chat-image-preview">
+                    <!-- Image previews will appear here -->
+                </div>
+                <textarea
+                    id="chat-input"
+                    placeholder="Ask me anything..."
                     rows="1"
                     aria-label="Chat message"
                 ></textarea>
+                <button class="chat-upload-btn" id="chat-upload-btn" title="Upload image">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                </button>
+                <input type="file" id="chat-image-input" accept="image/*" multiple style="display: none;">
                 <button class="chat-voice-btn" id="chat-voice-btn" title="Voice input">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
@@ -33107,21 +33428,25 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         isProcessing: false,
         conversation: [], // {role: 'user'|'assistant', content: string, actions?: array, timestamp: number}
         maxHistory: 20, // Keep last 20 messages for context
-        
+        attachedImages: [], // Array of {dataUrl: string, file: File}
+
         init() {
             this.panel = document.getElementById('ai-chat-panel');
             this.messagesContainer = document.getElementById('chat-messages');
             this.input = document.getElementById('chat-input');
             this.sendBtn = document.getElementById('chat-send-btn');
             this.voiceBtn = document.getElementById('chat-voice-btn');
+            this.uploadBtn = document.getElementById('chat-upload-btn');
+            this.imageInput = document.getElementById('chat-image-input');
+            this.imagePreview = document.getElementById('chat-image-preview');
             this.slideToggle = document.getElementById('chat-slide-toggle');
             this.clearBtn = document.getElementById('chat-clear');
             this.ttsToggleBtn = document.getElementById('chat-tts-toggle');
             this.suggestionsContainer = document.getElementById('chat-suggestions');
-            
+
             this.setupEventListeners();
             this.loadConversation();
-            
+
             console.log('Chat Manager initialized');
         },
         
@@ -33162,7 +33487,7 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             // Input handling
             this.input.addEventListener('input', () => {
                 this.autoResize();
-                this.sendBtn.disabled = !this.input.value.trim();
+                this.updateSendButton();
             });
             
             this.input.addEventListener('keydown', (e) => {
@@ -33174,7 +33499,51 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             
             // Voice input
             this.voiceBtn.addEventListener('click', () => this.startVoiceInput());
-            
+
+            // Image upload button
+            this.uploadBtn.addEventListener('click', () => this.imageInput.click());
+
+            // File input change
+            this.imageInput.addEventListener('change', (e) => {
+                const files = Array.from(e.target.files);
+                files.forEach(file => this.addImage(file));
+                e.target.value = ''; // Reset for next selection
+            });
+
+            // Paste event for images
+            this.input.addEventListener('paste', (e) => {
+                const items = Array.from(e.clipboardData.items);
+                const imageItems = items.filter(item => item.type.startsWith('image/'));
+                if (imageItems.length > 0) {
+                    e.preventDefault();
+                    imageItems.forEach(item => {
+                        const file = item.getAsFile();
+                        if (file) this.addImage(file);
+                    });
+                }
+            });
+
+            // Drag and drop for images
+            this.input.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.input.closest('.chat-input-container').classList.add('drag-over');
+            });
+
+            this.input.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.input.closest('.chat-input-container').classList.remove('drag-over');
+            });
+
+            this.input.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.input.closest('.chat-input-container').classList.remove('drag-over');
+                const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+                files.forEach(file => this.addImage(file));
+            });
+
             // Example buttons
             document.querySelectorAll('.chat-example-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -33247,22 +33616,83 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             this.input.style.height = 'auto';
             this.input.style.height = Math.min(this.input.scrollHeight, 120) + 'px';
         },
-        
+
+        // Image handling methods
+        addImage(file) {
+            if (!file.type.startsWith('image/')) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const imageData = {
+                    dataUrl: e.target.result,
+                    file: file,
+                    id: Date.now() + Math.random()
+                };
+                this.attachedImages.push(imageData);
+                this.updateImagePreview();
+                this.updateSendButton();
+            };
+            reader.readAsDataURL(file);
+        },
+
+        removeImage(id) {
+            this.attachedImages = this.attachedImages.filter(img => img.id !== id);
+            this.updateImagePreview();
+            this.updateSendButton();
+        },
+
+        updateImagePreview() {
+            this.imagePreview.innerHTML = '';
+            if (this.attachedImages.length === 0) {
+                this.imagePreview.classList.remove('has-images');
+                return;
+            }
+
+            this.imagePreview.classList.add('has-images');
+            this.attachedImages.forEach(img => {
+                const item = document.createElement('div');
+                item.className = 'chat-image-preview-item';
+                item.innerHTML = `
+                    <img src="${img.dataUrl}" alt="Attached image">
+                    <button class="chat-image-preview-remove" data-id="${img.id}">×</button>
+                `;
+                item.querySelector('.chat-image-preview-remove').addEventListener('click', () => {
+                    this.removeImage(img.id);
+                });
+                this.imagePreview.appendChild(item);
+            });
+        },
+
+        clearImages() {
+            this.attachedImages = [];
+            this.updateImagePreview();
+        },
+
+        updateSendButton() {
+            const hasContent = this.input.value.trim().length > 0 || this.attachedImages.length > 0;
+            this.sendBtn.disabled = !hasContent;
+        },
+
         async sendMessage() {
             const content = this.input.value.trim();
-            if (!content || this.isProcessing) return;
-            
-            // Clear input
+            const hasImages = this.attachedImages.length > 0;
+            if ((!content && !hasImages) || this.isProcessing) return;
+
+            // Capture images before clearing
+            const imagesToSend = [...this.attachedImages];
+
+            // Clear input and images
             this.input.value = '';
             this.input.style.height = 'auto';
+            this.clearImages();
             this.sendBtn.disabled = true;
-            
+
             // Hide welcome if shown
             const welcome = this.messagesContainer.querySelector('.chat-welcome');
             if (welcome) welcome.style.display = 'none';
-            
-            // Add user message
-            this.addMessage('user', content);
+
+            // Add user message with images
+            this.addMessage('user', content, null, imagesToSend);
             
             // Show typing indicator
             this.showTyping();
@@ -33314,14 +33744,15 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             }
         },
         
-        addMessage(role, content, actionResults = [], suggestions = []) {
+        addMessage(role, content, actionResults = [], images = []) {
             const message = {
                 role,
                 content,
                 actions: actionResults,
+                images: images.map(img => img.dataUrl), // Store just the data URLs
                 timestamp: Date.now()
             };
-            
+
             this.conversation.push(message);
             
             // Trim conversation history
@@ -33347,9 +33778,18 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         renderMessage(message) {
             const div = document.createElement('div');
             div.className = `chat-message ${message.role}`;
-            
+
             const time = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            
+
+            let imagesHTML = '';
+            if (message.images && message.images.length > 0) {
+                imagesHTML = `
+                    <div class="chat-message-images">
+                        ${message.images.map(src => `<img src="${src}" alt="Attached image" class="chat-message-image">`).join('')}
+                    </div>
+                `;
+            }
+
             let actionsHTML = '';
             if (message.actions && message.actions.length > 0) {
                 actionsHTML = `
@@ -33357,7 +33797,7 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                         ${message.actions.map(a => {
                             let icon = a.success ? '✓' : '✗';
                             let className = a.success ? 'success' : 'error';
-                            
+
                             if (a.skippedDuplicate) {
                                 icon = '⚠';
                                 className = 'warning';
@@ -33366,7 +33806,7 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                                 icon = '?';
                                 className = 'pending';
                             }
-                            
+
                             return `
                             <div class="chat-action-item ${className}">
                                 <span class="chat-action-icon">${icon}</span>
@@ -33377,25 +33817,146 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                     </div>
                 `;
             }
-            
+
+            // Add copy button for assistant messages
+            const copyBtnHTML = message.role === 'assistant' ? `
+                <button class="chat-copy-btn" title="Copy to clipboard">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                    </svg>
+                </button>
+            ` : '';
+
             div.innerHTML = `
                 <div class="chat-bubble">
+                    ${copyBtnHTML}
+                    ${imagesHTML}
                     ${this.formatMessage(message.content)}
                     ${actionsHTML}
                 </div>
                 <div class="chat-message-time">${time}</div>
             `;
-            
+
+            // Add copy button click handler
+            const copyBtn = div.querySelector('.chat-copy-btn');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', () => {
+                    navigator.clipboard.writeText(message.content).then(() => {
+                        copyBtn.classList.add('copied');
+                        copyBtn.innerHTML = `
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                        `;
+                        setTimeout(() => {
+                            copyBtn.classList.remove('copied');
+                            copyBtn.innerHTML = `
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                                </svg>
+                            `;
+                        }, 2000);
+                    });
+                });
+            }
+
             this.messagesContainer.appendChild(div);
         },
         
         formatMessage(content) {
-            // Basic markdown-like formatting
-            return escapeHTML(content)
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/`(.*?)`/g, '<code>$1</code>')
-                .replace(/\n/g, '<br>');
+            if (!content) return '';
+
+            // Enhanced markdown formatting
+            let formatted = content;
+
+            // Code blocks (must process first before escaping)
+            const codeBlocks = [];
+            formatted = formatted.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
+                const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`;
+                codeBlocks.push({ lang: lang || 'plaintext', code: code.trim() });
+                return placeholder;
+            });
+
+            // Inline code (must process before escaping)
+            const inlineCodes = [];
+            formatted = formatted.replace(/`([^`]+)`/g, (match, code) => {
+                const placeholder = `__INLINE_CODE_${inlineCodes.length}__`;
+                inlineCodes.push(code);
+                return placeholder;
+            });
+
+            // Escape HTML
+            formatted = escapeHTML(formatted);
+
+            // Restore inline code
+            inlineCodes.forEach((code, i) => {
+                formatted = formatted.replace(`__INLINE_CODE_${i}__`, `<code class="inline-code">${escapeHTML(code)}</code>`);
+            });
+
+            // Restore code blocks
+            codeBlocks.forEach((block, i) => {
+                const langLabel = block.lang !== 'plaintext' ? `<span class="code-lang">${block.lang}</span>` : '';
+                formatted = formatted.replace(
+                    `__CODE_BLOCK_${i}__`,
+                    `<div class="code-block">${langLabel}<pre><code>${escapeHTML(block.code)}</code></pre></div>`
+                );
+            });
+
+            // Tables
+            formatted = formatted.replace(/(?:^|\n)(\|.+\|)\n(\|[-:| ]+\|)\n((?:\|.+\|\n?)+)/g, (match, header, separator, body) => {
+                const headerCells = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('');
+                const bodyRows = body.trim().split('\n').map(row => {
+                    const cells = row.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('');
+                    return `<tr>${cells}</tr>`;
+                }).join('');
+                return `<div class="md-table-wrapper"><table class="md-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table></div>`;
+            });
+
+            // Headers
+            formatted = formatted.replace(/^### (.+)$/gm, '<h4 class="md-h4">$1</h4>');
+            formatted = formatted.replace(/^## (.+)$/gm, '<h3 class="md-h3">$1</h3>');
+            formatted = formatted.replace(/^# (.+)$/gm, '<h2 class="md-h2">$1</h2>');
+
+            // Bold and italic
+            formatted = formatted.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+            formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            formatted = formatted.replace(/\*(.+?)\*/g, '<em>$1</em>');
+            formatted = formatted.replace(/__(.+?)__/g, '<strong>$1</strong>');
+            formatted = formatted.replace(/_(.+?)_/g, '<em>$1</em>');
+
+            // Strikethrough
+            formatted = formatted.replace(/~~(.+?)~~/g, '<del>$1</del>');
+
+            // Unordered lists
+            formatted = formatted.replace(/(?:^|\n)((?:[-*+] .+\n?)+)/g, (match, list) => {
+                const items = list.trim().split('\n').map(item => `<li>${item.replace(/^[-*+] /, '')}</li>`).join('');
+                return `<ul class="md-list">${items}</ul>`;
+            });
+
+            // Ordered lists
+            formatted = formatted.replace(/(?:^|\n)((?:\d+\. .+\n?)+)/g, (match, list) => {
+                const items = list.trim().split('\n').map(item => `<li>${item.replace(/^\d+\. /, '')}</li>`).join('');
+                return `<ol class="md-list">${items}</ol>`;
+            });
+
+            // Blockquotes
+            formatted = formatted.replace(/(?:^|\n)(&gt; .+(?:\n&gt; .+)*)/g, (match, quote) => {
+                const text = quote.replace(/&gt; /g, '').replace(/\n/g, '<br>');
+                return `<blockquote class="md-quote">${text}</blockquote>`;
+            });
+
+            // Horizontal rule
+            formatted = formatted.replace(/(?:^|\n)---(?:\n|$)/g, '<hr class="md-hr">');
+
+            // Links
+            formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener" class="md-link">$1</a>');
+
+            // Line breaks (but not inside pre/code blocks)
+            formatted = formatted.replace(/\n/g, '<br>');
+
+            return formatted;
         },
         
         showTyping() {

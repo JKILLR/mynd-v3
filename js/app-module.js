@@ -27779,6 +27779,8 @@ You are a trusted guide, not a data harvester.
             this.timelinePanel = document.getElementById('chat-timeline-panel');
             this.timelineContent = document.getElementById('chat-timeline-content');
             this.timelineCloseBtn = document.getElementById('chat-timeline-close');
+            this.expandBtn = document.getElementById('chat-expand-toggle');
+            this.isExpanded = false;
 
             this.setupEventListeners();
             this.loadConversation();
@@ -27820,6 +27822,9 @@ You are a trusted guide, not a data harvester.
             // Timeline toggle
             this.timelineToggleBtn.addEventListener('click', () => this.toggleTimeline());
             this.timelineCloseBtn.addEventListener('click', () => this.closeTimeline());
+
+            // Expand toggle
+            this.expandBtn.addEventListener('click', () => this.toggleExpand());
 
             // Send message
             this.sendBtn.addEventListener('click', () => this.sendMessage());
@@ -28018,6 +28023,17 @@ You are a trusted guide, not a data harvester.
         closeTimeline() {
             this.timelinePanel.classList.remove('active');
             this.timelineToggleBtn.classList.remove('active');
+        },
+
+        toggleExpand() {
+            this.isExpanded = !this.isExpanded;
+            this.panel.classList.toggle('expanded', this.isExpanded);
+            this.expandBtn.title = this.isExpanded ? 'Collapse chat' : 'Expand chat';
+
+            // Scroll to bottom after expansion animation
+            setTimeout(() => {
+                this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+            }, 100);
         },
 
         // Helper to sanitize color values
@@ -30728,14 +30744,17 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                     } else if (action.action === 'edit') {
                         const targetId = resolveId(action.targetId);
                         if (targetId) {
+                            const targetNode = store.findNode(targetId);
+                            const nodeName = action.label || targetNode?.label || 'node';
                             const updates = {};
                             if (action.label) updates.label = action.label;
                             if (action.description) updates.description = action.description;
                             if (action.color) updates.color = action.color;
                             store.updateNode(targetId, updates);
                             result.success = true;
-                            result.description = `Updated node`;
-                            
+                            result.description = `Updated "${nodeName}"`;
+                            result.nodeId = targetId; // Make clickable to navigate to edited node
+
                             // Update mesh
                             const mesh = nodes.get(targetId);
                             if (mesh && action.color) {
@@ -30820,6 +30839,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                             }, 100);
                             result.success = true;
                             result.description = `Focused on node`;
+                            result.nodeId = targetId;
                         }
                     } else if (action.action === 'expand') {
                         const targetId = resolveId(action.targetId);
@@ -30827,6 +30847,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                             store.expandedNodes.add(targetId);
                             result.success = true;
                             result.description = `Expanded node`;
+                            result.nodeId = targetId;
                         }
                     } else if (action.action === 'collapse') {
                         const targetId = resolveId(action.targetId);
@@ -30834,6 +30855,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                             store.expandedNodes.delete(targetId);
                             result.success = true;
                             result.description = `Collapsed node`;
+                            result.nodeId = targetId;
                         }
                     } else if (action.action === 'teach_neural') {
                         // Handle neural teaching - Claude teaching the local neural net
