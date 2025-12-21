@@ -28816,14 +28816,16 @@ You are a trusted guide, not a data harvester.
         },
 
         showSuggestions(suggestions) {
-            this.suggestionsContainer.innerHTML = suggestions.map(s => 
-                `<button class="chat-suggestion-btn">${escapeHTML(s)}</button>`
+            this.suggestionsContainer.innerHTML = suggestions.map(s =>
+                `<button type="button" class="chat-suggestion-btn">${escapeHTML(s)}</button>`
             ).join('');
             this.suggestionsContainer.style.display = 'flex';
-            
+
             // Add click handlers
             this.suggestionsContainer.querySelectorAll('.chat-suggestion-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     this.input.value = btn.textContent;
                     this.sendBtn.disabled = false;
                     this.sendMessage();
@@ -29190,17 +29192,40 @@ You are a trusted guide, not a data harvester.
             let brainState = null;
             if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
                 try {
+                    // Get user_id for AI memory queries
+                    let userId = null;
+                    try {
+                        const { data: session } = await supabase.auth.getSession();
+                        userId = session?.session?.user?.id || null;
+                    } catch (e) { /* No auth available */ }
+
+                    // Get goals from GoalRegistry for context synthesis
+                    let goals = [];
+                    if (typeof GoalRegistry !== 'undefined') {
+                        const activeGoals = GoalRegistry.getActiveGoals ? GoalRegistry.getActiveGoals() : [];
+                        const allGoals = GoalRegistry.goals || [];
+                        goals = (activeGoals.length > 0 ? activeGoals : allGoals).map(g => ({
+                            id: g.id,
+                            title: g.label || g.title,
+                            description: g.description || g.desiredState,
+                            priority: g.priority || 'medium'
+                        }));
+                    }
+
                     const brainResult = await LocalBrain.getBrainContext({
                         requestType: 'chat',
                         userMessage: userMessage,
                         selectedNodeId: selectedNodeData?.id,
                         mapData: store.data,
+                        userId: userId,  // For Supabase AI memory queries
+                        goals: goals,    // For goal-aware context synthesis
                         include: {
                             self_awareness: true,
                             map_context: true,
                             memories: true,
                             user_profile: true,
-                            neural_insights: true
+                            neural_insights: true,
+                            synthesized_context: true  // NEW: unified context synthesis
                         }
                     });
 
@@ -31503,13 +31528,24 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
             }
         },
 
-        async writeAIMemory({ memory_type, content, importance = 0.5, related_nodes = [] }) {
+        async writeAIMemory({ memory_type, content, importance = 0.5, related_nodes = [], evergreen = null }) {
             // Write a new persistent memory for Claude
+            // evergreen: if null, auto-determine based on memory_type
+            //   - synthesis, realization, pattern → evergreen (foundational)
+            //   - goal_tracking → not evergreen (situational)
+            //   - relationship → depends on context (default false)
             try {
                 if (typeof supabase === 'undefined' || !supabase) return null;
 
                 const { data: session } = await supabase.auth.getSession();
                 if (!session?.session?.user) return null;
+
+                // Auto-determine evergreen based on memory type if not specified
+                let isEvergreen = evergreen;
+                if (isEvergreen === null) {
+                    const evergreenTypes = ['synthesis', 'realization', 'pattern'];
+                    isEvergreen = evergreenTypes.includes(memory_type);
+                }
 
                 const { data, error } = await supabase
                     .from('ai_memory')
@@ -31518,6 +31554,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                         memory_type,
                         content,
                         importance: Math.max(0, Math.min(1, importance)),  // Clamp 0-1
+                        evergreen: isEvergreen,
                         related_nodes: related_nodes || []
                     })
                     .select()
@@ -31528,7 +31565,8 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                     return null;
                 }
 
-                console.log(`🧠 Wrote new memory: [${memory_type}] ${content.slice(0, 50)}...`);
+                const evergreenIcon = isEvergreen ? '⚓' : '';
+                console.log(`🧠 Wrote new memory: [${memory_type}]${evergreenIcon} ${content.slice(0, 50)}...`);
                 return data;
             } catch (e) {
                 console.error('AI memory write error:', e);

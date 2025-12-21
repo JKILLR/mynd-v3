@@ -480,12 +480,15 @@ const LocalBrain = {
                     user_message: options.userMessage || '',
                     selected_node_id: options.selectedNodeId || null,
                     map_data: mapData,
+                    user_id: options.userId || null,  // For Supabase AI memory queries
+                    goals: options.goals || null,     // For goal-aware context synthesis
                     include: options.include || {
                         self_awareness: true,
                         map_context: true,
                         memories: true,
                         user_profile: true,
-                        neural_insights: true
+                        neural_insights: true,
+                        synthesized_context: true
                     }
                 })
             });

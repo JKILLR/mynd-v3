@@ -20,6 +20,11 @@ CREATE TABLE IF NOT EXISTS ai_memory (
   -- Importance for retrieval prioritization (0-1)
   importance FLOAT DEFAULT 0.5 CHECK (importance >= 0 AND importance <= 1),
 
+  -- Evergreen flag: if true, memory never decays (foundational knowledge)
+  -- Use for: synthesis, realization, pattern types
+  -- Don't use for: goal_tracking (situational, should decay)
+  evergreen BOOLEAN DEFAULT FALSE,
+
   -- Connections to map nodes
   related_nodes TEXT[] DEFAULT '{}',
 
@@ -84,6 +89,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function for semantic search (requires embedding)
 -- Uses CTE to compute similarity once for efficiency
+-- Returns evergreen flag for recency calculation in application code
 CREATE OR REPLACE FUNCTION search_memories(
   query_embedding VECTOR(1536),
   match_threshold FLOAT DEFAULT 0.7,
@@ -95,6 +101,7 @@ RETURNS TABLE (
   memory_type TEXT,
   content TEXT,
   importance FLOAT,
+  evergreen BOOLEAN,
   related_nodes TEXT[],
   similarity FLOAT,
   created_at TIMESTAMPTZ,
@@ -108,6 +115,7 @@ BEGIN
       m.memory_type,
       m.content,
       m.importance,
+      m.evergreen,
       m.related_nodes,
       1 - (m.embedding <=> query_embedding) AS similarity,
       m.created_at,
@@ -126,6 +134,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to get top memories by importance and recency (no embedding required)
+-- Evergreen memories always have recency_factor = 1.0
 CREATE OR REPLACE FUNCTION get_top_memories(
   p_user_id UUID DEFAULT auth.uid(),
   p_limit INT DEFAULT 20,
@@ -136,6 +145,7 @@ RETURNS TABLE (
   memory_type TEXT,
   content TEXT,
   importance FLOAT,
+  evergreen BOOLEAN,
   related_nodes TEXT[],
   created_at TIMESTAMPTZ,
   last_accessed TIMESTAMPTZ,
@@ -148,6 +158,7 @@ BEGIN
     m.memory_type,
     m.content,
     m.importance,
+    m.evergreen,
     m.related_nodes,
     m.created_at,
     m.last_accessed,
@@ -158,8 +169,13 @@ BEGIN
     AND (p_memory_type IS NULL OR m.memory_type = p_memory_type)
   ORDER BY
     -- Score = importance * recency_factor
-    -- Recency factor: 1.0 for today, decays over 30 days
-    m.importance * (1.0 - LEAST(EXTRACT(EPOCH FROM (NOW() - m.last_accessed)) / (30 * 24 * 60 * 60), 0.5)) DESC
+    -- Evergreen memories: recency_factor = 1.0 (never decays)
+    -- Regular memories: recency decays over 30 days
+    m.importance * (
+      CASE WHEN m.evergreen THEN 1.0
+      ELSE (1.0 - LEAST(EXTRACT(EPOCH FROM (NOW() - m.last_accessed)) / (30 * 24 * 60 * 60), 0.5))
+      END
+    ) DESC
   LIMIT p_limit;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -168,6 +184,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- WARNING: This function operates across ALL users and should only be called
 -- by a scheduled database job (e.g., pg_cron), never from client code.
 -- Reduces importance by 10% for memories not accessed in 30+ days.
+-- RESPECTS evergreen flag - evergreen memories never decay.
 CREATE OR REPLACE FUNCTION decay_stale_memories()
 RETURNS INT AS $$
 DECLARE
@@ -179,7 +196,8 @@ BEGIN
     updated_at = NOW()
   WHERE
     last_accessed < NOW() - INTERVAL '30 days'
-    AND importance > 0.1;
+    AND importance > 0.1
+    AND evergreen = FALSE;  -- Never decay evergreen memories
 
   GET DIAGNOSTICS affected_count = ROW_COUNT;
   RETURN affected_count;
@@ -210,7 +228,8 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Comments for documentation
 COMMENT ON TABLE ai_memory IS 'Claude persistent memory - synthesized understanding that persists across sessions';
 COMMENT ON COLUMN ai_memory.memory_type IS 'synthesis: unified understanding | realization: aha moments | goal_tracking: active goals | pattern: behavioral patterns | relationship: concept connections';
-COMMENT ON COLUMN ai_memory.importance IS '0-1 priority score for retrieval. Decays over time if not accessed.';
+COMMENT ON COLUMN ai_memory.importance IS '0-1 priority score for retrieval. Decays over time if not accessed (unless evergreen).';
+COMMENT ON COLUMN ai_memory.evergreen IS 'If true, memory never decays. Use for foundational knowledge (synthesis, realization, pattern). Situational memories (goal_tracking) should be false.';
 COMMENT ON COLUMN ai_memory.related_nodes IS 'Array of map node IDs this memory connects to';
 COMMENT ON COLUMN ai_memory.related_memories IS 'Links to other memories for building memory graphs';
 COMMENT ON FUNCTION decay_stale_memories() IS 'Scheduled job function - decays importance of stale memories. NOT for client use.';

@@ -16,6 +16,12 @@ from .unified_brain import (
     ContextResponse
 )
 
+from .context_synthesizer import (
+    ContextSynthesizer,
+    ContextItem,
+    SynthesizedContext
+)
+
 __all__ = [
     'UnifiedBrain',
     'SelfAwareness',
@@ -25,5 +31,8 @@ __all__ = [
     'MetaLearner',
     'SelfImprover',
     'ContextRequest',
-    'ContextResponse'
+    'ContextResponse',
+    'ContextSynthesizer',
+    'ContextItem',
+    'SynthesizedContext'
 ]
