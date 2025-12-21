@@ -2272,17 +2272,18 @@ const ReflectionDaemon = {
                 };
             }
 
-            // Direct Supabase fallback
-            if (typeof supabase === 'undefined' || !supabase) {
+            // Direct Supabase fallback (uses window.supabaseClient exposed by app-module)
+            const supabaseClient = typeof window !== 'undefined' ? window.supabaseClient : null;
+            if (!supabaseClient) {
                 return { error: 'Memory system not available (no auth)' };
             }
 
-            const { data: session } = await supabase.auth.getSession();
+            const { data: session } = await supabaseClient.auth.getSession();
             if (!session?.session?.user) {
                 return { error: 'Not authenticated' };
             }
 
-            let query = supabase
+            let query = supabaseClient
                 .from('ai_memory')
                 .select('id, memory_type, content, importance, related_nodes, created_at, last_accessed')
                 .eq('user_id', session.session.user.id)
@@ -2336,17 +2337,18 @@ const ReflectionDaemon = {
                 return { error: 'Failed to write memory' };
             }
 
-            // Direct Supabase fallback
-            if (typeof supabase === 'undefined' || !supabase) {
+            // Direct Supabase fallback (uses window.supabaseClient exposed by app-module)
+            const supabaseClient = typeof window !== 'undefined' ? window.supabaseClient : null;
+            if (!supabaseClient) {
                 return { error: 'Memory system not available (no auth)' };
             }
 
-            const { data: session } = await supabase.auth.getSession();
+            const { data: session } = await supabaseClient.auth.getSession();
             if (!session?.session?.user) {
                 return { error: 'Not authenticated' };
             }
 
-            const { data, error } = await supabase
+            const { data, error } = await supabaseClient
                 .from('ai_memory')
                 .insert({
                     user_id: session.session.user.id,
@@ -2388,49 +2390,34 @@ const ReflectionDaemon = {
                 return { error: 'Failed to reinforce memory' };
             }
 
-            // Direct Supabase fallback
-            if (typeof supabase === 'undefined' || !supabase) {
+            // Direct Supabase fallback - use atomic RPC function
+            const supabaseClient = typeof window !== 'undefined' ? window.supabaseClient : null;
+            if (!supabaseClient) {
                 return { error: 'Memory system not available (no auth)' };
             }
 
-            const { data: session } = await supabase.auth.getSession();
+            const { data: session } = await supabaseClient.auth.getSession();
             if (!session?.session?.user) {
                 return { error: 'Not authenticated' };
             }
 
-            // Get current importance
-            const { data: current } = await supabase
-                .from('ai_memory')
-                .select('importance')
-                .eq('id', memory_id)
-                .eq('user_id', session.session.user.id)
-                .single();
-
-            if (!current) {
-                return { error: 'Memory not found' };
-            }
-
-            const newImportance = Math.min(1.0, (current.importance || 0.5) * 1.1);
-
-            const { data, error } = await supabase
-                .from('ai_memory')
-                .update({
-                    importance: newImportance,
-                    last_accessed: new Date().toISOString()
-                })
-                .eq('id', memory_id)
-                .eq('user_id', session.session.user.id)
-                .select()
-                .single();
+            // Use atomic database function to avoid race conditions
+            const { data, error } = await supabaseClient.rpc('reinforce_memory', {
+                p_memory_id: memory_id
+            });
 
             if (error) {
                 return { error: `Failed to reinforce memory: ${error.message}` };
             }
 
+            if (data === null) {
+                return { error: 'Memory not found' };
+            }
+
             return {
                 success: true,
-                new_importance: data.importance,
-                message: `Memory reinforced: importance now ${(data.importance * 100).toFixed(0)}%`
+                new_importance: data,
+                message: `Memory reinforced: importance now ${(data * 100).toFixed(0)}%`
             };
         } catch (error) {
             return { error: `Memory reinforce failed: ${error.message}` };

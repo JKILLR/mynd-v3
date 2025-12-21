@@ -45,9 +45,12 @@ CREATE INDEX IF NOT EXISTS idx_ai_memory_importance ON ai_memory(importance DESC
 CREATE INDEX IF NOT EXISTS idx_ai_memory_last_accessed ON ai_memory(last_accessed DESC);
 CREATE INDEX IF NOT EXISTS idx_ai_memory_created ON ai_memory(created_at DESC);
 
--- Vector similarity search index (for semantic retrieval)
+-- Composite index for queries that sort by both importance and last_accessed
+CREATE INDEX IF NOT EXISTS idx_ai_memory_importance_recency ON ai_memory(user_id, importance DESC, last_accessed DESC);
+
+-- Vector similarity search index using HNSW (better for incremental inserts than IVFFlat)
 CREATE INDEX IF NOT EXISTS idx_ai_memory_embedding ON ai_memory
-  USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+  USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64);
 
 -- Row Level Security
 ALTER TABLE ai_memory ENABLE ROW LEVEL SECURITY;
@@ -66,6 +69,7 @@ CREATE POLICY "Users can delete own memories" ON ai_memory
   FOR DELETE USING (auth.uid() = user_id);
 
 -- Function to update last_accessed and access_count when memory is retrieved
+-- Includes ownership validation to prevent unauthorized access
 CREATE OR REPLACE FUNCTION touch_memory(memory_id UUID)
 RETURNS void AS $$
 BEGIN
@@ -73,11 +77,13 @@ BEGIN
   SET
     last_accessed = NOW(),
     access_count = access_count + 1
-  WHERE id = memory_id;
+  WHERE id = memory_id
+    AND user_id = auth.uid();  -- Ownership validation
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function for semantic search (requires embedding)
+-- Uses CTE to compute similarity once for efficiency
 CREATE OR REPLACE FUNCTION search_memories(
   query_embedding VECTOR(1536),
   match_threshold FLOAT DEFAULT 0.7,
@@ -96,21 +102,25 @@ RETURNS TABLE (
 ) AS $$
 BEGIN
   RETURN QUERY
-  SELECT
-    m.id,
-    m.memory_type,
-    m.content,
-    m.importance,
-    m.related_nodes,
-    1 - (m.embedding <=> query_embedding) AS similarity,
-    m.created_at,
-    m.last_accessed
-  FROM ai_memory m
-  WHERE
-    m.user_id = p_user_id
-    AND m.embedding IS NOT NULL
-    AND 1 - (m.embedding <=> query_embedding) > match_threshold
-  ORDER BY m.embedding <=> query_embedding
+  WITH scored AS (
+    SELECT
+      m.id,
+      m.memory_type,
+      m.content,
+      m.importance,
+      m.related_nodes,
+      1 - (m.embedding <=> query_embedding) AS similarity,
+      m.created_at,
+      m.last_accessed
+    FROM ai_memory m
+    WHERE
+      m.user_id = p_user_id
+      AND m.embedding IS NOT NULL
+  )
+  SELECT *
+  FROM scored
+  WHERE scored.similarity > match_threshold
+  ORDER BY scored.similarity DESC
   LIMIT match_count;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -154,13 +164,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Function for memory decay (to be called by a scheduled job)
+-- Function for memory decay (scheduled job only - not for end-user exposure)
+-- WARNING: This function operates across ALL users and should only be called
+-- by a scheduled database job (e.g., pg_cron), never from client code.
+-- Reduces importance by 10% for memories not accessed in 30+ days.
 CREATE OR REPLACE FUNCTION decay_stale_memories()
 RETURNS INT AS $$
 DECLARE
   affected_count INT;
 BEGIN
-  -- Reduce importance by 10% for memories not accessed in 30+ days
   UPDATE ai_memory
   SET
     importance = GREATEST(importance * 0.9, 0.1),  -- Don't go below 0.1
@@ -174,9 +186,32 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Function to atomically reinforce a memory (avoids race conditions)
+-- Increases importance by 10% (capped at 1.0) and updates access time
+CREATE OR REPLACE FUNCTION reinforce_memory(p_memory_id UUID)
+RETURNS FLOAT AS $$
+DECLARE
+  new_importance FLOAT;
+BEGIN
+  UPDATE ai_memory
+  SET
+    importance = LEAST(importance * 1.1, 1.0),
+    last_accessed = NOW(),
+    access_count = access_count + 1,
+    updated_at = NOW()
+  WHERE id = p_memory_id
+    AND user_id = auth.uid()
+  RETURNING importance INTO new_importance;
+
+  RETURN new_importance;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Comments for documentation
 COMMENT ON TABLE ai_memory IS 'Claude persistent memory - synthesized understanding that persists across sessions';
 COMMENT ON COLUMN ai_memory.memory_type IS 'synthesis: unified understanding | realization: aha moments | goal_tracking: active goals | pattern: behavioral patterns | relationship: concept connections';
 COMMENT ON COLUMN ai_memory.importance IS '0-1 priority score for retrieval. Decays over time if not accessed.';
 COMMENT ON COLUMN ai_memory.related_nodes IS 'Array of map node IDs this memory connects to';
 COMMENT ON COLUMN ai_memory.related_memories IS 'Links to other memories for building memory graphs';
+COMMENT ON FUNCTION decay_stale_memories() IS 'Scheduled job function - decays importance of stale memories. NOT for client use.';
+COMMENT ON FUNCTION reinforce_memory(UUID) IS 'Atomically reinforces a memory, increasing importance by 10% (max 1.0).';

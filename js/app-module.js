@@ -31354,65 +31354,88 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                     // ═══════════════════════════════════════════════════════════════
                     else if (action.action === 'write_memory') {
                         // Claude writes a new memory
-                        try {
-                            const memory = await this.writeAIMemory({
-                                memory_type: action.memory_type || 'synthesis',
-                                content: action.content,
-                                importance: action.importance || 0.5,
-                                related_nodes: action.related_nodes || []
-                            });
+                        const VALID_MEMORY_TYPES = ['synthesis', 'realization', 'goal_tracking', 'pattern', 'relationship'];
 
-                            if (memory) {
-                                result.success = true;
-                                result.description = `Stored ${action.memory_type}: "${action.content.slice(0, 50)}..."`;
-                                console.log(`🧠 Memory written: [${action.memory_type}] ${action.content.slice(0, 80)}...`);
-                            } else {
-                                result.success = false;
-                                result.description = 'Failed to write memory (no auth?)';
-                            }
-                        } catch (memError) {
-                            console.error('Failed to write memory:', memError);
+                        // Input validation
+                        if (!action.content || typeof action.content !== 'string' || action.content.trim().length === 0) {
                             result.success = false;
-                            result.description = `Memory write failed: ${memError.message}`;
+                            result.description = 'Memory content is required';
+                        } else if (action.memory_type && !VALID_MEMORY_TYPES.includes(action.memory_type)) {
+                            result.success = false;
+                            result.description = `Invalid memory_type. Must be one of: ${VALID_MEMORY_TYPES.join(', ')}`;
+                        } else {
+                            try {
+                                const memory = await this.writeAIMemory({
+                                    memory_type: action.memory_type || 'synthesis',
+                                    content: action.content.trim(),
+                                    importance: action.importance || 0.5,
+                                    related_nodes: action.related_nodes || []
+                                });
+
+                                if (memory) {
+                                    result.success = true;
+                                    result.description = `Stored ${action.memory_type || 'synthesis'}: "${action.content.slice(0, 50)}..."`;
+                                    console.log(`🧠 Memory written: [${action.memory_type || 'synthesis'}] ${action.content.slice(0, 80)}...`);
+                                } else {
+                                    result.success = false;
+                                    result.description = 'Failed to write memory (no auth?)';
+                                }
+                            } catch (memError) {
+                                console.error('Failed to write memory:', memError);
+                                result.success = false;
+                                result.description = `Memory write failed: ${memError.message}`;
+                            }
                         }
                     } else if (action.action === 'update_memory') {
                         // Claude updates an existing memory
-                        try {
-                            const updated = await this.updateAIMemory(action.memory_id, {
-                                content: action.content,
-                                importance: action.importance
-                            });
-
-                            if (updated) {
-                                result.success = true;
-                                result.description = `Updated memory`;
-                                console.log(`🧠 Memory updated: ${action.memory_id}`);
-                            } else {
-                                result.success = false;
-                                result.description = 'Failed to update memory';
-                            }
-                        } catch (memError) {
-                            console.error('Failed to update memory:', memError);
+                        // Input validation
+                        if (!action.memory_id || typeof action.memory_id !== 'string') {
                             result.success = false;
-                            result.description = `Memory update failed: ${memError.message}`;
+                            result.description = 'memory_id is required for update_memory';
+                        } else {
+                            try {
+                                const updated = await this.updateAIMemory(action.memory_id, {
+                                    content: action.content,
+                                    importance: action.importance
+                                });
+
+                                if (updated) {
+                                    result.success = true;
+                                    result.description = `Updated memory`;
+                                    console.log(`🧠 Memory updated: ${action.memory_id}`);
+                                } else {
+                                    result.success = false;
+                                    result.description = 'Failed to update memory (not found or no auth)';
+                                }
+                            } catch (memError) {
+                                console.error('Failed to update memory:', memError);
+                                result.success = false;
+                                result.description = `Memory update failed: ${memError.message}`;
+                            }
                         }
                     } else if (action.action === 'reinforce_memory') {
                         // Claude reinforces an important memory (increases importance, updates access time)
-                        try {
-                            const reinforced = await this.reinforceAIMemory(action.memory_id);
-
-                            if (reinforced) {
-                                result.success = true;
-                                result.description = `Reinforced memory`;
-                                console.log(`🧠 Memory reinforced: ${action.memory_id}`);
-                            } else {
-                                result.success = false;
-                                result.description = 'Failed to reinforce memory';
-                            }
-                        } catch (memError) {
-                            console.error('Failed to reinforce memory:', memError);
+                        // Input validation
+                        if (!action.memory_id || typeof action.memory_id !== 'string') {
                             result.success = false;
-                            result.description = `Memory reinforce failed: ${memError.message}`;
+                            result.description = 'memory_id is required for reinforce_memory';
+                        } else {
+                            try {
+                                const reinforced = await this.reinforceAIMemory(action.memory_id);
+
+                                if (reinforced) {
+                                    result.success = true;
+                                    result.description = `Reinforced memory`;
+                                    console.log(`🧠 Memory reinforced: ${action.memory_id}`);
+                                } else {
+                                    result.success = false;
+                                    result.description = 'Failed to reinforce memory (not found or no auth)';
+                                }
+                            } catch (memError) {
+                                console.error('Failed to reinforce memory:', memError);
+                                result.success = false;
+                                result.description = `Memory reinforce failed: ${memError.message}`;
+                            }
                         }
                     }
 
@@ -31462,11 +31485,12 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 }
 
                 // Touch accessed memories (update last_accessed)
+                // Note: access_count is updated separately via touch_memory DB function if needed
                 if (data && data.length > 0) {
                     const memoryIds = data.map(m => m.id);
                     supabase
                         .from('ai_memory')
-                        .update({ last_accessed: new Date().toISOString(), access_count: supabase.raw('access_count + 1') })
+                        .update({ last_accessed: new Date().toISOString() })
                         .in('id', memoryIds)
                         .then(() => {});  // Fire and forget
                 }
@@ -31550,44 +31574,30 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
         },
 
         async reinforceAIMemory(memoryId) {
-            // Reinforce a memory - increases importance and updates access time
+            // Reinforce a memory - uses atomic database function to avoid race conditions
             try {
                 if (typeof supabase === 'undefined' || !supabase) return null;
 
                 const { data: session } = await supabase.auth.getSession();
                 if (!session?.session?.user) return null;
 
-                // First get current importance
-                const { data: current } = await supabase
-                    .from('ai_memory')
-                    .select('importance')
-                    .eq('id', memoryId)
-                    .eq('user_id', session.session.user.id)
-                    .single();
-
-                if (!current) return null;
-
-                // Increase importance by 10%, cap at 1.0
-                const newImportance = Math.min(1.0, (current.importance || 0.5) * 1.1);
-
-                const { data, error } = await supabase
-                    .from('ai_memory')
-                    .update({
-                        importance: newImportance,
-                        last_accessed: new Date().toISOString(),
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', memoryId)
-                    .eq('user_id', session.session.user.id)
-                    .select()
-                    .single();
+                // Use atomic database function to avoid TOCTOU race condition
+                const { data, error } = await supabase.rpc('reinforce_memory', {
+                    p_memory_id: memoryId
+                });
 
                 if (error) {
                     console.error('Failed to reinforce AI memory:', error);
                     return null;
                 }
 
-                return data;
+                // data is the new importance value returned by the function
+                if (data === null) {
+                    // Memory not found or not owned by user
+                    return null;
+                }
+
+                return { importance: data };
             } catch (e) {
                 console.error('AI memory reinforce error:', e);
                 return null;
