@@ -29678,6 +29678,18 @@ You are a trusted guide, not a data harvester.
                 console.warn('Session context error:', e);
             }
 
+            // 15b. Deep Synthesis Cache - Cross-referenced context from previous messages in this session
+            let deepSynthesisContext = '';
+            try {
+                const cachedSynthesis = await this.getCachedSynthesis();
+                if (cachedSynthesis) {
+                    deepSynthesisContext = cachedSynthesis.synthesis_content;
+                    console.log(`🔮 Deep synthesis loaded from cache (${cachedSynthesis.topics_expanded?.length || 0} topics)`);
+                }
+            } catch (e) {
+                console.warn('Deep synthesis cache error:', e);
+            }
+
             // 16. VisionCore - Foundational vision, mission, goals, and values
             let visionContext = '';
             try {
@@ -30211,6 +30223,12 @@ SESSION CONTINUITY - Our Recent Conversations
 ═══════════════════════════════════════════════════════════════
 These are summaries of our recent sessions together. Use them to maintain experiential continuity - reference past discussions naturally, pick up open threads, and show that you remember our journey together.
 ${sessionContext}` : ''}
+${deepSynthesisContext ? `
+═══════════════════════════════════════════════════════════════
+DEEP SYNTHESIS - Cross-Referenced Context
+═══════════════════════════════════════════════════════════════
+This is expanded context that cross-references recent session topics with your memories and map nodes. It provides richer associative context for the current conversation.
+${deepSynthesisContext}` : ''}
 ${loadedSourceContext ? `
 LOADED SOURCE FILE FOR REVIEW:
 ${loadedSourceContext}` : ''}
@@ -30267,7 +30285,9 @@ RESPONSE FORMAT (always JSON):
     {"action": "update_memory", "memory_id": "uuid", "content": "Updated understanding", "importance": 0.9},
     {"action": "reinforce_memory", "memory_id": "uuid"},
     // Session continuity - write when ending a session or user says goodbye
-    {"action": "write_session_summary", "summary": "Narrative summary of this session", "key_outcomes": "What we decided/realized", "open_threads": "What's unfinished", "session_type": "building|troubleshooting|vision|exploration|reflection|planning|casual", "tone": "collaborative|focused|creative|etc", "topics_discussed": ["topic1", "topic2"]}
+    {"action": "write_session_summary", "summary": "Narrative summary of this session", "key_outcomes": "What we decided/realized", "open_threads": "What's unfinished", "session_type": "building|troubleshooting|vision|exploration|reflection|planning|casual", "tone": "collaborative|focused|creative|etc", "topics_discussed": ["topic1", "topic2"]},
+    // Deep context synthesis - expand session summaries with cross-referenced memories and nodes
+    {"action": "synthesize_deep_context", "focus_topics": ["topic1", "topic2"], "reason": "Why deeper context would help right now"}
   ],
   "suggestions": ["Quick reply 1", "Quick reply 2"] // Optional quick reply suggestions
 }
@@ -30288,6 +30308,12 @@ GUIDELINES:
   - Conversation reaches a natural stopping point
   - You sense the session is ending
   The summary should capture: what we discussed (topics, nodes), what we decided/realized (outcomes), what's unfinished (open threads), and the session type (building/troubleshooting/vision/exploration/reflection/planning/casual). This enables you to pick up naturally in future sessions.
+- **DEEP CONTEXT SYNTHESIS**: Use synthesize_deep_context when:
+  - The conversation touches on topics from past sessions and you want richer context
+  - User references something you discussed before but your current session summaries lack detail
+  - You sense the conversation would benefit from cross-referencing memories with past sessions
+  - After the first exchange in a session, once you know what direction the conversation is heading
+  This expands session summaries by querying related memories and nodes, giving you deeper associative context. The result is cached server-side for the session.
 - When users seem stuck or vague, help them clarify and expand their thinking
 - Reference the neural context to personalize responses (match their style, preferred colors, naming patterns)
 - Use similar nodes to avoid duplicates AND to surface potential connections
@@ -31545,6 +31571,32 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                             }
                         }
                     }
+                    // ═══════════════════════════════════════════════════════════════
+                    // DEEP CONTEXT SYNTHESIS - Cross-reference sessions with memories/nodes
+                    // ═══════════════════════════════════════════════════════════════
+                    else if (action.action === 'synthesize_deep_context') {
+                        // Claude requests deeper context by cross-referencing session summaries with memories and nodes
+                        const focusTopics = action.focus_topics || [];
+                        const reason = action.reason || '';
+
+                        try {
+                            const synthesis = await this.synthesizeDeepContext(focusTopics, reason);
+
+                            if (synthesis) {
+                                result.success = true;
+                                result.description = `Deep context synthesized: ${synthesis.topics_expanded?.length || 0} topics expanded`;
+                                result.synthesized_context = synthesis.synthesis_content;
+                                console.log(`🔮 Deep synthesis complete: ${synthesis.topics_expanded?.length || 0} topics`);
+                            } else {
+                                result.success = false;
+                                result.description = 'Failed to synthesize deep context (no data or auth?)';
+                            }
+                        } catch (synthError) {
+                            console.error('Failed to synthesize deep context:', synthError);
+                            result.success = false;
+                            result.description = `Deep synthesis failed: ${synthError.message}`;
+                        }
+                    }
 
                     results.push(result);
                 } catch (e) {
@@ -31785,6 +31837,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
 
         sessionStartTime: null,
         currentSessionId: null,
+        currentSessionToken: null, // Unique token for this browser session (for caching)
         lastSessionId: null,
         sessionMessageCount: 0,
         sessionNodesAccessed: new Set(),
@@ -31796,6 +31849,13 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
             this.sessionMessageCount = 0;
             this.sessionNodesAccessed = new Set();
             this.sessionTopics = new Set();
+
+            // Generate unique session token for caching (persists across page reloads in same session)
+            this.currentSessionToken = sessionStorage.getItem('mynd-session-token');
+            if (!this.currentSessionToken) {
+                this.currentSessionToken = crypto.randomUUID();
+                sessionStorage.setItem('mynd-session-token', this.currentSessionToken);
+            }
 
             // Store session start in localStorage (for tracking across page reloads)
             localStorage.setItem('mynd-session-start', this.sessionStartTime.toISOString());
@@ -31973,6 +32033,200 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
             }
 
             return output;
+        },
+
+        // ═══════════════════════════════════════════════════════════════════
+        // DEEP CONTEXT SYNTHESIS - Cross-reference sessions with memories/nodes
+        // ═══════════════════════════════════════════════════════════════════
+
+        async getCachedSynthesis() {
+            // Check if we have a cached synthesis for this session
+            try {
+                if (typeof supabase === 'undefined' || !supabase) return null;
+                if (!this.currentSessionToken) return null;
+
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return null;
+
+                const { data, error } = await supabase
+                    .from('wakeup_synthesis')
+                    .select('*')
+                    .eq('user_id', user.id)
+                    .eq('session_id', this.currentSessionToken)
+                    .single();
+
+                if (error && error.code !== 'PGRST116') { // PGRST116 = not found
+                    console.warn('Failed to get cached synthesis:', error);
+                    return null;
+                }
+
+                return data || null;
+            } catch (e) {
+                console.warn('Get cached synthesis error:', e);
+                return null;
+            }
+        },
+
+        async saveSynthesisCache(synthesis) {
+            // Save synthesis to cache for this session
+            try {
+                if (typeof supabase === 'undefined' || !supabase) return null;
+                if (!this.currentSessionToken) return null;
+
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return null;
+
+                const { data, error } = await supabase
+                    .from('wakeup_synthesis')
+                    .upsert({
+                        user_id: user.id,
+                        session_id: this.currentSessionToken,
+                        synthesis_content: synthesis.content,
+                        topics_expanded: synthesis.topics || [],
+                        sessions_referenced: synthesis.sessionIds || [],
+                        trigger_context: synthesis.trigger || '',
+                        generated_at: new Date().toISOString()
+                    }, { onConflict: 'user_id,session_id' })
+                    .select()
+                    .single();
+
+                if (error) {
+                    console.error('Failed to save synthesis cache:', error);
+                    return null;
+                }
+
+                console.log('💾 Synthesis cached for session');
+                return data;
+            } catch (e) {
+                console.error('Save synthesis cache error:', e);
+                return null;
+            }
+        },
+
+        async synthesizeDeepContext(focusTopics = [], reason = '') {
+            // Main synthesis function: cross-reference sessions with memories and nodes
+            try {
+                // Check cache first
+                const cached = await this.getCachedSynthesis();
+                if (cached) {
+                    console.log('🔮 Using cached deep synthesis');
+                    return {
+                        synthesis_content: cached.synthesis_content,
+                        topics_expanded: cached.topics_expanded,
+                        from_cache: true
+                    };
+                }
+
+                // Get recent sessions
+                const recentSessions = await this.getRecentSessions(5);
+                if (!recentSessions || recentSessions.length === 0) {
+                    console.log('🔮 No sessions to synthesize');
+                    return null;
+                }
+
+                // Get AI memories for cross-referencing
+                const aiMemories = await this.getAIMemories(30);
+
+                // Extract key phrases from sessions + focus topics
+                const phrasesToExpand = new Set(focusTopics);
+
+                // From the 3 most recent sessions, extract key phrases
+                for (const session of recentSessions.slice(0, 3)) {
+                    // Extract from key_outcomes
+                    if (session.key_outcomes) {
+                        const outcomes = session.key_outcomes.split(/[,;.]/).map(s => s.trim()).filter(s => s.length > 3);
+                        outcomes.slice(0, 3).forEach(o => phrasesToExpand.add(o));
+                    }
+                    // Extract from open_threads
+                    if (session.open_threads) {
+                        const threads = session.open_threads.split(/[,;.]/).map(s => s.trim()).filter(s => s.length > 3);
+                        threads.slice(0, 2).forEach(t => phrasesToExpand.add(t));
+                    }
+                    // Add topics
+                    if (session.topics_discussed) {
+                        session.topics_discussed.slice(0, 3).forEach(t => phrasesToExpand.add(t));
+                    }
+                }
+
+                // Build synthesis content
+                let synthesisContent = '## Deep Context Synthesis\n\n';
+                const topicsExpanded = [];
+                const sessionIds = recentSessions.map(s => s.id);
+
+                // For each phrase, find related memories
+                for (const phrase of Array.from(phrasesToExpand).slice(0, 15)) { // Limit to 15 phrases
+                    if (phrase.length < 4) continue;
+
+                    // Find matching memories
+                    const relatedMemories = aiMemories.filter(m =>
+                        m.content && m.content.toLowerCase().includes(phrase.toLowerCase())
+                    ).slice(0, 2);
+
+                    if (relatedMemories.length > 0) {
+                        topicsExpanded.push(phrase);
+                        synthesisContent += `### ${phrase}\n`;
+                        for (const memory of relatedMemories) {
+                            synthesisContent += `- [${memory.memory_type}] ${memory.content}\n`;
+                        }
+                        synthesisContent += '\n';
+                    }
+                }
+
+                // Cross-reference with nodes if we have map data
+                if (currentMapData && currentMapData.nodes) {
+                    const relevantNodes = [];
+                    for (const phrase of Array.from(phrasesToExpand).slice(0, 10)) {
+                        const phraseLC = phrase.toLowerCase();
+                        for (const node of currentMapData.nodes) {
+                            if (!node) continue;
+                            const label = (node.label || '').toLowerCase();
+                            const desc = (node.description || '').toLowerCase();
+                            if (label.includes(phraseLC) || desc.includes(phraseLC)) {
+                                if (!relevantNodes.find(n => n.id === node.id)) {
+                                    relevantNodes.push(node);
+                                }
+                            }
+                        }
+                    }
+
+                    if (relevantNodes.length > 0) {
+                        synthesisContent += '### Related Nodes\n';
+                        for (const node of relevantNodes.slice(0, 10)) {
+                            synthesisContent += `- **${node.label}**`;
+                            if (node.description) synthesisContent += `: ${node.description.slice(0, 100)}`;
+                            synthesisContent += '\n';
+                        }
+                        synthesisContent += '\n';
+                    }
+                }
+
+                // Add session thread connections
+                synthesisContent += '### Session Threads\n';
+                for (const session of recentSessions.slice(0, 3)) {
+                    if (session.open_threads) {
+                        const date = new Date(session.session_ended).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        synthesisContent += `- [${date}] Open: ${session.open_threads}\n`;
+                    }
+                }
+
+                // Save to cache
+                await this.saveSynthesisCache({
+                    content: synthesisContent,
+                    topics: topicsExpanded,
+                    sessionIds: sessionIds,
+                    trigger: reason
+                });
+
+                console.log(`🔮 Deep synthesis complete: ${topicsExpanded.length} topics expanded`);
+                return {
+                    synthesis_content: synthesisContent,
+                    topics_expanded: topicsExpanded,
+                    from_cache: false
+                };
+            } catch (e) {
+                console.error('Deep synthesis error:', e);
+                return null;
+            }
         },
 
         // Audio feedback for voice recording
