@@ -2007,35 +2007,51 @@ const ReflectionDaemon = {
             const patterns = {};
 
             // Get from PreferenceTracker if available
-            if (typeof preferenceTracker !== 'undefined') {
+            if (typeof preferenceTracker !== 'undefined' && preferenceTracker.loaded) {
                 const tracker = preferenceTracker;
 
-                if (domain === 'all' || domain === 'naming') {
-                    patterns.naming = {
-                        recent_labels: tracker.recentLabels?.slice(-10) || [],
-                        label_patterns: tracker.labelPatterns || {}
+                if (domain === 'all' || domain === 'suggestions') {
+                    // Acceptance/rejection insights
+                    patterns.suggestions = {
+                        acceptance_rate: tracker.insights?.acceptanceRateByType || {},
+                        preferred_patterns: tracker.insights?.preferredPatterns || {},
+                        avoided_patterns: tracker.insights?.avoidedPatterns || {},
+                        top_accepted: tracker.insights?.topAcceptedLabels?.slice(0, 10) || [],
+                        top_ignored: tracker.insights?.topIgnoredLabels?.slice(0, 10) || []
                     };
                 }
 
-                if (domain === 'all' || domain === 'colors') {
-                    patterns.colors = {
-                        frequently_used: tracker.colorUsage || {},
-                        recent_colors: tracker.recentColors?.slice(-5) || []
+                if (domain === 'all' || domain === 'style') {
+                    patterns.style = {
+                        prefers_action_labels: tracker.insights?.stylePreferences?.prefersActionLabels || 0,
+                        prefers_short_labels: tracker.insights?.stylePreferences?.prefersShortLabels || 0,
+                        prefers_descriptive: tracker.insights?.stylePreferences?.prefersDescriptive || 0
                     };
                 }
 
-                if (domain === 'all' || domain === 'structure') {
-                    patterns.structure = {
-                        avg_children_per_node: tracker.structureStats?.avgChildren || 0,
-                        max_depth: tracker.structureStats?.maxDepth || 0,
-                        common_structures: tracker.commonStructures || []
+                if (domain === 'all' || domain === 'history') {
+                    // Recent decisions
+                    const recentAccepted = tracker.history?.accepted?.slice(-10) || [];
+                    const recentIgnored = tracker.history?.ignored?.slice(-10) || [];
+                    patterns.recent_history = {
+                        accepted: recentAccepted.map(h => ({
+                            label: h.label,
+                            parent: h.parentLabel,
+                            type: h.type
+                        })),
+                        ignored: recentIgnored.map(h => ({
+                            label: h.label,
+                            parent: h.parentLabel,
+                            type: h.type
+                        })),
+                        total_accepted: tracker.history?.accepted?.length || 0,
+                        total_ignored: tracker.history?.ignored?.length || 0
                     };
                 }
 
-                if (domain === 'all' || domain === 'categories') {
-                    patterns.categories = {
-                        common_categories: tracker.categoryUsage || {},
-                        category_patterns: tracker.categoryPatterns || []
+                if (domain === 'all' || domain === 'relationships') {
+                    patterns.relationships = {
+                        successful_pairs: tracker.insights?.preferredParentChildPairs?.slice(0, 10) || []
                     };
                 }
             }
@@ -2043,16 +2059,22 @@ const ReflectionDaemon = {
             // Get neural net stats if available
             if (typeof neuralNet !== 'undefined' && neuralNet.isReady) {
                 patterns.neural_stats = {
-                    predictions_made: neuralNet.predictionCount || 0,
-                    acceptance_rate: neuralNet.acceptanceRate || 0,
-                    confidence_avg: neuralNet.avgConfidence || 0
+                    is_ready: true,
+                    recent_predictions: neuralNet.recentPredictions?.slice(-5)?.map(p => ({
+                        input: p.input?.substring(0, 50),
+                        output: p.output,
+                        confidence: Math.round((p.confidence || 0) * 100) + '%'
+                    })) || []
                 };
             }
 
             // Get semantic memory stats
             if (typeof semanticMemory !== 'undefined' && semanticMemory.loaded) {
-                patterns.memory_stats = semanticMemory.getStats?.() || {
-                    total_memories: semanticMemory.memories?.length || 0
+                const stats = semanticMemory.getStats?.() || {};
+                patterns.memory_stats = {
+                    total_memories: semanticMemory.memories?.length || 0,
+                    important_memories: stats.importantMemories || 0,
+                    event_types: stats.eventCounts || {}
                 };
             }
 
