@@ -27765,12 +27765,17 @@ You are a trusted guide, not a data harvester.
             return adaptation;
         },
 
+        attachedImages: [], // Array of {dataUrl: string, file: File, id: number}
+
         init() {
             this.panel = document.getElementById('ai-chat-panel');
             this.messagesContainer = document.getElementById('chat-messages');
             this.input = document.getElementById('chat-input');
             this.sendBtn = document.getElementById('chat-send-btn');
             this.voiceBtn = document.getElementById('chat-voice-btn');
+            this.uploadBtn = document.getElementById('chat-upload-btn');
+            this.imageInput = document.getElementById('chat-image-input');
+            this.imagePreview = document.getElementById('chat-image-preview');
             this.slideToggle = document.getElementById('chat-slide-toggle');
             this.clearBtn = document.getElementById('chat-clear');
             this.ttsToggleBtn = document.getElementById('chat-tts-toggle');
@@ -27784,7 +27789,7 @@ You are a trusted guide, not a data harvester.
 
             this.setupEventListeners();
             this.loadConversation();
-            
+
             console.log('Chat Manager initialized');
         },
         
@@ -27844,7 +27849,55 @@ You are a trusted guide, not a data harvester.
             
             // Voice input
             this.voiceBtn.addEventListener('click', () => this.startVoiceInput());
-            
+
+            // Image upload button
+            if (this.uploadBtn) {
+                this.uploadBtn.addEventListener('click', () => this.imageInput?.click());
+            }
+
+            // File input change
+            if (this.imageInput) {
+                this.imageInput.addEventListener('change', (e) => {
+                    const files = Array.from(e.target.files);
+                    files.forEach(file => this.addImage(file));
+                    e.target.value = ''; // Reset for next selection
+                });
+            }
+
+            // Paste event for images
+            this.input.addEventListener('paste', (e) => {
+                const items = Array.from(e.clipboardData.items);
+                const imageItems = items.filter(item => item.type.startsWith('image/'));
+                if (imageItems.length > 0) {
+                    e.preventDefault();
+                    imageItems.forEach(item => {
+                        const file = item.getAsFile();
+                        if (file) this.addImage(file);
+                    });
+                }
+            });
+
+            // Drag and drop for images
+            this.input.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.input.closest('.chat-input-container')?.classList.add('drag-over');
+            });
+
+            this.input.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.input.closest('.chat-input-container')?.classList.remove('drag-over');
+            });
+
+            this.input.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.input.closest('.chat-input-container')?.classList.remove('drag-over');
+                const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+                files.forEach(file => this.addImage(file));
+            });
+
             // Example buttons
             document.querySelectorAll('.chat-example-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -28121,14 +28174,76 @@ You are a trusted guide, not a data harvester.
             this.input.style.height = 'auto';
             this.input.style.height = Math.min(this.input.scrollHeight, 120) + 'px';
         },
-        
+
+        // Image handling methods
+        addImage(file) {
+            if (!file.type.startsWith('image/')) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const imageData = {
+                    dataUrl: e.target.result,
+                    file: file,
+                    id: Date.now() + Math.random()
+                };
+                this.attachedImages.push(imageData);
+                this.updateImagePreview();
+                this.updateSendButton();
+            };
+            reader.readAsDataURL(file);
+        },
+
+        removeImage(id) {
+            this.attachedImages = this.attachedImages.filter(img => img.id !== id);
+            this.updateImagePreview();
+            this.updateSendButton();
+        },
+
+        updateImagePreview() {
+            if (!this.imagePreview) return;
+            this.imagePreview.innerHTML = '';
+            if (this.attachedImages.length === 0) {
+                this.imagePreview.classList.remove('has-images');
+                return;
+            }
+
+            this.imagePreview.classList.add('has-images');
+            this.attachedImages.forEach(img => {
+                const item = document.createElement('div');
+                item.className = 'chat-image-preview-item';
+                item.innerHTML = `
+                    <img src="${img.dataUrl}" alt="Attached image">
+                    <button class="chat-image-preview-remove" data-id="${img.id}">×</button>
+                `;
+                item.querySelector('.chat-image-preview-remove').addEventListener('click', () => {
+                    this.removeImage(img.id);
+                });
+                this.imagePreview.appendChild(item);
+            });
+        },
+
+        clearImages() {
+            this.attachedImages = [];
+            this.updateImagePreview();
+        },
+
+        updateSendButton() {
+            const hasContent = this.input.value.trim().length > 0 || this.attachedImages.length > 0;
+            this.sendBtn.disabled = !hasContent;
+        },
+
         async sendMessage() {
             const content = this.input.value.trim();
-            if (!content || this.isProcessing) return;
+            const hasImages = this.attachedImages.length > 0;
+            if ((!content && !hasImages) || this.isProcessing) return;
 
-            // Clear input
+            // Capture images before clearing
+            const imagesToSend = [...this.attachedImages];
+
+            // Clear input and images
             this.input.value = '';
             this.input.style.height = 'auto';
+            this.clearImages();
             this.sendBtn.disabled = true;
 
             // Hide welcome if shown
@@ -28149,8 +28264,8 @@ You are a trusted guide, not a data harvester.
                 }
             }
 
-            // Add user message
-            this.addMessage('user', content);
+            // Add user message with images
+            this.addMessage('user', content, null, imagesToSend);
 
             // Show typing indicator
             this.showTyping();
@@ -28215,14 +28330,15 @@ You are a trusted guide, not a data harvester.
             }
         },
         
-        addMessage(role, content, actionResults = [], suggestions = []) {
+        addMessage(role, content, actionResults = [], images = []) {
             const message = {
                 role,
                 content,
                 actions: actionResults,
+                images: images.map(img => img.dataUrl || img), // Store just the data URLs
                 timestamp: Date.now()
             };
-            
+
             this.conversation.push(message);
             
             // Trim conversation history
@@ -28302,6 +28418,15 @@ You are a trusted guide, not a data harvester.
 
             const time = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+            let imagesHTML = '';
+            if (message.images && message.images.length > 0) {
+                imagesHTML = `
+                    <div class="chat-message-images">
+                        ${message.images.map(src => `<img src="${src}" alt="Attached image" class="chat-message-image">`).join('')}
+                    </div>
+                `;
+            }
+
             let actionsHTML = '';
             if (message.actions && message.actions.length > 0) {
                 actionsHTML = `
@@ -28334,13 +28459,49 @@ You are a trusted guide, not a data harvester.
                 `;
             }
 
+            // Add copy button for assistant messages
+            const copyBtnHTML = message.role === 'assistant' ? `
+                <button class="chat-copy-btn" title="Copy to clipboard">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                    </svg>
+                </button>
+            ` : '';
+
             div.innerHTML = `
                 <div class="chat-bubble">
+                    ${copyBtnHTML}
+                    ${imagesHTML}
                     ${this.formatMessage(message.content)}
                     ${actionsHTML}
                 </div>
                 <div class="chat-message-time">${time}</div>
             `;
+
+            // Add copy button click handler
+            const copyBtn = div.querySelector('.chat-copy-btn');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', () => {
+                    navigator.clipboard.writeText(message.content).then(() => {
+                        copyBtn.classList.add('copied');
+                        copyBtn.innerHTML = `
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                        `;
+                        setTimeout(() => {
+                            copyBtn.classList.remove('copied');
+                            copyBtn.innerHTML = `
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                                </svg>
+                            `;
+                        }, 2000);
+                    });
+                });
+            }
 
             // Add click handlers for action items with nodeId
             div.querySelectorAll('.chat-action-item.clickable').forEach(item => {
@@ -28367,14 +28528,99 @@ You are a trusted guide, not a data harvester.
 
             this.messagesContainer.appendChild(div);
         },
-        
+
         formatMessage(content) {
-            // Basic markdown-like formatting
-            return escapeHTML(content)
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/`(.*?)`/g, '<code>$1</code>')
-                .replace(/\n/g, '<br>');
+            if (!content) return '';
+
+            // Enhanced markdown formatting
+            let formatted = content;
+
+            // Code blocks (must process first before escaping)
+            const codeBlocks = [];
+            formatted = formatted.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
+                const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`;
+                codeBlocks.push({ lang: lang || 'plaintext', code: code.trim() });
+                return placeholder;
+            });
+
+            // Inline code (must process before escaping)
+            const inlineCodes = [];
+            formatted = formatted.replace(/`([^`]+)`/g, (match, code) => {
+                const placeholder = `__INLINE_CODE_${inlineCodes.length}__`;
+                inlineCodes.push(code);
+                return placeholder;
+            });
+
+            // Escape HTML
+            formatted = escapeHTML(formatted);
+
+            // Restore inline code
+            inlineCodes.forEach((code, i) => {
+                formatted = formatted.replace(`__INLINE_CODE_${i}__`, `<code class="inline-code">${escapeHTML(code)}</code>`);
+            });
+
+            // Restore code blocks
+            codeBlocks.forEach((block, i) => {
+                const langLabel = block.lang !== 'plaintext' ? `<span class="code-lang">${block.lang}</span>` : '';
+                formatted = formatted.replace(
+                    `__CODE_BLOCK_${i}__`,
+                    `<div class="code-block">${langLabel}<pre><code>${escapeHTML(block.code)}</code></pre></div>`
+                );
+            });
+
+            // Tables
+            formatted = formatted.replace(/(?:^|\n)(\|.+\|)\n(\|[-:| ]+\|)\n((?:\|.+\|\n?)+)/g, (match, header, separator, body) => {
+                const headerCells = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('');
+                const bodyRows = body.trim().split('\n').map(row => {
+                    const cells = row.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('');
+                    return `<tr>${cells}</tr>`;
+                }).join('');
+                return `<div class="md-table-wrapper"><table class="md-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table></div>`;
+            });
+
+            // Headers
+            formatted = formatted.replace(/^### (.+)$/gm, '<h4 class="md-h4">$1</h4>');
+            formatted = formatted.replace(/^## (.+)$/gm, '<h3 class="md-h3">$1</h3>');
+            formatted = formatted.replace(/^# (.+)$/gm, '<h2 class="md-h2">$1</h2>');
+
+            // Bold and italic
+            formatted = formatted.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+            formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            formatted = formatted.replace(/\*(.+?)\*/g, '<em>$1</em>');
+            formatted = formatted.replace(/__(.+?)__/g, '<strong>$1</strong>');
+            formatted = formatted.replace(/_(.+?)_/g, '<em>$1</em>');
+
+            // Strikethrough
+            formatted = formatted.replace(/~~(.+?)~~/g, '<del>$1</del>');
+
+            // Unordered lists
+            formatted = formatted.replace(/(?:^|\n)((?:[-*+] .+\n?)+)/g, (match, list) => {
+                const items = list.trim().split('\n').map(item => `<li>${item.replace(/^[-*+] /, '')}</li>`).join('');
+                return `<ul class="md-list">${items}</ul>`;
+            });
+
+            // Ordered lists
+            formatted = formatted.replace(/(?:^|\n)((?:\d+\. .+\n?)+)/g, (match, list) => {
+                const items = list.trim().split('\n').map(item => `<li>${item.replace(/^\d+\. /, '')}</li>`).join('');
+                return `<ol class="md-list">${items}</ol>`;
+            });
+
+            // Blockquotes
+            formatted = formatted.replace(/(?:^|\n)(&gt; .+(?:\n&gt; .+)*)/g, (match, quote) => {
+                const text = quote.replace(/&gt; /g, '').replace(/\n/g, '<br>');
+                return `<blockquote class="md-quote">${text}</blockquote>`;
+            });
+
+            // Horizontal rule
+            formatted = formatted.replace(/(?:^|\n)---(?:\n|$)/g, '<hr class="md-hr">');
+
+            // Links
+            formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener" class="md-link">$1</a>');
+
+            // Line breaks (but not inside pre/code blocks)
+            formatted = formatted.replace(/\n/g, '<br>');
+
+            return formatted;
         },
 
         // Format markdown for BAPI messages with proper escaping
