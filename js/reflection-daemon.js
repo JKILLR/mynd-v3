@@ -351,6 +351,20 @@ const ReflectionDaemon = {
         // SELF-QUERY TOOLS (Inner Dialogue)
         // ═══════════════════════════════════════════════════════════════════
         {
+            name: "think",
+            description: "Pause to think and continue reasoning. Use when you want to reflect before continuing your response.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    thought: {
+                        type: "string",
+                        description: "Your internal thought or reflection"
+                    }
+                },
+                required: ["thought"]
+            }
+        },
+        {
             name: "query_focus",
             description: "Get current session context - recently viewed/edited nodes, active branch, what user is working on. Use to understand immediate context.",
             input_schema: {
@@ -1034,6 +1048,8 @@ const ReflectionDaemon = {
                 case 'github_compare':
                     return await this.toolGithubCompare(toolInput);
                 // Self-query tools (inner dialogue)
+                case 'think':
+                    return await this.toolThink(toolInput);
                 case 'query_focus':
                     return await this.toolQueryFocus(toolInput);
                 case 'query_similar':
@@ -1733,6 +1749,25 @@ const ReflectionDaemon = {
     // ═══════════════════════════════════════════════════════════════════
     // SELF-QUERY TOOLS (Inner Dialogue)
     // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Think tool - allows Claude to pause and continue reasoning
+     * Returns minimal response to continue the tool loop
+     */
+    async toolThink({ thought }) {
+        console.log(`🧠 Inner thought: ${thought}`);
+
+        // Log the thought for debugging/transparency
+        this.log?.(`Inner thought: ${thought.substring(0, 100)}...`);
+
+        // Return acknowledgment - the tool loop will continue
+        // allowing Claude to respond again or use more tools
+        return {
+            acknowledged: true,
+            message: "Thought logged. Continue your reasoning and respond to the user.",
+            timestamp: new Date().toISOString()
+        };
+    },
 
     /**
      * Get current session focus - what user is working on right now

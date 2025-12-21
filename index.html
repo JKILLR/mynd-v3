@@ -6679,7 +6679,19 @@
         .chat-action-item.pending {
             color: var(--accent);
         }
-        
+
+        .chat-action-item.clickable {
+            cursor: pointer;
+            text-decoration: underline;
+            text-decoration-style: dotted;
+            text-underline-offset: 2px;
+        }
+
+        .chat-action-item.clickable:hover {
+            opacity: 0.8;
+            text-decoration-style: solid;
+        }
+
         .chat-action-icon {
             font-size: 0.9em;
         }
