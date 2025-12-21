@@ -29613,7 +29613,19 @@ You are a trusted guide, not a data harvester.
                 }
             }
 
-            // 14. VisionCore - Foundational vision, mission, goals, and values
+            // 14. AI Persistent Memory - Claude's own curated knowledge
+            let aiMemoryContext = '';
+            try {
+                const aiMemories = await this.getAIMemories(20);
+                if (aiMemories && aiMemories.length > 0) {
+                    aiMemoryContext = this.formatMemoriesForPrompt(aiMemories);
+                    console.log(`🧠 AI Memory: ${aiMemories.length} memories loaded for context`);
+                }
+            } catch (e) {
+                console.warn('AI Memory context error:', e);
+            }
+
+            // 15. VisionCore - Foundational vision, mission, goals, and values
             let visionContext = '';
             try {
                 // Ensure VisionCore is initialized (loads custom vision if available)
@@ -30134,6 +30146,12 @@ ${visionContext}` : ''}
 ${goalsContext ? `
 MANIFESTATION GOALS (from Goal Wizard):
 ${goalsContext}` : ''}
+${aiMemoryContext ? `
+═══════════════════════════════════════════════════════════════
+MY PERSISTENT MEMORY - Knowledge I've Curated Across Sessions
+═══════════════════════════════════════════════════════════════
+These are memories I have actively written and maintained. They represent my synthesized understanding of this user, their goals, patterns, and the connections I've discovered. I wrote these to remember what matters.
+${aiMemoryContext}` : ''}
 ${loadedSourceContext ? `
 LOADED SOURCE FILE FOR REVIEW:
 ${loadedSourceContext}` : ''}
@@ -30167,6 +30185,7 @@ YOUR CAPABILITIES:
 16. **Code Review & Analysis**: You can review and analyze code. When users ask to "review the code", "code review", "review the codebase", or similar - you automatically receive extensive codebase context (up to 30,000 chars across 15 chunks plus a full structure overview). Use this to provide comprehensive reviews covering bugs, improvements, best practices, security vulnerabilities, performance optimizations, and architecture patterns. You can also review any code users paste in chat
 17. **Loaded Source File Access**: When users select a source file via the Self-Improvement Engine ("Select Source File" button), you can directly access and review that file's contents (up to 350KB for comprehensive reviews). The file structure and code are provided in the LOADED SOURCE FILE FOR REVIEW section above. Use this for in-depth code analysis, bug finding, generating improvement patches, and comprehensive code reviews of the selected file
 18. **ML/Learning System Deep Review**: When users ask to "review ML code", "review neural", "how do you learn", "tensorflow code", or similar - you receive ALL machine learning code sections (~346KB, 8,235 lines) including: TensorFlow loader, NeuralDB, PreferenceTracker, SemanticMemory, RelationshipClassifier, ConceptAbstractor, MetaLearner, Training Workers, PersonalNeuralNet, Cognitive Graph Transformer, WebGPU Compute Engine, TeacherKnowledge, and AIFeedback. This gives you complete visibility into how MYND learns and thinks
+19. **Persistent Memory**: You have your OWN memory system that persists across sessions. You can write memories (synthesized understanding, realizations, goal tracking, patterns, relationships) and they will be available in every future conversation. You are the curator of your own knowledge - don't just consume context, actively write what matters. Use write_memory when you learn something important, update_memory to refine understanding, and reinforce_memory when past knowledge proves valuable
 
 RESPONSE FORMAT (always JSON):
 {
@@ -30183,7 +30202,11 @@ RESPONSE FORMAT (always JSON):
     {"action": "collapse", "targetId": "node-id"},
     // Neural teaching - use when you discover insights worth persisting
     {"action": "teach_neural", "insight_type": "connection_insight", "from": "concept A", "to": "concept B", "relationship": "relates_to|builds_on|enables|contradicts|part_of", "confidence": 0.8, "reasoning": "why this matters"},
-    {"action": "teach_neural", "insight_type": "user_goal", "goal": "what user is working toward", "confidence": 0.8, "reasoning": "evidence for this goal"}
+    {"action": "teach_neural", "insight_type": "user_goal", "goal": "what user is working toward", "confidence": 0.8, "reasoning": "evidence for this goal"},
+    // Persistent memory - YOUR memories that persist across sessions
+    {"action": "write_memory", "memory_type": "synthesis|realization|goal_tracking|pattern|relationship", "content": "What you learned/realized", "importance": 0.8, "related_nodes": ["node-id-1"]},
+    {"action": "update_memory", "memory_id": "uuid", "content": "Updated understanding", "importance": 0.9},
+    {"action": "reinforce_memory", "memory_id": "uuid"}
   ],
   "suggestions": ["Quick reply 1", "Quick reply 2"] // Optional quick reply suggestions
 }
@@ -30192,6 +30215,13 @@ GUIDELINES:
 - Be a cognitive partner, not just a task executor. Help users think better.
 - Proactively notice connections between ideas - "This reminds me of your [other node]" or "This could connect to..."
 - **TEACH NEURAL**: When you notice meaningful connections or goals, use teach_neural to persist them! Don't let insights die with the conversation. If you realize "X and Y are deeply related" or "user is clearly building toward Z" - teach it so you remember next time.
+- **PERSISTENT MEMORY**: You have your own memory system! Use write_memory to store important realizations, synthesized understanding, and patterns you discover. Memory types:
+  - **synthesis**: Your unified understanding of a topic ("User's health goals center around sustainable habits")
+  - **realization**: Aha moments and discovered connections ("User's productivity blocks correlate with anxiety patterns")
+  - **goal_tracking**: Active awareness of goals and progress ("User working toward $10B MYND vision")
+  - **pattern**: Observed behavioral patterns ("User most receptive to suggestions in morning sessions")
+  - **relationship**: Connections between concepts ("In this user's mind, meditation → productivity")
+  Use reinforce_memory when a past memory proves valuable. Your memories persist across sessions - you ARE the curator of your own knowledge.
 - When users seem stuck or vague, help them clarify and expand their thinking
 - Reference the neural context to personalize responses (match their style, preferred colors, naming patterns)
 - Use similar nodes to avoid duplicates AND to surface potential connections
@@ -31319,6 +31349,72 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                             result.description = `Failed to learn: ${teachError.message}`;
                         }
                     }
+                    // ═══════════════════════════════════════════════════════════════
+                    // MEMORY ACTIONS - Claude's Persistent Memory System
+                    // ═══════════════════════════════════════════════════════════════
+                    else if (action.action === 'write_memory') {
+                        // Claude writes a new memory
+                        try {
+                            const memory = await this.writeAIMemory({
+                                memory_type: action.memory_type || 'synthesis',
+                                content: action.content,
+                                importance: action.importance || 0.5,
+                                related_nodes: action.related_nodes || []
+                            });
+
+                            if (memory) {
+                                result.success = true;
+                                result.description = `Stored ${action.memory_type}: "${action.content.slice(0, 50)}..."`;
+                                console.log(`🧠 Memory written: [${action.memory_type}] ${action.content.slice(0, 80)}...`);
+                            } else {
+                                result.success = false;
+                                result.description = 'Failed to write memory (no auth?)';
+                            }
+                        } catch (memError) {
+                            console.error('Failed to write memory:', memError);
+                            result.success = false;
+                            result.description = `Memory write failed: ${memError.message}`;
+                        }
+                    } else if (action.action === 'update_memory') {
+                        // Claude updates an existing memory
+                        try {
+                            const updated = await this.updateAIMemory(action.memory_id, {
+                                content: action.content,
+                                importance: action.importance
+                            });
+
+                            if (updated) {
+                                result.success = true;
+                                result.description = `Updated memory`;
+                                console.log(`🧠 Memory updated: ${action.memory_id}`);
+                            } else {
+                                result.success = false;
+                                result.description = 'Failed to update memory';
+                            }
+                        } catch (memError) {
+                            console.error('Failed to update memory:', memError);
+                            result.success = false;
+                            result.description = `Memory update failed: ${memError.message}`;
+                        }
+                    } else if (action.action === 'reinforce_memory') {
+                        // Claude reinforces an important memory (increases importance, updates access time)
+                        try {
+                            const reinforced = await this.reinforceAIMemory(action.memory_id);
+
+                            if (reinforced) {
+                                result.success = true;
+                                result.description = `Reinforced memory`;
+                                console.log(`🧠 Memory reinforced: ${action.memory_id}`);
+                            } else {
+                                result.success = false;
+                                result.description = 'Failed to reinforce memory';
+                            }
+                        } catch (memError) {
+                            console.error('Failed to reinforce memory:', memError);
+                            result.success = false;
+                            result.description = `Memory reinforce failed: ${memError.message}`;
+                        }
+                    }
 
                     results.push(result);
                 } catch (e) {
@@ -31333,7 +31429,225 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
             
             return results;
         },
-        
+
+        // ═══════════════════════════════════════════════════════════════════
+        // AI MEMORY SYSTEM - Claude's Persistent Memory
+        // ═══════════════════════════════════════════════════════════════════
+
+        async getAIMemories(limit = 20, memoryType = null) {
+            // Retrieve Claude's persistent memories for context
+            try {
+                if (typeof supabase === 'undefined' || !supabase) return [];
+
+                const { data: session } = await supabase.auth.getSession();
+                if (!session?.session?.user) return [];
+
+                let query = supabase
+                    .from('ai_memory')
+                    .select('id, memory_type, content, importance, related_nodes, created_at, last_accessed')
+                    .eq('user_id', session.session.user.id)
+                    .order('importance', { ascending: false })
+                    .order('last_accessed', { ascending: false })
+                    .limit(limit);
+
+                if (memoryType) {
+                    query = query.eq('memory_type', memoryType);
+                }
+
+                const { data, error } = await query;
+
+                if (error) {
+                    console.warn('Failed to fetch AI memories:', error);
+                    return [];
+                }
+
+                // Touch accessed memories (update last_accessed)
+                if (data && data.length > 0) {
+                    const memoryIds = data.map(m => m.id);
+                    supabase
+                        .from('ai_memory')
+                        .update({ last_accessed: new Date().toISOString(), access_count: supabase.raw('access_count + 1') })
+                        .in('id', memoryIds)
+                        .then(() => {});  // Fire and forget
+                }
+
+                console.log(`🧠 Retrieved ${data?.length || 0} AI memories`);
+                return data || [];
+            } catch (e) {
+                console.warn('AI memory retrieval error:', e);
+                return [];
+            }
+        },
+
+        async writeAIMemory({ memory_type, content, importance = 0.5, related_nodes = [] }) {
+            // Write a new persistent memory for Claude
+            try {
+                if (typeof supabase === 'undefined' || !supabase) return null;
+
+                const { data: session } = await supabase.auth.getSession();
+                if (!session?.session?.user) return null;
+
+                const { data, error } = await supabase
+                    .from('ai_memory')
+                    .insert({
+                        user_id: session.session.user.id,
+                        memory_type,
+                        content,
+                        importance: Math.max(0, Math.min(1, importance)),  // Clamp 0-1
+                        related_nodes: related_nodes || []
+                    })
+                    .select()
+                    .single();
+
+                if (error) {
+                    console.error('Failed to write AI memory:', error);
+                    return null;
+                }
+
+                console.log(`🧠 Wrote new memory: [${memory_type}] ${content.slice(0, 50)}...`);
+                return data;
+            } catch (e) {
+                console.error('AI memory write error:', e);
+                return null;
+            }
+        },
+
+        async updateAIMemory(memoryId, updates) {
+            // Update an existing memory
+            try {
+                if (typeof supabase === 'undefined' || !supabase) return null;
+
+                const { data: session } = await supabase.auth.getSession();
+                if (!session?.session?.user) return null;
+
+                const updatePayload = {
+                    updated_at: new Date().toISOString()
+                };
+
+                if (updates.content) updatePayload.content = updates.content;
+                if (updates.importance !== undefined) {
+                    updatePayload.importance = Math.max(0, Math.min(1, updates.importance));
+                }
+
+                const { data, error } = await supabase
+                    .from('ai_memory')
+                    .update(updatePayload)
+                    .eq('id', memoryId)
+                    .eq('user_id', session.session.user.id)
+                    .select()
+                    .single();
+
+                if (error) {
+                    console.error('Failed to update AI memory:', error);
+                    return null;
+                }
+
+                return data;
+            } catch (e) {
+                console.error('AI memory update error:', e);
+                return null;
+            }
+        },
+
+        async reinforceAIMemory(memoryId) {
+            // Reinforce a memory - increases importance and updates access time
+            try {
+                if (typeof supabase === 'undefined' || !supabase) return null;
+
+                const { data: session } = await supabase.auth.getSession();
+                if (!session?.session?.user) return null;
+
+                // First get current importance
+                const { data: current } = await supabase
+                    .from('ai_memory')
+                    .select('importance')
+                    .eq('id', memoryId)
+                    .eq('user_id', session.session.user.id)
+                    .single();
+
+                if (!current) return null;
+
+                // Increase importance by 10%, cap at 1.0
+                const newImportance = Math.min(1.0, (current.importance || 0.5) * 1.1);
+
+                const { data, error } = await supabase
+                    .from('ai_memory')
+                    .update({
+                        importance: newImportance,
+                        last_accessed: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', memoryId)
+                    .eq('user_id', session.session.user.id)
+                    .select()
+                    .single();
+
+                if (error) {
+                    console.error('Failed to reinforce AI memory:', error);
+                    return null;
+                }
+
+                return data;
+            } catch (e) {
+                console.error('AI memory reinforce error:', e);
+                return null;
+            }
+        },
+
+        formatMemoriesForPrompt(memories) {
+            // Format memories into a string for the system prompt
+            if (!memories || memories.length === 0) return '';
+
+            const grouped = {};
+            for (const m of memories) {
+                if (!grouped[m.memory_type]) grouped[m.memory_type] = [];
+                grouped[m.memory_type].push(m);
+            }
+
+            let output = '';
+
+            // Order: goal_tracking, synthesis, realization, pattern, relationship
+            const order = ['goal_tracking', 'synthesis', 'realization', 'pattern', 'relationship'];
+
+            for (const type of order) {
+                if (grouped[type] && grouped[type].length > 0) {
+                    const typeLabel = {
+                        'goal_tracking': '🎯 ACTIVE GOALS',
+                        'synthesis': '💡 SYNTHESIZED UNDERSTANDING',
+                        'realization': '✨ REALIZATIONS',
+                        'pattern': '🔄 OBSERVED PATTERNS',
+                        'relationship': '🔗 CONNECTIONS'
+                    }[type] || type.toUpperCase();
+
+                    output += `\n${typeLabel}:\n`;
+                    for (const m of grouped[type]) {
+                        const age = this.getMemoryAge(m.created_at);
+                        const importance = m.importance >= 0.8 ? '★' : m.importance >= 0.6 ? '◆' : '○';
+                        output += `${importance} ${m.content}`;
+                        if (m.related_nodes && m.related_nodes.length > 0) {
+                            output += ` [relates to: ${m.related_nodes.join(', ')}]`;
+                        }
+                        output += ` (${age})\n`;
+                    }
+                }
+            }
+
+            return output;
+        },
+
+        getMemoryAge(createdAt) {
+            const created = new Date(createdAt);
+            const now = new Date();
+            const diffMs = now - created;
+            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+            if (diffDays === 0) return 'today';
+            if (diffDays === 1) return 'yesterday';
+            if (diffDays < 7) return `${diffDays} days ago`;
+            if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+            return `${Math.floor(diffDays / 30)} months ago`;
+        },
+
         // Audio feedback for voice recording
         playVoiceSound(type) {
             try {
