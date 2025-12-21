@@ -28816,14 +28816,16 @@ You are a trusted guide, not a data harvester.
         },
 
         showSuggestions(suggestions) {
-            this.suggestionsContainer.innerHTML = suggestions.map(s => 
-                `<button class="chat-suggestion-btn">${escapeHTML(s)}</button>`
+            this.suggestionsContainer.innerHTML = suggestions.map(s =>
+                `<button type="button" class="chat-suggestion-btn">${escapeHTML(s)}</button>`
             ).join('');
             this.suggestionsContainer.style.display = 'flex';
-            
+
             // Add click handlers
             this.suggestionsContainer.querySelectorAll('.chat-suggestion-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     this.input.value = btn.textContent;
                     this.sendBtn.disabled = false;
                     this.sendMessage();
