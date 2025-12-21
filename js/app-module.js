@@ -30728,14 +30728,17 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                     } else if (action.action === 'edit') {
                         const targetId = resolveId(action.targetId);
                         if (targetId) {
+                            const targetNode = store.findNode(targetId);
+                            const nodeName = action.label || targetNode?.label || 'node';
                             const updates = {};
                             if (action.label) updates.label = action.label;
                             if (action.description) updates.description = action.description;
                             if (action.color) updates.color = action.color;
                             store.updateNode(targetId, updates);
                             result.success = true;
-                            result.description = `Updated node`;
-                            
+                            result.description = `Updated "${nodeName}"`;
+                            result.nodeId = targetId; // Make clickable to navigate to edited node
+
                             // Update mesh
                             const mesh = nodes.get(targetId);
                             if (mesh && action.color) {
@@ -30820,6 +30823,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                             }, 100);
                             result.success = true;
                             result.description = `Focused on node`;
+                            result.nodeId = targetId;
                         }
                     } else if (action.action === 'expand') {
                         const targetId = resolveId(action.targetId);
@@ -30827,6 +30831,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                             store.expandedNodes.add(targetId);
                             result.success = true;
                             result.description = `Expanded node`;
+                            result.nodeId = targetId;
                         }
                     } else if (action.action === 'collapse') {
                         const targetId = resolveId(action.targetId);
@@ -30834,6 +30839,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                             store.expandedNodes.delete(targetId);
                             result.success = true;
                             result.description = `Collapsed node`;
+                            result.nodeId = targetId;
                         }
                     } else if (action.action === 'teach_neural') {
                         // Handle neural teaching - Claude teaching the local neural net
