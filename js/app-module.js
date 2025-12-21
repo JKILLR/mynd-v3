@@ -30837,6 +30837,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                         }
                     } else if (action.action === 'teach_neural') {
                         // Handle neural teaching - Claude teaching the local neural net
+                        console.log('📚 teach_neural action received:', JSON.stringify(action, null, 2));
                         try {
                             const insightType = action.insight_type || 'general';
 
@@ -30866,6 +30867,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                                 result.success = true;
                                 result.description = `Learned connection: ${action.from} → ${action.to}`;
                                 console.log(`🧠 Neural taught: ${action.from} ${action.relationship || '→'} ${action.to}`);
+                                console.log(`📊 SemanticMemory now has ${semanticMemory.memories?.length || 0} memories`);
 
                             } else if (insightType === 'user_goal') {
                                 // Store user goal insight
