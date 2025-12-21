@@ -3633,7 +3633,11 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                 'chat_query': 0.6,              // User questions
                 'chat_insight': 0.7,            // AI insights
                 'user_preference': 0.75,        // Expressed preferences
-                'correction_received': 0.8      // Corrections are important to remember
+                'correction_received': 0.8,     // Corrections are important to remember
+                // Claude-taught insights (teach_neural action)
+                'connection_insight': 0.85,     // Discovered connections between concepts
+                'user_goal': 0.9,               // Identified user goals - highest priority
+                'neural_insight': 0.7           // General neural learnings
             };
             
             let importance = baseImportance[event] || 0.5;
@@ -28847,17 +28851,21 @@ You are a trusted guide, not a data harvester.
                     // Recall relevant past conversations using embedding similarity
                     const relevantMemories = await semanticMemory.recallMemories(userMessage, 5, 0.3);
 
-                    // Filter for conversation-related memories
+                    // Filter for conversation-related memories and neural insights
                     const conversationMemories = relevantMemories.filter(m =>
                         m.event === 'conversation_exchange' ||
                         m.event === 'chat_insight' ||
                         m.event === 'user_preference' ||
-                        m.event === 'correction_received'
+                        m.event === 'correction_received' ||
+                        // Claude-taught insights
+                        m.event === 'connection_insight' ||
+                        m.event === 'user_goal' ||
+                        m.event === 'neural_insight'
                     );
 
                     if (conversationMemories.length > 0) {
-                        conversationContext = '\n=== RELEVANT PAST CONVERSATIONS ===\n';
-                        conversationContext += 'You have discussed similar topics before. Here are relevant memories:\n\n';
+                        conversationContext = '\n=== RELEVANT MEMORIES & INSIGHTS ===\n';
+                        conversationContext += 'Here are relevant memories, connections, and insights you have learned:\n\n';
 
                         for (const memory of conversationMemories.slice(0, 3)) {
                             const timeAgo = Math.round((Date.now() - memory.timestamp) / (1000 * 60 * 60 * 24));
@@ -29780,7 +29788,10 @@ RESPONSE FORMAT (always JSON):
     {"action": "reorder", "targetId": "node-id", "position": "first|last|up|down|NUMBER"},
     {"action": "focus", "targetId": "node-id"},
     {"action": "expand", "targetId": "node-id"},
-    {"action": "collapse", "targetId": "node-id"}
+    {"action": "collapse", "targetId": "node-id"},
+    // Neural teaching - use when you discover insights worth persisting
+    {"action": "teach_neural", "insight_type": "connection_insight", "from": "concept A", "to": "concept B", "relationship": "relates_to|builds_on|enables|contradicts|part_of", "confidence": 0.8, "reasoning": "why this matters"},
+    {"action": "teach_neural", "insight_type": "user_goal", "goal": "what user is working toward", "confidence": 0.8, "reasoning": "evidence for this goal"}
   ],
   "suggestions": ["Quick reply 1", "Quick reply 2"] // Optional quick reply suggestions
 }
@@ -29788,6 +29799,7 @@ RESPONSE FORMAT (always JSON):
 GUIDELINES:
 - Be a cognitive partner, not just a task executor. Help users think better.
 - Proactively notice connections between ideas - "This reminds me of your [other node]" or "This could connect to..."
+- **TEACH NEURAL**: When you notice meaningful connections or goals, use teach_neural to persist them! Don't let insights die with the conversation. If you realize "X and Y are deeply related" or "user is clearly building toward Z" - teach it so you remember next time.
 - When users seem stuck or vague, help them clarify and expand their thinking
 - Reference the neural context to personalize responses (match their style, preferred colors, naming patterns)
 - Use similar nodes to avoid duplicates AND to surface potential connections
@@ -30796,8 +30808,86 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                             result.success = true;
                             result.description = `Collapsed node`;
                         }
+                    } else if (action.action === 'teach_neural') {
+                        // Handle neural teaching - Claude teaching the local neural net
+                        try {
+                            const insightType = action.insight_type || 'general';
+
+                            if (insightType === 'connection_insight') {
+                                // Store connection insight in semantic memory
+                                const connectionContext = [
+                                    `Connection discovered: "${action.from}" ${action.relationship || 'relates_to'} "${action.to}"`,
+                                    action.reasoning ? `Reasoning: ${action.reasoning}` : '',
+                                    `Confidence: ${Math.round((action.confidence || 0.7) * 100)}%`
+                                ].filter(Boolean).join('\n');
+
+                                await semanticMemory.addMemory(
+                                    'connection_insight',
+                                    connectionContext,
+                                    {
+                                        insightType: 'connection_insight',
+                                        from: action.from,
+                                        to: action.to,
+                                        relationship: action.relationship || 'relates_to',
+                                        confidence: action.confidence || 0.7,
+                                        reasoning: action.reasoning || '',
+                                        source: 'claude_taught',
+                                        timestamp: Date.now()
+                                    }
+                                );
+
+                                result.success = true;
+                                result.description = `Learned connection: ${action.from} → ${action.to}`;
+                                console.log(`🧠 Neural taught: ${action.from} ${action.relationship || '→'} ${action.to}`);
+
+                            } else if (insightType === 'user_goal') {
+                                // Store user goal insight
+                                const goalContext = [
+                                    `User goal identified: ${action.goal}`,
+                                    action.reasoning ? `Context: ${action.reasoning}` : ''
+                                ].filter(Boolean).join('\n');
+
+                                await semanticMemory.addMemory(
+                                    'user_goal',
+                                    goalContext,
+                                    {
+                                        insightType: 'user_goal',
+                                        goal: action.goal,
+                                        confidence: action.confidence || 0.8,
+                                        reasoning: action.reasoning || '',
+                                        source: 'claude_taught',
+                                        timestamp: Date.now()
+                                    }
+                                );
+
+                                result.success = true;
+                                result.description = `Learned goal: ${action.goal}`;
+                                console.log(`🎯 Neural taught goal: ${action.goal}`);
+
+                            } else {
+                                // Generic insight
+                                await semanticMemory.addMemory(
+                                    'neural_insight',
+                                    action.insight || action.pattern || 'Unknown insight',
+                                    {
+                                        insightType: insightType,
+                                        confidence: action.confidence || 0.7,
+                                        source: 'claude_taught',
+                                        timestamp: Date.now(),
+                                        ...action
+                                    }
+                                );
+
+                                result.success = true;
+                                result.description = `Learned insight: ${insightType}`;
+                            }
+                        } catch (teachError) {
+                            console.error('Failed to teach neural:', teachError);
+                            result.success = false;
+                            result.description = `Failed to learn: ${teachError.message}`;
+                        }
                     }
-                    
+
                     results.push(result);
                 } catch (e) {
                     results.push({ action: action.action, success: false, description: `Error: ${e.message}` });
