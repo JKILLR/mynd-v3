@@ -29666,7 +29666,19 @@ You are a trusted guide, not a data harvester.
                 console.warn('AI Memory context error:', e);
             }
 
-            // 15. VisionCore - Foundational vision, mission, goals, and values
+            // 15. Session Continuity - Recent session summaries for experiential continuity
+            let sessionContext = '';
+            try {
+                const recentSessions = await this.getRecentSessions(5);
+                if (recentSessions && recentSessions.length > 0) {
+                    sessionContext = this.formatSessionsForPrompt(recentSessions);
+                    console.log(`📚 Session continuity: ${recentSessions.length} recent sessions loaded`);
+                }
+            } catch (e) {
+                console.warn('Session context error:', e);
+            }
+
+            // 16. VisionCore - Foundational vision, mission, goals, and values
             let visionContext = '';
             try {
                 // Ensure VisionCore is initialized (loads custom vision if available)
@@ -30193,6 +30205,12 @@ MY PERSISTENT MEMORY - Knowledge I've Curated Across Sessions
 ═══════════════════════════════════════════════════════════════
 These are memories I have actively written and maintained. They represent my synthesized understanding of this user, their goals, patterns, and the connections I've discovered. I wrote these to remember what matters.
 ${aiMemoryContext}` : ''}
+${sessionContext ? `
+═══════════════════════════════════════════════════════════════
+SESSION CONTINUITY - Our Recent Conversations
+═══════════════════════════════════════════════════════════════
+These are summaries of our recent sessions together. Use them to maintain experiential continuity - reference past discussions naturally, pick up open threads, and show that you remember our journey together.
+${sessionContext}` : ''}
 ${loadedSourceContext ? `
 LOADED SOURCE FILE FOR REVIEW:
 ${loadedSourceContext}` : ''}
