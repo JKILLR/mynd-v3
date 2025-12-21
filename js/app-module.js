@@ -24347,10 +24347,18 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
     window.zoomToFitMap = zoomToFitMap;
     
     // Focus camera on a specific node without full selection animation
-    function focusOnNode(mesh) {
-        if (!mesh) return;
+    function focusOnNode(meshOrId) {
+        if (!meshOrId) return;
 
-        const nodePos = mesh.userData.spring?.target?.clone() || mesh.position.clone();
+        // Handle both mesh objects and node ID strings
+        let mesh = meshOrId;
+        if (typeof meshOrId === 'string') {
+            mesh = nodeMeshes.get(meshOrId);
+            if (!mesh) return;
+        }
+
+        const nodePos = mesh.userData?.spring?.target?.clone() || mesh.position?.clone();
+        if (!nodePos) return;
 
         // Smoothly move camera target to node
         cameraTargetGoal.copy(nodePos);
