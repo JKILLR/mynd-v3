@@ -686,7 +686,7 @@ const ReflectionDaemon = {
         };
 
         // 1. Map structure
-        const store = window.app?.store;
+        const store = window.store;
         if (store) {
             const allNodes = store.getAllNodes();
             context.mapContext = this.buildMapContext(allNodes, store.data);
@@ -854,7 +854,7 @@ const ReflectionDaemon = {
         }
 
         // 4. Semantic search for additional relevant chunks based on map content
-        const store = window.app?.store;
+        const store = window.store;
         if (store && codeRAG.search) {
             const topNodes = store.data?.children?.slice(0, 5) || [];
             const searchTerms = topNodes.map(n => n.label).filter(Boolean);
@@ -2249,7 +2249,7 @@ You have tools available to explore the codebase further. Use them to investigat
     },
 
     async applyApprovedItem(item) {
-        const store = window.app?.store;
+        const store = window.store;
         if (!store) return;
 
         try {
@@ -2300,7 +2300,7 @@ You have tools available to explore the codebase further. Use them to investigat
     // ═══════════════════════════════════════════════════════════════════
 
     async addInsightToMap(insight) {
-        const store = window.app?.store;
+        const store = window.store;
         if (!store) return;
 
         // Find or create MYND Thoughts branch
@@ -2324,7 +2324,7 @@ You have tools available to explore the codebase further. Use them to investigat
     },
 
     async addReflectionLogToMap(results) {
-        const store = window.app?.store;
+        const store = window.store;
         if (!store) return;
 
         let thoughtsNode = this.findMyndThoughtsNode(store);

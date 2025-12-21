@@ -3526,9 +3526,9 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
     class SemanticMemory {
         constructor() {
             this.memories = [];
-            this.maxMemories = 200; // Keep last 200 memories
-            this.minImportance = 0.2; // Minimum importance to keep
-            this.decayRate = 0.995; // Daily decay multiplier
+            this.maxMemories = 2000; // Keep last 2000 memories
+            this.minImportance = 0.25; // Minimum importance to keep (stricter for larger pool)
+            this.decayRate = 0.99; // Daily decay multiplier (faster decay for more memories)
             this.loaded = false;
             this.encoder = null; // Will be set from neuralNet
         }
