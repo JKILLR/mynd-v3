@@ -41583,7 +41583,9 @@ Summary:`
             
             // Suggestions
             document.querySelectorAll('.sheet-suggestion').forEach(sug => {
-                sug.addEventListener('click', () => {
+                sug.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     const textInput = document.getElementById('sheet-text-input');
                     if (textInput) {
                         textInput.value = sug.textContent;
