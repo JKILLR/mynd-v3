@@ -346,13 +346,15 @@ class ContextSynthesizer:
                     relevance = min(1.0, matches / max(len(query_words), 1))
 
                 if relevance > 0.2:  # Lower threshold for memories
-                    # Calculate recency
+                    # Calculate recency (evergreen memories never decay)
+                    is_evergreen = mem.get('evergreen', False)
                     created = mem.get('created_at', '')
-                    recency = self._calculate_recency(created)
+                    recency = self._calculate_recency(created, evergreen=is_evergreen)
 
                     # Format content with type indicator
                     mem_type = mem.get('memory_type', 'memory')
-                    formatted = f"[{mem_type}] {content[:300]}"
+                    evergreen_marker = "⚓" if is_evergreen else ""
+                    formatted = f"[{mem_type}]{evergreen_marker} {content[:300]}"
 
                     items.append(ContextItem(
                         content=formatted,
@@ -363,6 +365,7 @@ class ContextSynthesizer:
                         metadata={
                             'memory_id': mem.get('id'),
                             'memory_type': mem_type,
+                            'evergreen': is_evergreen,
                             'related_nodes': mem.get('related_nodes', [])
                         }
                     ))
@@ -563,8 +566,18 @@ class ContextSynthesizer:
 
         return insights[:5]
 
-    def _calculate_recency(self, timestamp) -> float:
-        """Calculate recency score (1 = now, 0 = very old)"""
+    def _calculate_recency(self, timestamp, evergreen: bool = False) -> float:
+        """
+        Calculate recency score (1 = now, 0 = very old)
+
+        Args:
+            timestamp: Creation or last_accessed time
+            evergreen: If True, always returns 1.0 (foundational knowledge never decays)
+        """
+        # Evergreen memories never decay
+        if evergreen:
+            return 1.0
+
         if not timestamp:
             return 0.5
 
@@ -581,7 +594,7 @@ class ContextSynthesizer:
                 else:
                     return 0.5
 
-            # Decay: 1 day = 0.9, 1 week = 0.7, 1 month = 0.5
+            # Decay: 1 day = 0.97, 1 week = 0.79, 1 month = 0.1
             days_old = age_seconds / 86400
             recency = max(0.1, 1.0 - (days_old * 0.03))  # 3% decay per day
             return min(1.0, recency)

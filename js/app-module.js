@@ -31528,13 +31528,24 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
             }
         },
 
-        async writeAIMemory({ memory_type, content, importance = 0.5, related_nodes = [] }) {
+        async writeAIMemory({ memory_type, content, importance = 0.5, related_nodes = [], evergreen = null }) {
             // Write a new persistent memory for Claude
+            // evergreen: if null, auto-determine based on memory_type
+            //   - synthesis, realization, pattern → evergreen (foundational)
+            //   - goal_tracking → not evergreen (situational)
+            //   - relationship → depends on context (default false)
             try {
                 if (typeof supabase === 'undefined' || !supabase) return null;
 
                 const { data: session } = await supabase.auth.getSession();
                 if (!session?.session?.user) return null;
+
+                // Auto-determine evergreen based on memory type if not specified
+                let isEvergreen = evergreen;
+                if (isEvergreen === null) {
+                    const evergreenTypes = ['synthesis', 'realization', 'pattern'];
+                    isEvergreen = evergreenTypes.includes(memory_type);
+                }
 
                 const { data, error } = await supabase
                     .from('ai_memory')
@@ -31543,6 +31554,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                         memory_type,
                         content,
                         importance: Math.max(0, Math.min(1, importance)),  // Clamp 0-1
+                        evergreen: isEvergreen,
                         related_nodes: related_nodes || []
                     })
                     .select()
@@ -31553,7 +31565,8 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                     return null;
                 }
 
-                console.log(`🧠 Wrote new memory: [${memory_type}] ${content.slice(0, 50)}...`);
+                const evergreenIcon = isEvergreen ? '⚓' : '';
+                console.log(`🧠 Wrote new memory: [${memory_type}]${evergreenIcon} ${content.slice(0, 50)}...`);
                 return data;
             } catch (e) {
                 console.error('AI memory write error:', e);
