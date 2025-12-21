@@ -1,5 +1,5 @@
 // MYND Service Worker
-const CACHE_NAME = 'mynd-v3-cache-v7';
+const CACHE_NAME = 'mynd-v3-cache-v8';
 const OFFLINE_URL = '/';
 
 // Assets to cache for offline use
