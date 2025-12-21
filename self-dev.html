@@ -471,10 +471,10 @@
         /* ═══════════════════════════════════════════════════════════
            HEADER & BRANDING
            ═══════════════════════════════════════════════════════════ */
-        #header { 
-            position: fixed; 
-            top: var(--space-5); 
-            left: var(--space-5); 
+        #header {
+            position: fixed;
+            top: var(--space-5);
+            right: var(--space-5);
             z-index: var(--z-ui);
             display: flex;
             align-items: center;
@@ -538,7 +538,7 @@
         #top-controls {
             position: fixed;
             top: var(--space-5);
-            right: var(--space-5);
+            left: var(--space-5);
             z-index: var(--z-ui);
             display: flex;
             gap: var(--space-2);
@@ -2412,7 +2412,7 @@
         #user-dropdown {
             position: fixed;
             top: 60px;
-            right: var(--space-4);
+            left: var(--space-4);
             width: 280px;
             background: var(--bg-secondary);
             backdrop-filter: blur(30px);
@@ -5338,7 +5338,7 @@
         #theme-picker {
             position: fixed;
             top: 80px;
-            right: var(--space-5);
+            left: var(--space-5);
             z-index: var(--z-overlay);
             background: var(--glass-bg);
             backdrop-filter: blur(var(--glass-blur));
@@ -5398,7 +5398,7 @@
         #menu-dropdown {
             position: fixed;
             top: 80px;
-            right: var(--space-5);
+            left: var(--space-5);
             z-index: var(--z-overlay);
             background: var(--glass-bg);
             backdrop-filter: blur(30px);
@@ -6427,6 +6427,47 @@
             background: var(--bg-tertiary);
             color: var(--text-primary);
             border-bottom-left-radius: 4px;
+            position: relative;
+        }
+
+        .chat-copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 28px;
+            height: 28px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--glass-border);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+            transition: all 0.2s;
+            color: var(--text-secondary);
+        }
+
+        .chat-message.assistant:hover .chat-copy-btn {
+            opacity: 1;
+        }
+
+        .chat-copy-btn:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .chat-copy-btn.copied {
+            background: #22c55e;
+            color: white;
+            border-color: #22c55e;
+            opacity: 1;
+        }
+
+        .chat-copy-btn svg {
+            width: 14px;
+            height: 14px;
         }
 
         /* BAPI (Local Brain) insight messages */
@@ -6643,7 +6684,232 @@
         .chat-send-btn:not(:disabled) {
             color: var(--accent);
         }
-        
+
+        .chat-upload-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chat-upload-btn:hover {
+            color: var(--accent);
+            background: var(--bg-tertiary);
+        }
+
+        /* Image preview area */
+        .chat-image-preview {
+            display: none;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--glass-border);
+            background: var(--bg-tertiary);
+            border-radius: 16px 16px 0 0;
+            margin: -8px -12px 8px -12px;
+        }
+
+        .chat-image-preview.has-images {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .chat-image-preview-item {
+            position: relative;
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+
+        .chat-image-preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .chat-image-preview-remove {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 18px;
+            height: 18px;
+            background: rgba(0, 0, 0, 0.7);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .chat-image-preview-remove:hover {
+            background: #EF4444;
+        }
+
+        /* Images in messages */
+        .chat-message-images {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .chat-message-image {
+            max-width: 200px;
+            max-height: 150px;
+            border-radius: 8px;
+            object-fit: cover;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .chat-message-image:hover {
+            transform: scale(1.02);
+        }
+
+        /* Drag over effect for input */
+        .chat-input-container.drag-over {
+            border-color: var(--accent);
+            background: rgba(var(--accent-rgb), 0.05);
+        }
+
+        /* Enhanced markdown styles */
+        .code-block {
+            background: var(--bg-primary);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            margin: 8px 0;
+            overflow: hidden;
+        }
+
+        .code-block .code-lang {
+            display: block;
+            padding: 6px 12px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--glass-border);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 12px;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            white-space: pre;
+        }
+
+        .inline-code {
+            background: var(--bg-tertiary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 0.9em;
+            color: var(--accent);
+        }
+
+        .md-table-wrapper {
+            overflow-x: auto;
+            margin: 12px 0;
+        }
+
+        .md-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .md-table th,
+        .md-table td {
+            padding: 8px 12px;
+            border: 1px solid var(--glass-border);
+            text-align: left;
+        }
+
+        .md-table th {
+            background: var(--bg-tertiary);
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .md-table tr:nth-child(even) {
+            background: var(--bg-secondary);
+        }
+
+        .md-h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 16px 0 8px 0;
+            color: var(--text-primary);
+        }
+
+        .md-h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 12px 0 6px 0;
+            color: var(--text-primary);
+        }
+
+        .md-h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 10px 0 4px 0;
+            color: var(--text-primary);
+        }
+
+        .md-list {
+            margin: 8px 0;
+            padding-left: 24px;
+        }
+
+        .md-list li {
+            margin: 4px 0;
+        }
+
+        .md-quote {
+            border-left: 3px solid var(--accent);
+            margin: 12px 0;
+            padding: 8px 16px;
+            background: var(--bg-secondary);
+            border-radius: 0 8px 8px 0;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .md-hr {
+            border: none;
+            height: 1px;
+            background: var(--glass-border);
+            margin: 16px 0;
+        }
+
+        .md-link {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .md-link:hover {
+            text-decoration: underline;
+        }
+
         .chat-voice-btn.recording {
             color: #EF4444;
             background: rgba(239, 68, 68, 0.1);
@@ -8348,7 +8614,7 @@
         </div>
         <div class="voice-icon" id="voice-icon">
             <svg id="voice-icon-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-            <svg id="voice-icon-brain" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4c0 .74.2 1.43.56 2.02A4 4 0 0 0 6 12c0 1.2.52 2.27 1.35 3A4 4 0 0 0 6 18a4 4 0 0 0 4 4h.09c.49 0 .97-.07 1.41-.2"/><path d="M12 2a4 4 0 0 1 4 4c0 .74-.2 1.43-.56 2.02A4 4 0 0 1 18 12c0 1.2-.52 2.27-1.35 3A4 4 0 0 1 18 18a4 4 0 0 1-4 4h-.09c-.49 0-.97-.07-1.41-.2"/><path d="M12 2v20"/><path d="M9 10h6"/><path d="M9 14h6"/></svg>
+            <svg id="voice-icon-brain" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="12" rx="10" ry="4"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(120 12 12)"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
         </div>
         <div class="voice-status" id="voice-status">Listening...</div>
         <div class="voice-transcript" id="voice-transcript">Say something...</div>
@@ -9315,9 +9581,11 @@ Things to avoid..."></textarea>
     <div id="neural-panel">
         <div class="neural-header">
             <div class="neural-title">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 2a4 4 0 0 0-4 4c0 .74.2 1.43.56 2.02A4 4 0 0 0 6 12c0 1.2.52 2.27 1.35 3A4 4 0 0 0 6 18a4 4 0 0 0 4 4c.74 0 1.43-.2 2-.56A4 4 0 0 0 16 22a4 4 0 0 0 4-4c0-1.2-.52-2.27-1.35-3A4 4 0 0 0 20 12a4 4 0 0 0-2.56-3.98c.36-.59.56-1.28.56-2.02a4 4 0 0 0-4-4"/>
-                    <circle cx="12" cy="12" r="2"/>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <ellipse cx="12" cy="12" rx="10" ry="4"/>
+                    <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(60 12 12)"/>
+                    <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(120 12 12)"/>
+                    <circle cx="12" cy="12" r="2" fill="currentColor"/>
                 </svg>
                 Your Neural Net
             </div>
@@ -9564,12 +9832,23 @@ Things to avoid..."></textarea>
         
         <div class="chat-input-area">
             <div class="chat-input-container">
-                <textarea 
-                    id="chat-input" 
-                    placeholder="Ask me anything..." 
+                <div class="chat-image-preview" id="chat-image-preview">
+                    <!-- Image previews will appear here -->
+                </div>
+                <textarea
+                    id="chat-input"
+                    placeholder="Ask me anything..."
                     rows="1"
                     aria-label="Chat message"
                 ></textarea>
+                <button class="chat-upload-btn" id="chat-upload-btn" title="Upload image">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                </button>
+                <input type="file" id="chat-image-input" accept="image/*" multiple style="display: none;">
                 <button class="chat-voice-btn" id="chat-voice-btn" title="Voice input">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
