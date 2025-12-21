@@ -28340,7 +28340,7 @@ You are a trusted guide, not a data harvester.
             }
 
             // Add user message with images
-            this.addMessage('user', content, null, imagesToSend);
+            this.addMessage('user', content, [], [], imagesToSend);
 
             // Show typing indicator
             this.showTyping();
@@ -28388,7 +28388,7 @@ You are a trusted guide, not a data harvester.
                     }
                     
                     // Add assistant message
-                    this.addMessage('assistant', response.message, actionResults, response.suggestions);
+                    this.addMessage('assistant', response.message, actionResults, response.suggestions || [], []);
                     
                     // Show quick suggestions if provided
                     if (response.suggestions && response.suggestions.length > 0) {
@@ -28405,12 +28405,13 @@ You are a trusted guide, not a data harvester.
             }
         },
         
-        addMessage(role, content, actionResults = [], images = []) {
+        addMessage(role, content, actionResults = [], suggestions = [], images = []) {
             const message = {
                 role,
                 content,
                 actions: actionResults,
-                images: images.map(img => img.dataUrl || img), // Store just the data URLs
+                suggestions: suggestions || [],
+                images: Array.isArray(images) ? images.map(img => img.dataUrl || img) : [], // Store just the data URLs
                 timestamp: Date.now()
             };
 
