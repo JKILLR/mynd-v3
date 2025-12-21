@@ -1784,7 +1784,7 @@ const ReflectionDaemon = {
                 // Get selected node
                 const selectedId = store.selectedNode;
                 if (selectedId) {
-                    const selectedNode = store.getNode(selectedId);
+                    const selectedNode = store.findNode(selectedId);
                     if (selectedNode) {
                         result.session_context.selected_node = {
                             id: selectedId,
@@ -1797,7 +1797,7 @@ const ReflectionDaemon = {
                         const breadcrumb = [];
                         let current = selectedNode;
                         while (current?.parentId) {
-                            const parent = store.getNode(current.parentId);
+                            const parent = store.findNode(current.parentId);
                             if (parent) {
                                 breadcrumb.unshift(parent.label);
                                 current = parent;
@@ -1809,7 +1809,7 @@ const ReflectionDaemon = {
 
                         // Get siblings
                         if (selectedNode.parentId) {
-                            const parent = store.getNode(selectedNode.parentId);
+                            const parent = store.findNode(selectedNode.parentId);
                             if (parent?.children) {
                                 result.session_context.siblings = parent.children
                                     .filter(c => c.id !== selectedId)
@@ -1825,7 +1825,7 @@ const ReflectionDaemon = {
                 if (expandedNodes.length > 0) {
                     result.session_context.expanded_branches = expandedNodes
                         .slice(0, 10)
-                        .map(id => store.getNode(id)?.label)
+                        .map(id => store.findNode(id)?.label)
                         .filter(Boolean);
                 }
 
@@ -2104,7 +2104,7 @@ const ReflectionDaemon = {
 
                 // Get parent
                 if (node.parentId) {
-                    const parent = store.getNode(node.parentId);
+                    const parent = store.findNode(node.parentId);
                     if (parent) {
                         nodeConnections.parent = { id: parent.id, label: parent.label };
 

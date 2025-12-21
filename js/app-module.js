@@ -28336,10 +28336,10 @@ You are a trusted guide, not a data harvester.
                         window.store.expandedNodes.add(nodeId);
 
                         // Expand parent chain to make node visible
-                        let current = window.store.getNode(nodeId);
+                        let current = window.store.findNode(nodeId);
                         while (current?.parentId) {
                             window.store.expandedNodes.add(current.parentId);
-                            current = window.store.getNode(current.parentId);
+                            current = window.store.findNode(current.parentId);
                         }
 
                         // Rebuild scene and focus
