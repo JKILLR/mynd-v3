@@ -336,19 +336,21 @@ class ContextSynthesizer:
     def _search_map_nodes(self, query_embedding: np.ndarray, query: str, map_data: Dict) -> List[ContextItem]:
         """Search map nodes using HYBRID scoring (vector + BM25)"""
         items = []
-        nodes = map_data.get('nodes', [])
+        nodes = map_data.get('nodes') or []
 
         # Calculate local corpus stats for BM25 (not shared instance state)
         corpus_size = len(nodes)
         avg_doc_len = 50  # Default
         if nodes:
-            total_len = sum(len(n.get('label', '')) + len(n.get('description', '')) for n in nodes)
-            avg_doc_len = max(20, total_len // len(nodes))
+            total_len = sum(len(n.get('label') or '') + len(n.get('description') or '') for n in nodes if n)
+            avg_doc_len = max(20, total_len // len(nodes)) if nodes else 50
 
         for node in nodes:
+            if not node:
+                continue
             # Skip if no meaningful content
-            label = node.get('label', '')
-            description = node.get('description', '')
+            label = node.get('label') or ''
+            description = node.get('description') or ''
             if not label and not description:
                 continue
 
