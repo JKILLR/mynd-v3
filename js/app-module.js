@@ -27795,60 +27795,78 @@ You are a trusted guide, not a data harvester.
         
         setupEventListeners() {
             // Toggle chat via slide toggle
-            this.slideToggle.addEventListener('click', () => this.toggle());
-            
+            if (this.slideToggle) {
+                this.slideToggle.addEventListener('click', () => this.toggle());
+            }
+
             // Mobile close button
             const mobileClose = document.getElementById('chat-mobile-close');
             if (mobileClose) {
                 mobileClose.addEventListener('click', () => this.close());
             }
-            
+
             // Clear conversation
-            this.clearBtn.addEventListener('click', async () => {
-                const confirmed = await showConfirm({
-                    title: 'Clear Chat',
-                    message: 'Clear all conversation history?',
-                    confirmText: 'Clear',
-                    cancelText: 'Cancel',
-                    danger: true
+            if (this.clearBtn) {
+                this.clearBtn.addEventListener('click', async () => {
+                    const confirmed = await showConfirm({
+                        title: 'Clear Chat',
+                        message: 'Clear all conversation history?',
+                        confirmText: 'Clear',
+                        cancelText: 'Cancel',
+                        danger: true
+                    });
+                    if (confirmed) {
+                        this.clearConversation();
+                    }
                 });
-                if (confirmed) {
-                    this.clearConversation();
-                }
-            });
-            
+            }
+
             // TTS toggle
             this.updateTTSButton();
-            this.ttsToggleBtn.addEventListener('click', () => {
-                voiceAI.toggleTTS();
-                this.updateTTSButton();
-            });
+            if (this.ttsToggleBtn) {
+                this.ttsToggleBtn.addEventListener('click', () => {
+                    voiceAI.toggleTTS();
+                    this.updateTTSButton();
+                });
+            }
 
             // Timeline toggle
-            this.timelineToggleBtn.addEventListener('click', () => this.toggleTimeline());
-            this.timelineCloseBtn.addEventListener('click', () => this.closeTimeline());
+            if (this.timelineToggleBtn) {
+                this.timelineToggleBtn.addEventListener('click', () => this.toggleTimeline());
+            }
+            if (this.timelineCloseBtn) {
+                this.timelineCloseBtn.addEventListener('click', () => this.closeTimeline());
+            }
 
             // Expand toggle
-            this.expandBtn.addEventListener('click', () => this.toggleExpand());
+            if (this.expandBtn) {
+                this.expandBtn.addEventListener('click', () => this.toggleExpand());
+            }
 
             // Send message
-            this.sendBtn.addEventListener('click', () => this.sendMessage());
-            
+            if (this.sendBtn) {
+                this.sendBtn.addEventListener('click', () => this.sendMessage());
+            }
+
             // Input handling
-            this.input.addEventListener('input', () => {
-                this.autoResize();
-                this.sendBtn.disabled = !this.input.value.trim();
-            });
-            
-            this.input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    this.sendMessage();
-                }
-            });
-            
+            if (this.input) {
+                this.input.addEventListener('input', () => {
+                    this.autoResize();
+                    if (this.sendBtn) this.sendBtn.disabled = !this.input.value.trim();
+                });
+
+                this.input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+            }
+
             // Voice input
-            this.voiceBtn.addEventListener('click', () => this.startVoiceInput());
+            if (this.voiceBtn) {
+                this.voiceBtn.addEventListener('click', () => this.startVoiceInput());
+            }
 
             // Image upload button
             if (this.uploadBtn) {
@@ -27865,44 +27883,46 @@ You are a trusted guide, not a data harvester.
             }
 
             // Paste event for images
-            this.input.addEventListener('paste', (e) => {
-                const items = Array.from(e.clipboardData.items);
-                const imageItems = items.filter(item => item.type.startsWith('image/'));
-                if (imageItems.length > 0) {
+            if (this.input) {
+                this.input.addEventListener('paste', (e) => {
+                    const items = Array.from(e.clipboardData.items);
+                    const imageItems = items.filter(item => item.type.startsWith('image/'));
+                    if (imageItems.length > 0) {
+                        e.preventDefault();
+                        imageItems.forEach(item => {
+                            const file = item.getAsFile();
+                            if (file) this.addImage(file);
+                        });
+                    }
+                });
+
+                // Drag and drop for images
+                this.input.addEventListener('dragover', (e) => {
                     e.preventDefault();
-                    imageItems.forEach(item => {
-                        const file = item.getAsFile();
-                        if (file) this.addImage(file);
-                    });
-                }
-            });
+                    e.stopPropagation();
+                    this.input.closest('.chat-input-container')?.classList.add('drag-over');
+                });
 
-            // Drag and drop for images
-            this.input.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.input.closest('.chat-input-container')?.classList.add('drag-over');
-            });
+                this.input.addEventListener('dragleave', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.input.closest('.chat-input-container')?.classList.remove('drag-over');
+                });
 
-            this.input.addEventListener('dragleave', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.input.closest('.chat-input-container')?.classList.remove('drag-over');
-            });
-
-            this.input.addEventListener('drop', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.input.closest('.chat-input-container')?.classList.remove('drag-over');
-                const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-                files.forEach(file => this.addImage(file));
-            });
+                this.input.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.input.closest('.chat-input-container')?.classList.remove('drag-over');
+                    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+                    files.forEach(file => this.addImage(file));
+                });
+            }
 
             // Example buttons
             document.querySelectorAll('.chat-example-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    this.input.value = btn.textContent;
-                    this.sendBtn.disabled = false;
+                    if (this.input) this.input.value = btn.textContent;
+                    if (this.sendBtn) this.sendBtn.disabled = false;
                     this.sendMessage();
                 });
             });
