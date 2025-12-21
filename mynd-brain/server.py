@@ -191,12 +191,22 @@ class BrainContextInclude(BaseModel):
     memories: bool = True
     user_profile: bool = True
     neural_insights: bool = True
+    synthesized_context: bool = True  # NEW: unified context from ContextSynthesizer
+
+class GoalData(BaseModel):
+    """Goal from Goal Wizard"""
+    id: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    priority: str = "medium"  # high, medium, low
 
 class BrainContextRequest(BaseModel):
     request_type: str = "chat"  # chat, action, code_review, self_improve
     user_message: str = ""
     selected_node_id: Optional[str] = None
     map_data: Optional[MapData] = None
+    user_id: Optional[str] = None  # For Supabase AI memory queries
+    goals: Optional[List[GoalData]] = None  # Active goals from Goal Wizard
     include: Optional[BrainContextInclude] = None
 
 class BrainContextResponse(BaseModel):
@@ -879,6 +889,12 @@ async def lifespan(app: FastAPI):
     conversation_archive = ConversationArchive(data_dir, embedder=brain.embedder)
     print(f"📚 Conversation Archive initialized ({conversation_archive.get_stats()['total_conversations']} conversations)")
 
+    # Connect external components to UnifiedBrain's ContextSynthesizer
+    unified_brain.set_conversation_archive(conversation_archive)
+    unified_brain.set_map_vector_db(map_vector_db)
+    # Embedding engine is connected via set_ml_brain above
+    print("🔀 ContextSynthesizer connected to: MapVectorDB, ConversationArchive, EmbeddingEngine")
+
     # Initialize knowledge extractor (API key optional - uses rule-based fallback)
     api_key = os.environ.get('ANTHROPIC_API_KEY')
     knowledge_extractor = KnowledgeExtractor(map_vector_db, api_key=api_key)
@@ -1078,7 +1094,8 @@ async def get_brain_context(request: BrainContextRequest):
             'map_context': request.include.map_context,
             'memories': request.include.memories,
             'user_profile': request.include.user_profile,
-            'neural_insights': request.include.neural_insights
+            'neural_insights': request.include.neural_insights,
+            'synthesized_context': request.include.synthesized_context
         }
 
     map_dict = None
@@ -1087,11 +1104,18 @@ async def get_brain_context(request: BrainContextRequest):
             'nodes': [n.model_dump() for n in request.map_data.nodes]
         }
 
+    # Convert goals to list of dicts
+    goals_list = None
+    if request.goals:
+        goals_list = [g.model_dump() for g in request.goals]
+
     ctx_request = ContextRequest(
         request_type=request.request_type,
         user_message=request.user_message,
         selected_node_id=request.selected_node_id,
         map_data=map_dict,
+        user_id=request.user_id,
+        goals=goals_list,
         include=include_dict
     )
 

@@ -14,6 +14,9 @@ from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# Import ContextSynthesizer for unified context
+from .context_synthesizer import ContextSynthesizer, SynthesizedContext
+
 
 @dataclass
 class ContextRequest:
@@ -22,12 +25,15 @@ class ContextRequest:
     user_message: str = ""
     selected_node_id: Optional[str] = None
     map_data: Optional[Dict] = None
+    user_id: Optional[str] = None  # For Supabase AI memory queries
+    goals: Optional[List[Dict]] = None  # Active goals from Goal Wizard
     include: Dict[str, bool] = field(default_factory=lambda: {
         "self_awareness": True,
         "map_context": True,
         "memories": True,
         "user_profile": True,
-        "neural_insights": True
+        "neural_insights": True,
+        "synthesized_context": True  # NEW: unified context from synthesizer
     })
 
 
@@ -1348,20 +1354,61 @@ class UnifiedBrain:
         self.meta_learner = MetaLearner()       # Learning how to learn
         self.self_improver = SelfImprover()     # Self-improvement suggestions
 
+        # Context Synthesizer - unifies all context sources
+        self.synthesizer = ContextSynthesizer(
+            knowledge_distiller=self.knowledge,
+            memory_system=self.memory
+        )
+
         # External references (set by server.py)
         self.ml_brain = None  # Reference to MYNDBrain for neural ops
+        self.supabase = None  # Supabase client for AI memories
 
         # Stats
         self.context_requests = 0
         self.growth_events_today = 0
 
-        print("🧠 UnifiedBrain initialized with MetaLearner + SelfImprover")
+        print("🧠 UnifiedBrain initialized with MetaLearner + SelfImprover + ContextSynthesizer")
 
     def set_ml_brain(self, ml_brain):
         """Connect to the ML brain for neural operations"""
         self.ml_brain = ml_brain
         if ml_brain:
             self.self_awareness.update_capabilities(ml_brain.get_health())
+            # Connect embedding engine to synthesizer
+            if hasattr(ml_brain, 'embedder'):
+                self.synthesizer.embedder = ml_brain.embedder
+                print("🔗 EmbeddingEngine connected to ContextSynthesizer")
+
+    def set_supabase(self, supabase_client):
+        """Connect Supabase client for AI memories"""
+        self.supabase = supabase_client
+        self.synthesizer.supabase = supabase_client
+        print("🔗 Supabase connected to UnifiedBrain + ContextSynthesizer")
+
+    def set_conversation_archive(self, archive):
+        """Connect conversation archive to synthesizer"""
+        self.synthesizer.conversations = archive
+
+    def set_map_vector_db(self, map_db):
+        """Connect map vector DB to synthesizer"""
+        self.synthesizer.map_db = map_db
+
+    def update_synthesizer_weights(self):
+        """Update synthesizer source weights from meta-learner"""
+        weights = {}
+        for source, weight in self.meta_learner.attention_weights.items():
+            # Map meta-learner sources to synthesizer sources
+            source_mapping = {
+                'predictions': 'map_node',
+                'distilled_knowledge': 'distilled',
+                'patterns': 'pattern',
+                'corrections': 'distilled',
+                'memories': 'ai_memory'
+            }
+            if source in source_mapping:
+                weights[source_mapping[source]] = weight
+        self.synthesizer.set_source_weights(weights)
 
     def get_context(self, request: ContextRequest) -> ContextResponse:
         """
@@ -1417,6 +1464,34 @@ class UnifiedBrain:
             if insights:
                 context_parts.append(("neural_insights", insights))
                 token_breakdown['neural_insights'] = len(insights) // 4
+
+        # 8. SYNTHESIZED CONTEXT - Unified search across all sources
+        # This is the "funnel" that combines map, memories, goals, and AI memories
+        if include.get('synthesized_context', True) and request.user_message:
+            # Update source weights from meta-learner before synthesizing
+            self.update_synthesizer_weights()
+
+            synthesized = self.synthesizer.synthesize(
+                query=request.user_message,
+                user_id=request.user_id,
+                map_data=request.map_data,
+                goals=request.goals,
+                max_items=15,
+                max_tokens=3000
+            )
+
+            if synthesized.items:
+                synth_doc = self.synthesizer.format_for_prompt(synthesized)
+                context_parts.append(("synthesized_context", synth_doc))
+                token_breakdown['synthesized_context'] = synthesized.token_estimate
+
+                # Store active goal for quick reference
+                if synthesized.active_goal:
+                    context_parts.append(("active_goal",
+                        f"🎯 **Active Goal**: {synthesized.active_goal.get('title', 'Unknown')}\n"
+                        f"This query relates to your goal. Keep it in mind."
+                    ))
+                    token_breakdown['active_goal'] = 50
 
         # Combine into single document
         context_document = self._combine_context(context_parts, request.request_type)
@@ -1527,7 +1602,18 @@ class UnifiedBrain:
     def _combine_context(self, parts: List[tuple], request_type: str) -> str:
         """Combine all context parts into a single document"""
         # Order matters - most important first
-        order = ['self_awareness', 'distilled_knowledge', 'meta_learning', 'request', 'map_context', 'memories', 'neural_insights']
+        # Synthesized context comes early as it's the unified "funnel" output
+        order = [
+            'self_awareness',
+            'active_goal',           # Current goal (if relevant)
+            'synthesized_context',   # THE unified context from all sources
+            'distilled_knowledge',
+            'meta_learning',
+            'request',
+            'map_context',
+            'memories',
+            'neural_insights'
+        ]
 
         ordered_parts = []
         for name in order:

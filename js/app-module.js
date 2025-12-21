@@ -29192,17 +29192,40 @@ You are a trusted guide, not a data harvester.
             let brainState = null;
             if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
                 try {
+                    // Get user_id for AI memory queries
+                    let userId = null;
+                    try {
+                        const { data: session } = await supabase.auth.getSession();
+                        userId = session?.session?.user?.id || null;
+                    } catch (e) { /* No auth available */ }
+
+                    // Get goals from GoalRegistry for context synthesis
+                    let goals = [];
+                    if (typeof GoalRegistry !== 'undefined') {
+                        const activeGoals = GoalRegistry.getActiveGoals ? GoalRegistry.getActiveGoals() : [];
+                        const allGoals = GoalRegistry.goals || [];
+                        goals = (activeGoals.length > 0 ? activeGoals : allGoals).map(g => ({
+                            id: g.id,
+                            title: g.label || g.title,
+                            description: g.description || g.desiredState,
+                            priority: g.priority || 'medium'
+                        }));
+                    }
+
                     const brainResult = await LocalBrain.getBrainContext({
                         requestType: 'chat',
                         userMessage: userMessage,
                         selectedNodeId: selectedNodeData?.id,
                         mapData: store.data,
+                        userId: userId,  // For Supabase AI memory queries
+                        goals: goals,    // For goal-aware context synthesis
                         include: {
                             self_awareness: true,
                             map_context: true,
                             memories: true,
                             user_profile: true,
-                            neural_insights: true
+                            neural_insights: true,
+                            synthesized_context: true  // NEW: unified context synthesis
                         }
                     });
 
