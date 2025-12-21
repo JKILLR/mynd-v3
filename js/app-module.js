@@ -37275,8 +37275,9 @@ showKeyboardHints();
                     rateEl.style.color = rate >= 50 ? '#22c55e' : rate >= 30 ? '#f59e0b' : '#ef4444';
                 } else {
                     rateEl.textContent = '—';
+                }
             }
-            
+
             // Show style preference if we have enough data
             const style = prefStats.stylePreferences;
             const styleRow = document.getElementById('pref-style-row');
