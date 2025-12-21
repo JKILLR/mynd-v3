@@ -213,7 +213,7 @@ When analyzing the map, prioritize:
     },
 
     async runMaintenance(options = {}) {
-        const store = window.app?.store;
+        const store = window.store;
         if (!store) {
             this.log('No store available');
             return null;
@@ -1001,7 +1001,7 @@ When analyzing the map, prioritize:
     },
 
     async applySuggestion(suggestion) {
-        const store = window.app?.store;
+        const store = window.store;
         if (!store) return false;
 
         try {
@@ -1029,7 +1029,7 @@ When analyzing the map, prioritize:
     },
 
     async consolidateNodes(duplicate) {
-        const store = window.app?.store;
+        const store = window.store;
         if (!store || !duplicate.nodeA || !duplicate.nodeB) return false;
 
         try {
@@ -1135,7 +1135,7 @@ When analyzing the map, prioritize:
     // ═══════════════════════════════════════════════════════════════════
 
     async generateReport() {
-        const store = window.app?.store;
+        const store = window.store;
         if (!store) return null;
 
         const report = await this.runMaintenance({ skipQueue: true });
