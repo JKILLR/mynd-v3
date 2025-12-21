@@ -6076,7 +6076,24 @@
         #ai-chat-panel.open {
             right: 0;
         }
-        
+
+        /* Expanded chat panel */
+        #ai-chat-panel.expanded {
+            width: 60vw;
+            max-width: 900px;
+            background: rgba(var(--bg-primary-rgb), 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        #ai-chat-panel.expanded .chat-bubble {
+            max-width: 100%;
+        }
+
+        #ai-chat-panel.expanded .chat-message {
+            max-width: 90%;
+        }
+
         /* Slide toggle button on left edge of chat panel */
         .chat-slide-toggle {
             position: absolute;
@@ -6546,7 +6563,19 @@
         .chat-action-item.pending {
             color: var(--accent);
         }
-        
+
+        .chat-action-item.clickable {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .chat-action-item.clickable:hover {
+            background: rgba(var(--accent-rgb), 0.1);
+            border-radius: 4px;
+            padding: 2px 6px;
+            margin: -2px -6px;
+        }
+
         .chat-action-icon {
             font-size: 0.9em;
         }
@@ -9790,6 +9819,14 @@ Things to avoid..."></textarea>
                 <button class="chat-header-btn" id="chat-clear" title="Clear conversation">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                    </svg>
+                </button>
+                <button class="chat-header-btn" id="chat-expand-toggle" title="Expand chat">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 3 21 3 21 9"/>
+                        <polyline points="9 21 3 21 3 15"/>
+                        <line x1="21" y1="3" x2="14" y2="10"/>
+                        <line x1="3" y1="21" x2="10" y2="14"/>
                     </svg>
                 </button>
             </div>
