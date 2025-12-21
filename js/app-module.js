@@ -27779,6 +27779,8 @@ You are a trusted guide, not a data harvester.
             this.timelinePanel = document.getElementById('chat-timeline-panel');
             this.timelineContent = document.getElementById('chat-timeline-content');
             this.timelineCloseBtn = document.getElementById('chat-timeline-close');
+            this.expandBtn = document.getElementById('chat-expand-toggle');
+            this.isExpanded = false;
 
             this.setupEventListeners();
             this.loadConversation();
@@ -27820,6 +27822,9 @@ You are a trusted guide, not a data harvester.
             // Timeline toggle
             this.timelineToggleBtn.addEventListener('click', () => this.toggleTimeline());
             this.timelineCloseBtn.addEventListener('click', () => this.closeTimeline());
+
+            // Expand toggle
+            this.expandBtn.addEventListener('click', () => this.toggleExpand());
 
             // Send message
             this.sendBtn.addEventListener('click', () => this.sendMessage());
@@ -28018,6 +28023,17 @@ You are a trusted guide, not a data harvester.
         closeTimeline() {
             this.timelinePanel.classList.remove('active');
             this.timelineToggleBtn.classList.remove('active');
+        },
+
+        toggleExpand() {
+            this.isExpanded = !this.isExpanded;
+            this.panel.classList.toggle('expanded', this.isExpanded);
+            this.expandBtn.title = this.isExpanded ? 'Collapse chat' : 'Expand chat';
+
+            // Scroll to bottom after expansion animation
+            setTimeout(() => {
+                this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+            }, 100);
         },
 
         // Helper to sanitize color values

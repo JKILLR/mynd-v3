@@ -6283,7 +6283,41 @@
         #ai-chat-panel.open {
             right: 0;
         }
-        
+
+        /* Expanded chat panel mode */
+        #ai-chat-panel.expanded {
+            width: 700px;
+            max-width: calc(100vw - 40px);
+            height: calc(100vh - 80px);
+            top: 40px;
+            bottom: 40px;
+            right: 20px;
+            border-radius: 16px;
+            border: 1px solid var(--glass-border);
+            background: rgba(18, 18, 24, 0.85);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5),
+                        0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+        }
+
+        #ai-chat-panel.expanded .chat-slide-toggle {
+            display: none;
+        }
+
+        #ai-chat-panel.expanded .chat-header {
+            border-radius: 16px 16px 0 0;
+        }
+
+        /* Expand button in header */
+        .chat-expand-btn svg {
+            transition: transform 0.2s;
+        }
+
+        #ai-chat-panel.expanded .chat-expand-btn svg {
+            transform: rotate(180deg);
+        }
+
         /* Slide toggle button on left edge of chat panel */
         .chat-slide-toggle {
             position: absolute;
@@ -9522,6 +9556,14 @@
                 <span class="chat-title">MYND Chat</span>
             </div>
             <div class="chat-header-actions">
+                <button class="chat-header-btn chat-expand-btn" id="chat-expand-toggle" title="Expand chat">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 3 21 3 21 9"/>
+                        <polyline points="9 21 3 21 3 15"/>
+                        <line x1="21" y1="3" x2="14" y2="10"/>
+                        <line x1="3" y1="21" x2="10" y2="14"/>
+                    </svg>
+                </button>
                 <button class="chat-header-btn" id="chat-tts-toggle" title="Voice responses ON">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
