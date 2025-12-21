@@ -28346,7 +28346,7 @@ You are a trusted guide, not a data harvester.
             // Process with AI
             this.isProcessing = true;
             try {
-                const response = await this.callAI(content);
+                const response = await this.callAI(content, imagesToSend);
                 this.hideTyping();
 
                 // ═══════════════════════════════════════════════════════════════
@@ -29097,7 +29097,7 @@ You are a trusted guide, not a data harvester.
             return line;
         },
 
-        async callAI(userMessage) {
+        async callAI(userMessage, images = []) {
             // Build context
             const allNodes = store.getAllNodes();
             const selectedNodeData = selectedNode ? store.findNode(selectedNode.userData.id) : null;
@@ -29127,7 +29127,7 @@ You are a trusted guide, not a data harvester.
             const historyForClaude = this.conversation.slice(-10)
                 .filter(m => (m.role === 'user' || m.role === 'assistant') && m.content)
                 .map(m => {
-                let content = m.content;
+                let textContent = m.content;
 
                 // If assistant message had successful actions, append them to content
                 // This helps AI avoid repeating the same additions
@@ -29143,14 +29143,44 @@ You are a trusted guide, not a data harvester.
                         .join(', ');
 
                     if (completedActions) {
-                        content += `\n\n[COMPLETED ACTIONS: ${completedActions}]`;
+                        textContent += `\n\n[COMPLETED ACTIONS: ${completedActions}]`;
                     }
                     if (skippedDupes) {
-                        content += `\n[SKIPPED DUPLICATES: ${skippedDupes}]`;
+                        textContent += `\n[SKIPPED DUPLICATES: ${skippedDupes}]`;
                     }
                 }
 
-                return { role: m.role, content };
+                // Include images from conversation history (Claude Vision format)
+                if (m.role === 'user' && m.images && m.images.length > 0) {
+                    const contentBlocks = [];
+
+                    // Add images first
+                    for (const img of m.images) {
+                        const dataUrl = img.dataUrl || img;
+                        if (typeof dataUrl === 'string') {
+                            const match = dataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/);
+                            if (match) {
+                                contentBlocks.push({
+                                    type: 'image',
+                                    source: {
+                                        type: 'base64',
+                                        media_type: match[1],
+                                        data: match[2]
+                                    }
+                                });
+                            }
+                        }
+                    }
+
+                    // Add text content
+                    if (textContent) {
+                        contentBlocks.push({ type: 'text', text: textContent });
+                    }
+
+                    return { role: m.role, content: contentBlocks };
+                }
+
+                return { role: m.role, content: textContent };
             });
             
             // ═══════════════════════════════════════════════════════════════
@@ -30611,12 +30641,44 @@ COLORS: Red #EF4444, Orange #EF8354, Yellow #F7B731, Green #26DE81, Teal #4ECDC4
 
 CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no explanation before or after. Just the raw JSON starting with { and ending with }.`;
 
+            // Build final user message with images if present (Claude Vision format)
+            let finalUserMessage;
+            if (images && images.length > 0) {
+                const contentBlocks = [];
+
+                // Add images first
+                for (const img of images) {
+                    const dataUrl = img.dataUrl || img;
+                    if (typeof dataUrl === 'string') {
+                        const match = dataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/);
+                        if (match) {
+                            contentBlocks.push({
+                                type: 'image',
+                                source: {
+                                    type: 'base64',
+                                    media_type: match[1],
+                                    data: match[2]
+                                }
+                            });
+                        }
+                    }
+                }
+
+                // Add text content
+                contentBlocks.push({ type: 'text', text: userMessage || 'Please describe what you see in this image.' });
+
+                finalUserMessage = { role: 'user', content: contentBlocks };
+                console.log(`📷 Including ${contentBlocks.length - 1} image(s) in message to Claude`);
+            } else {
+                finalUserMessage = { role: 'user', content: userMessage };
+            }
+
             // Build messages array
             const messages = [
                 { role: 'user', content: systemPrompt },
                 { role: 'assistant', content: '{"message": "I understand. I\'m ready to help with your mind map.", "actions": [], "suggestions": []}' },
                 ...historyForClaude,
-                { role: 'user', content: userMessage }
+                finalUserMessage
             ];
             
             // Get auth session
