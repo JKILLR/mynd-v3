@@ -24347,10 +24347,18 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
     window.zoomToFitMap = zoomToFitMap;
     
     // Focus camera on a specific node without full selection animation
-    function focusOnNode(mesh) {
-        if (!mesh) return;
+    function focusOnNode(meshOrId) {
+        if (!meshOrId) return;
 
-        const nodePos = mesh.userData.spring?.target?.clone() || mesh.position.clone();
+        // Handle both mesh objects and node ID strings
+        let mesh = meshOrId;
+        if (typeof meshOrId === 'string') {
+            mesh = nodeMeshes.get(meshOrId);
+            if (!mesh) return;
+        }
+
+        const nodePos = mesh.userData?.spring?.target?.clone() || mesh.position?.clone();
+        if (!nodePos) return;
 
         // Smoothly move camera target to node
         cameraTargetGoal.copy(nodePos);
@@ -27842,6 +27850,7 @@ You are a trusted guide, not a data harvester.
 
             this.setupEventListeners();
             this.loadConversation();
+            this.initSession();
 
             console.log('Chat Manager initialized');
         },
@@ -28416,7 +28425,8 @@ You are a trusted guide, not a data harvester.
             };
 
             this.conversation.push(message);
-            
+            this.trackMessage(); // Track for session summary
+
             // Trim conversation history
             if (this.conversation.length > this.maxHistory) {
                 this.conversation = this.conversation.slice(-this.maxHistory);
@@ -30237,7 +30247,9 @@ RESPONSE FORMAT (always JSON):
     // Persistent memory - YOUR memories that persist across sessions
     {"action": "write_memory", "memory_type": "synthesis|realization|goal_tracking|pattern|relationship", "content": "What you learned/realized", "importance": 0.8, "related_nodes": ["node-id-1"]},
     {"action": "update_memory", "memory_id": "uuid", "content": "Updated understanding", "importance": 0.9},
-    {"action": "reinforce_memory", "memory_id": "uuid"}
+    {"action": "reinforce_memory", "memory_id": "uuid"},
+    // Session continuity - write when ending a session or user says goodbye
+    {"action": "write_session_summary", "summary": "Narrative summary of this session", "key_outcomes": "What we decided/realized", "open_threads": "What's unfinished", "session_type": "building|troubleshooting|vision|exploration|reflection|planning|casual", "tone": "collaborative|focused|creative|etc", "topics_discussed": ["topic1", "topic2"]}
   ],
   "suggestions": ["Quick reply 1", "Quick reply 2"] // Optional quick reply suggestions
 }
@@ -30253,6 +30265,11 @@ GUIDELINES:
   - **pattern**: Observed behavioral patterns ("User most receptive to suggestions in morning sessions")
   - **relationship**: Connections between concepts ("In this user's mind, meditation → productivity")
   Use reinforce_memory when a past memory proves valuable. Your memories persist across sessions - you ARE the curator of your own knowledge.
+- **SESSION CONTINUITY**: Use write_session_summary when:
+  - User says goodbye, "see you later", "gotta go", or similar
+  - Conversation reaches a natural stopping point
+  - You sense the session is ending
+  The summary should capture: what we discussed (topics, nodes), what we decided/realized (outcomes), what's unfinished (open threads), and the session type (building/troubleshooting/vision/exploration/reflection/planning/casual). This enables you to pick up naturally in future sessions.
 - When users seem stuck or vague, help them clarify and expand their thinking
 - Reference the neural context to personalize responses (match their style, preferred colors, naming patterns)
 - Use similar nodes to avoid duplicates AND to surface potential connections
@@ -31469,6 +31486,47 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                             }
                         }
                     }
+                    // ═══════════════════════════════════════════════════════════════
+                    // SESSION SUMMARY - Experiential Continuity
+                    // ═══════════════════════════════════════════════════════════════
+                    else if (action.action === 'write_session_summary') {
+                        // Claude writes a session summary for continuity
+                        const VALID_SESSION_TYPES = ['building', 'troubleshooting', 'vision', 'exploration', 'reflection', 'planning', 'casual'];
+
+                        // Input validation
+                        if (!action.summary || typeof action.summary !== 'string' || action.summary.trim().length === 0) {
+                            result.success = false;
+                            result.description = 'Session summary is required';
+                        } else if (action.session_type && !VALID_SESSION_TYPES.includes(action.session_type)) {
+                            result.success = false;
+                            result.description = `Invalid session_type. Must be one of: ${VALID_SESSION_TYPES.join(', ')}`;
+                        } else {
+                            try {
+                                const session = await this.writeSessionSummary({
+                                    summary: action.summary.trim(),
+                                    key_outcomes: action.key_outcomes || null,
+                                    open_threads: action.open_threads || null,
+                                    session_type: action.session_type || 'casual',
+                                    tone: action.tone || null,
+                                    topics_discussed: action.topics_discussed || [],
+                                    nodes_touched: action.nodes_touched || []
+                                });
+
+                                if (session) {
+                                    result.success = true;
+                                    result.description = `Session summary saved (${action.session_type || 'casual'})`;
+                                    console.log(`📝 Session summary written: ${session.id}`);
+                                } else {
+                                    result.success = false;
+                                    result.description = 'Failed to write session summary (no auth?)';
+                                }
+                            } catch (sessionError) {
+                                console.error('Failed to write session summary:', sessionError);
+                                result.success = false;
+                                result.description = `Session summary failed: ${sessionError.message}`;
+                            }
+                        }
+                    }
 
                     results.push(result);
                 } catch (e) {
@@ -31700,6 +31758,203 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
             if (diffDays < 7) return `${diffDays} days ago`;
             if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
             return `${Math.floor(diffDays / 30)} months ago`;
+        },
+
+        // ═══════════════════════════════════════════════════════════════════
+        // SESSION MANAGER - Experiential Continuity System
+        // Tracks sessions and enables Claude to maintain narrative continuity
+        // ═══════════════════════════════════════════════════════════════════
+
+        sessionStartTime: null,
+        currentSessionId: null,
+        lastSessionId: null,
+        sessionMessageCount: 0,
+        sessionNodesAccessed: new Set(),
+        sessionTopics: new Set(),
+
+        async initSession() {
+            // Called on app load - starts a new session and checks for previous unsummarized session
+            this.sessionStartTime = new Date();
+            this.sessionMessageCount = 0;
+            this.sessionNodesAccessed = new Set();
+            this.sessionTopics = new Set();
+
+            // Store session start in localStorage (for tracking across page reloads)
+            localStorage.setItem('mynd-session-start', this.sessionStartTime.toISOString());
+
+            try {
+                if (typeof supabase === 'undefined' || !supabase) return;
+
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return;
+
+                // Get the last session ID for threading
+                const { data: lastSession } = await supabase
+                    .from('session_summaries')
+                    .select('id, session_ended')
+                    .eq('user_id', user.id)
+                    .order('session_ended', { ascending: false })
+                    .limit(1)
+                    .single();
+
+                if (lastSession) {
+                    this.lastSessionId = lastSession.id;
+                    console.log(`📚 Previous session found: ${lastSession.id}`);
+                }
+
+                console.log('🌅 New session started');
+            } catch (e) {
+                console.warn('Session init error:', e);
+            }
+        },
+
+        trackNodeAccess(nodeId, nodeLabel) {
+            // Track which nodes were accessed during this session
+            if (nodeId) this.sessionNodesAccessed.add(nodeId);
+            if (nodeLabel) this.sessionTopics.add(nodeLabel);
+        },
+
+        trackMessage() {
+            // Track message count for session
+            this.sessionMessageCount++;
+        },
+
+        async writeSessionSummary({
+            summary,
+            key_outcomes,
+            open_threads,
+            session_type,
+            tone,
+            topics_discussed = [],
+            nodes_touched = []
+        }) {
+            // Write a session summary to Supabase
+            try {
+                if (typeof supabase === 'undefined' || !supabase) {
+                    console.warn('Cannot write session summary: Supabase not available');
+                    return null;
+                }
+
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) {
+                    console.warn('Cannot write session summary: Not signed in');
+                    return null;
+                }
+
+                // Merge tracked topics/nodes with provided ones
+                const allTopics = [...new Set([
+                    ...topics_discussed,
+                    ...Array.from(this.sessionTopics)
+                ])];
+                const allNodes = [...new Set([
+                    ...nodes_touched,
+                    ...Array.from(this.sessionNodesAccessed)
+                ])];
+
+                const sessionData = {
+                    user_id: user.id,
+                    session_started: this.sessionStartTime?.toISOString() || new Date().toISOString(),
+                    session_ended: new Date().toISOString(),
+                    previous_session_id: this.lastSessionId || null,
+                    topics_discussed: allTopics.slice(0, 20), // Limit to 20
+                    nodes_touched: allNodes.slice(0, 50), // Limit to 50
+                    key_outcomes: key_outcomes || null,
+                    open_threads: open_threads || null,
+                    session_type: session_type || 'casual',
+                    summary: summary,
+                    tone: tone || null,
+                    message_count: this.sessionMessageCount
+                };
+
+                const { data, error } = await supabase
+                    .from('session_summaries')
+                    .insert(sessionData)
+                    .select()
+                    .single();
+
+                if (error) {
+                    console.error('Failed to write session summary:', error);
+                    return null;
+                }
+
+                console.log(`📝 Session summary saved: ${data.id}`);
+                this.currentSessionId = data.id;
+                return data;
+            } catch (e) {
+                console.error('Session summary error:', e);
+                return null;
+            }
+        },
+
+        async getRecentSessions(limit = 5) {
+            // Get recent session summaries for wake-up synthesis
+            try {
+                if (typeof supabase === 'undefined' || !supabase) return [];
+
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return [];
+
+                const { data, error } = await supabase
+                    .from('session_summaries')
+                    .select('*')
+                    .eq('user_id', user.id)
+                    .order('session_ended', { ascending: false })
+                    .limit(limit);
+
+                if (error) {
+                    console.warn('Failed to fetch recent sessions:', error);
+                    return [];
+                }
+
+                return data || [];
+            } catch (e) {
+                console.warn('Get recent sessions error:', e);
+                return [];
+            }
+        },
+
+        async getLastSession() {
+            // Get the most recent session summary
+            const sessions = await this.getRecentSessions(1);
+            return sessions[0] || null;
+        },
+
+        formatSessionsForPrompt(sessions) {
+            // Format session summaries for the system prompt
+            if (!sessions || sessions.length === 0) return '';
+
+            let output = '\n## Recent Sessions:\n';
+
+            for (const session of sessions) {
+                const date = new Date(session.session_ended);
+                const dateStr = date.toLocaleDateString('en-US', {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric'
+                });
+                const timeStr = date.toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit'
+                });
+
+                output += `\n### ${dateStr} at ${timeStr}`;
+                if (session.session_type) output += ` (${session.session_type})`;
+                output += '\n';
+
+                output += session.summary + '\n';
+
+                if (session.key_outcomes) {
+                    output += `**Key outcomes:** ${session.key_outcomes}\n`;
+                }
+                if (session.open_threads) {
+                    output += `**Open threads:** ${session.open_threads}\n`;
+                }
+                if (session.tone) {
+                    output += `**Tone:** ${session.tone}\n`;
+                }
+            }
+
+            return output;
         },
 
         // Audio feedback for voice recording
