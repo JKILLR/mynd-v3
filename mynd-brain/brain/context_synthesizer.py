@@ -104,9 +104,18 @@ class ContextSynthesizer:
         # Recency decay half-life in days (exponential decay)
         self.recency_half_life_days = 7.0
 
-        # Corpus statistics for BM25 (updated during search)
-        self._corpus_doc_count = 0
-        self._corpus_avg_len = 100  # Default average document length
+        # Common stop words to filter from BM25 scoring
+        self._stop_words = {
+            'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+            'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'been',
+            'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
+            'could', 'should', 'may', 'might', 'must', 'shall', 'can', 'need',
+            'it', 'its', 'this', 'that', 'these', 'those', 'i', 'you', 'he',
+            'she', 'we', 'they', 'what', 'which', 'who', 'whom', 'how', 'when',
+            'where', 'why', 'all', 'each', 'every', 'both', 'few', 'more', 'most',
+            'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same',
+            'so', 'than', 'too', 'very', 'just', 'also', 'now', 'here', 'there'
+        }
 
         print("🔀 ContextSynthesizer initialized (hybrid search enabled)")
 
@@ -247,12 +256,14 @@ class ContextSynthesizer:
         return float(np.dot(a, b) / (norm_a * norm_b))
 
     def _tokenize(self, text: str) -> List[str]:
-        """Simple tokenization for BM25 scoring"""
-        # Lowercase, split on non-alphanumeric, filter short tokens
+        """Simple tokenization for BM25 scoring with stop-word filtering"""
+        # Lowercase, split on non-alphanumeric, filter short tokens and stop words
         tokens = re.findall(r'\b[a-z0-9]+\b', text.lower())
-        return [t for t in tokens if len(t) > 2]  # Skip very short tokens
+        return [t for t in tokens if len(t) > 2 and t not in self._stop_words]
 
     def _calculate_bm25_score(self, query: str, document: str,
+                               corpus_size: int = 10,
+                               avg_doc_len: int = 100,
                                k1: float = 1.5, b: float = 0.75) -> float:
         """
         Calculate BM25 score between query and document.
@@ -264,6 +275,8 @@ class ContextSynthesizer:
         Args:
             query: Search query
             document: Document text to score
+            corpus_size: Number of documents in corpus (for IDF calculation)
+            avg_doc_len: Average document length in corpus
             k1: Term frequency saturation parameter (1.2-2.0 typical)
             b: Length normalization parameter (0.75 typical)
 
@@ -280,9 +293,8 @@ class ContextSynthesizer:
         doc_tf = Counter(doc_tokens)
         doc_len = len(doc_tokens)
 
-        # Use cached corpus stats or estimate
-        avg_doc_len = self._corpus_avg_len
-        num_docs = max(self._corpus_doc_count, 10)  # Assume at least 10 docs
+        # Use provided corpus stats (local, not shared instance state)
+        num_docs = max(corpus_size, 10)  # Assume at least 10 docs
 
         score = 0.0
         for term in query_tokens:
@@ -293,19 +305,19 @@ class ContextSynthesizer:
 
             # IDF: log((N - n + 0.5) / (n + 0.5))
             # Estimate term document frequency as fraction of corpus
-            # (simplified - in production would track this)
+            # (simplified - in production would track actual term frequencies)
             doc_freq = max(1, num_docs * 0.1)  # Assume term in 10% of docs
-            idf = math.log((num_docs - doc_freq + 0.5) / (doc_freq + 0.5) + 1)
+            idf = math.log((num_docs - doc_freq + 0.5) / (doc_freq + 0.5))
 
             # BM25 term score
             numerator = tf * (k1 + 1)
-            denominator = tf + k1 * (1 - b + b * (doc_len / avg_doc_len))
+            denominator = tf + k1 * (1 - b + b * (doc_len / max(avg_doc_len, 1)))
             score += idf * (numerator / denominator)
 
         # Normalize to 0-1 range (cap at reasonable max)
         # Typical BM25 scores range 0-10+, normalize by query length
         max_possible = len(query_tokens) * 3  # Rough estimate
-        normalized = min(1.0, score / max(max_possible, 1))
+        normalized = min(1.0, max(0.0, score / max(max_possible, 1)))
 
         return normalized
 
@@ -326,11 +338,12 @@ class ContextSynthesizer:
         items = []
         nodes = map_data.get('nodes', [])
 
-        # Update corpus stats for BM25
-        self._corpus_doc_count = len(nodes)
+        # Calculate local corpus stats for BM25 (not shared instance state)
+        corpus_size = len(nodes)
+        avg_doc_len = 50  # Default
         if nodes:
             total_len = sum(len(n.get('label', '')) + len(n.get('description', '')) for n in nodes)
-            self._corpus_avg_len = max(20, total_len // len(nodes))
+            avg_doc_len = max(20, total_len // len(nodes))
 
         for node in nodes:
             # Skip if no meaningful content
@@ -353,7 +366,7 @@ class ContextSynthesizer:
             if node_embedding is not None:
                 vector_score = self._cosine_similarity(query_embedding, node_embedding)
 
-            bm25_score = self._calculate_bm25_score(query, node_text)
+            bm25_score = self._calculate_bm25_score(query, node_text, corpus_size, avg_doc_len)
             hybrid_score = self._hybrid_score(vector_score, bm25_score)
 
             if hybrid_score > 0.25:  # Lower threshold for hybrid
@@ -425,11 +438,12 @@ class ContextSynthesizer:
 
             memories = response.data if response.data else []
 
-            # Update corpus stats for BM25
-            self._corpus_doc_count = len(memories)
+            # Calculate local corpus stats for BM25 (not shared instance state)
+            corpus_size = len(memories)
+            avg_doc_len = 100  # Default
             if memories:
                 total_len = sum(len(m.get('content', '')) for m in memories)
-                self._corpus_avg_len = max(50, total_len // len(memories))
+                avg_doc_len = max(50, total_len // len(memories))
 
             for mem in memories:
                 content = mem.get('content', '')
@@ -443,7 +457,7 @@ class ContextSynthesizer:
                     mem_embedding = np.array(mem_embedding)
                     vector_score = self._cosine_similarity(query_embedding, mem_embedding)
 
-                bm25_score = self._calculate_bm25_score(query, content)
+                bm25_score = self._calculate_bm25_score(query, content, corpus_size, avg_doc_len)
                 hybrid_score = self._hybrid_score(vector_score, bm25_score)
 
                 if hybrid_score > 0.15:  # Lower threshold for memories
@@ -697,15 +711,26 @@ class ContextSynthesizer:
             return 0.5
 
         try:
+            from datetime import datetime, timezone
+
             # Handle various timestamp formats
             if isinstance(timestamp, (int, float)):
                 age_seconds = time.time() - timestamp
             else:
                 # Parse ISO string
-                from datetime import datetime
-                if 'T' in str(timestamp):
-                    dt = datetime.fromisoformat(str(timestamp).replace('Z', '+00:00'))
-                    age_seconds = (datetime.now(dt.tzinfo) - dt).total_seconds()
+                ts_str = str(timestamp)
+                if 'T' in ts_str:
+                    # Replace Z with +00:00 for proper parsing
+                    dt = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+
+                    # Handle naive timestamps (no timezone info)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                        now = datetime.now(timezone.utc)
+                    else:
+                        now = datetime.now(dt.tzinfo)
+
+                    age_seconds = (now - dt).total_seconds()
                 else:
                     return 0.5
 
@@ -723,7 +748,8 @@ class ContextSynthesizer:
             # Floor at 0.1 to prevent memories from becoming completely invisible
             return max(0.1, min(1.0, recency))
 
-        except:
+        except Exception as e:
+            print(f"⚠️ Recency calculation error: {e}")
             return 0.5
 
     def _reorder_for_attention(self, items: List[ContextItem]) -> List[ContextItem]:
@@ -766,6 +792,7 @@ class ContextSynthesizer:
 
         IMPORTANT: Uses "Lost in the Middle" mitigation - high-relevance items
         are positioned at START and END of context for better LLM attention.
+        Items are output in reordered sequence (not grouped by source).
         """
         lines = ["## Relevant Context (Synthesized from All Sources)"]
 
@@ -777,47 +804,30 @@ class ContextSynthesizer:
         # Reorder items so high-relevance are at START and END
         reordered_items = self._reorder_for_attention(synthesized.items)
 
-        # Group by source type for readability (preserving reordered sequence)
-        by_source: Dict[str, List[ContextItem]] = {}
-        source_order: List[str] = []  # Track order of first appearance
-
-        for item in reordered_items:
-            source = item.source_type
-            if source not in by_source:
-                by_source[source] = []
-                source_order.append(source)
-            by_source[source].append(item)
-
-        # Format each group
+        # Source labels for inline display
         source_labels = {
-            'map_node': '📍 From Map',
-            'ai_memory': '🧠 From Memory',
-            'conversation': '💬 From Past Conversations',
-            'goal': '🎯 Related Goals',
-            'distilled': '📚 Learned Knowledge',
-            'pattern': '🔄 Recognized Patterns',
-            'session': '⚡ This Session'
+            'map_node': '📍',
+            'ai_memory': '🧠',
+            'conversation': '💬',
+            'goal': '🎯',
+            'distilled': '📚',
+            'pattern': '🔄',
+            'session': '⚡'
         }
 
-        # Use source_order to maintain the reordered sequence
-        for source_type in source_order:
-            if source_type not in by_source:
-                continue
+        # Output items in reordered sequence (preserving Lost in the Middle fix)
+        # DO NOT regroup by source - that would undo the attention optimization
+        for item in reordered_items[:20]:  # Max 20 items total
+            # Show relevance indicator
+            if item.combined_score > 0.8:
+                indicator = "★"  # High relevance
+            elif item.combined_score > 0.5:
+                indicator = "◆"  # Medium relevance
+            else:
+                indicator = "○"  # Lower relevance
 
-            items = by_source[source_type]
-            label = source_labels.get(source_type, source_type)
-            lines.append(f"\n### {label}")
-
-            for item in items[:5]:  # Max 5 per source
-                # Show relevance indicator
-                if item.combined_score > 0.8:
-                    indicator = "★"  # High relevance
-                elif item.combined_score > 0.5:
-                    indicator = "◆"  # Medium relevance
-                else:
-                    indicator = "○"  # Lower relevance
-
-                lines.append(f"{indicator} {item.content}")
+            source_icon = source_labels.get(item.source_type, '•')
+            lines.append(f"{indicator}{source_icon} {item.content}")
 
         # Add active goal highlight if present (goals are important - at end)
         if synthesized.active_goal:
@@ -832,6 +842,6 @@ class ContextSynthesizer:
                 lines.append(f"- {c.get('description', 'Conflict detected')}")
 
         # Token count note
-        lines.append(f"\n_Context: {len(synthesized.items)} items, ~{synthesized.token_estimate} tokens_")
+        lines.append(f"\n_Context: {len(reordered_items[:20])} items, ~{synthesized.token_estimate} tokens_")
 
         return "\n".join(lines)
