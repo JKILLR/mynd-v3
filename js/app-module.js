@@ -37022,7 +37022,7 @@ showKeyboardHints();
                     scanBtn.disabled = true;
                     scanBtn.textContent = 'Scanning...';
                     try {
-                        const report = await MapMaintenanceDaemon.runMaintenanceCheck();
+                        const report = await MapMaintenanceDaemon.runMaintenance();
                         this.updateMaintenanceStatus();
                         if (report) {
                             const totalFindings = (report.duplicates?.length || 0) +
@@ -37205,63 +37205,76 @@ showKeyboardHints();
         
         updateStatus() {
             const stats = neuralNet.getStats();
-            
-            // Update status text
+
+            // Skip browser ML UI updates in self-dev mode (elements removed)
             const statusText = document.getElementById('neural-status-text');
+            if (!statusText) {
+                // Self-dev mode - no browser ML UI elements, skip all updates
+                return;
+            }
+
             const trainBtn = document.getElementById('neural-train-panel-btn');
-            
-            if (stats.isTraining) {
-                statusText.textContent = 'Training...';
-                statusText.className = 'neural-status-value training';
-                if (trainBtn) trainBtn.style.display = 'none';
-            } else if (stats.isReady) {
-                statusText.textContent = stats.hasPredictionModel ? 'Trained' : 'Ready';
-                statusText.className = 'neural-status-value ready';
-                // Hide train button when ready, but allow retraining
-                if (trainBtn) {
-                    trainBtn.style.display = 'flex';
-                    trainBtn.innerHTML = `
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
-                            <path d="M23 4v6h-6M1 20v-6h6"/>
-                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-                        </svg>
-                        Retrain Network
-                    `;
-                    trainBtn.style.background = 'linear-gradient(135deg, #6b7280, #9ca3af)';
-                }
-            } else {
-                statusText.textContent = 'Not Ready';
-                statusText.className = 'neural-status-value not-ready';
-                // Show prominent train button when not ready
-                if (trainBtn) {
-                    trainBtn.style.display = 'flex';
-                    trainBtn.innerHTML = `
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
-                            <path d="M12 2v4m0 12v4m-8-10H2m20 0h-2m-3.5-6.5L17 7m-10 0l-1.5-1.5M17 17l1.5 1.5M7 17l-1.5 1.5"/>
-                        </svg>
-                        Train on My Map
-                    `;
-                    trainBtn.style.background = 'linear-gradient(135deg, #f59e0b, #fbbf24)';
+
+            if (statusText) {
+                if (stats.isTraining) {
+                    statusText.textContent = 'Training...';
+                    statusText.className = 'neural-status-value training';
+                    if (trainBtn) trainBtn.style.display = 'none';
+                } else if (stats.isReady) {
+                    statusText.textContent = stats.hasPredictionModel ? 'Trained' : 'Ready';
+                    statusText.className = 'neural-status-value ready';
+                    // Hide train button when ready, but allow retraining
+                    if (trainBtn) {
+                        trainBtn.style.display = 'flex';
+                        trainBtn.innerHTML = `
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                                <path d="M23 4v6h-6M1 20v-6h6"/>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                            </svg>
+                            Retrain Network
+                        `;
+                        trainBtn.style.background = 'linear-gradient(135deg, #6b7280, #9ca3af)';
+                    }
+                } else {
+                    statusText.textContent = 'Not Ready';
+                    statusText.className = 'neural-status-value not-ready';
+                    // Show prominent train button when not ready
+                    if (trainBtn) {
+                        trainBtn.style.display = 'flex';
+                        trainBtn.innerHTML = `
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                                <path d="M12 2v4m0 12v4m-8-10H2m20 0h-2m-3.5-6.5L17 7m-10 0l-1.5-1.5M17 17l1.5 1.5M7 17l-1.5 1.5"/>
+                            </svg>
+                            Train on My Map
+                        `;
+                        trainBtn.style.background = 'linear-gradient(135deg, #f59e0b, #fbbf24)';
+                    }
                 }
             }
-            
-            // Update counts
-            document.getElementById('neural-category-count').textContent = stats.categories.length;
-            document.getElementById('neural-pattern-count').textContent = stats.expansionPatterns;
-            document.getElementById('neural-embedding-count').textContent = stats.cachedEmbeddings;
-            
-            // Update preference stats
+
+            // Update counts (may not exist in self-dev version)
+            const categoryEl = document.getElementById('neural-category-count');
+            const patternEl = document.getElementById('neural-pattern-count');
+            const embeddingEl = document.getElementById('neural-embedding-count');
+            if (categoryEl) categoryEl.textContent = stats.categories.length;
+            if (patternEl) patternEl.textContent = stats.expansionPatterns;
+            if (embeddingEl) embeddingEl.textContent = stats.cachedEmbeddings;
+
+            // Update preference stats (may not exist in self-dev version)
             const prefStats = preferenceTracker.getStats();
-            document.getElementById('pref-accepted-count').textContent = prefStats.totalAccepted;
-            document.getElementById('pref-ignored-count').textContent = prefStats.totalIgnored;
-            
-            if (prefStats.overallAcceptanceRate !== null) {
-                const rate = Math.round(prefStats.overallAcceptanceRate * 100);
-                const rateEl = document.getElementById('pref-acceptance-rate');
-                rateEl.textContent = `${rate}%`;
-                rateEl.style.color = rate >= 50 ? '#22c55e' : rate >= 30 ? '#f59e0b' : '#ef4444';
-            } else {
-                document.getElementById('pref-acceptance-rate').textContent = '—';
+            const prefAcceptedEl = document.getElementById('pref-accepted-count');
+            const prefIgnoredEl = document.getElementById('pref-ignored-count');
+            if (prefAcceptedEl) prefAcceptedEl.textContent = prefStats.totalAccepted;
+            if (prefIgnoredEl) prefIgnoredEl.textContent = prefStats.totalIgnored;
+
+            const rateEl = document.getElementById('pref-acceptance-rate');
+            if (rateEl) {
+                if (prefStats.overallAcceptanceRate !== null) {
+                    const rate = Math.round(prefStats.overallAcceptanceRate * 100);
+                    rateEl.textContent = `${rate}%`;
+                    rateEl.style.color = rate >= 50 ? '#22c55e' : rate >= 30 ? '#f59e0b' : '#ef4444';
+                } else {
+                    rateEl.textContent = '—';
             }
             
             // Show style preference if we have enough data
