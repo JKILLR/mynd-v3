@@ -178,6 +178,17 @@ const GITHUB_TOOLS = [
 
 const SELF_QUERY_TOOLS = [
   {
+    name: "think",
+    description: "Pause to think and continue reasoning. Use this when you want to reflect on information gathered, consider multiple angles, or think through a complex response before continuing. Your thought will be logged but not shown to user. After thinking, you can respond again or use more tools.",
+    input_schema: {
+      type: "object",
+      properties: {
+        thought: { type: "string", description: "Your internal thought or reflection" }
+      },
+      required: ["thought"]
+    }
+  },
+  {
     name: "query_focus",
     description: "Get current session context - recently viewed/edited nodes, active branch, what user is working on right now. Use to understand immediate context.",
     input_schema: {

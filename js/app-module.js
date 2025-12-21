@@ -28283,9 +28283,9 @@ You are a trusted guide, not a data harvester.
         renderMessage(message) {
             const div = document.createElement('div');
             div.className = `chat-message ${message.role}`;
-            
+
             const time = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            
+
             let actionsHTML = '';
             if (message.actions && message.actions.length > 0) {
                 actionsHTML = `
@@ -28293,7 +28293,7 @@ You are a trusted guide, not a data harvester.
                         ${message.actions.map(a => {
                             let icon = a.success ? '✓' : '✗';
                             let className = a.success ? 'success' : 'error';
-                            
+
                             if (a.skippedDuplicate) {
                                 icon = '⚠';
                                 className = 'warning';
@@ -28302,9 +28302,13 @@ You are a trusted guide, not a data harvester.
                                 icon = '?';
                                 className = 'pending';
                             }
-                            
+
+                            // Make clickable if we have a nodeId
+                            const clickable = a.nodeId ? 'clickable' : '';
+                            const dataAttr = a.nodeId ? `data-node-id="${a.nodeId}"` : '';
+
                             return `
-                            <div class="chat-action-item ${className}">
+                            <div class="chat-action-item ${className} ${clickable}" ${dataAttr}>
                                 <span class="chat-action-icon">${icon}</span>
                                 <span>${a.description}</span>
                             </div>
@@ -28313,7 +28317,7 @@ You are a trusted guide, not a data harvester.
                     </div>
                 `;
             }
-            
+
             div.innerHTML = `
                 <div class="chat-bubble">
                     ${this.formatMessage(message.content)}
@@ -28321,7 +28325,30 @@ You are a trusted guide, not a data harvester.
                 </div>
                 <div class="chat-message-time">${time}</div>
             `;
-            
+
+            // Add click handlers for action items with nodeId
+            div.querySelectorAll('.chat-action-item.clickable').forEach(item => {
+                item.addEventListener('click', () => {
+                    const nodeId = item.dataset.nodeId;
+                    if (nodeId && window.store) {
+                        // Select and focus the node
+                        window.store.selectedNode = nodeId;
+                        window.store.expandedNodes.add(nodeId);
+
+                        // Expand parent chain to make node visible
+                        let current = window.store.findNode(nodeId);
+                        while (current?.parentId) {
+                            window.store.expandedNodes.add(current.parentId);
+                            current = window.store.findNode(current.parentId);
+                        }
+
+                        // Rebuild scene and focus
+                        if (typeof buildScene === 'function') buildScene();
+                        if (typeof focusOnNode === 'function') focusOnNode(nodeId);
+                    }
+                });
+            });
+
             this.messagesContainer.appendChild(div);
         },
         
@@ -30810,6 +30837,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                         }
                     } else if (action.action === 'teach_neural') {
                         // Handle neural teaching - Claude teaching the local neural net
+                        console.log('📚 teach_neural action received:', JSON.stringify(action, null, 2));
                         try {
                             const insightType = action.insight_type || 'general';
 
@@ -30839,6 +30867,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                                 result.success = true;
                                 result.description = `Learned connection: ${action.from} → ${action.to}`;
                                 console.log(`🧠 Neural taught: ${action.from} ${action.relationship || '→'} ${action.to}`);
+                                console.log(`📊 SemanticMemory now has ${semanticMemory.memories?.length || 0} memories`);
 
                             } else if (insightType === 'user_goal') {
                                 // Store user goal insight

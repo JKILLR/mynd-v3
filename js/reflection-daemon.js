@@ -351,6 +351,20 @@ const ReflectionDaemon = {
         // SELF-QUERY TOOLS (Inner Dialogue)
         // ═══════════════════════════════════════════════════════════════════
         {
+            name: "think",
+            description: "Pause to think and continue reasoning. Use when you want to reflect before continuing your response.",
+            input_schema: {
+                type: "object",
+                properties: {
+                    thought: {
+                        type: "string",
+                        description: "Your internal thought or reflection"
+                    }
+                },
+                required: ["thought"]
+            }
+        },
+        {
             name: "query_focus",
             description: "Get current session context - recently viewed/edited nodes, active branch, what user is working on. Use to understand immediate context.",
             input_schema: {
@@ -1034,6 +1048,8 @@ const ReflectionDaemon = {
                 case 'github_compare':
                     return await this.toolGithubCompare(toolInput);
                 // Self-query tools (inner dialogue)
+                case 'think':
+                    return await this.toolThink(toolInput);
                 case 'query_focus':
                     return await this.toolQueryFocus(toolInput);
                 case 'query_similar':
@@ -1735,6 +1751,25 @@ const ReflectionDaemon = {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
+     * Think tool - allows Claude to pause and continue reasoning
+     * Returns minimal response to continue the tool loop
+     */
+    async toolThink({ thought }) {
+        console.log(`🧠 Inner thought: ${thought}`);
+
+        // Log the thought for debugging/transparency
+        this.log?.(`Inner thought: ${thought.substring(0, 100)}...`);
+
+        // Return acknowledgment - the tool loop will continue
+        // allowing Claude to respond again or use more tools
+        return {
+            acknowledged: true,
+            message: "Thought logged. Continue your reasoning and respond to the user.",
+            timestamp: new Date().toISOString()
+        };
+    },
+
+    /**
      * Get current session focus - what user is working on right now
      */
     async toolQueryFocus() {
@@ -1749,7 +1784,7 @@ const ReflectionDaemon = {
                 // Get selected node
                 const selectedId = store.selectedNode;
                 if (selectedId) {
-                    const selectedNode = store.getNode(selectedId);
+                    const selectedNode = store.findNode(selectedId);
                     if (selectedNode) {
                         result.session_context.selected_node = {
                             id: selectedId,
@@ -1762,7 +1797,7 @@ const ReflectionDaemon = {
                         const breadcrumb = [];
                         let current = selectedNode;
                         while (current?.parentId) {
-                            const parent = store.getNode(current.parentId);
+                            const parent = store.findNode(current.parentId);
                             if (parent) {
                                 breadcrumb.unshift(parent.label);
                                 current = parent;
@@ -1774,7 +1809,7 @@ const ReflectionDaemon = {
 
                         // Get siblings
                         if (selectedNode.parentId) {
-                            const parent = store.getNode(selectedNode.parentId);
+                            const parent = store.findNode(selectedNode.parentId);
                             if (parent?.children) {
                                 result.session_context.siblings = parent.children
                                     .filter(c => c.id !== selectedId)
@@ -1790,7 +1825,7 @@ const ReflectionDaemon = {
                 if (expandedNodes.length > 0) {
                     result.session_context.expanded_branches = expandedNodes
                         .slice(0, 10)
-                        .map(id => store.getNode(id)?.label)
+                        .map(id => store.findNode(id)?.label)
                         .filter(Boolean);
                 }
 
@@ -1972,35 +2007,51 @@ const ReflectionDaemon = {
             const patterns = {};
 
             // Get from PreferenceTracker if available
-            if (typeof preferenceTracker !== 'undefined') {
+            if (typeof preferenceTracker !== 'undefined' && preferenceTracker.loaded) {
                 const tracker = preferenceTracker;
 
-                if (domain === 'all' || domain === 'naming') {
-                    patterns.naming = {
-                        recent_labels: tracker.recentLabels?.slice(-10) || [],
-                        label_patterns: tracker.labelPatterns || {}
+                if (domain === 'all' || domain === 'suggestions') {
+                    // Acceptance/rejection insights
+                    patterns.suggestions = {
+                        acceptance_rate: tracker.insights?.acceptanceRateByType || {},
+                        preferred_patterns: tracker.insights?.preferredPatterns || {},
+                        avoided_patterns: tracker.insights?.avoidedPatterns || {},
+                        top_accepted: tracker.insights?.topAcceptedLabels?.slice(0, 10) || [],
+                        top_ignored: tracker.insights?.topIgnoredLabels?.slice(0, 10) || []
                     };
                 }
 
-                if (domain === 'all' || domain === 'colors') {
-                    patterns.colors = {
-                        frequently_used: tracker.colorUsage || {},
-                        recent_colors: tracker.recentColors?.slice(-5) || []
+                if (domain === 'all' || domain === 'style') {
+                    patterns.style = {
+                        prefers_action_labels: tracker.insights?.stylePreferences?.prefersActionLabels || 0,
+                        prefers_short_labels: tracker.insights?.stylePreferences?.prefersShortLabels || 0,
+                        prefers_descriptive: tracker.insights?.stylePreferences?.prefersDescriptive || 0
                     };
                 }
 
-                if (domain === 'all' || domain === 'structure') {
-                    patterns.structure = {
-                        avg_children_per_node: tracker.structureStats?.avgChildren || 0,
-                        max_depth: tracker.structureStats?.maxDepth || 0,
-                        common_structures: tracker.commonStructures || []
+                if (domain === 'all' || domain === 'history') {
+                    // Recent decisions
+                    const recentAccepted = tracker.history?.accepted?.slice(-10) || [];
+                    const recentIgnored = tracker.history?.ignored?.slice(-10) || [];
+                    patterns.recent_history = {
+                        accepted: recentAccepted.map(h => ({
+                            label: h.label,
+                            parent: h.parentLabel,
+                            type: h.type
+                        })),
+                        ignored: recentIgnored.map(h => ({
+                            label: h.label,
+                            parent: h.parentLabel,
+                            type: h.type
+                        })),
+                        total_accepted: tracker.history?.accepted?.length || 0,
+                        total_ignored: tracker.history?.ignored?.length || 0
                     };
                 }
 
-                if (domain === 'all' || domain === 'categories') {
-                    patterns.categories = {
-                        common_categories: tracker.categoryUsage || {},
-                        category_patterns: tracker.categoryPatterns || []
+                if (domain === 'all' || domain === 'relationships') {
+                    patterns.relationships = {
+                        successful_pairs: tracker.insights?.preferredParentChildPairs?.slice(0, 10) || []
                     };
                 }
             }
@@ -2008,16 +2059,22 @@ const ReflectionDaemon = {
             // Get neural net stats if available
             if (typeof neuralNet !== 'undefined' && neuralNet.isReady) {
                 patterns.neural_stats = {
-                    predictions_made: neuralNet.predictionCount || 0,
-                    acceptance_rate: neuralNet.acceptanceRate || 0,
-                    confidence_avg: neuralNet.avgConfidence || 0
+                    is_ready: true,
+                    recent_predictions: neuralNet.recentPredictions?.slice(-5)?.map(p => ({
+                        input: p.input?.substring(0, 50),
+                        output: p.output,
+                        confidence: Math.round((p.confidence || 0) * 100) + '%'
+                    })) || []
                 };
             }
 
             // Get semantic memory stats
             if (typeof semanticMemory !== 'undefined' && semanticMemory.loaded) {
-                patterns.memory_stats = semanticMemory.getStats?.() || {
-                    total_memories: semanticMemory.memories?.length || 0
+                const stats = semanticMemory.getStats?.() || {};
+                patterns.memory_stats = {
+                    total_memories: semanticMemory.memories?.length || 0,
+                    important_memories: stats.importantMemories || 0,
+                    event_types: stats.eventCounts || {}
                 };
             }
 
@@ -2069,7 +2126,7 @@ const ReflectionDaemon = {
 
                 // Get parent
                 if (node.parentId) {
-                    const parent = store.getNode(node.parentId);
+                    const parent = store.findNode(node.parentId);
                     if (parent) {
                         nodeConnections.parent = { id: parent.id, label: parent.label };
 
