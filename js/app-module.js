@@ -17653,7 +17653,7 @@ Respond with a JSON object:
                         'anthropic-dangerous-direct-browser-access': 'true'
                     },
                     body: JSON.stringify({
-                        model: CONFIG.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+                        model: CONFIG.CLAUDE_MODEL || 'claude-opus-4-5-20250514',
                         max_tokens: 2000,
                         messages: [{ role: 'user', content: evolutionPrompt }]
                     })
