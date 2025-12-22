@@ -17878,10 +17878,18 @@ Respond with a JSON object:
             this.idleCheckIntervalId = IntervalManager.set(() => {
                 this.checkIdleEvolution();
             }, 30000, 'autonomousEvolution-idleCheck'); // Check every 30 seconds
+
+            console.log('🔄 Autonomous evolution idle detection started (checks every 30s, triggers after 60s idle)');
         },
 
         async checkIdleEvolution() {
             const idleTime = ActivityTracker.getIdleTime();
+            const idleSecs = Math.round(idleTime / 1000);
+
+            // Log every check for debugging
+            if (idleSecs >= 30) {
+                console.log(`🔄 Idle check: ${idleSecs}s idle (need ${this.config.minIdleTimeMs / 1000}s), running: ${this.isRunning}`);
+            }
 
             if (idleTime >= this.config.minIdleTimeMs && !this.isRunning) {
                 // User has been idle - consider auto-evolution
@@ -17890,8 +17898,11 @@ Respond with a JSON object:
                 // Only run if there's meaningful data to work with
                 const store = window.app?.store;
                 if (store && store.getAllNodes().length >= 5) {
+                    console.log(`🔄 Starting evolution session (${store.getAllNodes().length} nodes available)`);
                     // Run a short exploration session
                     await this.startSession('explore', { maxIterations: 3 });
+                } else {
+                    console.log(`🔄 Skipping evolution: ${store ? store.getAllNodes().length : 0} nodes (need 5+)`);
                 }
             }
         },
