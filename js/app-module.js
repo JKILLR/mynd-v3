@@ -17640,14 +17640,43 @@ Respond with a JSON object:
 }`;
 
             try {
-                // Get API key from localStorage
+                // Try Edge Function first (production - uses server-side API key)
+                if (typeof supabase !== 'undefined' && supabase) {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (session?.access_token) {
+                        console.log('🔄 Evolution: Using Edge Function');
+                        const response = await fetch(CONFIG.EDGE_FUNCTION_URL, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${session.access_token}`
+                            },
+                            body: JSON.stringify({
+                                messages: [{ role: 'user', content: evolutionPrompt }],
+                                maxTokens: 2000
+                            })
+                        });
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            const content = data.response || data.textSoFar || '';
+                            const jsonMatch = content.match(/\{[\s\S]*\}/);
+                            if (jsonMatch) {
+                                return JSON.parse(jsonMatch[0]);
+                            }
+                        }
+                        return null;
+                    }
+                }
+
+                // Fallback: Direct API call (self-dev mode with localStorage key)
                 const apiKey = localStorage.getItem(CONFIG.API_KEY);
                 if (!apiKey) {
-                    console.log('🔄 Autonomous evolution: No API key configured');
+                    console.log('🔄 Autonomous evolution: No API key and no session');
                     return null;
                 }
 
-                // Make API call
+                console.log('🔄 Evolution: Using direct API call');
                 const response = await fetch('https://api.anthropic.com/v1/messages', {
                     method: 'POST',
                     headers: {
