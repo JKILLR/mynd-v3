@@ -27982,7 +27982,7 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         isOpen: false,
         isProcessing: false,
         conversation: [], // {role: 'user'|'assistant', content: string, actions?: array, timestamp: number}
-        maxHistory: 20, // Keep last 20 messages for context
+        maxHistory: 100, // Keep last 100 messages for context
 
         // Real-time conversation learning - tracks what was learned THIS session
         sessionLearning: {
@@ -30146,7 +30146,7 @@ You are a trusted guide, not a data harvester.
             // Build conversation history for Claude
             // Include completed actions so AI knows what was already done
             // Filter out 'bapi' role messages - only 'user' and 'assistant' are valid for Claude API
-            const historyForClaude = this.conversation.slice(-10)
+            const historyForClaude = this.conversation.slice(-50)  // Keep last 50 messages for rich context
                 .filter(m => (m.role === 'user' || m.role === 'assistant') && m.content)
                 .map(m => {
                 let textContent = m.content;
@@ -30176,10 +30176,17 @@ You are a trusted guide, not a data harvester.
                 if (m.role === 'user' && m.images && m.images.length > 0) {
                     const contentBlocks = [];
 
-                    // Add images first
+                    // Add images first (skip oversized images from old messages)
                     for (const img of m.images) {
                         const dataUrl = img.dataUrl || img;
                         if (typeof dataUrl === 'string') {
+                            // Check image size - skip if over 4.5MB (base64 is ~1.37x original)
+                            const estimatedBytes = dataUrl.length * 0.75;
+                            if (estimatedBytes > 4.5 * 1024 * 1024) {
+                                console.warn(`⚠️ Skipping oversized image in history (${(estimatedBytes / 1024 / 1024).toFixed(1)}MB)`);
+                                continue;  // Skip this image
+                            }
+
                             const match = dataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/);
                             if (match) {
                                 contentBlocks.push({
@@ -30199,7 +30206,12 @@ You are a trusted guide, not a data harvester.
                         contentBlocks.push({ type: 'text', text: textContent });
                     }
 
-                    return { role: m.role, content: contentBlocks };
+                    // Only return image format if we have valid images
+                    if (contentBlocks.length > 0 && contentBlocks.some(b => b.type === 'image')) {
+                        return { role: m.role, content: contentBlocks };
+                    }
+                    // If all images were skipped, just return text
+                    return { role: m.role, content: textContent || '[image too large to include]' };
                 }
 
                 return { role: m.role, content: textContent };
@@ -33737,13 +33749,19 @@ CURRENT REQUEST CONTEXT
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user) return; // Not signed in, localStorage only
 
+                // Don't save full images to Supabase (too large) - just note that images were attached
+                const imageMeta = message.images?.map(img => ({
+                    hadImage: true,
+                    timestamp: Date.now()
+                })) || [];
+
                 const { error } = await supabase
                     .from('chat_conversations')
                     .insert({
                         user_id: user.id,
                         role: message.role,
                         content: message.content,
-                        images: message.images || [],
+                        images: imageMeta,  // Store metadata, not full base64
                         actions: message.actions || [],
                         suggestions: message.suggestions || [],
                         message_timestamp: message.timestamp
@@ -33770,7 +33788,7 @@ CURRENT REQUEST CONTEXT
                             .select('*')
                             .eq('user_id', user.id)
                             .order('message_timestamp', { ascending: true })
-                            .limit(100);
+                            .limit(200);  // Load more conversation history
 
                         if (!error && data && data.length > 0) {
                             console.log(`📥 Loaded ${data.length} messages from server`);
