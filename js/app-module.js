@@ -31875,7 +31875,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                     .eq('user_id', user.id)
                     .order('session_ended', { ascending: false })
                     .limit(1)
-                    .single();
+                    .maybeSingle();  // Use maybeSingle to avoid 406 when no sessions exist
 
                 if (lastSession) {
                     this.lastSessionId = lastSession.id;
