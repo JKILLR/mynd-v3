@@ -27982,7 +27982,7 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         isOpen: false,
         isProcessing: false,
         conversation: [], // {role: 'user'|'assistant', content: string, actions?: array, timestamp: number}
-        maxHistory: 20, // Keep last 20 messages for context
+        maxHistory: 100, // Keep last 100 messages for context
 
         // Real-time conversation learning - tracks what was learned THIS session
         sessionLearning: {
@@ -30146,7 +30146,7 @@ You are a trusted guide, not a data harvester.
             // Build conversation history for Claude
             // Include completed actions so AI knows what was already done
             // Filter out 'bapi' role messages - only 'user' and 'assistant' are valid for Claude API
-            const historyForClaude = this.conversation.slice(-10)
+            const historyForClaude = this.conversation.slice(-50)  // Keep last 50 messages for rich context
                 .filter(m => (m.role === 'user' || m.role === 'assistant') && m.content)
                 .map(m => {
                 let textContent = m.content;
@@ -33788,7 +33788,7 @@ CURRENT REQUEST CONTEXT
                             .select('*')
                             .eq('user_id', user.id)
                             .order('message_timestamp', { ascending: true })
-                            .limit(100);
+                            .limit(200);  // Load more conversation history
 
                         if (!error && data && data.length > 0) {
                             console.log(`📥 Loaded ${data.length} messages from server`);
