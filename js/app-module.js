@@ -14321,17 +14321,17 @@ Return as JSON:
         }
 
         // Embed source file chunks (separate from main codebase embeddings)
+        // NOTE: Only uses LocalBrain server - TensorFlow.js disabled (crashes browser)
         async embedSourceChunks() {
             if (!this.sourceChunks || this.sourceChunks.length === 0) return;
 
-            const encoder = this.encoder || neuralNet?.encoder;
-            if (!encoder) {
-                console.warn('CodeRAG: No encoder available for source embeddings');
+            if (typeof LocalBrain === 'undefined' || !LocalBrain.isAvailable) {
+                console.warn('CodeRAG: LocalBrain server not available for source embeddings');
                 return;
             }
 
             this.sourceEmbeddings = new Map();
-            console.log(`📚 Embedding ${this.sourceChunks.length} source chunks...`);
+            console.log(`📚 Embedding ${this.sourceChunks.length} source chunks via LocalBrain...`);
 
             const batchSize = 20;
             for (let i = 0; i < this.sourceChunks.length; i += batchSize) {
@@ -14341,10 +14341,7 @@ Return as JSON:
                 );
 
                 try {
-                    const embeddings = await encoder.embed(texts);
-                    const vectors = await embeddings.array();
-                    embeddings.dispose();
-
+                    const vectors = await LocalBrain.embedBatch(texts);
                     batch.forEach((chunk, idx) => {
                         this.sourceEmbeddings.set(chunk.id, vectors[idx]);
                     });
