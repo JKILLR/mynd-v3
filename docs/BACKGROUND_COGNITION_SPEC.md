@@ -372,7 +372,7 @@ if (pendingInsights.length > 0) {
 
 ## Analysis Algorithms
 
-Two primary data sources: **Conversations** and **Map Structure**
+Three data sources: **Conversations**, **Map Structure**, and **AI Memories**
 
 ---
 
@@ -477,11 +477,178 @@ def track_thinking_evolution(conversations):
 
 ---
 
-### Data Source 2: Map Structure
+### Data Source 2: AI Memories
+
+Persistent memories stored by Claude - syntheses, realizations, patterns, relationships, goals.
+
+#### 2A. Memory Clustering
+
+```python
+def cluster_memories(memories):
+    """Find clusters of related memories that might form larger insights."""
+    insights = []
+
+    # Group by type first
+    by_type = defaultdict(list)
+    for mem in memories:
+        by_type[mem['memory_type']].append(mem)
+
+    # Cluster within each type by semantic similarity
+    for mem_type, mems in by_type.items():
+        if len(mems) < 3:
+            continue
+
+        embeddings = [embed(m['content'][:500]) for m in mems]
+        clusters = cluster_embeddings(embeddings, threshold=0.65)
+
+        for cluster in clusters:
+            if len(cluster) >= 3:
+                cluster_mems = [mems[i] for i in cluster]
+                common_theme = extract_common_theme(cluster_mems)
+
+                insights.append({
+                    "type": "memory_cluster",
+                    "title": f"Pattern across {len(cluster)} {mem_type} memories",
+                    "content": f"Multiple memories converge on: {common_theme}. This might be a core insight worth surfacing.",
+                    "confidence": 0.75,
+                    "source_memories": [m['id'] for m in cluster_mems]
+                })
+
+    return insights
+```
+
+#### 2B. Memory-Map Alignment
+
+```python
+def check_memory_map_alignment(memories, map_nodes):
+    """Find memories that should be reflected in map but aren't."""
+    insights = []
+
+    node_labels = {n['label'].lower() for n in map_nodes}
+    node_embeddings = {n['id']: embed(n['label']) for n in map_nodes}
+
+    for mem in memories:
+        if mem['memory_type'] not in ['synthesis', 'realization', 'pattern']:
+            continue
+
+        # Check if memory topic is represented in map
+        mem_embedding = embed(mem['content'][:500])
+
+        max_similarity = 0
+        best_match = None
+        for node_id, node_emb in node_embeddings.items():
+            sim = cosine_similarity(mem_embedding, node_emb)
+            if sim > max_similarity:
+                max_similarity = sim
+                best_match = node_id
+
+        # Memory not well-represented in map
+        if max_similarity < 0.5:
+            insights.append({
+                "type": "unrepresented_memory",
+                "title": f"Insight not in map: {mem['content'][:50]}...",
+                "content": f"You had this realization but it's not reflected in your map structure. Worth adding as a node?",
+                "confidence": 0.65,
+                "source_memories": [mem['id']]
+            })
+
+        # Memory could enhance existing node
+        elif 0.5 <= max_similarity < 0.75:
+            node_label = get_node_label(best_match, map_nodes)
+            insights.append({
+                "type": "memory_enrichment",
+                "title": f"Memory could enrich '{node_label}'",
+                "content": f"This stored insight relates to '{node_label}' but adds depth: {mem['content'][:100]}...",
+                "confidence": max_similarity,
+                "source_nodes": [best_match],
+                "source_memories": [mem['id']]
+            })
+
+    return insights
+```
+
+#### 2C. Memory Evolution
+
+```python
+def track_memory_evolution(memories):
+    """Detect how stored insights have evolved over time."""
+    insights = []
+
+    # Sort by creation date
+    sorted_mems = sorted(memories, key=lambda m: m['created_at'])
+
+    # Find memories on same topic at different times
+    topics = extract_memory_topics(sorted_mems)
+
+    for topic in topics:
+        topic_mems = [m for m in sorted_mems if topic_matches(topic, m)]
+
+        if len(topic_mems) >= 2:
+            earliest = topic_mems[0]
+            latest = topic_mems[-1]
+
+            # Check if understanding has shifted
+            similarity = cosine_similarity(
+                embed(earliest['content']),
+                embed(latest['content'])
+            )
+
+            if similarity < 0.7:  # Significant shift
+                days_apart = (parse_date(latest['created_at']) - parse_date(earliest['created_at'])).days
+
+                insights.append({
+                    "type": "memory_evolution",
+                    "title": f"Your understanding of '{topic}' has evolved",
+                    "content": f"Over {days_apart} days, your stored insights on this shifted. Earlier: '{earliest['content'][:80]}...' Now: '{latest['content'][:80]}...'",
+                    "confidence": 0.7,
+                    "source_memories": [earliest['id'], latest['id']]
+                })
+
+    return insights
+```
+
+#### 2D. Goal Progress from Memories
+
+```python
+def analyze_goal_memories(memories):
+    """Track progress on stored goals through related memories."""
+    insights = []
+
+    goal_mems = [m for m in memories if m['memory_type'] == 'goal_tracking']
+    other_mems = [m for m in memories if m['memory_type'] != 'goal_tracking']
+
+    for goal in goal_mems:
+        goal_embedding = embed(goal['content'])
+
+        # Find other memories related to this goal
+        related = []
+        for mem in other_mems:
+            sim = cosine_similarity(goal_embedding, embed(mem['content']))
+            if sim > 0.6:
+                related.append((mem, sim))
+
+        if len(related) >= 2:
+            # Sort by date to see progress
+            related.sort(key=lambda x: x[0]['created_at'])
+
+            insights.append({
+                "type": "goal_progress",
+                "title": f"Progress on: {goal['content'][:40]}...",
+                "content": f"Found {len(related)} memories related to this goal. Most recent: '{related[-1][0]['content'][:80]}...'",
+                "confidence": 0.7,
+                "source_memories": [goal['id']] + [m['id'] for m, _ in related[:3]]
+            })
+
+    return insights
+```
+
+---
+
+### Data Source 3: Map Structure
 
 The mind map's nodes, hierarchy, and connections reveal cognitive organization.
 
-#### 2A. Missing Connections (Semantic)
+#### 3A. Missing Connections (Semantic)
 
 ```python
 def find_missing_connections(map_data):
@@ -515,7 +682,7 @@ def find_missing_connections(map_data):
     return sorted(insights, key=lambda x: -x['confidence'])[:3]
 ```
 
-#### 2B. Structural Imbalance
+#### 3B. Structural Imbalance
 
 ```python
 def detect_structural_patterns(map_data):
@@ -562,7 +729,7 @@ def detect_structural_patterns(map_data):
     return insights
 ```
 
-#### 2C. Orphan and Stale Detection
+#### 3C. Orphan and Stale Detection
 
 ```python
 def find_orphans_and_stale(map_data, conversations):
@@ -593,7 +760,7 @@ def find_orphans_and_stale(map_data, conversations):
     return insights
 ```
 
-#### 2D. Cross-Branch Connections
+#### 3D. Cross-Branch Connections
 
 ```python
 def suggest_cross_branch_links(map_data):
@@ -640,27 +807,42 @@ def suggest_cross_branch_links(map_data):
 
 ```python
 def run_background_analysis(user_id):
-    """Main analysis function combining all sources."""
+    """Main analysis function combining all three data sources."""
 
-    # Load data
+    # Load all data
     map_data = load_user_map(user_id)
     conversations = load_user_conversations(user_id)
-    map_nodes = flatten_nodes(map_data)
+    memories = load_user_memories(user_id)  # From ai_memory table
+    map_nodes = flatten_nodes(map_data) if map_data else []
 
     insights = []
 
-    # Conversation analysis
+    # 1. Conversation analysis
     if conversations:
         insights += find_conversation_map_connections(conversations, map_nodes)
         insights += detect_conversation_threads(conversations)
         insights += track_thinking_evolution(conversations)
 
-    # Map structure analysis
+    # 2. AI Memory analysis
+    if memories:
+        insights += cluster_memories(memories)
+        insights += check_memory_map_alignment(memories, map_nodes)
+        insights += track_memory_evolution(memories)
+        insights += analyze_goal_memories(memories)
+
+    # 3. Map structure analysis
     if map_data:
         insights += find_missing_connections(map_data)
         insights += detect_structural_patterns(map_data)
-        insights += find_orphans_and_stale(map_data, conversations)
+        insights += find_orphans_and_stale(map_data, conversations or [])
         insights += suggest_cross_branch_links(map_data)
+
+    # Cross-source analysis (connections between data sources)
+    if memories and conversations:
+        insights += find_memory_conversation_links(memories, conversations)
+
+    if memories and map_nodes:
+        insights += find_memory_map_gaps(memories, map_nodes)
 
     # Filter and rank
     insights = [i for i in insights if i['confidence'] >= 0.6]
@@ -670,6 +852,56 @@ def run_background_analysis(user_id):
     insights = deduplicate_insights(insights)
 
     return insights[:3]  # Top 3 only
+
+
+def find_memory_conversation_links(memories, conversations):
+    """Find where memories connect to specific conversations."""
+    insights = []
+
+    for mem in memories:
+        mem_emb = embed(mem['content'][:500])
+
+        for conv in conversations:
+            conv_emb = embed(conv['content'][:1000])
+            sim = cosine_similarity(mem_emb, conv_emb)
+
+            if sim > 0.75:
+                insights.append({
+                    "type": "memory_conversation_link",
+                    "title": f"Memory traces to conversation",
+                    "content": f"Your insight '{mem['content'][:60]}...' originated from or relates to your {conv['source']} conversation on {conv['date']}.",
+                    "confidence": sim,
+                    "source_memories": [mem['id']],
+                    "source_conversations": [conv['id']]
+                })
+
+    return sorted(insights, key=lambda x: -x['confidence'])[:2]
+
+
+def find_memory_map_gaps(memories, map_nodes):
+    """Find high-importance memories not represented in map."""
+    insights = []
+
+    # Only check high-importance memories
+    important_mems = [m for m in memories if m.get('importance', 0) >= 0.7]
+
+    node_texts = ' '.join([n['label'] for n in map_nodes]).lower()
+
+    for mem in important_mems:
+        # Simple keyword check first
+        key_terms = extract_key_terms(mem['content'])
+        represented = any(term.lower() in node_texts for term in key_terms)
+
+        if not represented:
+            insights.append({
+                "type": "important_gap",
+                "title": f"High-value insight missing from map",
+                "content": f"You stored this with {mem['importance']:.0%} importance but it's not in your map: '{mem['content'][:100]}...'",
+                "confidence": mem['importance'],
+                "source_memories": [mem['id']]
+            })
+
+    return sorted(insights, key=lambda x: -x['confidence'])[:2]
 ```
 
 ---
