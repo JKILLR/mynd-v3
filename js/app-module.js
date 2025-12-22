@@ -29152,13 +29152,88 @@ You are a trusted guide, not a data harvester.
         },
 
         // Image handling methods
-        addImage(file) {
+
+        // Compress image to fit within Claude's 5MB limit
+        async compressImage(dataUrl, maxSizeBytes = 4.5 * 1024 * 1024) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+
+                    // Start with original dimensions
+                    let width = img.width;
+                    let height = img.height;
+                    let quality = 0.9;
+
+                    // Calculate current size (rough estimate from base64)
+                    const currentSize = dataUrl.length * 0.75;
+
+                    // If already under limit, return as-is
+                    if (currentSize <= maxSizeBytes) {
+                        resolve(dataUrl);
+                        return;
+                    }
+
+                    console.log(`🖼️ Compressing image: ${(currentSize / 1024 / 1024).toFixed(2)}MB -> target <${(maxSizeBytes / 1024 / 1024).toFixed(1)}MB`);
+
+                    // Scale down if very large
+                    const maxDimension = 2048;
+                    if (width > maxDimension || height > maxDimension) {
+                        const ratio = Math.min(maxDimension / width, maxDimension / height);
+                        width = Math.round(width * ratio);
+                        height = Math.round(height * ratio);
+                    }
+
+                    // Try progressively lower quality until under limit
+                    const tryCompress = () => {
+                        canvas.width = width;
+                        canvas.height = height;
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        const compressed = canvas.toDataURL('image/jpeg', quality);
+                        const compressedSize = compressed.length * 0.75;
+
+                        if (compressedSize <= maxSizeBytes || quality <= 0.3) {
+                            console.log(`🖼️ Compressed to ${(compressedSize / 1024 / 1024).toFixed(2)}MB (quality: ${Math.round(quality * 100)}%)`);
+                            resolve(compressed);
+                        } else {
+                            // Reduce quality or dimensions
+                            if (quality > 0.5) {
+                                quality -= 0.1;
+                            } else {
+                                quality -= 0.05;
+                                // Also reduce dimensions
+                                width = Math.round(width * 0.9);
+                                height = Math.round(height * 0.9);
+                            }
+                            tryCompress();
+                        }
+                    };
+
+                    tryCompress();
+                };
+                img.src = dataUrl;
+            });
+        },
+
+        async addImage(file) {
             if (!file.type.startsWith('image/')) return;
 
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = async (e) => {
+                let dataUrl = e.target.result;
+
+                // Compress if over 4.5MB (leave margin for API limit of 5MB)
+                const sizeBytes = dataUrl.length * 0.75;
+                if (sizeBytes > 4.5 * 1024 * 1024) {
+                    showToast('Compressing large image...', 'info');
+                    dataUrl = await this.compressImage(dataUrl);
+                    showToast('Image compressed successfully', 'success');
+                }
+
                 const imageData = {
-                    dataUrl: e.target.result,
+                    dataUrl: dataUrl,
                     file: file,
                     id: Date.now() + Math.random()
                 };
@@ -33592,7 +33667,65 @@ CURRENT REQUEST CONTEXT
                 // Always save to localStorage for offline access
                 localStorage.setItem('mynd-chat-history', JSON.stringify(this.conversation));
             } catch (e) {
-                console.warn('Failed to save chat history to localStorage:', e);
+                // Handle QuotaExceededError by pruning old data
+                if (e.name === 'QuotaExceededError') {
+                    console.warn('localStorage quota exceeded, pruning old data...');
+                    this.pruneLocalStorage();
+                } else {
+                    console.warn('Failed to save chat history to localStorage:', e);
+                }
+            }
+        },
+
+        // Prune localStorage by removing images from old messages and trimming history
+        pruneLocalStorage() {
+            try {
+                // Strategy 1: Strip images from all but the last 5 messages
+                const prunedConversation = this.conversation.map((msg, index) => {
+                    const isRecent = index >= this.conversation.length - 5;
+                    if (!isRecent && msg.images && msg.images.length > 0) {
+                        // Keep message but remove image data, just note it had images
+                        return {
+                            ...msg,
+                            images: undefined,
+                            hadImages: msg.images.length  // Remember it had images
+                        };
+                    }
+                    return msg;
+                });
+
+                try {
+                    localStorage.setItem('mynd-chat-history', JSON.stringify(prunedConversation));
+                    console.log('✓ Pruned image data from old messages');
+                    return;
+                } catch (e2) {
+                    // Still too big, continue pruning
+                }
+
+                // Strategy 2: Keep only last 50 messages
+                const trimmed = prunedConversation.slice(-50);
+                try {
+                    localStorage.setItem('mynd-chat-history', JSON.stringify(trimmed));
+                    console.log('✓ Trimmed to last 50 messages');
+                    return;
+                } catch (e3) {
+                    // Still too big
+                }
+
+                // Strategy 3: Keep only last 20 messages
+                const minimal = prunedConversation.slice(-20);
+                try {
+                    localStorage.setItem('mynd-chat-history', JSON.stringify(minimal));
+                    console.log('✓ Trimmed to last 20 messages');
+                    return;
+                } catch (e4) {
+                    // Last resort: clear localStorage chat history
+                    localStorage.removeItem('mynd-chat-history');
+                    console.warn('Had to clear localStorage chat history - data preserved in Supabase');
+                    showToast('Chat history cleared from local cache (preserved in cloud)', 'warning');
+                }
+            } catch (e) {
+                console.error('Failed to prune localStorage:', e);
             }
         },
 
