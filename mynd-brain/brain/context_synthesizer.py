@@ -503,7 +503,7 @@ class ContextSynthesizer:
 
         try:
             # Use archive's search if available
-            results = self.conversations.search(query, limit=10)
+            results = self.conversations.search(query, top_k=10)
 
             for conv in results:
                 content = conv.get('text', conv.get('content', ''))[:300]
