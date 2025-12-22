@@ -1984,6 +1984,7 @@ const ReflectionDaemon = {
         try {
             const insights = [];
 
+            // 1. Search local semanticMemory
             if (typeof semanticMemory !== 'undefined' && semanticMemory.loaded) {
                 const targetTypes = insight_type === 'all'
                     ? ['connection_insight', 'user_goal', 'neural_insight']
@@ -2007,6 +2008,7 @@ const ReflectionDaemon = {
 
                         insights.push({
                             type: memory.event,
+                            source: 'local',
                             context: memory.context?.substring(0, 300),
                             importance: memory.importance,
                             metadata: memory.metadata,
@@ -2014,15 +2016,75 @@ const ReflectionDaemon = {
                         });
                     }
                 }
-
-                // Sort by importance
-                insights.sort((a, b) => b.importance - a.importance);
             }
+
+            // 2. Also search Supabase AI memories (persistent store)
+            const supabaseClient = typeof window !== 'undefined' ? window.supabaseClient : null;
+            if (supabaseClient) {
+                try {
+                    const { data: session } = await supabaseClient.auth.getSession();
+                    if (session?.session?.user) {
+                        // Map insight_type to Supabase memory_type
+                        const typeMapping = {
+                            'connection_insight': 'relationship',
+                            'user_goal': 'goal_tracking',
+                            'neural_insight': 'synthesis'
+                        };
+
+                        let query = supabaseClient
+                            .from('ai_memory')
+                            .select('id, memory_type, content, importance, related_nodes, created_at')
+                            .eq('user_id', session.session.user.id)
+                            .order('importance', { ascending: false })
+                            .limit(20);
+
+                        // Filter by memory type if specified
+                        if (insight_type !== 'all') {
+                            const supaType = typeMapping[insight_type] || insight_type;
+                            query = query.eq('memory_type', supaType);
+                        } else {
+                            // Get all insight-related types
+                            query = query.in('memory_type', ['synthesis', 'realization', 'pattern', 'relationship', 'goal_tracking']);
+                        }
+
+                        const { data, error } = await query;
+
+                        if (!error && data) {
+                            for (const mem of data) {
+                                // Filter by related_to if specified
+                                if (related_to) {
+                                    const searchTerm = related_to.toLowerCase();
+                                    const content = (mem.content || '').toLowerCase();
+                                    const nodes = (mem.related_nodes || []).join(' ').toLowerCase();
+                                    if (!content.includes(searchTerm) && !nodes.includes(searchTerm)) {
+                                        continue;
+                                    }
+                                }
+
+                                insights.push({
+                                    id: mem.id,
+                                    type: mem.memory_type,
+                                    source: 'supabase',
+                                    context: mem.content?.substring(0, 300),
+                                    importance: mem.importance,
+                                    related_nodes: mem.related_nodes,
+                                    age_days: Math.round((Date.now() - new Date(mem.created_at).getTime()) / (1000 * 60 * 60 * 24))
+                                });
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Supabase AI memory query failed:', e);
+                }
+            }
+
+            // Sort by importance
+            insights.sort((a, b) => b.importance - a.importance);
 
             return {
                 filter: { insight_type, related_to },
                 count: insights.length,
-                insights: insights.slice(0, 10)
+                insights: insights.slice(0, 15)
             };
 
         } catch (error) {
@@ -2031,12 +2093,13 @@ const ReflectionDaemon = {
     },
 
     /**
-     * Search conversation memory
+     * Search conversation memory - combines local semanticMemory with Supabase AI memories
      */
-    async toolQueryMemory({ topic, limit = 5 }) {
+    async toolQueryMemory({ topic, limit = 10 }) {
         try {
             const results = [];
 
+            // 1. Search local semanticMemory
             if (typeof semanticMemory !== 'undefined' && semanticMemory.loaded) {
                 const memories = await semanticMemory.recallMemories(topic, limit, 0.3);
 
@@ -2048,6 +2111,7 @@ const ReflectionDaemon = {
                     if (conversationTypes.includes(memory.event)) {
                         results.push({
                             type: memory.event,
+                            source: 'local',
                             context: memory.context?.substring(0, 400),
                             similarity: Math.round(memory.similarity * 100) / 100,
                             importance: memory.importance,
@@ -2057,10 +2121,47 @@ const ReflectionDaemon = {
                 }
             }
 
+            // 2. Also search Supabase AI memories (persistent store)
+            const supabaseClient = typeof window !== 'undefined' ? window.supabaseClient : null;
+            if (supabaseClient) {
+                try {
+                    const { data: session } = await supabaseClient.auth.getSession();
+                    if (session?.session?.user) {
+                        // Search all memory types with text matching
+                        const { data, error } = await supabaseClient
+                            .from('ai_memory')
+                            .select('id, memory_type, content, importance, related_nodes, created_at')
+                            .eq('user_id', session.session.user.id)
+                            .ilike('content', `%${topic}%`)
+                            .order('importance', { ascending: false })
+                            .limit(limit);
+
+                        if (!error && data) {
+                            for (const mem of data) {
+                                results.push({
+                                    id: mem.id,
+                                    type: mem.memory_type,
+                                    source: 'supabase',
+                                    context: mem.content?.substring(0, 400),
+                                    importance: mem.importance,
+                                    related_nodes: mem.related_nodes,
+                                    age_days: Math.round((Date.now() - new Date(mem.created_at).getTime()) / (1000 * 60 * 60 * 24))
+                                });
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Supabase AI memory query failed:', e);
+                }
+            }
+
+            // Sort by importance
+            results.sort((a, b) => (b.importance || 0) - (a.importance || 0));
+
             return {
                 topic,
                 results_count: results.length,
-                results
+                results: results.slice(0, limit)
             };
 
         } catch (error) {
