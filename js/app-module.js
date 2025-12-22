@@ -32784,7 +32784,10 @@ CURRENT REQUEST CONTEXT
                 const { data, error } = await query;
 
                 if (error) {
-                    console.warn('Failed to fetch AI memories:', error);
+                    console.warn('Failed to fetch AI memories:', error.message || error);
+                    if (error.code === '42P01' || error.message?.includes('does not exist')) {
+                        console.warn('❌ ai_memory table does not exist! Run the migration.');
+                    }
                     return [];
                 }
 
@@ -32816,10 +32819,16 @@ CURRENT REQUEST CONTEXT
             //   - goal_tracking → not evergreen (situational)
             //   - relationship → depends on context (default false)
             try {
-                if (typeof supabase === 'undefined' || !supabase) return null;
+                if (typeof supabase === 'undefined' || !supabase) {
+                    console.warn('🧠 writeAIMemory: Supabase not available');
+                    return null;
+                }
 
                 const { data: session } = await supabase.auth.getSession();
-                if (!session?.session?.user) return null;
+                if (!session?.session?.user) {
+                    console.warn('🧠 writeAIMemory: No authenticated user');
+                    return null;
+                }
 
                 // Auto-determine evergreen based on memory type if not specified
                 let isEvergreen = evergreen;
@@ -32842,15 +32851,21 @@ CURRENT REQUEST CONTEXT
                     .single();
 
                 if (error) {
-                    console.error('Failed to write AI memory:', error);
+                    // Log detailed error info for debugging
+                    console.error('Failed to write AI memory:', error.message || error);
+                    console.error('Error details:', { code: error.code, details: error.details, hint: error.hint });
+                    // Check if it's a table not existing error
+                    if (error.code === '42P01' || error.message?.includes('does not exist')) {
+                        console.error('❌ ai_memory table does not exist! Run the migration: supabase/migrations/20241221_ai_memory.sql');
+                    }
                     return null;
                 }
 
                 const evergreenIcon = isEvergreen ? '⚓' : '';
-                console.log(`🧠 Wrote new memory: [${memory_type}]${evergreenIcon} ${content.slice(0, 50)}...`);
+                console.log(`🧠 Wrote new memory: [${memory_type}]${evergreenIcon} ID=${data.id} "${content.slice(0, 50)}..."`);
                 return data;
             } catch (e) {
-                console.error('AI memory write error:', e);
+                console.error('AI memory write error:', e.message || e);
                 return null;
             }
         },

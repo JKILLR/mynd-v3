@@ -2143,10 +2143,11 @@ const ReflectionDaemon = {
                             .limit(limit);
 
                         if (error) {
-                            console.warn('AI memory query error:', error);
+                            console.warn('AI memory query error:', error.message || error);
                         }
 
                         if (!error && data && data.length > 0) {
+                            console.log(`🧠 Found ${data.length} memories matching "${topic}"`);
                             for (const mem of data) {
                                 results.push({
                                     id: mem.id,
@@ -2158,33 +2159,42 @@ const ReflectionDaemon = {
                                     age_days: Math.round((Date.now() - new Date(mem.created_at).getTime()) / (1000 * 60 * 60 * 24))
                                 });
                             }
-                        } else if (data && data.length === 0) {
-                            // No results with topic search, try getting recent memories instead
-                            const { data: recentData } = await supabaseClient
-                                .from('ai_memory')
-                                .select('id, memory_type, content, importance, related_nodes, created_at')
-                                .eq('user_id', session.session.user.id)
-                                .order('created_at', { ascending: false })
-                                .limit(5);
+                        } else {
+                            // No matches with topic search OR error - fall back to recent memories
+                            console.log(`📝 No matches for "${topic}", fetching recent memories as fallback...`);
+                            try {
+                                const { data: recentData, error: recentError } = await supabaseClient
+                                    .from('ai_memory')
+                                    .select('id, memory_type, content, importance, related_nodes, created_at')
+                                    .eq('user_id', session.session.user.id)
+                                    .order('created_at', { ascending: false })
+                                    .limit(10);
 
-                            if (recentData && recentData.length > 0) {
-                                console.log(`📝 No matches for "${topic}", returning ${recentData.length} recent memories`);
-                                for (const mem of recentData) {
-                                    results.push({
-                                        id: mem.id,
-                                        type: mem.memory_type,
-                                        source: 'supabase_recent',
-                                        context: mem.content?.substring(0, 400),
-                                        importance: mem.importance,
-                                        related_nodes: mem.related_nodes,
-                                        age_days: Math.round((Date.now() - new Date(mem.created_at).getTime()) / (1000 * 60 * 60 * 24))
-                                    });
+                                if (recentError) {
+                                    console.warn('Recent memories fallback error:', recentError.message || recentError);
+                                } else if (recentData && recentData.length > 0) {
+                                    console.log(`📝 Returning ${recentData.length} recent memories as fallback`);
+                                    for (const mem of recentData) {
+                                        results.push({
+                                            id: mem.id,
+                                            type: mem.memory_type,
+                                            source: 'supabase_recent',
+                                            context: mem.content?.substring(0, 400),
+                                            importance: mem.importance,
+                                            related_nodes: mem.related_nodes,
+                                            age_days: Math.round((Date.now() - new Date(mem.created_at).getTime()) / (1000 * 60 * 60 * 24))
+                                        });
+                                    }
+                                } else {
+                                    console.log(`📝 No memories found in ai_memory table (table may be empty)`);
                                 }
+                            } catch (fallbackError) {
+                                console.warn('Recent memories fallback failed:', fallbackError);
                             }
                         }
                     }
                 } catch (e) {
-                    console.warn('Supabase AI memory query failed:', e);
+                    console.warn('Supabase AI memory query failed:', e.message || e);
                 }
             }
 
@@ -2452,6 +2462,8 @@ const ReflectionDaemon = {
 
     async toolWriteMemory({ memory_type, content, importance = 0.5, related_nodes = [] }) {
         try {
+            console.log(`🧠 Writing memory: [${memory_type}] ${content.substring(0, 60)}...`);
+
             // Use chatManager's memory functions if available
             if (typeof chatManager !== 'undefined' && chatManager.writeAIMemory) {
                 const memory = await chatManager.writeAIMemory({
@@ -2462,13 +2474,15 @@ const ReflectionDaemon = {
                 });
 
                 if (memory) {
+                    console.log(`✅ Memory written successfully: ID=${memory.id}`);
                     return {
                         success: true,
                         memory_id: memory.id,
                         message: `Memory written: [${memory_type}] ${content.substring(0, 50)}...`
                     };
                 }
-                return { error: 'Failed to write memory' };
+                console.warn('❌ chatManager.writeAIMemory returned null');
+                return { error: 'Failed to write memory (returned null - check Supabase connection/table)' };
             }
 
             // Direct Supabase fallback (uses window.supabaseClient exposed by app-module)
