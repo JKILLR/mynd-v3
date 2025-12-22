@@ -17697,6 +17697,9 @@ Respond with a JSON object:
                     timestamp: Date.now()
                 });
                 this.history.totalInsights++;
+
+                // Store to pending_insights for background cognition integration
+                await this.storeInsightToSupabase(response.insight, response.confidence, mode);
             }
 
             // Record learnings
@@ -17709,6 +17712,47 @@ Respond with a JSON object:
                 for (const action of response.proposedActions) {
                     await this.processAction(action, response.confidence);
                 }
+            }
+        },
+
+        // Store evolution insight to Supabase pending_insights table
+        // This integrates with background cognition - insights surface on wake-up
+        async storeInsightToSupabase(insight, confidence, mode) {
+            try {
+                if (typeof supabase === 'undefined' || !supabase) return;
+
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return;
+
+                // Map evolution mode to insight type
+                const insightType = {
+                    'explore': 'evolution',
+                    'connect': 'connection',
+                    'deepen': 'growth',
+                    'improve': 'evolution',
+                    'create': 'emergence'
+                }[mode] || 'evolution';
+
+                // Create hash to prevent duplicates
+                const hashInput = `${user.id}:evolution:${insight.substring(0, 50)}`;
+                const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(hashInput));
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                const insightHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 32);
+
+                await supabase.from('pending_insights').upsert({
+                    user_id: user.id,
+                    insight_type: insightType,
+                    title: `Evolution insight: ${mode}`,
+                    content: insight,
+                    confidence: confidence || 0.7,
+                    source_nodes: [],
+                    source_memories: [],
+                    insight_hash: insightHash
+                }, { onConflict: 'insight_hash' });
+
+                console.log(`🧠 Evolution insight stored to pending_insights: ${mode}`);
+            } catch (e) {
+                console.warn('Failed to store evolution insight to Supabase:', e);
             }
         },
 
