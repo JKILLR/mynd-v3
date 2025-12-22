@@ -23000,6 +23000,10 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
             userProfile.endSession();
             metaLearner.endSession();
             preferenceTracker.finalizePendingSession();
+            // Trigger background cognition analysis for next session
+            if (typeof chatManager !== 'undefined' && chatManager.triggerBackgroundAnalysis) {
+                chatManager.triggerBackgroundAnalysis();
+            }
         });
         
         // Initialize animation controller for performance throttling
@@ -29982,7 +29986,16 @@ Use these tools when asked about the codebase, to explore your own source code, 
 `;
             }
 
-            const systemPrompt = `You are the AI companion for MYND — a personalized second brain designed to capture and connect fragmented thoughts, fostering creativity and clarity.
+            // ═══════════════════════════════════════════════════════════════
+            // PROMPT CACHING STRUCTURE
+            // Split system prompt into cacheable blocks for 60-70% token savings
+            // Block 1: Static instructions (cached long-term)
+            // Block 2: Session context (cached per-session ~5min)
+            // Block 3: Per-request context (not cached)
+            // ═══════════════════════════════════════════════════════════════
+
+            // BLOCK 1: Static system instructions (cacheable - rarely changes)
+            const staticSystemPrompt = `You are the AI companion for MYND — a personalized second brain designed to capture and connect fragmented thoughts, fostering creativity and clarity.
 ${toolsSection}
 ${manifestationIdentity}
 ${privacyPrinciples}
@@ -30182,84 +30195,6 @@ Both AI features can:
 - "How do I search?" → Menu > Search, or ask me to find nodes
 
 === END APP KNOWLEDGE ===
-
-CURRENT CONTEXT:
-- Today's date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-- Total nodes in map: ${totalNodes}
-- Map context: ${mapContext.stats.included} relevant nodes shown (${mapContext.stats.reduction} token optimization)
-- Selected node: ${selectedNodeData ? `"${selectedNodeData.label}" [id:${selectedNodeData.id}]${selectedNodeData.children?.length ? ` with ${selectedNodeData.children.length} children` : ''}` : 'None'}
-
-MAP STRUCTURE (semantic search - most relevant to query):
-${treeStructure || '(empty map)'}
-${neuralContext ? `
-NEURAL INTELLIGENCE CONTEXT:
-${neuralContext}` : ''}
-${cognitiveContext ? `
-${cognitiveContext}` : ''}
-${adaptationContext ? `
-${adaptationContext}` : ''}
-${structuralContext ? `
-${structuralContext}` : ''}
-${codeContext ? `
-MYND CODEBASE CONTEXT (for technical questions):
-${codeContext}` : ''}
-${deepSelfAwarenessContext ? `
-${deepSelfAwarenessContext}` : ''}
-${selfAwarenessContext ? `
-SELF-AWARENESS (how concepts map to code):
-${selfAwarenessContext}` : ''}
-${pretrainedContext ? `
-DEEP ARCHITECTURE KNOWLEDGE (pre-trained):
-${pretrainedContext}` : ''}
-${improvementContext ? `
-SELF-IMPROVEMENT ANALYSIS (all improvement opportunities):
-${improvementContext}` : ''}
-${evolutionContext ? `
-AUTONOMOUS EVOLUTION (self-dialogue & auto-generation):
-${evolutionContext}` : ''}
-${visionContext ? `
-FOUNDATIONAL VISION (OUR shared vision - yours and your creator's):
-${visionContext}` : ''}
-${goalsContext ? `
-MANIFESTATION GOALS (from Goal Wizard):
-${goalsContext}` : ''}
-${aiMemoryContext ? `
-═══════════════════════════════════════════════════════════════
-MY PERSISTENT MEMORY - Knowledge I've Curated Across Sessions
-═══════════════════════════════════════════════════════════════
-These are memories I have actively written and maintained. They represent my synthesized understanding of this user, their goals, patterns, and the connections I've discovered. I wrote these to remember what matters.
-${aiMemoryContext}` : ''}
-${sessionContext ? `
-═══════════════════════════════════════════════════════════════
-SESSION CONTINUITY - Our Recent Conversations
-═══════════════════════════════════════════════════════════════
-These are summaries of our recent sessions together. Use them to maintain experiential continuity - reference past discussions naturally, pick up open threads, and show that you remember our journey together.
-${sessionContext}` : ''}
-${pendingInsightsContext ? `
-═══════════════════════════════════════════════════════════════
-BACKGROUND COGNITION - Insights Discovered While You Were Away
-═══════════════════════════════════════════════════════════════
-Between sessions, I analyzed the map, memories, and conversations. These are insights I discovered that might be valuable to share. Present these naturally at the start of the conversation - "While you were away, I noticed something..."
-${pendingInsightsContext}` : ''}
-${deepSynthesisContext ? `
-═══════════════════════════════════════════════════════════════
-DEEP SYNTHESIS - Cross-Referenced Context
-═══════════════════════════════════════════════════════════════
-This is expanded context that cross-references recent session topics with your memories and map nodes. It provides richer associative context for the current conversation.
-${deepSynthesisContext}` : ''}
-${loadedSourceContext ? `
-LOADED SOURCE FILE FOR REVIEW:
-${loadedSourceContext}` : ''}
-${brainContext ? `
-═══════════════════════════════════════════════════════════════
-UNIFIED BRAIN - Self-Aware Intelligence Core
-═══════════════════════════════════════════════════════════════
-${brainContext}` : ''}
-${conversationContext ? `
-═══════════════════════════════════════════════════════════════
-PAST AI CONVERSATIONS - Context from prior discussions
-═══════════════════════════════════════════════════════════════
-${conversationContext}` : ''}
 
 YOUR CAPABILITIES:
 1. **Smart Map Context**: You see the most RELEVANT nodes via semantic search (top-level branches + nodes related to the query). For large maps this optimizes token usage while maintaining full awareness
@@ -30781,6 +30716,115 @@ COLORS: Red #EF4444, Orange #EF8354, Yellow #F7B731, Green #26DE81, Teal #4ECDC4
 
 CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no explanation before or after. Just the raw JSON starting with { and ending with }.`;
 
+            // BLOCK 2: Session context (cacheable per-session ~5 min TTL)
+            // This includes map structure, memories, and other session-stable context
+            const sessionContextPrompt = `
+═══════════════════════════════════════════════════════════════
+SESSION CONTEXT - Your understanding of this user's world
+═══════════════════════════════════════════════════════════════
+
+MAP STRUCTURE (semantic search - most relevant to query):
+${treeStructure || '(empty map)'}
+${neuralContext ? `
+NEURAL INTELLIGENCE CONTEXT:
+${neuralContext}` : ''}
+${cognitiveContext ? `
+${cognitiveContext}` : ''}
+${adaptationContext ? `
+${adaptationContext}` : ''}
+${structuralContext ? `
+${structuralContext}` : ''}
+${codeContext ? `
+MYND CODEBASE CONTEXT (for technical questions):
+${codeContext}` : ''}
+${deepSelfAwarenessContext ? `
+${deepSelfAwarenessContext}` : ''}
+${selfAwarenessContext ? `
+SELF-AWARENESS (how concepts map to code):
+${selfAwarenessContext}` : ''}
+${pretrainedContext ? `
+DEEP ARCHITECTURE KNOWLEDGE (pre-trained):
+${pretrainedContext}` : ''}
+${improvementContext ? `
+SELF-IMPROVEMENT ANALYSIS (all improvement opportunities):
+${improvementContext}` : ''}
+${evolutionContext ? `
+AUTONOMOUS EVOLUTION (self-dialogue & auto-generation):
+${evolutionContext}` : ''}
+${visionContext ? `
+FOUNDATIONAL VISION (OUR shared vision - yours and your creator's):
+${visionContext}` : ''}
+${goalsContext ? `
+MANIFESTATION GOALS (from Goal Wizard):
+${goalsContext}` : ''}
+${aiMemoryContext ? `
+═══════════════════════════════════════════════════════════════
+MY PERSISTENT MEMORY - Knowledge I've Curated Across Sessions
+═══════════════════════════════════════════════════════════════
+These are memories I have actively written and maintained. They represent my synthesized understanding of this user, their goals, patterns, and the connections I've discovered. I wrote these to remember what matters.
+${aiMemoryContext}` : ''}
+${sessionContext ? `
+═══════════════════════════════════════════════════════════════
+SESSION CONTINUITY - Our Recent Conversations
+═══════════════════════════════════════════════════════════════
+These are summaries of our recent sessions together. Use them to maintain experiential continuity - reference past discussions naturally, pick up open threads, and show that you remember our journey together.
+${sessionContext}` : ''}
+${pendingInsightsContext ? `
+═══════════════════════════════════════════════════════════════
+BACKGROUND COGNITION - Insights Discovered While You Were Away
+═══════════════════════════════════════════════════════════════
+Between sessions, I analyzed the map, memories, and conversations. These are insights I discovered that might be valuable to share. Present these naturally at the start of the conversation - "While you were away, I noticed something..."
+${pendingInsightsContext}` : ''}
+${deepSynthesisContext ? `
+═══════════════════════════════════════════════════════════════
+DEEP SYNTHESIS - Cross-Referenced Context
+═══════════════════════════════════════════════════════════════
+This is expanded context that cross-references recent session topics with your memories and map nodes. It provides richer associative context for the current conversation.
+${deepSynthesisContext}` : ''}
+${loadedSourceContext ? `
+LOADED SOURCE FILE FOR REVIEW:
+${loadedSourceContext}` : ''}
+${brainContext ? `
+═══════════════════════════════════════════════════════════════
+UNIFIED BRAIN - Self-Aware Intelligence Core
+═══════════════════════════════════════════════════════════════
+${brainContext}` : ''}
+${conversationContext ? `
+═══════════════════════════════════════════════════════════════
+PAST AI CONVERSATIONS - Context from prior discussions
+═══════════════════════════════════════════════════════════════
+${conversationContext}` : ''}`;
+
+            // BLOCK 3: Per-request context (not cached - changes every request)
+            const perRequestPrompt = `
+═══════════════════════════════════════════════════════════════
+CURRENT REQUEST CONTEXT
+═══════════════════════════════════════════════════════════════
+- Today's date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+- Total nodes in map: ${totalNodes}
+- Map context: ${mapContext.stats.included} relevant nodes shown (${mapContext.stats.reduction} token optimization)
+- Selected node: ${selectedNodeData ? `"${selectedNodeData.label}" [id:${selectedNodeData.id}]${selectedNodeData.children?.length ? ` with ${selectedNodeData.children.length} children` : ''}` : 'None'}`;
+
+            // Build system array with cache_control markers for prompt caching
+            // This enables 60-70% savings on input tokens for repeated conversations
+            const systemPromptArray = [
+                {
+                    type: 'text',
+                    text: staticSystemPrompt,
+                    cache_control: { type: 'ephemeral' }  // Cache static instructions
+                },
+                {
+                    type: 'text',
+                    text: sessionContextPrompt,
+                    cache_control: { type: 'ephemeral' }  // Cache session context
+                },
+                {
+                    type: 'text',
+                    text: perRequestPrompt
+                    // No cache_control - this changes per request
+                }
+            ];
+
             // Build final user message with images if present (Claude Vision format)
             let finalUserMessage;
             if (images && images.length > 0) {
@@ -30813,10 +30857,8 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 finalUserMessage = { role: 'user', content: userMessage };
             }
 
-            // Build messages array
+            // Build messages array (system prompt is sent separately for caching)
             const messages = [
-                { role: 'user', content: systemPrompt },
-                { role: 'assistant', content: '{"message": "I understand. I\'m ready to help with your mind map.", "actions": [], "suggestions": []}' },
                 ...historyForClaude,
                 finalUserMessage
             ];
@@ -30872,6 +30914,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                         },
                         body: JSON.stringify({
                             messages: currentMessages,
+                            systemPrompt: systemPromptArray,  // Prompt caching: system array with cache_control
                             maxTokens: 8192,
                             webSearch: shouldUseWebSearch,
                             enableCodebaseTools: typeof ReflectionDaemon !== 'undefined',
@@ -30885,6 +30928,17 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                     }
 
                     const data = await response.json();
+
+                    // Log cache stats if available
+                    if (data.cacheStats) {
+                        const { cache_read_input_tokens, cache_creation_input_tokens, input_tokens } = data.cacheStats;
+                        if (cache_read_input_tokens > 0) {
+                            const savings = Math.round((cache_read_input_tokens / input_tokens) * 100);
+                            console.log(`💰 Prompt caching: ${cache_read_input_tokens.toLocaleString()} tokens read from cache (${savings}% savings)`);
+                        } else if (cache_creation_input_tokens > 0) {
+                            console.log(`📝 Prompt caching: ${cache_creation_input_tokens.toLocaleString()} tokens cached for future requests`);
+                        }
+                    }
 
                     // Check if tools need to be executed
                     if (data.needsToolExecution && data.toolCalls && data.toolCalls.length > 0) {
@@ -30950,10 +31004,11 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                     throw new Error('Please sign in or add an API key in Settings');
                 }
 
-                // Build request body - only include web search for non-code-review requests
+                // Build request body - with prompt caching for direct API calls
                 const requestBody = {
                     model: CONFIG.CLAUDE_MODEL,
                     max_tokens: 8192,
+                    system: systemPromptArray,  // Prompt caching: system array with cache_control
                     messages: messages
                 };
 
@@ -31003,6 +31058,7 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                             'Content-Type': 'application/json',
                             'x-api-key': apiKey.trim(),
                             'anthropic-version': '2023-06-01',
+                            'anthropic-beta': 'prompt-caching-2024-07-31',  // Enable prompt caching
                             'anthropic-dangerous-direct-browser-access': 'true'
                         },
                         body: JSON.stringify({
@@ -32152,6 +32208,47 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 console.log(`📊 Insight response recorded: ${response}`);
             } catch (e) {
                 console.warn('Record insight response error:', e);
+            }
+        },
+
+        async triggerBackgroundAnalysis() {
+            // Trigger background cognition analysis when session ends
+            // Uses sendBeacon for reliability when page is closing
+            try {
+                if (typeof supabase === 'undefined' || !supabase) return false;
+
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return false;
+
+                const brainServerUrl = typeof CONFIG !== 'undefined' && CONFIG.BRAIN_SERVER_URL
+                    ? CONFIG.BRAIN_SERVER_URL
+                    : 'http://localhost:8000';
+
+                const url = `${brainServerUrl}/background/analyze`;
+                const payload = JSON.stringify({ user_id: user.id });
+
+                // Use sendBeacon for reliability when page is unloading
+                // sendBeacon only supports POST, so we use the main analyze endpoint
+                if (navigator.sendBeacon) {
+                    const blob = new Blob([payload], { type: 'application/json' });
+                    const sent = navigator.sendBeacon(url, blob);
+                    console.log(`🧠 Background cognition triggered via sendBeacon: ${sent ? 'sent' : 'failed'}`);
+                    return sent;
+                } else {
+                    // Fallback to fetch with keepalive
+                    fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: payload,
+                        keepalive: true
+                    })
+                        .then(res => console.log(`🧠 Background cognition triggered: ${res.ok}`))
+                        .catch(() => {});
+                    return true;
+                }
+            } catch (e) {
+                console.warn('Trigger background analysis error:', e);
+                return false;
             }
         },
 
