@@ -17896,13 +17896,16 @@ Respond with a JSON object:
                 console.log('🔄 User idle, considering auto-evolution...');
 
                 // Only run if there's meaningful data to work with
-                const store = window.app?.store;
-                if (store && store.getAllNodes().length >= 5) {
-                    console.log(`🔄 Starting evolution session (${store.getAllNodes().length} nodes available)`);
+                // Use window.store directly (guaranteed to exist)
+                const nodeCount = window.store?.getAllNodes?.()?.length || 0;
+                console.log(`🔄 Store check: window.store=${!!window.store}, nodeCount=${nodeCount}`);
+
+                if (nodeCount >= 5) {
+                    console.log(`🔄 Starting evolution session (${nodeCount} nodes available)`);
                     // Run a short exploration session
                     await this.startSession('explore', { maxIterations: 3 });
                 } else {
-                    console.log(`🔄 Skipping evolution: ${store ? store.getAllNodes().length : 0} nodes (need 5+)`);
+                    console.log(`🔄 Skipping evolution: ${nodeCount} nodes (need 5+)`);
                 }
             }
         },
