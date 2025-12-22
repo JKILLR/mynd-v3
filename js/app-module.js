@@ -30019,18 +30019,27 @@ You are a trusted guide, not a data harvester.
                 }
             }
 
-            // Hot nodes get full description (up to 300 chars)
-            // Warm nodes get truncated description (up to 100 chars)
-            // Cool/Cold/Dormant nodes get no description (saves tokens)
+            // Include descriptions based on heat tier AND relevance
+            // Hot nodes: full description (300 chars)
+            // Warm nodes: medium description (150 chars)
+            // Relevant cool/cold nodes: short description (80 chars) - important for context!
+            // Non-relevant cold/dormant: no description (saves tokens)
             if (node.description && node.description.trim()) {
+                let maxLen = 0;
                 if (heatTier === 'hot') {
-                    const desc = node.description.trim().slice(0, 300);
-                    line += `\n${indent}  "${desc}${desc.length >= 300 ? '...' : ''}"`;
-                } else if (heatTier === 'warm' && isRelevant) {
-                    const desc = node.description.trim().slice(0, 100);
-                    line += `\n${indent}  "${desc}${desc.length >= 100 ? '...' : ''}"`;
+                    maxLen = 300;
+                } else if (heatTier === 'warm') {
+                    maxLen = 150;
+                } else if (isRelevant) {
+                    // Always show description for semantically relevant nodes
+                    maxLen = 80;
                 }
-                // Cold/dormant nodes: no description to save context window
+                // Non-relevant cold/dormant nodes: no description
+
+                if (maxLen > 0) {
+                    const desc = node.description.trim().slice(0, maxLen);
+                    line += `\n${indent}  "${desc}${desc.length >= maxLen ? '...' : ''}"`;
+                }
             }
 
             if (node.children && node.children.length > 0) {

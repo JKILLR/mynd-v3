@@ -2330,7 +2330,11 @@ const ReflectionDaemon = {
 
             for (const node of matchingNodes.slice(0, 3)) {
                 const nodeConnections = {
-                    node: { id: node.id, label: node.label },
+                    node: {
+                        id: node.id,
+                        label: node.label,
+                        description: node.description?.substring(0, 150) || null
+                    },
                     parent: null,
                     children: [],
                     siblings: [],
@@ -2341,14 +2345,22 @@ const ReflectionDaemon = {
                 if (node.parentId) {
                     const parent = store.findNode(node.parentId);
                     if (parent) {
-                        nodeConnections.parent = { id: parent.id, label: parent.label };
+                        nodeConnections.parent = {
+                            id: parent.id,
+                            label: parent.label,
+                            description: parent.description?.substring(0, 100) || null
+                        };
 
                         // Get siblings
                         if (parent.children) {
                             nodeConnections.siblings = parent.children
                                 .filter(c => c.id !== node.id)
                                 .slice(0, 5)
-                                .map(c => ({ id: c.id, label: c.label }));
+                                .map(c => ({
+                                    id: c.id,
+                                    label: c.label,
+                                    description: c.description?.substring(0, 80) || null
+                                }));
                         }
                     }
                 }
@@ -2357,7 +2369,12 @@ const ReflectionDaemon = {
                 if (node.children?.length > 0) {
                     nodeConnections.children = node.children
                         .slice(0, 10)
-                        .map(c => ({ id: c.id, label: c.label, hasChildren: (c.children?.length || 0) > 0 }));
+                        .map(c => ({
+                            id: c.id,
+                            label: c.label,
+                            description: c.description?.substring(0, 80) || null,
+                            hasChildren: (c.children?.length || 0) > 0
+                        }));
                 }
 
                 // Get taught connections from semantic memory
