@@ -33749,13 +33749,19 @@ CURRENT REQUEST CONTEXT
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user) return; // Not signed in, localStorage only
 
+                // Don't save full images to Supabase (too large) - just note that images were attached
+                const imageMeta = message.images?.map(img => ({
+                    hadImage: true,
+                    timestamp: Date.now()
+                })) || [];
+
                 const { error } = await supabase
                     .from('chat_conversations')
                     .insert({
                         user_id: user.id,
                         role: message.role,
                         content: message.content,
-                        images: message.images || [],
+                        images: imageMeta,  // Store metadata, not full base64
                         actions: message.actions || [],
                         suggestions: message.suggestions || [],
                         message_timestamp: message.timestamp
