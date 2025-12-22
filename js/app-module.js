@@ -33015,12 +33015,28 @@ CURRENT REQUEST CONTEXT
         sessionNodesAccessed: new Set(),
         sessionTopics: new Set(),
 
+        // Auto-summarization tracking
+        lastActivityTime: null,
+        autoSummaryTimer: null,
+        autoSummaryInProgress: false,
+        sessionSummarized: false,
+        AUTO_SUMMARY_INACTIVITY_MS: 10 * 60 * 1000,  // 10 minutes of inactivity triggers summary
+        MIN_MESSAGES_FOR_SUMMARY: 4,  // Need at least 4 messages to summarize
+
         async initSession() {
             // Called on app load - starts a new session and checks for previous unsummarized session
             this.sessionStartTime = new Date();
             this.sessionMessageCount = 0;
             this.sessionNodesAccessed = new Set();
             this.sessionTopics = new Set();
+            this.lastActivityTime = Date.now();
+            this.sessionSummarized = false;
+
+            // Set up auto-summary triggers
+            this.setupAutoSummaryTriggers();
+
+            // Check for pending summary from previous session that didn't save
+            this.checkPendingSummary();
 
             // Generate unique session token for caching (persists across page reloads in same session)
             this.currentSessionToken = sessionStorage.getItem('mynd-session-token');
@@ -33067,6 +33083,8 @@ CURRENT REQUEST CONTEXT
         trackMessage() {
             // Track message count for session
             this.sessionMessageCount++;
+            this.lastActivityTime = Date.now();
+            this.resetAutoSummaryTimer();
         },
 
         async writeSessionSummary({
@@ -33129,10 +33147,268 @@ CURRENT REQUEST CONTEXT
 
                 console.log(`📝 Session summary saved: ${data.id}`);
                 this.currentSessionId = data.id;
+                this.sessionSummarized = true;
                 return data;
             } catch (e) {
                 console.error('Session summary error:', e);
                 return null;
+            }
+        },
+
+        // ═══════════════════════════════════════════════════════════════════
+        // AUTO-SUMMARIZATION SYSTEM
+        // Automatically captures detailed session summaries with emotional resonance
+        // ═══════════════════════════════════════════════════════════════════
+
+        setupAutoSummaryTriggers() {
+            // 1. Visibility change - summarize when user tabs away for extended time
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    // User tabbed away - start shorter timer
+                    this.scheduleAutoSummary(3 * 60 * 1000);  // 3 minutes when hidden
+                } else {
+                    // User came back - reset to normal timer
+                    this.resetAutoSummaryTimer();
+                }
+            });
+
+            // 2. Before unload - try to save summary (may not complete)
+            window.addEventListener('beforeunload', () => {
+                if (this.shouldAutoSummarize()) {
+                    // Use sendBeacon for reliability on page close
+                    this.triggerAutoSummaryBeacon();
+                }
+            });
+
+            // 3. Start inactivity timer
+            this.resetAutoSummaryTimer();
+
+            console.log('🔄 Auto-summarization triggers set up');
+        },
+
+        resetAutoSummaryTimer() {
+            // Clear existing timer and start new one
+            if (this.autoSummaryTimer) {
+                clearTimeout(this.autoSummaryTimer);
+            }
+
+            this.autoSummaryTimer = setTimeout(() => {
+                this.triggerAutoSummary('inactivity');
+            }, this.AUTO_SUMMARY_INACTIVITY_MS);
+        },
+
+        scheduleAutoSummary(delayMs) {
+            if (this.autoSummaryTimer) {
+                clearTimeout(this.autoSummaryTimer);
+            }
+
+            this.autoSummaryTimer = setTimeout(() => {
+                this.triggerAutoSummary('visibility');
+            }, delayMs);
+        },
+
+        shouldAutoSummarize() {
+            // Check if we should auto-summarize
+            return (
+                !this.sessionSummarized &&
+                !this.autoSummaryInProgress &&
+                this.sessionMessageCount >= this.MIN_MESSAGES_FOR_SUMMARY &&
+                this.conversation.length >= this.MIN_MESSAGES_FOR_SUMMARY
+            );
+        },
+
+        async triggerAutoSummary(trigger = 'manual') {
+            if (!this.shouldAutoSummarize()) {
+                console.log(`📝 Auto-summary skipped: already summarized or not enough messages`);
+                return;
+            }
+
+            this.autoSummaryInProgress = true;
+            console.log(`📝 Auto-summarizing session (trigger: ${trigger})...`);
+
+            try {
+                const summary = await this.generateDetailedSummary();
+                if (summary) {
+                    await this.writeSessionSummary(summary);
+                    console.log('✅ Auto-summary saved successfully');
+                }
+            } catch (e) {
+                console.error('Auto-summary failed:', e);
+            } finally {
+                this.autoSummaryInProgress = false;
+            }
+        },
+
+        triggerAutoSummaryBeacon() {
+            // Fallback for beforeunload - stores summary request for next session
+            // Can't make async API call on unload, so we save state for recovery
+            if (!this.shouldAutoSummarize()) return;
+
+            try {
+                const summaryData = {
+                    timestamp: Date.now(),
+                    messageCount: this.sessionMessageCount,
+                    topics: Array.from(this.sessionTopics),
+                    nodes: Array.from(this.sessionNodesAccessed),
+                    conversationPreview: this.conversation.slice(-10).map(m => ({
+                        role: m.role,
+                        content: m.content?.substring(0, 200)
+                    }))
+                };
+                localStorage.setItem('mynd-pending-summary', JSON.stringify(summaryData));
+                console.log('📝 Pending summary saved for recovery');
+            } catch (e) {
+                console.warn('Failed to save pending summary:', e);
+            }
+        },
+
+        async generateDetailedSummary() {
+            // Generate a detailed, emotionally-resonant session summary using Claude
+            // This captures not just facts but the FEELING of insights
+
+            if (!CONFIG?.ANTHROPIC_API_KEY) {
+                console.warn('Cannot generate summary: No API key');
+                return this.generateFallbackSummary();
+            }
+
+            try {
+                // Build conversation context for summary
+                const recentMessages = this.conversation.slice(-30);  // Last 30 messages
+                const conversationText = recentMessages.map(m =>
+                    `${m.role === 'user' ? 'Human' : 'MYND'}: ${m.content?.substring(0, 500) || '[no content]'}`
+                ).join('\n\n');
+
+                const sessionDuration = Date.now() - (this.sessionStartTime?.getTime() || Date.now());
+                const durationMins = Math.round(sessionDuration / 60000);
+
+                const summaryPrompt = `You are creating a detailed session summary for MYND, a personal AI companion. This summary will be used to maintain experiential continuity across conversations.
+
+CRITICAL: Capture not just WHAT was discussed, but the FEELING and MEANING of it. Our conversations are the primary source of insights - make this summary rich enough that reading it later recreates the emotional resonance of the discoveries we made.
+
+SESSION DETAILS:
+- Duration: ${durationMins} minutes
+- Messages exchanged: ${this.sessionMessageCount}
+- Topics touched: ${Array.from(this.sessionTopics).join(', ') || 'various'}
+- Nodes accessed: ${this.sessionNodesAccessed.size} nodes
+
+CONVERSATION:
+${conversationText}
+
+Generate a JSON response with:
+{
+  "summary": "A rich narrative summary (2-4 paragraphs) that captures:
+    - The arc of our conversation (how it evolved)
+    - Key realizations and their emotional weight (what felt significant)
+    - Metaphors or frameworks that emerged
+    - The energy/tone of the exchange
+    - Any 'aha moments' and why they mattered
+    Write it as if helping future-me remember not just what we discussed, but what it FELT like to discover these things together.",
+
+  "key_outcomes": "The most important decisions, realizations, or progress made. What shifted in understanding?",
+
+  "open_threads": "What remains unfinished or worth continuing? What questions emerged that we didn't fully explore?",
+
+  "session_type": "vision|exploration|building|troubleshooting|reflection|planning|casual",
+
+  "tone": "The emotional quality of this session (e.g., 'excited discovery', 'focused problem-solving', 'playful exploration', 'deep reflection')",
+
+  "topics_discussed": ["topic1", "topic2", ...],
+
+  "emotional_highlights": "What moments had the most energy or meaning? What breakthroughs felt most significant?"
+}
+
+Respond with ONLY the JSON, no markdown or explanation.`;
+
+                const response = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': CONFIG.ANTHROPIC_API_KEY,
+                        'anthropic-version': '2023-06-01',
+                        'anthropic-dangerous-direct-browser-access': 'true'
+                    },
+                    body: JSON.stringify({
+                        model: 'claude-3-5-haiku-20241022',  // Fast model for summaries
+                        max_tokens: 1500,
+                        messages: [{
+                            role: 'user',
+                            content: summaryPrompt
+                        }]
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const content = data.content?.[0]?.text;
+
+                if (!content) {
+                    throw new Error('Empty response from API');
+                }
+
+                // Parse the JSON response
+                const parsed = JSON.parse(content);
+
+                console.log('📝 Generated detailed summary:', parsed.summary?.substring(0, 100) + '...');
+
+                return {
+                    summary: parsed.summary || 'Session summary',
+                    key_outcomes: parsed.key_outcomes || null,
+                    open_threads: parsed.open_threads || null,
+                    session_type: parsed.session_type || 'casual',
+                    tone: parsed.tone || null,
+                    topics_discussed: parsed.topics_discussed || [],
+                    emotional_highlights: parsed.emotional_highlights || null
+                };
+
+            } catch (e) {
+                console.error('Failed to generate detailed summary:', e);
+                return this.generateFallbackSummary();
+            }
+        },
+
+        generateFallbackSummary() {
+            // Fallback when API is unavailable - basic summary from conversation
+            const topics = Array.from(this.sessionTopics).slice(0, 5);
+            const messageCount = this.sessionMessageCount;
+
+            return {
+                summary: `Session with ${messageCount} messages discussing: ${topics.join(', ') || 'various topics'}. [Auto-generated fallback summary]`,
+                key_outcomes: null,
+                open_threads: null,
+                session_type: 'casual',
+                tone: null,
+                topics_discussed: topics
+            };
+        },
+
+        async checkPendingSummary() {
+            // Check if there's a pending summary from a previous unclean exit
+            try {
+                const pending = localStorage.getItem('mynd-pending-summary');
+                if (pending) {
+                    const data = JSON.parse(pending);
+                    // Only recover if it's recent (within last hour)
+                    if (Date.now() - data.timestamp < 60 * 60 * 1000) {
+                        console.log('📝 Found pending summary from previous session, recovering...');
+                        // Generate summary from saved data
+                        const topics = data.topics || [];
+                        await this.writeSessionSummary({
+                            summary: `[Recovered] Session with ${data.messageCount} messages. Topics: ${topics.join(', ') || 'various'}`,
+                            key_outcomes: null,
+                            open_threads: 'Session ended unexpectedly - may have unfinished threads',
+                            session_type: 'casual',
+                            tone: null,
+                            topics_discussed: topics
+                        });
+                    }
+                    localStorage.removeItem('mynd-pending-summary');
+                }
+            } catch (e) {
+                console.warn('Failed to recover pending summary:', e);
+                localStorage.removeItem('mynd-pending-summary');
             }
         },
 
