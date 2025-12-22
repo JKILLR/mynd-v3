@@ -321,6 +321,8 @@ serve(async (req) => {
       messages: messages
     }
 
+    // Handle system prompt - can be string or array with cache_control
+    // Array format enables prompt caching for 60-70% token savings
     if (systemPrompt) {
       requestBody.system = systemPrompt
     }
@@ -329,14 +331,23 @@ serve(async (req) => {
       requestBody.tools = tools
     }
 
+    // Build headers - include prompt caching beta if system is array format
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01'
+    }
+
+    // Enable prompt caching if using array format with cache_control
+    if (Array.isArray(systemPrompt)) {
+      headers['anthropic-beta'] = 'prompt-caching-2024-07-31'
+      console.log('🔄 Prompt caching enabled (system prompt array format)')
+    }
+
     // Single call to Claude API - return full response
     const response = await fetch(ANTHROPIC_API_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
+      headers,
       body: JSON.stringify(requestBody)
     })
 
@@ -347,9 +358,29 @@ serve(async (req) => {
 
     const data = await response.json()
 
+    // Log cache statistics if available
+    if (data.usage) {
+      const { input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens } = data.usage
+      if (cache_read_input_tokens || cache_creation_input_tokens) {
+        console.log(`📊 Prompt caching stats:
+  - Cache read: ${cache_read_input_tokens || 0} tokens (saved)
+  - Cache creation: ${cache_creation_input_tokens || 0} tokens (first time)
+  - Non-cached input: ${input_tokens - (cache_read_input_tokens || 0) - (cache_creation_input_tokens || 0)} tokens
+  - Output: ${output_tokens} tokens`)
+      }
+    }
+
     // Check for tool use - return full response for client to handle
     const toolUseBlocks = data.content?.filter((b: any) => b.type === 'tool_use') || []
     const textBlocks = data.content?.filter((b: any) => b.type === 'text') || []
+
+    // Include cache stats in response for client visibility
+    const cacheStats = data.usage ? {
+      cache_read_input_tokens: data.usage.cache_read_input_tokens || 0,
+      cache_creation_input_tokens: data.usage.cache_creation_input_tokens || 0,
+      input_tokens: data.usage.input_tokens,
+      output_tokens: data.usage.output_tokens
+    } : null
 
     if (toolUseBlocks.length > 0) {
       // Return full response so client can execute tools and continue
@@ -363,7 +394,8 @@ serve(async (req) => {
             name: t.name,
             input: t.input
           })),
-          textSoFar: textBlocks.map((b: any) => b.text).join('\n')
+          textSoFar: textBlocks.map((b: any) => b.text).join('\n'),
+          cacheStats
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -376,7 +408,7 @@ serve(async (req) => {
     const responseText = textBlocks.map((b: any) => b.text).join('\n')
 
     return new Response(
-      JSON.stringify({ response: responseText }),
+      JSON.stringify({ response: responseText, cacheStats }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
