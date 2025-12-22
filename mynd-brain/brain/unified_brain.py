@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 # Import ContextSynthesizer for unified context
-from .context_synthesizer import ContextSynthesizer, SynthesizedContext
+from .context_synthesizer import ContextSynthesizer, SynthesizedContext, count_tokens
 
 
 @dataclass
@@ -473,6 +473,38 @@ class KnowledgeDistiller:
             'raw_insights': len(self.claude_insights)
         }
 
+    def save(self, filepath: Path):
+        """Save distilled knowledge to file"""
+        data = {
+            'distilled_knowledge': self.distilled_knowledge,
+            'claude_insights': self.claude_insights,
+            'patterns_learned': self.patterns_learned,
+            'corrections': self.corrections,
+            'explanations': self.explanations
+        }
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        with open(filepath, 'w') as f:
+            json.dump(data, f, indent=2, default=str)
+        print(f"💾 KnowledgeDistiller saved: {len(self.distilled_knowledge)} facts, {len(self.patterns_learned)} patterns")
+
+    def load(self, filepath: Path):
+        """Load distilled knowledge from file"""
+        if not filepath.exists():
+            return False
+        try:
+            with open(filepath, 'r') as f:
+                data = json.load(f)
+            self.distilled_knowledge = data.get('distilled_knowledge', [])
+            self.claude_insights = data.get('claude_insights', [])
+            self.patterns_learned = data.get('patterns_learned', {})
+            self.corrections = data.get('corrections', [])
+            self.explanations = data.get('explanations', {})
+            print(f"📂 KnowledgeDistiller loaded: {len(self.distilled_knowledge)} facts, {len(self.patterns_learned)} patterns")
+            return True
+        except Exception as e:
+            print(f"⚠️ KnowledgeDistiller load failed: {e}")
+            return False
+
 
 class MetaLearner:
     """
@@ -757,6 +789,42 @@ class MetaLearner:
                 lines.append(f"- {bucket} confidence: {data['status']}")
 
         return "\n".join(lines)
+
+    def save(self, filepath: Path):
+        """Save meta-learning state to file"""
+        data = {
+            'source_stats': self.source_stats,
+            'confidence_buckets': self.confidence_buckets,
+            'learning_rates': self.learning_rates,
+            'strategies': self.strategies,
+            'meta_history': self.meta_history[-100:],  # Keep last 100 epochs
+            'epoch': self.epoch,
+            'attention_weights': self.attention_weights
+        }
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        with open(filepath, 'w') as f:
+            json.dump(data, f, indent=2, default=str)
+        print(f"💾 MetaLearner saved: epoch {self.epoch}, {len(self.source_stats)} sources tracked")
+
+    def load(self, filepath: Path):
+        """Load meta-learning state from file"""
+        if not filepath.exists():
+            return False
+        try:
+            with open(filepath, 'r') as f:
+                data = json.load(f)
+            self.source_stats = data.get('source_stats', self.source_stats)
+            self.confidence_buckets = data.get('confidence_buckets', self.confidence_buckets)
+            self.learning_rates = data.get('learning_rates', self.learning_rates)
+            self.strategies = data.get('strategies', self.strategies)
+            self.meta_history = data.get('meta_history', [])
+            self.epoch = data.get('epoch', 0)
+            self.attention_weights = data.get('attention_weights', self.attention_weights)
+            print(f"📂 MetaLearner loaded: epoch {self.epoch}, {len(self.meta_history)} history entries")
+            return True
+        except Exception as e:
+            print(f"⚠️ MetaLearner load failed: {e}")
+            return False
 
 
 class SelfImprover:
@@ -1255,6 +1323,37 @@ class PredictionTracker:
             'history_size': len(self.prediction_history)
         }
 
+    def save(self, filepath: Path):
+        """Save prediction tracking state to file"""
+        data = {
+            'prediction_history': self.prediction_history[-500:],  # Keep last 500
+            'accuracy_by_type': self.accuracy_by_type,
+            'total_predictions': self.total_predictions,
+            'correct_predictions': self.correct_predictions
+            # Note: pending_predictions are session-only, not persisted
+        }
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        with open(filepath, 'w') as f:
+            json.dump(data, f, indent=2, default=str)
+        print(f"💾 PredictionTracker saved: {self.total_predictions} total, {self.get_accuracy():.1%} accuracy")
+
+    def load(self, filepath: Path):
+        """Load prediction tracking state from file"""
+        if not filepath.exists():
+            return False
+        try:
+            with open(filepath, 'r') as f:
+                data = json.load(f)
+            self.prediction_history = data.get('prediction_history', [])
+            self.accuracy_by_type = data.get('accuracy_by_type', {})
+            self.total_predictions = data.get('total_predictions', 0)
+            self.correct_predictions = data.get('correct_predictions', 0)
+            print(f"📂 PredictionTracker loaded: {self.total_predictions} total, {self.get_accuracy():.1%} accuracy")
+            return True
+        except Exception as e:
+            print(f"⚠️ PredictionTracker load failed: {e}")
+            return False
+
 
 class MemorySystem:
     """
@@ -1427,43 +1526,43 @@ class UnifiedBrain:
             code_doc = self.self_awareness.get_code_document()
             doc = f"{identity}\n\n{code_doc}"
             context_parts.append(("self_awareness", doc))
-            token_breakdown['self_awareness'] = len(doc) // 4
+            token_breakdown['self_awareness'] = count_tokens(doc)
 
         # 2. Map context (what is the user looking at?)
         if include.get('map_context', True) and request.map_data:
             map_ctx = self._build_map_context(request)
             context_parts.append(("map_context", map_ctx))
-            token_breakdown['map_context'] = len(map_ctx) // 4
+            token_breakdown['map_context'] = count_tokens(map_ctx)
 
         # 3. Memories (what do I remember that's relevant?)
         if include.get('memories', True):
             memories = self.memory.format_for_context()
             context_parts.append(("memories", memories))
-            token_breakdown['memories'] = len(memories) // 4
+            token_breakdown['memories'] = count_tokens(memories)
 
         # 4. Distilled Knowledge (what has Claude taught me?)
         knowledge_ctx = self.get_context_with_knowledge(request)
         if knowledge_ctx:
             context_parts.append(("distilled_knowledge", knowledge_ctx))
-            token_breakdown['distilled_knowledge'] = len(knowledge_ctx) // 4
+            token_breakdown['distilled_knowledge'] = count_tokens(knowledge_ctx)
 
         # 5. Request-specific context
         request_ctx = self._build_request_context(request)
         context_parts.append(("request", request_ctx))
-        token_breakdown['request'] = len(request_ctx) // 4
+        token_breakdown['request'] = count_tokens(request_ctx)
 
         # 6. Meta-learning insights (how I learn)
         meta_ctx = self.meta_learner.format_for_context()
         if meta_ctx and self.meta_learner.epoch > 0:  # Only include if we have learning history
             context_parts.append(("meta_learning", meta_ctx))
-            token_breakdown['meta_learning'] = len(meta_ctx) // 4
+            token_breakdown['meta_learning'] = count_tokens(meta_ctx)
 
         # 7. Neural insights (if available and requested)
         if include.get('neural_insights', True) and self.ml_brain and request.map_data:
             insights = self._get_neural_insights(request)
             if insights:
                 context_parts.append(("neural_insights", insights))
-                token_breakdown['neural_insights'] = len(insights) // 4
+                token_breakdown['neural_insights'] = count_tokens(insights)
 
         # 8. SYNTHESIZED CONTEXT - Unified search across all sources
         # This is the "funnel" that combines map, memories, goals, and AI memories
@@ -1476,8 +1575,8 @@ class UnifiedBrain:
                 user_id=request.user_id,
                 map_data=request.map_data,
                 goals=request.goals,
-                max_items=15,
-                max_tokens=3000
+                max_items=50,  # Increased for richer context
+                max_tokens=20000  # Expanded context window
             )
 
             if synthesized.items:
@@ -2151,3 +2250,46 @@ I will distill high-confidence insights into permanent knowledge.
     def remove_vision_goal(self, goal: str) -> Dict:
         """Remove a goal from the vision"""
         return self.self_awareness.remove_goal(goal)
+
+    # ═══════════════════════════════════════════════════════════════════
+    # LEARNING PERSISTENCE - Save/load learning state across restarts
+    # ═══════════════════════════════════════════════════════════════════
+
+    def save_learning_state(self, data_dir: Path = None):
+        """Save all learning state to disk for persistence across restarts"""
+        if data_dir is None:
+            data_dir = self.base_dir / "mynd-brain" / "data" / "learning"
+
+        data_dir.mkdir(parents=True, exist_ok=True)
+
+        print("💾 Saving learning state...")
+        self.knowledge.save(data_dir / "knowledge_distiller.json")
+        self.meta_learner.save(data_dir / "meta_learner.json")
+        self.predictions.save(data_dir / "prediction_tracker.json")
+        print("✅ Learning state saved successfully")
+
+    def load_learning_state(self, data_dir: Path = None):
+        """Load learning state from disk to restore across restarts"""
+        if data_dir is None:
+            data_dir = self.base_dir / "mynd-brain" / "data" / "learning"
+
+        if not data_dir.exists():
+            print("📂 No saved learning state found (fresh start)")
+            return False
+
+        print("📂 Loading learning state...")
+        loaded_any = False
+
+        if self.knowledge.load(data_dir / "knowledge_distiller.json"):
+            loaded_any = True
+        if self.meta_learner.load(data_dir / "meta_learner.json"):
+            loaded_any = True
+        if self.predictions.load(data_dir / "prediction_tracker.json"):
+            loaded_any = True
+
+        if loaded_any:
+            print("✅ Learning state restored successfully")
+        else:
+            print("📂 No learning state files found")
+
+        return loaded_any

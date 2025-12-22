@@ -254,7 +254,7 @@ class ConversationSearchRequest(BaseModel):
 class ConversationContextRequest(BaseModel):
     """Get relevant context from past conversations"""
     query: str
-    max_tokens: int = 4000  # Approximate token limit for context
+    max_tokens: int = 20000  # Expanded token budget for richer context
     include_full_text: bool = False  # Include full conversations or just summaries
 
 # ═══════════════════════════════════════════════════════════════════
@@ -429,7 +429,7 @@ class ConversationStore:
         results.sort(key=lambda x: x["similarity"], reverse=True)
         return results[:top_k]
 
-    async def get_relevant_context(self, query: str, max_tokens: int = 4000, include_full_text: bool = False) -> str:
+    async def get_relevant_context(self, query: str, max_tokens: int = 20000, include_full_text: bool = False) -> str:
         """Get relevant context from past conversations for injection into prompts"""
         search_results = await self.search(query, top_k=10)
 
@@ -895,6 +895,25 @@ async def lifespan(app: FastAPI):
     # Embedding engine is connected via set_ml_brain above
     print("🔀 ContextSynthesizer connected to: MapVectorDB, ConversationArchive, EmbeddingEngine")
 
+    # Connect Supabase for persistent AI memories
+    try:
+        from supabase import create_client
+        supabase_url = os.environ.get('SUPABASE_URL')
+        supabase_key = os.environ.get('SUPABASE_SERVICE_KEY') or os.environ.get('SUPABASE_ANON_KEY')
+        if supabase_url and supabase_key:
+            supabase_client = create_client(supabase_url, supabase_key)
+            unified_brain.set_supabase(supabase_client)
+            print("🔗 Supabase connected to UnifiedBrain for persistent AI memories")
+        else:
+            print("⚠️ Supabase not configured (missing SUPABASE_URL or key)")
+    except ImportError:
+        print("⚠️ Supabase library not installed (pip install supabase)")
+    except Exception as e:
+        print(f"⚠️ Supabase connection failed: {e}")
+
+    # Load persisted learning state (meta-learner, knowledge distiller, predictions)
+    unified_brain.load_learning_state()
+
     # Initialize knowledge extractor (API key optional - uses rule-based fallback)
     api_key = os.environ.get('ANTHROPIC_API_KEY')
     knowledge_extractor = KnowledgeExtractor(map_vector_db, api_key=api_key)
@@ -905,6 +924,8 @@ async def lifespan(app: FastAPI):
     if map_vector_db:
         map_vector_db.save()
         print("💾 MapVectorDB saved")
+    if unified_brain:
+        unified_brain.save_learning_state()
     print("🧠 MYND Brain shutting down...")
 
 app = FastAPI(

@@ -21,6 +21,20 @@ from dataclasses import dataclass, field
 from collections import Counter
 import numpy as np
 
+# Token counting - use tiktoken if available, fallback to approximation
+try:
+    import tiktoken
+    _tiktoken_encoder = tiktoken.get_encoding("cl100k_base")  # Claude's encoding
+    def count_tokens(text: str) -> int:
+        """Count tokens accurately using tiktoken"""
+        return len(_tiktoken_encoder.encode(text))
+    print("✓ tiktoken loaded for accurate token counting")
+except ImportError:
+    def count_tokens(text: str) -> int:
+        """Approximate token count (fallback when tiktoken unavailable)"""
+        return len(text) // 4 + 1
+    print("⚠️ tiktoken not available, using approximate token counting")
+
 
 @dataclass
 class ContextItem:
@@ -128,8 +142,8 @@ class ContextSynthesizer:
                    user_id: Optional[str] = None,
                    map_data: Optional[Dict] = None,
                    goals: Optional[List[Dict]] = None,
-                   max_items: int = 20,
-                   max_tokens: int = 4000) -> SynthesizedContext:
+                   max_items: int = 50,
+                   max_tokens: int = 20000) -> SynthesizedContext:
         """
         Synthesize context from all sources for a query.
 
@@ -503,7 +517,7 @@ class ContextSynthesizer:
 
         try:
             # Use archive's search if available
-            results = self.conversations.search(query, limit=10)
+            results = self.conversations.search(query, top_k=10)
 
             for conv in results:
                 content = conv.get('text', conv.get('content', ''))[:300]
@@ -658,13 +672,13 @@ class ContextSynthesizer:
         return contradictions
 
     def _fit_to_budget(self, items: List[ContextItem], max_items: int, max_tokens: int) -> Tuple[List[ContextItem], int]:
-        """Fit items within token budget"""
+        """Fit items within token budget using accurate token counting"""
         selected = []
         total_tokens = 0
 
         for item in items[:max_items * 2]:  # Check more items than needed
-            # Estimate tokens (roughly 4 chars per token)
-            item_tokens = len(item.content) // 4 + 10  # +10 for formatting
+            # Use accurate token counting (tiktoken if available)
+            item_tokens = count_tokens(item.content) + 15  # +15 for formatting overhead
 
             if total_tokens + item_tokens <= max_tokens:
                 selected.append(item)
