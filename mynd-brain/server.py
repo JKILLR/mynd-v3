@@ -1819,8 +1819,8 @@ async def background_analyze(request: BackgroundAnalysisRequest):
                         missing = brain.graph_transformer.find_missing_connections(
                             brain.map_embeddings,
                             brain.map_adjacency,
-                            threshold=0.65,
-                            top_k=3
+                            threshold=0.50,  # Lowered from 0.65 to catch more connections
+                            top_k=5
                         )
                         print(f"📍 Found {len(missing)} potential missing connections")
 
@@ -1840,15 +1840,19 @@ async def background_analyze(request: BackgroundAnalysisRequest):
 
         # 4. Run memory pattern analysis
         if 'patterns' in analysis_types and len(memories) >= 3:
+            print(f"🔍 Running pattern analysis on {len(memories)} memories...")
             # Group memories by type and look for clusters
             from collections import defaultdict
             by_type = defaultdict(list)
             for mem in memories:
                 by_type[mem.get('memory_type', 'unknown')].append(mem)
 
+            print(f"📍 Memory types found: {dict((k, len(v)) for k, v in by_type.items())}")
+
             # Find types with multiple high-importance memories
             for mem_type, mems in by_type.items():
-                high_importance = [m for m in mems if m.get('importance', 0) >= 0.7]
+                high_importance = [m for m in mems if float(m.get('importance', 0) or 0) >= 0.7]
+                print(f"📍 {mem_type}: {len(high_importance)} high-importance memories")
                 if len(high_importance) >= 2:
                     # Extract common themes (simple keyword overlap for now)
                     contents = [m.get('content', '') for m in high_importance[:5]]
@@ -1859,8 +1863,11 @@ async def background_analyze(request: BackgroundAnalysisRequest):
                         title=f"Pattern in {mem_type} memories",
                         content=f"You have {len(high_importance)} high-importance {mem_type} memories. These might form a recurring theme worth exploring.",
                         confidence=0.7,
-                        source_memories=[m.get('id') for m in high_importance[:3]]
+                        source_memories=[str(m.get('id')) for m in high_importance[:3]]
                     ))
+                    print(f"✅ Created pattern insight for {mem_type}")
+
+        print(f"📍 Total insights generated: {len(insights)}")
 
         # 5. Store insights in pending_insights table
         insights_stored = 0
