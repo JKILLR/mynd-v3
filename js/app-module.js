@@ -3519,7 +3519,790 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
     
     // Create global preference tracker instance
     const preferenceTracker = new PreferenceTracker();
-    
+
+    // ═══════════════════════════════════════════════════════════════════
+    // HEAT TRACKER - Metabolic architecture for node access patterns
+    // ═══════════════════════════════════════════════════════════════════
+    class HeatTracker {
+        constructor() {
+            this.localHeat = new Map();  // In-memory cache: nodeId -> heat data
+            this.pendingUpdates = new Map();  // Batch updates for sync
+            this.syncDebounceTimer = null;
+            this.syncIntervalMs = 60000;  // Sync every minute
+            this.loaded = false;
+            this.currentSessionId = null;
+        }
+
+        // Initialize - load from localStorage and start sync
+        async init() {
+            if (this.loaded) return;
+
+            try {
+                // Load local cache
+                const cached = await NeuralDB.load('heat-tracker-cache');
+                if (cached && cached.heat) {
+                    this.localHeat = new Map(Object.entries(cached.heat));
+                    console.log(`🔥 Loaded ${this.localHeat.size} node heat records from cache`);
+                }
+
+                // Generate session ID
+                this.currentSessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+                // Start periodic sync
+                this.startPeriodicSync();
+
+                this.loaded = true;
+            } catch (error) {
+                console.error('Failed to load heat tracker:', error);
+                this.loaded = true;
+            }
+        }
+
+        // Record an access event
+        recordAccess(nodeId, source = 'unknown', metadata = {}) {
+            if (!nodeId) return;
+
+            const now = Date.now();
+            let heat = this.localHeat.get(nodeId) || this.createDefaultHeat(nodeId);
+
+            // Update counts based on source
+            heat.accessCount++;
+            heat.lastAccessed = now;
+
+            switch (source) {
+                case 'ai_context':
+                    heat.aiContextInclusions++;
+                    heat.lastAiAccessed = now;
+                    break;
+                case 'ai_modification':
+                    heat.aiModifications++;
+                    heat.lastAiAccessed = now;
+                    break;
+                case 'ai_creation':
+                    heat.aiCreations++;
+                    heat.lastAiAccessed = now;
+                    break;
+                case 'user_selection':
+                    heat.userSelections++;
+                    heat.lastUserAccessed = now;
+                    break;
+                case 'user_expansion':
+                    heat.userExpansions++;
+                    heat.lastUserAccessed = now;
+                    break;
+            }
+
+            // Track session
+            heat.currentSessionAccesses++;
+            if (!heat.sessionsTouched.includes(this.currentSessionId)) {
+                heat.sessionsTouched.push(this.currentSessionId);
+                heat.totalSessionsTouched++;
+            }
+
+            // Recalculate heat score locally
+            heat.heatScore = this.calculateHeatScore(heat);
+            heat.heatTier = this.getHeatTier(heat.heatScore);
+            heat.updatedAt = now;
+
+            this.localHeat.set(nodeId, heat);
+            this.pendingUpdates.set(nodeId, heat);
+
+            // Debounced save to local storage
+            this.debouncedSaveLocal();
+        }
+
+        // Create default heat record for new node
+        createDefaultHeat(nodeId) {
+            const now = Date.now();
+            return {
+                nodeId,
+                accessCount: 0,
+                aiContextInclusions: 0,
+                aiModifications: 0,
+                aiCreations: 0,
+                userSelections: 0,
+                userExpansions: 0,
+                lastAccessed: now,
+                lastAiAccessed: null,
+                lastUserAccessed: null,
+                firstAccessed: now,
+                currentSessionAccesses: 0,
+                totalSessionsTouched: 0,
+                sessionsTouched: [],
+                heatScore: 0.5,
+                heatTier: 'warm',
+                connectionCount: 0,
+                orphanRisk: false,
+                createdAt: now,
+                updatedAt: now
+            };
+        }
+
+        // Calculate heat score (mirrors DB function)
+        calculateHeatScore(heat) {
+            // Base score from activity (0-0.7)
+            const baseScore = Math.min(0.7,
+                heat.accessCount * 0.01 +
+                heat.aiContextInclusions * 0.02 +
+                heat.aiModifications * 0.05
+            );
+
+            // Recency factor (0-0.3) with 30-day half-life
+            const daysSinceAccess = (Date.now() - (heat.lastAccessed || Date.now())) / (1000 * 60 * 60 * 24);
+            const recencyFactor = 0.3 * Math.pow(0.5, daysSinceAccess / 30);
+
+            return Math.min(1.0, baseScore + recencyFactor);
+        }
+
+        // Get heat tier from score
+        getHeatTier(score) {
+            if (score >= 0.8) return 'hot';
+            if (score >= 0.5) return 'warm';
+            if (score >= 0.3) return 'cool';
+            if (score >= 0.1) return 'cold';
+            return 'dormant';
+        }
+
+        // Get heat for a node
+        getHeat(nodeId) {
+            return this.localHeat.get(nodeId);
+        }
+
+        // Get all nodes by tier
+        getNodesByTier(tier) {
+            const nodes = [];
+            for (const [nodeId, heat] of this.localHeat) {
+                if (heat.heatTier === tier) {
+                    nodes.push({ nodeId, ...heat });
+                }
+            }
+            return nodes.sort((a, b) => b.heatScore - a.heatScore);
+        }
+
+        // Get cold nodes (for circulation daemon)
+        getColdNodes(threshold = 0.3) {
+            const cold = [];
+            for (const [nodeId, heat] of this.localHeat) {
+                if (heat.heatScore < threshold) {
+                    cold.push({ nodeId, ...heat });
+                }
+            }
+            return cold.sort((a, b) => a.heatScore - b.heatScore);
+        }
+
+        // Get hot nodes (for context prioritization)
+        getHotNodes(threshold = 0.6) {
+            const hot = [];
+            for (const [nodeId, heat] of this.localHeat) {
+                if (heat.heatScore >= threshold) {
+                    hot.push({ nodeId, ...heat });
+                }
+            }
+            return hot.sort((a, b) => b.heatScore - a.heatScore);
+        }
+
+        // Get heat summary for Claude context
+        getHeatSummary() {
+            const summary = {
+                total: this.localHeat.size,
+                hot: 0,
+                warm: 0,
+                cool: 0,
+                cold: 0,
+                dormant: 0,
+                avgScore: 0,
+                lastActivity: null
+            };
+
+            let totalScore = 0;
+            for (const heat of this.localHeat.values()) {
+                summary[heat.heatTier]++;
+                totalScore += heat.heatScore;
+                if (!summary.lastActivity || heat.lastAccessed > summary.lastActivity) {
+                    summary.lastActivity = heat.lastAccessed;
+                }
+            }
+
+            summary.avgScore = summary.total > 0 ? totalScore / summary.total : 0;
+            return summary;
+        }
+
+        // Batch record context inclusions for multiple nodes
+        recordContextInclusions(nodeIds) {
+            for (const nodeId of nodeIds) {
+                this.recordAccess(nodeId, 'ai_context');
+            }
+        }
+
+        // Update connection count for a node
+        updateConnectionCount(nodeId, count) {
+            const heat = this.localHeat.get(nodeId);
+            if (heat) {
+                heat.connectionCount = count;
+                heat.orphanRisk = count === 0 && heat.heatScore < 0.3;
+                heat.updatedAt = Date.now();
+                this.localHeat.set(nodeId, heat);
+                this.pendingUpdates.set(nodeId, heat);
+            }
+        }
+
+        // Debounced save to local storage
+        debouncedSaveLocal() {
+            if (this.saveDebounceTimer) {
+                clearTimeout(this.saveDebounceTimer);
+            }
+            this.saveDebounceTimer = setTimeout(() => this.saveLocal(), 5000);
+        }
+
+        // Save to local storage
+        async saveLocal() {
+            try {
+                const heatObj = {};
+                for (const [nodeId, heat] of this.localHeat) {
+                    // Don't store session array in localStorage (too large)
+                    const { sessionsTouched, ...heatData } = heat;
+                    heatObj[nodeId] = heatData;
+                }
+                await NeuralDB.save('heat-tracker-cache', {
+                    heat: heatObj,
+                    savedAt: Date.now()
+                });
+            } catch (error) {
+                console.error('Failed to save heat tracker cache:', error);
+            }
+        }
+
+        // Start periodic sync to Supabase
+        startPeriodicSync() {
+            setInterval(() => this.syncToSupabase(), this.syncIntervalMs);
+        }
+
+        // Sync pending updates to Supabase
+        async syncToSupabase() {
+            if (this.pendingUpdates.size === 0) return;
+            if (typeof supabase === 'undefined' || !supabase) return;
+
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return;
+
+                const updates = [];
+                for (const [nodeId, heat] of this.pendingUpdates) {
+                    updates.push({
+                        user_id: user.id,
+                        node_id: nodeId,
+                        access_count: heat.accessCount,
+                        ai_context_inclusions: heat.aiContextInclusions,
+                        ai_modifications: heat.aiModifications,
+                        ai_creations: heat.aiCreations || 0,
+                        user_selections: heat.userSelections,
+                        user_expansions: heat.userExpansions || 0,
+                        last_accessed: new Date(heat.lastAccessed).toISOString(),
+                        last_ai_accessed: heat.lastAiAccessed ? new Date(heat.lastAiAccessed).toISOString() : null,
+                        last_user_accessed: heat.lastUserAccessed ? new Date(heat.lastUserAccessed).toISOString() : null,
+                        current_session_accesses: heat.currentSessionAccesses,
+                        total_sessions_touched: heat.totalSessionsTouched,
+                        connection_count: heat.connectionCount || 0,
+                        orphan_risk: heat.orphanRisk || false
+                    });
+                }
+
+                // Upsert in batches
+                const batchSize = 50;
+                for (let i = 0; i < updates.length; i += batchSize) {
+                    const batch = updates.slice(i, i + batchSize);
+                    await supabase
+                        .from('node_access_heat')
+                        .upsert(batch, {
+                            onConflict: 'user_id,node_id',
+                            ignoreDuplicates: false
+                        });
+                }
+
+                console.log(`🔥 Synced ${updates.length} heat records to Supabase`);
+                this.pendingUpdates.clear();
+            } catch (error) {
+                console.error('Failed to sync heat to Supabase:', error);
+            }
+        }
+
+        // Load heat data from Supabase (on init)
+        async loadFromSupabase() {
+            if (typeof supabase === 'undefined' || !supabase) return;
+
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return;
+
+                const { data, error } = await supabase
+                    .from('node_access_heat')
+                    .select('*')
+                    .eq('user_id', user.id);
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    for (const row of data) {
+                        const heat = {
+                            nodeId: row.node_id,
+                            accessCount: row.access_count,
+                            aiContextInclusions: row.ai_context_inclusions,
+                            aiModifications: row.ai_modifications,
+                            aiCreations: row.ai_creations || 0,
+                            userSelections: row.user_selections,
+                            userExpansions: row.user_expansions || 0,
+                            lastAccessed: new Date(row.last_accessed).getTime(),
+                            lastAiAccessed: row.last_ai_accessed ? new Date(row.last_ai_accessed).getTime() : null,
+                            lastUserAccessed: row.last_user_accessed ? new Date(row.last_user_accessed).getTime() : null,
+                            firstAccessed: new Date(row.first_accessed || row.created_at).getTime(),
+                            currentSessionAccesses: 0,  // Reset for new session
+                            totalSessionsTouched: row.total_sessions_touched,
+                            sessionsTouched: [],
+                            heatScore: row.heat_score,
+                            heatTier: row.heat_tier,
+                            connectionCount: row.connection_count || 0,
+                            orphanRisk: row.orphan_risk || false,
+                            createdAt: new Date(row.created_at).getTime(),
+                            updatedAt: new Date(row.updated_at).getTime()
+                        };
+                        this.localHeat.set(row.node_id, heat);
+                    }
+                    console.log(`🔥 Loaded ${data.length} heat records from Supabase`);
+                }
+            } catch (error) {
+                console.error('Failed to load heat from Supabase:', error);
+            }
+        }
+
+        // Apply decay to all nodes (called by circulation daemon)
+        applyDecay() {
+            const now = Date.now();
+            for (const [nodeId, heat] of this.localHeat) {
+                heat.heatScore = this.calculateHeatScore(heat);
+                heat.heatTier = this.getHeatTier(heat.heatScore);
+                heat.updatedAt = now;
+                this.pendingUpdates.set(nodeId, heat);
+            }
+            this.debouncedSaveLocal();
+        }
+
+        // Reset session counters (for new session)
+        resetSessionCounters() {
+            this.currentSessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            for (const heat of this.localHeat.values()) {
+                heat.currentSessionAccesses = 0;
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // COLD NODE INTELLIGENCE - Phase 3 of Metabolic Architecture
+        // ═══════════════════════════════════════════════════════════════════
+
+        // Analyze cold nodes and categorize them
+        analyzeColdNodes() {
+            const analysis = {
+                abandonedPotential: [],    // Had engagement, then stopped
+                naturallyDormant: [],      // Always low engagement (stable)
+                completedGoals: [],        // Were hot, now appropriately cold
+                orphanRisk: [],            // Isolated and cooling
+                recentlyAbandoned: []      // Dropped off recently
+            };
+
+            const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+            const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+
+            for (const [nodeId, heat] of this.localHeat) {
+                if (heat.heatScore >= 0.3) continue;  // Not cold
+
+                const node = typeof store !== 'undefined' ? store.findNode(nodeId) : null;
+                if (!node) continue;
+
+                const daysSinceAccess = (Date.now() - heat.lastAccessed) / (1000 * 60 * 60 * 24);
+                const hasChildren = node.children && node.children.length > 0;
+                const hadSignificantEngagement = heat.accessCount > 10 || heat.aiModifications > 2;
+
+                // Orphan risk: no children, cooling, and was never hot
+                if (!hasChildren && heat.connectionCount === 0 && heat.accessCount < 5) {
+                    analysis.orphanRisk.push({
+                        nodeId,
+                        label: node.label,
+                        heatScore: heat.heatScore,
+                        daysSinceAccess,
+                        reason: 'Isolated node with minimal engagement'
+                    });
+                }
+
+                // Abandoned potential: had good engagement, now cold
+                if (hadSignificantEngagement && heat.heatScore < 0.2) {
+                    analysis.abandonedPotential.push({
+                        nodeId,
+                        label: node.label,
+                        heatScore: heat.heatScore,
+                        peakEngagement: heat.accessCount,
+                        daysSinceAccess,
+                        reason: 'Previously active, now neglected'
+                    });
+                }
+
+                // Recently abandoned: accessed within 7 days but dropped quickly
+                if (heat.lastAccessed > sevenDaysAgo && heat.heatScore < 0.2 && heat.accessCount > 3) {
+                    analysis.recentlyAbandoned.push({
+                        nodeId,
+                        label: node.label,
+                        heatScore: heat.heatScore,
+                        daysSinceAccess,
+                        reason: 'Quick drop-off in engagement'
+                    });
+                }
+
+                // Completed goals: check if node label suggests completion
+                const completionKeywords = ['done', 'complete', 'finished', 'achieved', 'shipped', 'launched'];
+                const isCompleted = completionKeywords.some(kw =>
+                    node.label?.toLowerCase().includes(kw) ||
+                    node.description?.toLowerCase().includes(kw)
+                );
+                if (isCompleted && hadSignificantEngagement) {
+                    analysis.completedGoals.push({
+                        nodeId,
+                        label: node.label,
+                        heatScore: heat.heatScore,
+                        daysSinceAccess,
+                        reason: 'Goal appears completed'
+                    });
+                }
+
+                // Naturally dormant: always low engagement
+                if (!hadSignificantEngagement && heat.accessCount < 5 && daysSinceAccess > 30) {
+                    analysis.naturallyDormant.push({
+                        nodeId,
+                        label: node.label,
+                        heatScore: heat.heatScore,
+                        daysSinceAccess,
+                        reason: 'Consistently low engagement'
+                    });
+                }
+            }
+
+            // Sort by coldest first
+            Object.values(analysis).forEach(arr => {
+                arr.sort((a, b) => a.heatScore - b.heatScore);
+            });
+
+            return analysis;
+        }
+
+        // Get insights for Claude about cold nodes
+        getColdNodeInsights() {
+            const analysis = this.analyzeColdNodes();
+            let insights = '';
+
+            if (analysis.abandonedPotential.length > 0) {
+                insights += `\n🚨 Abandoned potential (${analysis.abandonedPotential.length} nodes):\n`;
+                analysis.abandonedPotential.slice(0, 3).forEach(n => {
+                    insights += `  - "${n.label}" (was active, ${Math.round(n.daysSinceAccess)}d ago)\n`;
+                });
+            }
+
+            if (analysis.recentlyAbandoned.length > 0) {
+                insights += `\n⚡ Recently abandoned (${analysis.recentlyAbandoned.length} nodes):\n`;
+                analysis.recentlyAbandoned.slice(0, 3).forEach(n => {
+                    insights += `  - "${n.label}" (dropped ${Math.round(n.daysSinceAccess)}d ago)\n`;
+                });
+            }
+
+            if (analysis.orphanRisk.length > 0) {
+                insights += `\n🔗 Orphan risk (${analysis.orphanRisk.length} isolated nodes):\n`;
+                analysis.orphanRisk.slice(0, 3).forEach(n => {
+                    insights += `  - "${n.label}"\n`;
+                });
+            }
+
+            if (analysis.completedGoals.length > 0) {
+                insights += `\n✅ Completed goals (${analysis.completedGoals.length} nodes):\n`;
+                analysis.completedGoals.slice(0, 3).forEach(n => {
+                    insights += `  - "${n.label}"\n`;
+                });
+            }
+
+            return insights;
+        }
+
+        // Suggest reconnections for cold nodes
+        suggestReconnections() {
+            const suggestions = [];
+            const analysis = this.analyzeColdNodes();
+
+            // For abandoned potential, suggest revisiting
+            analysis.abandonedPotential.forEach(n => {
+                suggestions.push({
+                    type: 'revisit',
+                    nodeId: n.nodeId,
+                    label: n.label,
+                    message: `"${n.label}" was active before - worth revisiting?`,
+                    priority: 0.8
+                });
+            });
+
+            // For orphan risk, suggest connecting or archiving
+            analysis.orphanRisk.forEach(n => {
+                suggestions.push({
+                    type: 'connect_or_archive',
+                    nodeId: n.nodeId,
+                    label: n.label,
+                    message: `"${n.label}" is isolated - connect to related nodes or archive?`,
+                    priority: 0.6
+                });
+            });
+
+            // For naturally dormant, suggest reviewing relevance
+            analysis.naturallyDormant.slice(0, 5).forEach(n => {
+                suggestions.push({
+                    type: 'review_relevance',
+                    nodeId: n.nodeId,
+                    label: n.label,
+                    message: `"${n.label}" has never been active - still relevant?`,
+                    priority: 0.4
+                });
+            });
+
+            return suggestions.sort((a, b) => b.priority - a.priority);
+        }
+
+        // Get nodes that need attention (for circulation daemon)
+        getNodesNeedingAttention() {
+            const needs = [];
+
+            for (const [nodeId, heat] of this.localHeat) {
+                const node = typeof store !== 'undefined' ? store.findNode(nodeId) : null;
+                if (!node) continue;
+
+                // Nodes with orphan risk
+                if (heat.orphanRisk) {
+                    needs.push({
+                        nodeId,
+                        label: node.label,
+                        issue: 'orphan_risk',
+                        priority: 0.8
+                    });
+                }
+
+                // Nodes that were hot but cooling fast
+                const daysSinceAccess = (Date.now() - heat.lastAccessed) / (1000 * 60 * 60 * 24);
+                if (heat.accessCount > 20 && heat.heatScore < 0.3 && daysSinceAccess < 14) {
+                    needs.push({
+                        nodeId,
+                        label: node.label,
+                        issue: 'rapid_cooling',
+                        priority: 0.9
+                    });
+                }
+
+                // Nodes with high AI modifications but no user engagement
+                if (heat.aiModifications > 5 && heat.userSelections < 2) {
+                    needs.push({
+                        nodeId,
+                        label: node.label,
+                        issue: 'ai_only_engagement',
+                        priority: 0.7
+                    });
+                }
+            }
+
+            return needs.sort((a, b) => b.priority - a.priority);
+        }
+    }
+
+    // Create global heat tracker instance
+    const heatTracker = new HeatTracker();
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CIRCULATION DAEMON - Background maintenance for metabolic architecture
+    // ═══════════════════════════════════════════════════════════════════
+    const CirculationDaemon = {
+        isRunning: false,
+        intervalId: null,
+        config: {
+            enabled: true,
+            intervalMs: 5 * 60 * 1000,  // Run every 5 minutes
+            decayIntervalMs: 60 * 60 * 1000,  // Apply decay every hour
+            lastDecayRun: null,
+            surfaceInsightsThreshold: 5  // Min cold nodes to surface insights
+        },
+
+        async init() {
+            // Load config from storage
+            try {
+                const saved = await NeuralDB.load('circulation-daemon-config');
+                if (saved) {
+                    Object.assign(this.config, saved);
+                }
+            } catch (e) {
+                console.warn('CirculationDaemon: Could not load config');
+            }
+
+            if (this.config.enabled) {
+                this.start();
+            }
+
+            console.log('🔄 CirculationDaemon initialized');
+        },
+
+        start() {
+            if (this.isRunning) return;
+
+            this.isRunning = true;
+            this.intervalId = setInterval(() => this.runCycle(), this.config.intervalMs);
+            console.log('🔄 CirculationDaemon started');
+
+            // Run initial cycle after a short delay
+            setTimeout(() => this.runCycle(), 10000);
+        },
+
+        stop() {
+            if (!this.isRunning) return;
+
+            this.isRunning = false;
+            if (this.intervalId) {
+                clearInterval(this.intervalId);
+                this.intervalId = null;
+            }
+            console.log('🔄 CirculationDaemon stopped');
+        },
+
+        async runCycle() {
+            if (typeof heatTracker === 'undefined' || !heatTracker.loaded) return;
+
+            try {
+                // 1. Apply heat decay if enough time has passed
+                const now = Date.now();
+                if (!this.config.lastDecayRun ||
+                    (now - this.config.lastDecayRun) >= this.config.decayIntervalMs) {
+                    heatTracker.applyDecay();
+                    this.config.lastDecayRun = now;
+                    console.log('🔄 Heat decay applied');
+                }
+
+                // 2. Update connection counts for all tracked nodes
+                await this.updateConnectionCounts();
+
+                // 3. Check for nodes needing attention
+                const needsAttention = heatTracker.getNodesNeedingAttention();
+                if (needsAttention.length > 0) {
+                    console.log(`🔄 ${needsAttention.length} nodes need attention`);
+
+                    // Store insights for background cognition to surface
+                    await this.storeCirculationInsights(needsAttention);
+                }
+
+                // 4. Sync to Supabase
+                await heatTracker.syncToSupabase();
+
+                // 5. Save config
+                await this.saveConfig();
+
+            } catch (error) {
+                console.error('CirculationDaemon cycle error:', error);
+            }
+        },
+
+        async updateConnectionCounts() {
+            if (typeof store === 'undefined') return;
+
+            for (const [nodeId, heat] of heatTracker.localHeat) {
+                const node = store.findNode(nodeId);
+                if (node) {
+                    const childCount = node.children?.length || 0;
+                    heatTracker.updateConnectionCount(nodeId, childCount);
+                }
+            }
+        },
+
+        async storeCirculationInsights(needsAttention) {
+            if (typeof supabase === 'undefined' || !supabase) return;
+
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return;
+
+                // Group by issue type
+                const issueGroups = {};
+                needsAttention.forEach(n => {
+                    if (!issueGroups[n.issue]) issueGroups[n.issue] = [];
+                    issueGroups[n.issue].push(n);
+                });
+
+                // Create insights for significant issues
+                for (const [issue, nodes] of Object.entries(issueGroups)) {
+                    if (nodes.length < 2) continue;  // Only surface if multiple nodes affected
+
+                    const labels = nodes.slice(0, 5).map(n => `"${n.label}"`).join(', ');
+                    let content = '';
+                    let title = '';
+
+                    switch (issue) {
+                        case 'orphan_risk':
+                            title = 'Isolated nodes detected';
+                            content = `${nodes.length} nodes appear isolated with minimal connections: ${labels}. Consider connecting them to related areas or archiving if no longer relevant.`;
+                            break;
+                        case 'rapid_cooling':
+                            title = 'Areas losing momentum';
+                            content = `${nodes.length} previously active areas are cooling rapidly: ${labels}. These may need attention to maintain momentum.`;
+                            break;
+                        case 'ai_only_engagement':
+                            title = 'AI-created content needs review';
+                            content = `${nodes.length} nodes were primarily created/modified by AI but haven't been reviewed: ${labels}. Consider reviewing these for accuracy and relevance.`;
+                            break;
+                    }
+
+                    if (title && content) {
+                        const insightHash = `circulation-${issue}-${Date.now().toString(36)}`;
+                        await supabase.from('pending_insights').upsert({
+                            user_id: user.id,
+                            insight_type: 'maintenance',
+                            title,
+                            content,
+                            confidence: 0.7,
+                            source_nodes: nodes.map(n => n.nodeId),
+                            insight_hash: insightHash
+                        }, { onConflict: 'insight_hash' });
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to store circulation insights:', e);
+            }
+        },
+
+        async saveConfig() {
+            try {
+                await NeuralDB.save('circulation-daemon-config', this.config);
+            } catch (e) {
+                // Config save not critical
+            }
+        },
+
+        getStatus() {
+            const summary = heatTracker.getHeatSummary();
+            return {
+                isRunning: this.isRunning,
+                lastDecayRun: this.config.lastDecayRun,
+                trackedNodes: summary.total,
+                hotNodes: summary.hot,
+                coldNodes: summary.cold + summary.dormant,
+                avgHeatScore: summary.avgScore
+            };
+        },
+
+        // Manual trigger for testing
+        async triggerCycle() {
+            console.log('🔄 Manual circulation cycle triggered');
+            await this.runCycle();
+            return this.getStatus();
+        }
+    };
+
+    // Expose globally for debugging
+    window.CirculationDaemon = CirculationDaemon;
+
     // ═══════════════════════════════════════════════════════════════════
     // SEMANTIC MEMORY SYSTEM - Long-term context awareness
     // ═══════════════════════════════════════════════════════════════════
@@ -23970,7 +24753,12 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         if (nodeData) {
             userProfile.trackNodeExpanded(nodeData, store);
         }
-        
+
+        // Track heat: user expanded this node
+        if (typeof heatTracker !== 'undefined') {
+            heatTracker.recordAccess(mesh.userData.id, 'user_expansion');
+        }
+
         // CGT: Record expand action
         cognitiveGT.recordAction('expand', mesh.userData.id, { 
             nodeDepth: mesh.userData.level || 0,
@@ -24226,6 +25014,11 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         selectedNode = mesh;
         mesh.userData.selected = true;
         store.selectedNodeId = mesh.userData.id;
+
+        // Track heat: user selected this node
+        if (typeof heatTracker !== 'undefined') {
+            heatTracker.recordAccess(mesh.userData.id, 'user_selection');
+        }
 
         // Show label of selected node
         if (mesh.userData.labelSprite) {
@@ -29089,6 +29882,11 @@ You are a trusted guide, not a data harvester.
                 ? this.buildMapSummary(store.data, relevantNodeIds, totalNodes)
                 : this.buildRelevantTree(store.data, relevantNodeIds);
 
+            // Track heat for nodes included in AI context
+            if (typeof heatTracker !== 'undefined' && relevantNodeIds.size > 0) {
+                heatTracker.recordContextInclusions(Array.from(relevantNodeIds));
+            }
+
             return {
                 mode: summaryOnly ? 'summary' : 'relevant',
                 structure,
@@ -29114,9 +29912,27 @@ You are a trusted guide, not a data harvester.
             const indent = '  '.repeat(depth);
             const childCount = node.children?.length || 0;
 
-            // Compact format: label [id] (children count)
-            // Skip descriptions to save tokens
+            // Get heat data for dynamic context allocation
+            let heatTier = 'warm';  // Default tier
+            let heatScore = 0.5;
+            if (typeof heatTracker !== 'undefined') {
+                const heat = heatTracker.getHeat(node.id);
+                if (heat) {
+                    heatTier = heat.heatTier;
+                    heatScore = heat.heatScore;
+                }
+            }
+
+            // Dynamic context: hot nodes get more detail, cold nodes get less
             let line = `${indent}- ${node.label} [${node.id}]`;
+
+            // Add heat indicator for hot/dormant nodes
+            if (heatTier === 'hot') {
+                line += ' 🔥';
+            } else if (heatTier === 'dormant') {
+                line += ' 💤';
+            }
+
             if (childCount > 0) {
                 const relevantChildCount = node.children?.filter(c =>
                     relevantIds.has(c.id) || this.hasRelevantDescendants(c, relevantIds)
@@ -29126,6 +29942,20 @@ You are a trusted guide, not a data harvester.
                 } else {
                     line += ` (${childCount})`;
                 }
+            }
+
+            // Hot nodes get full description (up to 300 chars)
+            // Warm nodes get truncated description (up to 100 chars)
+            // Cool/Cold/Dormant nodes get no description (saves tokens)
+            if (node.description && node.description.trim()) {
+                if (heatTier === 'hot') {
+                    const desc = node.description.trim().slice(0, 300);
+                    line += `\n${indent}  "${desc}${desc.length >= 300 ? '...' : ''}"`;
+                } else if (heatTier === 'warm' && isRelevant) {
+                    const desc = node.description.trim().slice(0, 100);
+                    line += `\n${indent}  "${desc}${desc.length >= 100 ? '...' : ''}"`;
+                }
+                // Cold/dormant nodes: no description to save context window
             }
 
             if (node.children && node.children.length > 0) {
@@ -29540,7 +30370,42 @@ You are a trusted guide, not a data harvester.
             } catch (e) {
                 // Stats not critical
             }
-            
+
+            // 6b. Metabolic heat context (node engagement patterns)
+            try {
+                if (typeof heatTracker !== 'undefined' && heatTracker.localHeat.size > 0) {
+                    const heatSummary = heatTracker.getHeatSummary();
+                    neuralContext += `\nNode engagement (metabolic state):\n`;
+                    neuralContext += `  Hot nodes (actively engaged): ${heatSummary.hot}\n`;
+                    neuralContext += `  Warm nodes (recent activity): ${heatSummary.warm}\n`;
+                    neuralContext += `  Cool nodes (occasional): ${heatSummary.cool}\n`;
+                    neuralContext += `  Cold nodes (neglected): ${heatSummary.cold}\n`;
+                    neuralContext += `  Dormant nodes (forgotten): ${heatSummary.dormant}\n`;
+
+                    // Surface cold nodes that might need attention
+                    if (heatSummary.cold + heatSummary.dormant > 5) {
+                        const coldNodes = heatTracker.getColdNodes(0.3).slice(0, 5);
+                        if (coldNodes.length > 0) {
+                            neuralContext += `  → Neglected areas: ${coldNodes.map(n => {
+                                const node = store.findNode(n.nodeId);
+                                return node ? `"${node.label}"` : null;
+                            }).filter(Boolean).join(', ')}\n`;
+                        }
+                    }
+
+                    // Surface hot nodes for context prioritization
+                    const hotNodes = heatTracker.getHotNodes(0.7).slice(0, 3);
+                    if (hotNodes.length > 0) {
+                        neuralContext += `  → Most active areas: ${hotNodes.map(n => {
+                            const node = store.findNode(n.nodeId);
+                            return node ? `"${node.label}"` : null;
+                        }).filter(Boolean).join(', ')}\n`;
+                    }
+                }
+            } catch (e) {
+                // Heat stats not critical
+            }
+
             // 7. AI Feedback stats (user's response to predictions)
             try {
                 const feedbackStats = AIFeedback.getStats('category');
@@ -31415,6 +32280,12 @@ CURRENT REQUEST CONTEXT
                             result.success = true;
                             result.description = `Added "${action.label}"`;
                             result.nodeId = newNode.id; // Track created node ID for timeline
+
+                            // Track heat: AI created this node and the parent was referenced
+                            if (typeof heatTracker !== 'undefined') {
+                                heatTracker.recordAccess(parentId, 'ai_creation');
+                                heatTracker.recordAccess(newNode.id, 'ai_modification');
+                            }
                         }
                     } else if (action.action === 'edit') {
                         const targetId = resolveId(action.targetId);
@@ -31429,6 +32300,11 @@ CURRENT REQUEST CONTEXT
                             result.success = true;
                             result.description = `Updated "${nodeName}"`;
                             result.nodeId = targetId; // Make clickable to navigate to edited node
+
+                            // Track heat: AI modified this node
+                            if (typeof heatTracker !== 'undefined') {
+                                heatTracker.recordAccess(targetId, 'ai_modification');
+                            }
 
                             // Update mesh
                             const mesh = nodes.get(targetId);
@@ -38757,6 +39633,18 @@ showKeyboardHints();
                 await userProfile.init();
                 await conceptAbstractor.init();
                 await metaLearner.init();
+                await heatTracker.init();
+
+                // Load heat data from Supabase if available
+                if (typeof supabase !== 'undefined' && supabase) {
+                    heatTracker.loadFromSupabase().catch(e => console.warn('Heat sync from Supabase deferred:', e));
+                }
+
+                // Initialize Circulation Daemon (metabolic architecture background maintenance)
+                if (typeof CirculationDaemon !== 'undefined') {
+                    await CirculationDaemon.init();
+                    console.log('🔄 Circulation Daemon initialized');
+                }
 
                 // Initialize Map Maintenance Daemon
                 console.log('🔧 Checking for MapMaintenanceDaemon...', typeof MapMaintenanceDaemon);
@@ -43368,6 +44256,9 @@ Summary:`
         // Expose globally for debugging and manual triggering
         window.AutonomousEvolution = AutonomousEvolution;
     });
+
+    // Expose HeatTracker globally for debugging and metabolic insights
+    window.heatTracker = heatTracker;
 
     // ReflectionDaemon - Autonomous reflection during idle periods
     queueInit('ReflectionDaemon', async () => {
