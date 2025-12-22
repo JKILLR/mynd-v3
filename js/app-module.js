@@ -30173,31 +30173,38 @@ You are a trusted guide, not a data harvester.
                 }
 
                 // Include images from conversation history (Claude Vision format)
-                if (m.role === 'user' && m.images && m.images.length > 0) {
+                // Only include images from recent messages (last 5) to avoid oversized image errors
+                const isRecentMessage = this.conversation.indexOf(m) >= this.conversation.length - 5;
+                if (m.role === 'user' && m.images && m.images.length > 0 && isRecentMessage) {
                     const contentBlocks = [];
 
-                    // Add images first (skip oversized images from old messages)
+                    // Add images first (skip oversized images)
                     for (const img of m.images) {
-                        const dataUrl = img.dataUrl || img;
-                        if (typeof dataUrl === 'string') {
-                            // Check image size - skip if over 4.5MB (base64 is ~1.37x original)
-                            const estimatedBytes = dataUrl.length * 0.75;
-                            if (estimatedBytes > 4.5 * 1024 * 1024) {
-                                console.warn(`⚠️ Skipping oversized image in history (${(estimatedBytes / 1024 / 1024).toFixed(1)}MB)`);
-                                continue;  // Skip this image
-                            }
+                        // Handle various image formats: {dataUrl: "..."}, "data:...", or {hadImage: true}
+                        const dataUrl = typeof img === 'string' ? img : (img?.dataUrl || null);
 
-                            const match = dataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/);
-                            if (match) {
-                                contentBlocks.push({
-                                    type: 'image',
-                                    source: {
-                                        type: 'base64',
-                                        media_type: match[1],
-                                        data: match[2]
-                                    }
-                                });
-                            }
+                        // Skip if no valid image data (e.g., {hadImage: true} metadata)
+                        if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
+                            continue;
+                        }
+
+                        // Check image size - skip if over 4.5MB
+                        const estimatedBytes = dataUrl.length * 0.75;
+                        if (estimatedBytes > 4.5 * 1024 * 1024) {
+                            console.warn(`⚠️ Skipping oversized image (${(estimatedBytes / 1024 / 1024).toFixed(1)}MB)`);
+                            continue;
+                        }
+
+                        const match = dataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/);
+                        if (match) {
+                            contentBlocks.push({
+                                type: 'image',
+                                source: {
+                                    type: 'base64',
+                                    media_type: match[1],
+                                    data: match[2]
+                                }
+                            });
                         }
                     }
 
@@ -30211,7 +30218,10 @@ You are a trusted guide, not a data harvester.
                         return { role: m.role, content: contentBlocks };
                     }
                     // If all images were skipped, just return text
-                    return { role: m.role, content: textContent || '[image too large to include]' };
+                    return { role: m.role, content: textContent || '[image from earlier in conversation]' };
+                } else if (m.role === 'user' && m.images && m.images.length > 0) {
+                    // Older message with images - just include text, note it had images
+                    return { role: m.role, content: textContent + '\n[had attached image(s)]' };
                 }
 
                 return { role: m.role, content: textContent };
