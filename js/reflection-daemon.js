@@ -2127,16 +2127,26 @@ const ReflectionDaemon = {
                 try {
                     const { data: session } = await supabaseClient.auth.getSession();
                     if (session?.session?.user) {
-                        // Search all memory types with text matching
+                        // Search all memory types with case-insensitive text matching
+                        // Try multiple search terms from the topic
+                        const searchTerms = topic.toLowerCase().split(/\s+/).filter(t => t.length > 3);
+                        const searchPattern = searchTerms.length > 0
+                            ? `%${searchTerms[0]}%`  // Use first significant word
+                            : `%${topic.toLowerCase()}%`;
+
                         const { data, error } = await supabaseClient
                             .from('ai_memory')
                             .select('id, memory_type, content, importance, related_nodes, created_at')
                             .eq('user_id', session.session.user.id)
-                            .ilike('content', `%${topic}%`)
+                            .ilike('content', searchPattern)
                             .order('importance', { ascending: false })
                             .limit(limit);
 
-                        if (!error && data) {
+                        if (error) {
+                            console.warn('AI memory query error:', error);
+                        }
+
+                        if (!error && data && data.length > 0) {
                             for (const mem of data) {
                                 results.push({
                                     id: mem.id,
@@ -2147,6 +2157,29 @@ const ReflectionDaemon = {
                                     related_nodes: mem.related_nodes,
                                     age_days: Math.round((Date.now() - new Date(mem.created_at).getTime()) / (1000 * 60 * 60 * 24))
                                 });
+                            }
+                        } else if (data && data.length === 0) {
+                            // No results with topic search, try getting recent memories instead
+                            const { data: recentData } = await supabaseClient
+                                .from('ai_memory')
+                                .select('id, memory_type, content, importance, related_nodes, created_at')
+                                .eq('user_id', session.session.user.id)
+                                .order('created_at', { ascending: false })
+                                .limit(5);
+
+                            if (recentData && recentData.length > 0) {
+                                console.log(`📝 No matches for "${topic}", returning ${recentData.length} recent memories`);
+                                for (const mem of recentData) {
+                                    results.push({
+                                        id: mem.id,
+                                        type: mem.memory_type,
+                                        source: 'supabase_recent',
+                                        context: mem.content?.substring(0, 400),
+                                        importance: mem.importance,
+                                        related_nodes: mem.related_nodes,
+                                        age_days: Math.round((Date.now() - new Date(mem.created_at).getTime()) / (1000 * 60 * 60 * 24))
+                                    });
+                                }
                             }
                         }
                     }
