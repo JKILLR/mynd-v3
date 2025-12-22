@@ -1759,18 +1759,32 @@ async def background_analyze(request: BackgroundAnalysisRequest):
     try:
         user_id = request.user_id
         analysis_types = request.analysis_types or ['connections', 'patterns']
+        print(f"🔍 Background analysis starting for user: {user_id}")
 
         # 1. Load user's mind map from Supabase
-        map_response = unified_brain.supabase.table('mind_maps').select('data').eq('user_id', user_id).order('updated_at', desc=True).limit(1).execute()
+        try:
+            map_response = unified_brain.supabase.table('mind_maps').select('data').eq('user_id', user_id).order('updated_at', desc=True).limit(1).execute()
+            print(f"📍 Map query returned: {len(map_response.data) if map_response.data else 0} results")
+        except Exception as e:
+            print(f"❌ Map query failed: {e}")
+            map_response = None
 
         map_data = None
-        if map_response.data and len(map_response.data) > 0:
+        if map_response and map_response.data and len(map_response.data) > 0:
             map_data = map_response.data[0].get('data')
+            print(f"📍 Map data loaded: root label = {map_data.get('label') if map_data else 'None'}")
+        else:
+            print(f"⚠️ No map data found for user")
 
         # 2. Load user's AI memories
-        memories_response = unified_brain.supabase.table('ai_memory').select('id, memory_type, content, importance, related_nodes').eq('user_id', user_id).order('importance', desc=True).limit(50).execute()
+        try:
+            memories_response = unified_brain.supabase.table('ai_memory').select('id, memory_type, content, importance, related_nodes').eq('user_id', user_id).order('importance', desc=True).limit(50).execute()
+            print(f"📍 Memories query returned: {len(memories_response.data) if memories_response.data else 0} memories")
+        except Exception as e:
+            print(f"❌ Memories query failed: {e}")
+            memories_response = None
 
-        memories = memories_response.data if memories_response.data else []
+        memories = memories_response.data if memories_response and memories_response.data else []
 
         # 3. Run connection analysis if map is available
         if 'connections' in analysis_types and map_data and brain is not None:
@@ -1790,13 +1804,17 @@ async def background_analyze(request: BackgroundAnalysisRequest):
                     extract_nodes(child, node.get('id'), depth + 1)
 
             extract_nodes(map_data)
+            print(f"📍 Extracted {len(nodes)} nodes from map")
 
             if len(nodes) >= 3:
                 # Sync to brain for analysis
+                print(f"🔄 Syncing {len(nodes)} nodes to brain...")
                 sync_result = await brain.sync_map(MapData(nodes=nodes))
+                print(f"✅ Map synced to brain")
 
                 # Get missing connections from the graph transformer
                 if brain.map_state and brain.map_transformed is not None:
+                    print(f"🔍 Running connection analysis...")
                     try:
                         missing = brain.graph_transformer.find_missing_connections(
                             brain.map_embeddings,
@@ -1804,6 +1822,7 @@ async def background_analyze(request: BackgroundAnalysisRequest):
                             threshold=0.65,
                             top_k=3
                         )
+                        print(f"📍 Found {len(missing)} potential missing connections")
 
                         for src_idx, tgt_idx, score in missing:
                             if score >= request.min_confidence:
