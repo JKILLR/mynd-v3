@@ -31650,8 +31650,10 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                     supabase
                         .from('ai_memory')
                         .update({ last_accessed: new Date().toISOString() })
+                        .eq('user_id', session.session.user.id)  // Required for RLS policy
                         .in('id', memoryIds)
-                        .then(() => {});  // Fire and forget
+                        .then(() => {})  // Fire and forget
+                        .catch(e => console.warn('Memory touch failed:', e));
                 }
 
                 console.log(`🧠 Retrieved ${data?.length || 0} AI memories`);
