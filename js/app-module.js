@@ -30176,10 +30176,17 @@ You are a trusted guide, not a data harvester.
                 if (m.role === 'user' && m.images && m.images.length > 0) {
                     const contentBlocks = [];
 
-                    // Add images first
+                    // Add images first (skip oversized images from old messages)
                     for (const img of m.images) {
                         const dataUrl = img.dataUrl || img;
                         if (typeof dataUrl === 'string') {
+                            // Check image size - skip if over 4.5MB (base64 is ~1.37x original)
+                            const estimatedBytes = dataUrl.length * 0.75;
+                            if (estimatedBytes > 4.5 * 1024 * 1024) {
+                                console.warn(`⚠️ Skipping oversized image in history (${(estimatedBytes / 1024 / 1024).toFixed(1)}MB)`);
+                                continue;  // Skip this image
+                            }
+
                             const match = dataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/);
                             if (match) {
                                 contentBlocks.push({
@@ -30199,7 +30206,12 @@ You are a trusted guide, not a data harvester.
                         contentBlocks.push({ type: 'text', text: textContent });
                     }
 
-                    return { role: m.role, content: contentBlocks };
+                    // Only return image format if we have valid images
+                    if (contentBlocks.length > 0 && contentBlocks.some(b => b.type === 'image')) {
+                        return { role: m.role, content: contentBlocks };
+                    }
+                    // If all images were skipped, just return text
+                    return { role: m.role, content: textContent || '[image too large to include]' };
                 }
 
                 return { role: m.role, content: textContent };
