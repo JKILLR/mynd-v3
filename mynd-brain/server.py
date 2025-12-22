@@ -1838,34 +1838,88 @@ async def background_analyze(request: BackgroundAnalysisRequest):
                     except Exception as e:
                         print(f"Connection analysis error: {e}")
 
-        # 4. Run memory pattern analysis
+        # 4. Run memory pattern analysis with semantic clustering
         if 'patterns' in analysis_types and len(memories) >= 3:
-            print(f"🔍 Running pattern analysis on {len(memories)} memories...")
-            # Group memories by type and look for clusters
-            from collections import defaultdict
-            by_type = defaultdict(list)
-            for mem in memories:
-                by_type[mem.get('memory_type', 'unknown')].append(mem)
+            print(f"🔍 Running semantic pattern analysis on {len(memories)} memories...")
 
-            print(f"📍 Memory types found: {dict((k, len(v)) for k, v in by_type.items())}")
+            try:
+                # Generate embeddings for all memory contents
+                memory_texts = [m.get('content', '') for m in memories]
+                memory_embeddings = await brain.embed_batch(memory_texts)
+                print(f"📍 Generated embeddings for {len(memory_texts)} memories")
 
-            # Find types with multiple high-importance memories
-            for mem_type, mems in by_type.items():
-                high_importance = [m for m in mems if float(m.get('importance', 0) or 0) >= 0.7]
-                print(f"📍 {mem_type}: {len(high_importance)} high-importance memories")
-                if len(high_importance) >= 2:
-                    # Extract common themes (simple keyword overlap for now)
-                    contents = [m.get('content', '') for m in high_importance[:5]]
-                    combined = ' '.join(contents).lower()
+                # Find semantic clusters using cosine similarity
+                # Each memory can belong to multiple overlapping themes
+                similarity_threshold = 0.65
+                clusters = []
+                used_in_cluster = set()
+
+                for i, mem_i in enumerate(memories):
+                    if i in used_in_cluster:
+                        continue
+
+                    cluster = [i]
+                    for j, mem_j in enumerate(memories):
+                        if i == j or j in used_in_cluster:
+                            continue
+
+                        # Calculate cosine similarity
+                        sim = float(np.dot(memory_embeddings[i], memory_embeddings[j]) /
+                                   (np.linalg.norm(memory_embeddings[i]) * np.linalg.norm(memory_embeddings[j]) + 1e-8))
+
+                        if sim >= similarity_threshold:
+                            cluster.append(j)
+
+                    # Only keep clusters with 2+ memories
+                    if len(cluster) >= 2:
+                        clusters.append(cluster)
+                        for idx in cluster:
+                            used_in_cluster.add(idx)
+
+                print(f"📍 Found {len(clusters)} semantic clusters")
+
+                # Generate insights for top clusters
+                for cluster_indices in clusters[:3]:  # Top 3 clusters
+                    cluster_memories = [memories[i] for i in cluster_indices]
+
+                    # Calculate average importance and confidence
+                    avg_importance = sum(float(m.get('importance', 0) or 0) for m in cluster_memories) / len(cluster_memories)
+
+                    # Extract key phrases from cluster (simple: use first ~50 chars of each)
+                    snippets = [m.get('content', '')[:80] for m in cluster_memories[:3]]
+                    theme_preview = "; ".join(snippets)
+
+                    # Get memory types in cluster
+                    types_in_cluster = set(m.get('memory_type', 'unknown') for m in cluster_memories)
+                    type_desc = ", ".join(types_in_cluster)
 
                     insights.append(InsightResult(
-                        insight_type='pattern',
-                        title=f"Pattern in {mem_type} memories",
-                        content=f"You have {len(high_importance)} high-importance {mem_type} memories. These might form a recurring theme worth exploring.",
-                        confidence=0.7,
-                        source_memories=[str(m.get('id')) for m in high_importance[:3]]
+                        insight_type='memory_cluster',
+                        title=f"Connected theme across {len(cluster_memories)} memories",
+                        content=f"These {type_desc} memories share a common thread:\n\n{theme_preview}\n\nThis recurring theme might be worth exploring or connecting to your map.",
+                        confidence=min(0.9, 0.5 + avg_importance * 0.4),
+                        source_memories=[str(m.get('id')) for m in cluster_memories[:5]]
                     ))
-                    print(f"✅ Created pattern insight for {mem_type}")
+                    print(f"✅ Created cluster insight: {len(cluster_memories)} memories")
+
+            except Exception as e:
+                print(f"❌ Semantic clustering error: {e}")
+                # Fallback to type-based analysis
+                from collections import defaultdict
+                by_type = defaultdict(list)
+                for mem in memories:
+                    by_type[mem.get('memory_type', 'unknown')].append(mem)
+
+                for mem_type, mems in by_type.items():
+                    high_importance = [m for m in mems if float(m.get('importance', 0) or 0) >= 0.7]
+                    if len(high_importance) >= 2:
+                        insights.append(InsightResult(
+                            insight_type='pattern',
+                            title=f"Pattern in {mem_type} memories",
+                            content=f"You have {len(high_importance)} high-importance {mem_type} memories worth exploring.",
+                            confidence=0.7,
+                            source_memories=[str(m.get('id')) for m in high_importance[:3]]
+                        ))
 
         print(f"📍 Total insights generated: {len(insights)}")
 
