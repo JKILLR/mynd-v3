@@ -23000,6 +23000,10 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
             userProfile.endSession();
             metaLearner.endSession();
             preferenceTracker.finalizePendingSession();
+            // Trigger background cognition analysis for next session
+            if (typeof chatManager !== 'undefined' && chatManager.triggerBackgroundAnalysis) {
+                chatManager.triggerBackgroundAnalysis();
+            }
         });
         
         // Initialize animation controller for performance throttling
@@ -32204,6 +32208,47 @@ CURRENT REQUEST CONTEXT
                 console.log(`📊 Insight response recorded: ${response}`);
             } catch (e) {
                 console.warn('Record insight response error:', e);
+            }
+        },
+
+        async triggerBackgroundAnalysis() {
+            // Trigger background cognition analysis when session ends
+            // Uses sendBeacon for reliability when page is closing
+            try {
+                if (typeof supabase === 'undefined' || !supabase) return false;
+
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return false;
+
+                const brainServerUrl = typeof CONFIG !== 'undefined' && CONFIG.BRAIN_SERVER_URL
+                    ? CONFIG.BRAIN_SERVER_URL
+                    : 'http://localhost:8000';
+
+                const url = `${brainServerUrl}/background/analyze`;
+                const payload = JSON.stringify({ user_id: user.id });
+
+                // Use sendBeacon for reliability when page is unloading
+                // sendBeacon only supports POST, so we use the main analyze endpoint
+                if (navigator.sendBeacon) {
+                    const blob = new Blob([payload], { type: 'application/json' });
+                    const sent = navigator.sendBeacon(url, blob);
+                    console.log(`🧠 Background cognition triggered via sendBeacon: ${sent ? 'sent' : 'failed'}`);
+                    return sent;
+                } else {
+                    // Fallback to fetch with keepalive
+                    fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: payload,
+                        keepalive: true
+                    })
+                        .then(res => console.log(`🧠 Background cognition triggered: ${res.ok}`))
+                        .catch(() => {});
+                    return true;
+                }
+            } catch (e) {
+                console.warn('Trigger background analysis error:', e);
+                return false;
             }
         },
 
