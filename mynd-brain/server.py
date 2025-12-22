@@ -263,6 +263,33 @@ class ConversationContextRequest(BaseModel):
     include_full_text: bool = False  # Include full conversations or just summaries
 
 # ═══════════════════════════════════════════════════════════════════
+# BACKGROUND COGNITION MODELS
+# ═══════════════════════════════════════════════════════════════════
+
+class BackgroundAnalysisRequest(BaseModel):
+    """Request for background cognition analysis"""
+    user_id: str
+    analysis_types: Optional[List[str]] = None  # 'connections', 'patterns', 'growth', 'questions'
+    max_insights: int = 3
+    min_confidence: float = 0.6
+
+class InsightResult(BaseModel):
+    """A single discovered insight"""
+    insight_type: str
+    title: str
+    content: str
+    confidence: float
+    source_nodes: Optional[List[str]] = None
+    source_memories: Optional[List[str]] = None
+
+class BackgroundAnalysisResponse(BaseModel):
+    """Response from background analysis"""
+    insights: List[InsightResult]
+    insights_stored: int
+    analysis_time_ms: float
+    error: Optional[str] = None
+
+# ═══════════════════════════════════════════════════════════════════
 # CONVERSATION STORE - File-based storage with embeddings
 # ═══════════════════════════════════════════════════════════════════
 
@@ -1695,6 +1722,181 @@ async def remove_vision_goal(goal: str):
         "status": "removed",
         "goals": result['goals']
     }
+
+# ═══════════════════════════════════════════════════════════════════
+# BACKGROUND COGNITION - Discover insights between sessions
+# ═══════════════════════════════════════════════════════════════════
+
+@app.post("/background/analyze", response_model=BackgroundAnalysisResponse)
+async def background_analyze(request: BackgroundAnalysisRequest):
+    """
+    Run background cognition analysis for a user.
+
+    Analyzes the user's map, memories, and conversations to discover:
+    - Missing connections (semantically similar but unlinked nodes)
+    - Patterns (recurring themes in memories)
+    - Growth observations (map structure changes)
+    - Reflective questions (gaps, orphan nodes)
+
+    Discovered insights are stored in the pending_insights table
+    and presented when the user returns.
+
+    This endpoint can be called:
+    - Manually for testing
+    - By a scheduled job (pg_cron)
+    - On session end
+    """
+    start_time = time.time()
+    insights = []
+
+    # Verify we have required components
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    if not unified_brain.supabase:
+        raise HTTPException(status_code=503, detail="Supabase not connected")
+
+    try:
+        user_id = request.user_id
+        analysis_types = request.analysis_types or ['connections', 'patterns']
+
+        # 1. Load user's mind map from Supabase
+        map_response = unified_brain.supabase.table('mind_maps').select('data').eq('user_id', user_id).order('updated_at', desc=True).limit(1).execute()
+
+        map_data = None
+        if map_response.data and len(map_response.data) > 0:
+            map_data = map_response.data[0].get('data')
+
+        # 2. Load user's AI memories
+        memories_response = unified_brain.supabase.table('ai_memory').select('id, memory_type, content, importance, related_nodes').eq('user_id', user_id).order('importance', desc=True).limit(50).execute()
+
+        memories = memories_response.data if memories_response.data else []
+
+        # 3. Run connection analysis if map is available
+        if 'connections' in analysis_types and map_data and brain is not None:
+            # Convert map data to nodes for analysis
+            nodes = []
+            def extract_nodes(node, parent_id=None, depth=0):
+                node_data = NodeData(
+                    id=node.get('id', ''),
+                    label=node.get('label', ''),
+                    description=node.get('description', ''),
+                    parentId=parent_id,
+                    depth=depth,
+                    children=[c.get('id', '') for c in node.get('children', [])]
+                )
+                nodes.append(node_data)
+                for child in node.get('children', []):
+                    extract_nodes(child, node.get('id'), depth + 1)
+
+            extract_nodes(map_data)
+
+            if len(nodes) >= 3:
+                # Sync to brain for analysis
+                sync_result = await brain.sync_map(MapData(nodes=nodes))
+
+                # Get missing connections from the graph transformer
+                if brain.map_state and brain.map_transformed is not None:
+                    try:
+                        missing = brain.graph_transformer.find_missing_connections(
+                            brain.map_embeddings,
+                            brain.map_adjacency,
+                            threshold=0.65,
+                            top_k=3
+                        )
+
+                        for src_idx, tgt_idx, score in missing:
+                            if score >= request.min_confidence:
+                                src_node = brain.map_state.nodes[src_idx]
+                                tgt_node = brain.map_state.nodes[tgt_idx]
+                                insights.append(InsightResult(
+                                    insight_type='connection',
+                                    title=f"Possible connection: {src_node.label} ↔ {tgt_node.label}",
+                                    content=f"These concepts appear related ({score:.0%} similarity) but aren't connected in your map. Linking them might reveal how they relate in your thinking.",
+                                    confidence=score,
+                                    source_nodes=[src_node.id, tgt_node.id]
+                                ))
+                    except Exception as e:
+                        print(f"Connection analysis error: {e}")
+
+        # 4. Run memory pattern analysis
+        if 'patterns' in analysis_types and len(memories) >= 3:
+            # Group memories by type and look for clusters
+            from collections import defaultdict
+            by_type = defaultdict(list)
+            for mem in memories:
+                by_type[mem.get('memory_type', 'unknown')].append(mem)
+
+            # Find types with multiple high-importance memories
+            for mem_type, mems in by_type.items():
+                high_importance = [m for m in mems if m.get('importance', 0) >= 0.7]
+                if len(high_importance) >= 2:
+                    # Extract common themes (simple keyword overlap for now)
+                    contents = [m.get('content', '') for m in high_importance[:5]]
+                    combined = ' '.join(contents).lower()
+
+                    insights.append(InsightResult(
+                        insight_type='pattern',
+                        title=f"Pattern in {mem_type} memories",
+                        content=f"You have {len(high_importance)} high-importance {mem_type} memories. These might form a recurring theme worth exploring.",
+                        confidence=0.7,
+                        source_memories=[m.get('id') for m in high_importance[:3]]
+                    ))
+
+        # 5. Store insights in pending_insights table
+        insights_stored = 0
+        insights_to_return = insights[:request.max_insights]
+
+        for insight in insights_to_return:
+            try:
+                # Create insight hash to prevent duplicates
+                import hashlib
+                hash_input = f"{user_id}:{insight.insight_type}:{insight.title}"
+                insight_hash = hashlib.md5(hash_input.encode()).hexdigest()
+
+                unified_brain.supabase.table('pending_insights').upsert({
+                    'user_id': user_id,
+                    'insight_type': insight.insight_type,
+                    'title': insight.title,
+                    'content': insight.content,
+                    'confidence': insight.confidence,
+                    'source_nodes': insight.source_nodes or [],
+                    'source_memories': insight.source_memories or [],
+                    'insight_hash': insight_hash
+                }, on_conflict='insight_hash').execute()
+
+                insights_stored += 1
+            except Exception as e:
+                print(f"Failed to store insight: {e}")
+
+        elapsed = (time.time() - start_time) * 1000
+
+        return BackgroundAnalysisResponse(
+            insights=insights_to_return,
+            insights_stored=insights_stored,
+            analysis_time_ms=elapsed
+        )
+
+    except Exception as e:
+        elapsed = (time.time() - start_time) * 1000
+        return BackgroundAnalysisResponse(
+            insights=[],
+            insights_stored=0,
+            analysis_time_ms=elapsed,
+            error=str(e)
+        )
+
+
+@app.get("/background/trigger/{user_id}")
+async def trigger_background_analysis(user_id: str):
+    """
+    Simple GET endpoint to trigger background analysis for testing.
+
+    Usage: GET /background/trigger/your-user-id-here
+    """
+    request = BackgroundAnalysisRequest(user_id=user_id)
+    return await background_analyze(request)
+
 
 # ═══════════════════════════════════════════════════════════════════
 # CONVERSATION STORAGE - Import and search AI conversations
