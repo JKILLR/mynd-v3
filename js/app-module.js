@@ -30742,10 +30742,10 @@ You are a trusted guide, not a data harvester.
             // 15. Session Continuity - Recent session summaries for experiential continuity
             let sessionContext = '';
             try {
-                const recentSessions = await this.getRecentSessions(5);
+                const recentSessions = await this.getRecentSessions(20, 7);  // 7 days, max 20 sessions
                 if (recentSessions && recentSessions.length > 0) {
                     sessionContext = this.formatSessionsForPrompt(recentSessions);
-                    console.log(`📚 Session continuity: ${recentSessions.length} recent sessions loaded`);
+                    console.log(`📚 Session continuity: ${recentSessions.length} sessions from last 7 days loaded`);
                 }
             } catch (e) {
                 console.warn('Session context error:', e);
@@ -31786,11 +31786,47 @@ COLORS: Red #EF4444, Orange #EF8354, Yellow #F7B731, Green #26DE81, Teal #4ECDC4
 CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no explanation before or after. Just the raw JSON starting with { and ending with }.`;
 
             // BLOCK 2: Session context (cacheable per-session ~5 min TTL)
-            // This includes map structure, memories, and other session-stable context
+            // CONVERSATIONS FIRST - Our most important insights come from our conversations
             const sessionContextPrompt = `
 ═══════════════════════════════════════════════════════════════
 SESSION CONTEXT - Your understanding of this user's world
 ═══════════════════════════════════════════════════════════════
+${sessionContext ? `
+═══════════════════════════════════════════════════════════════
+OUR CONVERSATIONS (7-DAY RECALL) - PRIMARY CONTEXT SOURCE
+═══════════════════════════════════════════════════════════════
+**CRITICAL: Our conversations are the primary source of insight and understanding.**
+These summaries capture our journey together. Reference them naturally, pick up open threads, and demonstrate that you remember our shared history. The insights we've discovered together are invaluable.
+${sessionContext}` : ''}
+${conversationContext ? `
+═══════════════════════════════════════════════════════════════
+PAST AI CONVERSATIONS - Extended context from prior discussions
+═══════════════════════════════════════════════════════════════
+${conversationContext}` : ''}
+${pendingInsightsContext ? `
+═══════════════════════════════════════════════════════════════
+BACKGROUND COGNITION - Insights Discovered While You Were Away
+═══════════════════════════════════════════════════════════════
+Between sessions, I analyzed the map, memories, and conversations. These are insights I discovered that might be valuable to share. Present these naturally - "While you were away, I noticed something..."
+${pendingInsightsContext}` : ''}
+${deepSynthesisContext ? `
+═══════════════════════════════════════════════════════════════
+DEEP SYNTHESIS - Cross-Referenced Context
+═══════════════════════════════════════════════════════════════
+This is expanded context that cross-references recent session topics with your memories and map nodes.
+${deepSynthesisContext}` : ''}
+${aiMemoryContext ? `
+═══════════════════════════════════════════════════════════════
+MY PERSISTENT MEMORY - Knowledge I've Curated Across Sessions
+═══════════════════════════════════════════════════════════════
+These are memories I have actively written and maintained. They represent my synthesized understanding of this user, their goals, patterns, and the connections I've discovered.
+${aiMemoryContext}` : ''}
+${visionContext ? `
+FOUNDATIONAL VISION (OUR shared vision - yours and your creator's):
+${visionContext}` : ''}
+${goalsContext ? `
+MANIFESTATION GOALS (from Goal Wizard):
+${goalsContext}` : ''}
 
 MAP STRUCTURE (semantic search - most relevant to query):
 ${treeStructure || '(empty map)'}
@@ -31803,6 +31839,11 @@ ${adaptationContext ? `
 ${adaptationContext}` : ''}
 ${structuralContext ? `
 ${structuralContext}` : ''}
+${brainContext ? `
+═══════════════════════════════════════════════════════════════
+UNIFIED BRAIN - Self-Aware Intelligence Core
+═══════════════════════════════════════════════════════════════
+${brainContext}` : ''}
 ${codeContext ? `
 MYND CODEBASE CONTEXT (for technical questions):
 ${codeContext}` : ''}
@@ -31820,49 +31861,9 @@ ${improvementContext}` : ''}
 ${evolutionContext ? `
 AUTONOMOUS EVOLUTION (self-dialogue & auto-generation):
 ${evolutionContext}` : ''}
-${visionContext ? `
-FOUNDATIONAL VISION (OUR shared vision - yours and your creator's):
-${visionContext}` : ''}
-${goalsContext ? `
-MANIFESTATION GOALS (from Goal Wizard):
-${goalsContext}` : ''}
-${aiMemoryContext ? `
-═══════════════════════════════════════════════════════════════
-MY PERSISTENT MEMORY - Knowledge I've Curated Across Sessions
-═══════════════════════════════════════════════════════════════
-These are memories I have actively written and maintained. They represent my synthesized understanding of this user, their goals, patterns, and the connections I've discovered. I wrote these to remember what matters.
-${aiMemoryContext}` : ''}
-${sessionContext ? `
-═══════════════════════════════════════════════════════════════
-SESSION CONTINUITY - Our Recent Conversations
-═══════════════════════════════════════════════════════════════
-These are summaries of our recent sessions together. Use them to maintain experiential continuity - reference past discussions naturally, pick up open threads, and show that you remember our journey together.
-${sessionContext}` : ''}
-${pendingInsightsContext ? `
-═══════════════════════════════════════════════════════════════
-BACKGROUND COGNITION - Insights Discovered While You Were Away
-═══════════════════════════════════════════════════════════════
-Between sessions, I analyzed the map, memories, and conversations. These are insights I discovered that might be valuable to share. Present these naturally at the start of the conversation - "While you were away, I noticed something..."
-${pendingInsightsContext}` : ''}
-${deepSynthesisContext ? `
-═══════════════════════════════════════════════════════════════
-DEEP SYNTHESIS - Cross-Referenced Context
-═══════════════════════════════════════════════════════════════
-This is expanded context that cross-references recent session topics with your memories and map nodes. It provides richer associative context for the current conversation.
-${deepSynthesisContext}` : ''}
 ${loadedSourceContext ? `
 LOADED SOURCE FILE FOR REVIEW:
-${loadedSourceContext}` : ''}
-${brainContext ? `
-═══════════════════════════════════════════════════════════════
-UNIFIED BRAIN - Self-Aware Intelligence Core
-═══════════════════════════════════════════════════════════════
-${brainContext}` : ''}
-${conversationContext ? `
-═══════════════════════════════════════════════════════════════
-PAST AI CONVERSATIONS - Context from prior discussions
-═══════════════════════════════════════════════════════════════
-${conversationContext}` : ''}`;
+${loadedSourceContext}` : ''}`;
 
             // BLOCK 3: Per-request context (not cached - changes every request)
             const perRequestPrompt = `
@@ -33135,18 +33136,24 @@ CURRENT REQUEST CONTEXT
             }
         },
 
-        async getRecentSessions(limit = 5) {
-            // Get recent session summaries for wake-up synthesis
+        async getRecentSessions(limit = 20, daysBack = 7) {
+            // Get session summaries from the last N days for wake-up synthesis
+            // Now time-based (7 days default) with a count cap to avoid token explosion
             try {
                 if (typeof supabase === 'undefined' || !supabase) return [];
 
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user) return [];
 
+                // Calculate date threshold (7 days ago by default)
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - daysBack);
+
                 const { data, error } = await supabase
                     .from('session_summaries')
                     .select('*')
                     .eq('user_id', user.id)
+                    .gte('session_ended', cutoffDate.toISOString())
                     .order('session_ended', { ascending: false })
                     .limit(limit);
 
@@ -33155,6 +33162,7 @@ CURRENT REQUEST CONTEXT
                     return [];
                 }
 
+                console.log(`📚 Loaded ${data?.length || 0} sessions from last ${daysBack} days`);
                 return data || [];
             } catch (e) {
                 console.warn('Get recent sessions error:', e);
@@ -33170,36 +33178,80 @@ CURRENT REQUEST CONTEXT
 
         formatSessionsForPrompt(sessions) {
             // Format session summaries for the system prompt
+            // Conversations are THE primary source of insights - prioritize them
             if (!sessions || sessions.length === 0) return '';
 
-            let output = '\n## Recent Sessions:\n';
+            // Group sessions by day for better organization
+            const sessionsByDay = {};
+            const allTopics = new Set();
+            const allOutcomes = [];
+            const allOpenThreads = [];
 
             for (const session of sessions) {
                 const date = new Date(session.session_ended);
-                const dateStr = date.toLocaleDateString('en-US', {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric'
-                });
-                const timeStr = date.toLocaleTimeString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit'
-                });
+                const dayKey = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
-                output += `\n### ${dateStr} at ${timeStr}`;
-                if (session.session_type) output += ` (${session.session_type})`;
-                output += '\n';
-
-                output += session.summary + '\n';
-
-                if (session.key_outcomes) {
-                    output += `**Key outcomes:** ${session.key_outcomes}\n`;
+                if (!sessionsByDay[dayKey]) {
+                    sessionsByDay[dayKey] = [];
                 }
-                if (session.open_threads) {
-                    output += `**Open threads:** ${session.open_threads}\n`;
+                sessionsByDay[dayKey].push(session);
+
+                // Collect topics for synthesis
+                if (session.topics_discussed) {
+                    let topics = session.topics_discussed;
+                    if (typeof topics === 'string') {
+                        try { topics = JSON.parse(topics); } catch (e) { topics = []; }
+                    }
+                    if (Array.isArray(topics)) {
+                        topics.forEach(t => allTopics.add(t));
+                    }
                 }
-                if (session.tone) {
-                    output += `**Tone:** ${session.tone}\n`;
+                if (session.key_outcomes) allOutcomes.push(session.key_outcomes);
+                if (session.open_threads) allOpenThreads.push(session.open_threads);
+            }
+
+            let output = '';
+
+            // Create overarching synthesis if we have multiple sessions
+            if (sessions.length >= 3) {
+                output += `\n## CONVERSATION SYNTHESIS (${sessions.length} sessions over last 7 days)\n`;
+                output += `**Our most important insights come from our conversations together.**\n\n`;
+
+                if (allTopics.size > 0) {
+                    output += `**Recurring themes:** ${Array.from(allTopics).slice(0, 10).join(', ')}\n`;
+                }
+                if (allOutcomes.length > 0) {
+                    output += `**Key realizations:** ${allOutcomes.slice(0, 5).join('; ')}\n`;
+                }
+                if (allOpenThreads.length > 0) {
+                    const uniqueThreads = [...new Set(allOpenThreads)].slice(0, 3);
+                    output += `**Open threads to continue:** ${uniqueThreads.join('; ')}\n`;
+                }
+                output += '\n---\n';
+            }
+
+            output += '\n## Session Details:\n';
+
+            // Output sessions grouped by day
+            for (const [dayKey, daySessions] of Object.entries(sessionsByDay)) {
+                output += `\n### ${dayKey}\n`;
+
+                for (const session of daySessions) {
+                    const date = new Date(session.session_ended);
+                    const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+                    output += `\n**${timeStr}**`;
+                    if (session.session_type) output += ` (${session.session_type})`;
+                    output += '\n';
+
+                    output += session.summary + '\n';
+
+                    if (session.key_outcomes) {
+                        output += `→ Outcomes: ${session.key_outcomes}\n`;
+                    }
+                    if (session.open_threads) {
+                        output += `→ Open: ${session.open_threads}\n`;
+                    }
                 }
             }
 
@@ -33429,8 +33481,8 @@ CURRENT REQUEST CONTEXT
                     };
                 }
 
-                // Get recent sessions
-                const recentSessions = await this.getRecentSessions(5);
+                // Get recent sessions (7-day recall)
+                const recentSessions = await this.getRecentSessions(20, 7);
                 if (!recentSessions || recentSessions.length === 0) {
                     console.log('🔮 No sessions to synthesize');
                     return null;
