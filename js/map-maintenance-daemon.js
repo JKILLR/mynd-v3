@@ -188,6 +188,14 @@ When analyzing the map, prioritize:
         return this.config.enabled;
     },
 
+    setEnabled(enabled) {
+        if (enabled) {
+            this.start();
+        } else {
+            this.stop();
+        }
+    },
+
     // ═══════════════════════════════════════════════════════════════════
     // MAINTENANCE CYCLE
     // ═══════════════════════════════════════════════════════════════════
