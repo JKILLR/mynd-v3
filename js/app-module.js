@@ -29690,6 +29690,18 @@ You are a trusted guide, not a data harvester.
                 console.warn('Deep synthesis cache error:', e);
             }
 
+            // 15c. Background Cognition Insights - Discoveries from between-session analysis
+            let pendingInsightsContext = '';
+            try {
+                const pendingInsights = await this.checkPendingInsights();
+                if (pendingInsights && pendingInsights.length > 0) {
+                    pendingInsightsContext = this.formatInsightsForPrompt(pendingInsights);
+                    console.log(`💡 Background cognition: ${pendingInsights.length} insights to present`);
+                }
+            } catch (e) {
+                console.warn('Pending insights error:', e);
+            }
+
             // 16. VisionCore - Foundational vision, mission, goals, and values
             let visionContext = '';
             try {
@@ -30223,6 +30235,12 @@ SESSION CONTINUITY - Our Recent Conversations
 ═══════════════════════════════════════════════════════════════
 These are summaries of our recent sessions together. Use them to maintain experiential continuity - reference past discussions naturally, pick up open threads, and show that you remember our journey together.
 ${sessionContext}` : ''}
+${pendingInsightsContext ? `
+═══════════════════════════════════════════════════════════════
+BACKGROUND COGNITION - Insights Discovered While You Were Away
+═══════════════════════════════════════════════════════════════
+Between sessions, I analyzed the map, memories, and conversations. These are insights I discovered that might be valuable to share. Present these naturally at the start of the conversation - "While you were away, I noticed something..."
+${pendingInsightsContext}` : ''}
 ${deepSynthesisContext ? `
 ═══════════════════════════════════════════════════════════════
 DEEP SYNTHESIS - Cross-Referenced Context
@@ -32035,6 +32053,106 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
             }
 
             return output;
+        },
+
+        // ═══════════════════════════════════════════════════════════════════
+        // BACKGROUND COGNITION - Insights discovered between sessions
+        // ═══════════════════════════════════════════════════════════════════
+
+        async checkPendingInsights() {
+            // Fetch unpresented insights from background cognition
+            try {
+                if (typeof supabase === 'undefined' || !supabase) return [];
+
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return [];
+
+                const { data: insights, error } = await supabase
+                    .from('pending_insights')
+                    .select('id, insight_type, title, content, confidence, source_nodes, source_memories, created_at')
+                    .eq('user_id', user.id)
+                    .is('presented_at', null)
+                    .order('confidence', { ascending: false })
+                    .limit(3);
+
+                if (error) {
+                    // Table might not exist yet - fail silently
+                    if (error.code === '42P01') {
+                        console.log('📭 pending_insights table not yet created');
+                        return [];
+                    }
+                    console.warn('Failed to fetch pending insights:', error);
+                    return [];
+                }
+
+                if (!insights || insights.length === 0) return [];
+
+                // Mark these insights as presented
+                const insightIds = insights.map(i => i.id);
+                await supabase
+                    .from('pending_insights')
+                    .update({ presented_at: new Date().toISOString() })
+                    .eq('user_id', user.id)
+                    .in('id', insightIds);
+
+                console.log(`💡 Background cognition: ${insights.length} pending insights found`);
+                return insights;
+            } catch (e) {
+                console.warn('Check pending insights error:', e);
+                return [];
+            }
+        },
+
+        formatInsightsForPrompt(insights) {
+            // Format pending insights for the system prompt
+            if (!insights || insights.length === 0) return '';
+
+            let output = '\n## Insights Discovered While Away\n';
+            output += 'Between sessions, I analyzed your map, memories, and conversations. Here\'s what I found:\n';
+
+            for (const insight of insights) {
+                const typeEmoji = {
+                    'connection': '🔗',
+                    'pattern': '🔄',
+                    'growth': '📈',
+                    'emergence': '🌱',
+                    'question': '❓',
+                    'conversation_link': '💬',
+                    'recurring_thread': '🧵',
+                    'evolution': '🦋',
+                    'memory_cluster': '🧠',
+                    'memory_enrichment': '✨',
+                    'cross_branch': '🌉',
+                    'important_gap': '⚠️'
+                }[insight.insight_type] || '💡';
+
+                output += `\n### ${typeEmoji} ${insight.title}\n`;
+                output += `${insight.content}\n`;
+                output += `*Confidence: ${Math.round(insight.confidence * 100)}%*\n`;
+            }
+
+            output += '\nFeel free to explore any of these, or continue with what you had in mind.\n';
+            return output;
+        },
+
+        async recordInsightResponse(insightId, response) {
+            // Record how user responded to an insight
+            try {
+                if (typeof supabase === 'undefined' || !supabase) return;
+
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return;
+
+                await supabase
+                    .from('pending_insights')
+                    .update({ user_response: response })
+                    .eq('user_id', user.id)
+                    .eq('id', insightId);
+
+                console.log(`📊 Insight response recorded: ${response}`);
+            } catch (e) {
+                console.warn('Record insight response error:', e);
+            }
         },
 
         // ═══════════════════════════════════════════════════════════════════
