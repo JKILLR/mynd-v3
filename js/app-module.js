@@ -17640,17 +17640,24 @@ Respond with a JSON object:
 }`;
 
             try {
+                // Get API key from localStorage
+                const apiKey = localStorage.getItem(CONFIG.API_KEY);
+                if (!apiKey) {
+                    console.log('🔄 Autonomous evolution: No API key configured');
+                    return null;
+                }
+
                 // Make API call
                 const response = await fetch('https://api.anthropic.com/v1/messages', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'x-api-key': CONFIG.CLAUDE_API_KEY,
+                        'x-api-key': apiKey,
                         'anthropic-version': '2023-06-01',
                         'anthropic-dangerous-direct-browser-access': 'true'
                     },
                     body: JSON.stringify({
-                        model: CONFIG.CLAUDE_MODEL || 'claude-opus-4-5-20250514',
+                        model: CONFIG.CLAUDE_MODEL,
                         max_tokens: 2000,
                         messages: [{ role: 'user', content: evolutionPrompt }]
                     })
