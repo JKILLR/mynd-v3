@@ -21900,6 +21900,10 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
     // Expose store globally for external modules (like goal-system.js)
     window.store = store;
 
+    // Also expose as window.app.store for compatibility
+    window.app = window.app || {};
+    window.app.store = store;
+
     // ═══════════════════════════════════════════════════════════════════
     // CONNECTION MANAGER - Batched Connection Updates for Performance
     // ═══════════════════════════════════════════════════════════════════
@@ -43285,6 +43289,8 @@ Summary:`
 
     queueInit('AutonomousEvolution', async () => {
         await AutonomousEvolution.initialize();
+        // Expose globally for debugging and manual triggering
+        window.AutonomousEvolution = AutonomousEvolution;
     });
 
     // ReflectionDaemon - Autonomous reflection during idle periods
