@@ -372,119 +372,304 @@ if (pendingInsights.length > 0) {
 
 ## Analysis Algorithms
 
-### 1. Connection Discovery
+Two primary data sources: **Conversations** and **Map Structure**
+
+---
+
+### Data Source 1: Conversations
+
+Imported conversations contain rich context about the user's thinking, interests, and evolution over time.
+
+#### 1A. Conversation-to-Map Bridging
 
 ```python
-def find_potential_connections(map_data, memories):
-    """Find semantically similar but unconnected nodes."""
+def find_conversation_map_connections(conversations, map_nodes):
+    """Find concepts discussed in conversations that relate to map nodes."""
     insights = []
 
-    nodes = flatten_map_nodes(map_data)
-    embeddings = embed_all_nodes(nodes)
+    # Embed all map node labels
+    node_embeddings = {
+        node['id']: embed(node['label'])
+        for node in map_nodes
+    }
 
-    # Find pairs with high similarity but no edge
-    for i, node_a in enumerate(nodes):
-        for j, node_b in enumerate(nodes[i+1:], i+1):
-            if are_connected(node_a, node_b, map_data):
-                continue
+    for conv in conversations:
+        # Extract key topics/entities from conversation
+        conv_topics = extract_topics(conv['content'])
+        conv_embedding = embed(conv['content'][:2000])
 
-            similarity = cosine_similarity(embeddings[i], embeddings[j])
+        # Find map nodes semantically similar to conversation content
+        for node_id, node_emb in node_embeddings.items():
+            similarity = cosine_similarity(conv_embedding, node_emb)
 
-            if similarity > 0.75:
-                # Check if they co-occur in memories/sessions
-                co_occurrence = count_co_occurrences(node_a, node_b, memories)
-
-                confidence = (similarity * 0.6) + (min(co_occurrence / 5, 1) * 0.4)
-
-                if confidence > 0.65:
-                    insights.append({
-                        "type": "connection",
-                        "title": f"Possible connection: '{node_a['label']}' ↔ '{node_b['label']}'",
-                        "content": f"These concepts appear related (similarity: {similarity:.0%}) and you've discussed them together {co_occurrence} times.",
-                        "confidence": confidence,
-                        "source_nodes": [node_a['id'], node_b['id']]
-                    })
+            if similarity > 0.7:
+                node_label = get_node_label(node_id, map_nodes)
+                insights.append({
+                    "type": "conversation_link",
+                    "title": f"'{node_label}' discussed in past conversation",
+                    "content": f"Your conversation from {conv['date']} touched on themes related to '{node_label}'. The context might enrich this node.",
+                    "confidence": similarity,
+                    "source_nodes": [node_id],
+                    "source_conversation": conv['id']
+                })
 
     return sorted(insights, key=lambda x: -x['confidence'])[:3]
 ```
 
-### 2. Pattern Detection
+#### 1B. Conversation Thread Detection
 
 ```python
-def detect_patterns(sessions, memories):
-    """Find recurring behavioral or topical patterns."""
+def detect_conversation_threads(conversations):
+    """Find recurring themes across multiple conversations."""
     insights = []
 
-    # Topic frequency across sessions
-    topic_counts = defaultdict(int)
-    for session in sessions:
-        for topic in session.get('topics_discussed', []):
-            topic_counts[topic] += 1
+    # Cluster conversations by semantic similarity
+    embeddings = [embed(c['content'][:2000]) for c in conversations]
+    clusters = cluster_embeddings(embeddings, threshold=0.6)
 
-    # Find topics that appear in >50% of sessions
-    session_count = len(sessions)
-    for topic, count in topic_counts.items():
-        frequency = count / session_count
-        if frequency > 0.5 and count >= 3:
+    for cluster in clusters:
+        if len(cluster) >= 3:  # Theme appears in 3+ conversations
+            # Find common topics in cluster
+            cluster_convs = [conversations[i] for i in cluster]
+            common_themes = extract_common_themes(cluster_convs)
+
             insights.append({
-                "type": "pattern",
-                "title": f"Recurring theme: {topic}",
-                "content": f"'{topic}' has appeared in {count} of your last {session_count} sessions ({frequency:.0%}). This seems to be a persistent focus area.",
-                "confidence": min(0.95, 0.5 + frequency * 0.5)
+                "type": "recurring_thread",
+                "title": f"Recurring theme: {common_themes[0]}",
+                "content": f"Across {len(cluster)} conversations, you keep returning to: {', '.join(common_themes[:3])}. This might be worth a dedicated map branch.",
+                "confidence": 0.75,
+                "source_conversations": [c['id'] for c in cluster_convs]
             })
-
-    # Session timing patterns
-    session_hours = [parse_time(s['session_started']).hour for s in sessions]
-    avg_hour = statistics.mean(session_hours)
-    std_hour = statistics.stdev(session_hours) if len(session_hours) > 1 else 12
-
-    if std_hour < 3:  # Consistent timing
-        time_desc = "morning" if avg_hour < 12 else "afternoon" if avg_hour < 17 else "evening"
-        insights.append({
-            "type": "pattern",
-            "title": f"You're a {time_desc} thinker",
-            "content": f"You consistently use MYND in the {time_desc} (average: {avg_hour:.0f}:00). Your best thinking happens then.",
-            "confidence": 0.7
-        })
 
     return insights
 ```
 
-### 3. Growth Observation
+#### 1C. Conversation Evolution
 
 ```python
-def observe_growth(current_map, sessions):
-    """Track structural changes in the map."""
+def track_thinking_evolution(conversations):
+    """Detect how user's thinking on a topic has evolved."""
     insights = []
 
-    # Count nodes by branch
-    branch_counts = count_nodes_by_branch(current_map)
+    # Sort by date
+    sorted_convs = sorted(conversations, key=lambda c: c['date'])
 
-    # Find branches that grew significantly
-    for branch, count in branch_counts.items():
-        # Compare to previous state (from session metadata)
-        previous_count = get_previous_branch_count(branch, sessions)
+    # For each major topic, track stance/framing changes
+    topics = extract_major_topics(sorted_convs)
 
-        if previous_count and count > previous_count * 1.3:  # 30% growth
-            growth = count - previous_count
-            insights.append({
-                "type": "growth",
-                "title": f"'{branch}' is expanding",
-                "content": f"You've added {growth} new nodes to '{branch}' recently. It's becoming a significant part of your map.",
-                "confidence": 0.85
-            })
+    for topic in topics:
+        relevant_convs = [c for c in sorted_convs if topic_in_conv(topic, c)]
 
-    # Detect new top-level branches
-    recent_roots = find_recent_root_nodes(current_map, days=7)
-    for node in recent_roots:
-        insights.append({
-            "type": "growth",
-            "title": f"New branch: '{node['label']}'",
-            "content": f"You started a new top-level branch '{node['label']}' this week. Where do you see this going?",
-            "confidence": 0.9
-        })
+        if len(relevant_convs) >= 2:
+            early_stance = summarize_stance(relevant_convs[0], topic)
+            recent_stance = summarize_stance(relevant_convs[-1], topic)
+
+            if stances_differ(early_stance, recent_stance):
+                insights.append({
+                    "type": "evolution",
+                    "title": f"Your thinking on '{topic}' has evolved",
+                    "content": f"Earlier: {early_stance[:100]}... Now: {recent_stance[:100]}... Interesting shift.",
+                    "confidence": 0.7
+                })
 
     return insights
+```
+
+---
+
+### Data Source 2: Map Structure
+
+The mind map's nodes, hierarchy, and connections reveal cognitive organization.
+
+#### 2A. Missing Connections (Semantic)
+
+```python
+def find_missing_connections(map_data):
+    """Find nodes that should probably be connected but aren't."""
+    insights = []
+
+    nodes = flatten_nodes(map_data)
+    embeddings = {n['id']: embed(n['label']) for n in nodes}
+    existing_edges = get_all_edges(map_data)
+
+    # Check all pairs
+    for i, node_a in enumerate(nodes):
+        for node_b in nodes[i+1:]:
+            if (node_a['id'], node_b['id']) in existing_edges:
+                continue
+
+            similarity = cosine_similarity(
+                embeddings[node_a['id']],
+                embeddings[node_b['id']]
+            )
+
+            if similarity > 0.75:
+                insights.append({
+                    "type": "missing_connection",
+                    "title": f"Connect '{node_a['label']}' ↔ '{node_b['label']}'?",
+                    "content": f"These nodes are {similarity:.0%} semantically similar but not linked. They might benefit from an explicit connection.",
+                    "confidence": similarity,
+                    "source_nodes": [node_a['id'], node_b['id']]
+                })
+
+    return sorted(insights, key=lambda x: -x['confidence'])[:3]
+```
+
+#### 2B. Structural Imbalance
+
+```python
+def detect_structural_patterns(map_data):
+    """Analyze map structure for imbalances or opportunities."""
+    insights = []
+
+    root = map_data
+    branches = root.get('children', [])
+
+    # Branch depth analysis
+    branch_stats = []
+    for branch in branches:
+        stats = {
+            'label': branch['label'],
+            'depth': get_max_depth(branch),
+            'node_count': count_nodes(branch),
+            'leaf_count': count_leaves(branch)
+        }
+        branch_stats.append(stats)
+
+    # Find imbalanced branches
+    avg_depth = statistics.mean([b['depth'] for b in branch_stats])
+    avg_nodes = statistics.mean([b['node_count'] for b in branch_stats])
+
+    for branch in branch_stats:
+        # Very deep but narrow (might need restructuring)
+        if branch['depth'] > avg_depth * 2 and branch['node_count'] < avg_nodes * 0.5:
+            insights.append({
+                "type": "structure",
+                "title": f"'{branch['label']}' is deep but narrow",
+                "content": f"This branch goes {branch['depth']} levels deep but only has {branch['node_count']} nodes. Consider whether some could be siblings instead of nested.",
+                "confidence": 0.65
+            })
+
+        # Very wide but shallow (might need hierarchy)
+        if branch['leaf_count'] > 10 and branch['depth'] < 2:
+            insights.append({
+                "type": "structure",
+                "title": f"'{branch['label']}' might benefit from sub-categories",
+                "content": f"You have {branch['leaf_count']} items directly under '{branch['label']}'. Grouping some might help organization.",
+                "confidence": 0.6
+            })
+
+    return insights
+```
+
+#### 2C. Orphan and Stale Detection
+
+```python
+def find_orphans_and_stale(map_data, conversations):
+    """Find nodes that are isolated or haven't been touched."""
+    insights = []
+
+    nodes = flatten_nodes(map_data)
+
+    # Find orphan nodes (no children, no connections, not referenced)
+    for node in nodes:
+        children_count = len(node.get('children', []))
+        connection_count = count_connections(node['id'], map_data)
+        conv_mentions = count_mentions_in_conversations(node['label'], conversations)
+
+        if children_count == 0 and connection_count == 0 and conv_mentions == 0:
+            # Check age (if metadata available)
+            age_days = get_node_age_days(node)
+
+            if age_days and age_days > 14:
+                insights.append({
+                    "type": "orphan",
+                    "title": f"'{node['label']}' seems isolated",
+                    "content": f"This node has no children or connections, and hasn't come up in conversations. Still relevant, or ready to archive?",
+                    "confidence": 0.55,
+                    "source_nodes": [node['id']]
+                })
+
+    return insights
+```
+
+#### 2D. Cross-Branch Connections
+
+```python
+def suggest_cross_branch_links(map_data):
+    """Find potential connections between different branches."""
+    insights = []
+
+    root = map_data
+    branches = root.get('children', [])
+
+    # Get all nodes per branch
+    branch_nodes = {}
+    for branch in branches:
+        branch_nodes[branch['label']] = flatten_nodes(branch)
+
+    # Compare nodes across branches
+    for branch_a, nodes_a in branch_nodes.items():
+        for branch_b, nodes_b in branch_nodes.items():
+            if branch_a >= branch_b:  # Avoid duplicates
+                continue
+
+            # Find similar nodes across branches
+            for node_a in nodes_a:
+                for node_b in nodes_b:
+                    similarity = cosine_similarity(
+                        embed(node_a['label']),
+                        embed(node_b['label'])
+                    )
+
+                    if similarity > 0.7:
+                        insights.append({
+                            "type": "cross_branch",
+                            "title": f"Bridge: '{node_a['label']}' ({branch_a}) ↔ '{node_b['label']}' ({branch_b})",
+                            "content": f"These nodes in different branches are highly related. A cross-link might reveal how {branch_a} connects to {branch_b}.",
+                            "confidence": similarity,
+                            "source_nodes": [node_a['id'], node_b['id']]
+                        })
+
+    return sorted(insights, key=lambda x: -x['confidence'])[:2]
+```
+
+---
+
+### Combined Analysis
+
+```python
+def run_background_analysis(user_id):
+    """Main analysis function combining all sources."""
+
+    # Load data
+    map_data = load_user_map(user_id)
+    conversations = load_user_conversations(user_id)
+    map_nodes = flatten_nodes(map_data)
+
+    insights = []
+
+    # Conversation analysis
+    if conversations:
+        insights += find_conversation_map_connections(conversations, map_nodes)
+        insights += detect_conversation_threads(conversations)
+        insights += track_thinking_evolution(conversations)
+
+    # Map structure analysis
+    if map_data:
+        insights += find_missing_connections(map_data)
+        insights += detect_structural_patterns(map_data)
+        insights += find_orphans_and_stale(map_data, conversations)
+        insights += suggest_cross_branch_links(map_data)
+
+    # Filter and rank
+    insights = [i for i in insights if i['confidence'] >= 0.6]
+    insights = sorted(insights, key=lambda x: -x['confidence'])
+
+    # Deduplicate similar insights
+    insights = deduplicate_insights(insights)
+
+    return insights[:3]  # Top 3 only
 ```
 
 ---
