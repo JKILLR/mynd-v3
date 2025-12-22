@@ -29219,7 +29219,10 @@ You are a trusted guide, not a data harvester.
                     let goals = [];
                     if (typeof GoalRegistry !== 'undefined') {
                         const activeGoals = GoalRegistry.getActiveGoals ? GoalRegistry.getActiveGoals() : [];
-                        const allGoals = GoalRegistry.goals || [];
+                        // GoalRegistry.goals is a Map, not an array - convert it properly
+                        const allGoals = GoalRegistry.goals instanceof Map
+                            ? Array.from(GoalRegistry.goals.values())
+                            : (Array.isArray(GoalRegistry.goals) ? GoalRegistry.goals : []);
                         goals = (activeGoals.length > 0 ? activeGoals : allGoals).map(g => ({
                             id: g.id,
                             title: g.label || g.title,
@@ -32124,8 +32127,8 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                     return null;
                 }
 
-                // Get AI memories for cross-referencing
-                const aiMemories = await this.getAIMemories(30);
+                // Get AI memories for cross-referencing (ensure array)
+                const aiMemories = (await this.getAIMemories(30)) || [];
 
                 // Extract key phrases from sessions + focus topics
                 const phrasesToExpand = new Set(focusTopics);
@@ -32133,18 +32136,24 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
                 // From the 3 most recent sessions, extract key phrases
                 for (const session of recentSessions.slice(0, 3)) {
                     // Extract from key_outcomes
-                    if (session.key_outcomes) {
+                    if (session.key_outcomes && typeof session.key_outcomes === 'string') {
                         const outcomes = session.key_outcomes.split(/[,;.]/).map(s => s.trim()).filter(s => s.length > 3);
                         outcomes.slice(0, 3).forEach(o => phrasesToExpand.add(o));
                     }
                     // Extract from open_threads
-                    if (session.open_threads) {
+                    if (session.open_threads && typeof session.open_threads === 'string') {
                         const threads = session.open_threads.split(/[,;.]/).map(s => s.trim()).filter(s => s.length > 3);
                         threads.slice(0, 2).forEach(t => phrasesToExpand.add(t));
                     }
-                    // Add topics
+                    // Add topics - handle both array and JSON string formats
                     if (session.topics_discussed) {
-                        session.topics_discussed.slice(0, 3).forEach(t => phrasesToExpand.add(t));
+                        let topics = session.topics_discussed;
+                        if (typeof topics === 'string') {
+                            try { topics = JSON.parse(topics); } catch (e) { topics = []; }
+                        }
+                        if (Array.isArray(topics)) {
+                            topics.slice(0, 3).forEach(t => phrasesToExpand.add(t));
+                        }
                     }
                 }
 

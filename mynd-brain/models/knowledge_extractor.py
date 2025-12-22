@@ -70,7 +70,7 @@ class KnowledgeExtractor:
         self,
         map_db: MapVectorDB,
         api_key: Optional[str] = None,
-        model: str = 'claude-3-5-haiku-latest'
+        model: str = 'claude-opus-4-5-20251101'
     ):
         """
         Initialize the knowledge extractor.
