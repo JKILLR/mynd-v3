@@ -14325,13 +14325,16 @@ Return as JSON:
             if (!this.sourceChunks || this.sourceChunks.length === 0) return;
 
             const encoder = this.encoder || neuralNet?.encoder;
-            if (!encoder) {
+            const useLocalBrain = typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable;
+
+            if (!encoder && !useLocalBrain) {
                 console.warn('CodeRAG: No encoder available for source embeddings');
                 return;
             }
 
             this.sourceEmbeddings = new Map();
-            console.log(`📚 Embedding ${this.sourceChunks.length} source chunks...`);
+            const embeddingSource = useLocalBrain ? 'LocalBrain' : 'TensorFlow';
+            console.log(`📚 Embedding ${this.sourceChunks.length} source chunks via ${embeddingSource}...`);
 
             const batchSize = 20;
             for (let i = 0; i < this.sourceChunks.length; i += batchSize) {
@@ -14341,9 +14344,17 @@ Return as JSON:
                 );
 
                 try {
-                    const embeddings = await encoder.embed(texts);
-                    const vectors = await embeddings.array();
-                    embeddings.dispose();
+                    let vectors;
+
+                    if (useLocalBrain) {
+                        // Use LocalBrain server for embeddings (GPU-accelerated)
+                        vectors = await LocalBrain.embedBatch(texts);
+                    } else {
+                        // Use TensorFlow.js encoder
+                        const embeddings = await encoder.embed(texts);
+                        vectors = await embeddings.array();
+                        embeddings.dispose();
+                    }
 
                     batch.forEach((chunk, idx) => {
                         this.sourceEmbeddings.set(chunk.id, vectors[idx]);
