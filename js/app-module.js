@@ -33341,9 +33341,9 @@ CURRENT REQUEST CONTEXT
                     .select('*')
                     .eq('user_id', user.id)
                     .eq('session_id', this.currentSessionToken)
-                    .single();
+                    .maybeSingle();  // Use maybeSingle to avoid 406 when no cache exists
 
-                if (error && error.code !== 'PGRST116') { // PGRST116 = not found
+                if (error) {
                     console.warn('Failed to get cached synthesis:', error);
                     return null;
                 }
