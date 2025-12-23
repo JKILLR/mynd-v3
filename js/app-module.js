@@ -27740,21 +27740,26 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
 
         // ═══════════════════════════════════════════════════════════════
         // UNIFIED BRAIN: Learn from parent-child connection (runs first, always)
-        // This is independent of in-browser neural net readiness
+        // Direct server call - bypasses LocalBrain.isAvailable which can be stale
         // ═══════════════════════════════════════════════════════════════
-        if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
-            console.log(`📡 GT Training: ${parent.id} → ${node.id} (${node.source || 'manual'})`);
-            LocalBrain.learnFromConnection(parent.id, node.id, node.source || 'manual')
-                .then(result => {
-                    console.log(`📥 GT Training result:`, result);
-                    if (result.was_predicted) {
-                        console.log(`🧠 Brain predicted this connection! Accuracy: ${(result.accuracy * 100).toFixed(1)}%`);
-                    }
-                })
-                .catch(e => console.warn('Brain connection learning failed:', e));
-        } else {
-            console.log(`⚠️ LocalBrain NOT available - skipping GT training`);
-        }
+        console.log(`📡 GT Training: ${parent.id} → ${node.id} (${node.source || 'manual'})`);
+        fetch('http://localhost:8420/brain/learn-connection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                source_id: parent.id,
+                target_id: node.id,
+                connection_type: node.source || 'manual'
+            })
+        })
+        .then(res => res.ok ? res.json() : Promise.reject(`Server ${res.status}`))
+        .then(result => {
+            console.log(`📥 GT Training result:`, result);
+            if (result.was_predicted) {
+                console.log(`🧠 Brain predicted this connection! Accuracy: ${(result.accuracy * 100).toFixed(1)}%`);
+            }
+        })
+        .catch(e => console.log('📡 GT Training: server unavailable -', e));
 
         // CGT: Record create action (also independent of neuralNet)
         cognitiveGT.recordAction('create', node.id, {
