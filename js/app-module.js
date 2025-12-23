@@ -42888,27 +42888,51 @@ showKeyboardHints();
                         el.addEventListener('click', () => {
                             const label = el.dataset.label;
                             const source = el.dataset.source;
-                            
-                            // Create the node
-                            const newNode = store.addNode(nodeData.id, label, { source: 'transfer' });
-                            
+                            const suggestionType = el.dataset.type || 'transfer';
+
+                            // Create the node with error handling
+                            let newNode;
+                            try {
+                                newNode = store.addNode(nodeData.id, label, { source: 'transfer' });
+                                if (!newNode) {
+                                    console.error('store.addNode returned null for transfer suggestion');
+                                    showToast('Failed to add node', 'error');
+                                    return;
+                                }
+                            } catch (e) {
+                                console.error('Transfer suggestion addNode failed:', e);
+                                showToast('Failed to add node', 'error');
+                                return;
+                            }
+
                             // Record the accepted suggestion
                             styleTransfer.recordAcceptedSuggestion(
-                                { label, source, type: el.dataset.type },
+                                { label, source, type: suggestionType },
                                 nodeData
                             );
-                            
+
+                            // LOCAL BRAIN FEEDBACK - Train GT on transfer suggestions
+                            if (typeof LocalBrain !== 'undefined') {
+                                LocalBrain.recordFeedback(nodeData.id, 'accepted', {
+                                    parentLabel: nodeData.label,
+                                    acceptedLabel: label,
+                                    suggestionType: 'transfer',
+                                    source: source,
+                                    timestamp: Date.now()
+                                }).catch(e => console.warn('Transfer feedback failed:', e));
+                            }
+
                             // Rebuild scene
                             buildScene();
-                            
+
                             // Select new node
                             setTimeout(() => {
                                 const mesh = nodes.get(newNode.id);
                                 if (mesh) selectNode(mesh);
                             }, 100);
-                            
+
                             showToast(`Added "${label}"`, 'success');
-                            
+
                             // Remove this suggestion from UI
                             el.remove();
                         });
@@ -43027,23 +43051,37 @@ showKeyboardHints();
                 }
                 
                 // Add click handlers for individual suggestions
+                console.log(`🎯 Binding click handlers to ${suggestionsList.querySelectorAll('.neural-suggestion[data-label]').length} suggestions`);
                 suggestionsList.querySelectorAll('.neural-suggestion[data-label]').forEach(el => {
+                    console.log(`🎯 Adding click handler for: "${el.dataset.label}"`);
                     el.addEventListener('click', () => {
-                        if (el.classList.contains('added')) return; // Already added
-                        
+                        console.log(`🎯 CLICK DETECTED on: "${el.dataset.label}"`);
+                        if (el.classList.contains('added')) {
+                            console.log(`🎯 Already added, skipping`);
+                            return;
+                        }
+
                         const label = el.dataset.label;
                         const description = el.dataset.description || '';
                         const suggestionType = el.dataset.type; // 'ml' or 'ai'
                         const parentId = suggestionsList.dataset.parentId; // Get from container, not selectedNode
                         const parentNode = store.findNode(parentId);
-                        
-                        store.addNode(parentId, { 
-                            label, 
-                            description,
-                            color: parentNode?.color,
-                            source: 'smart-expand'
-                        });
-                        
+
+                        console.log(`🎯 Creating node: "${label}" under parentId=${parentId}`);
+                        console.log(`   parentNode:`, parentNode);
+
+                        try {
+                            const newNode = store.addNode(parentId, {
+                                label,
+                                description,
+                                color: parentNode?.color,
+                                source: 'smart-expand'
+                            });
+                            console.log(`🎯 store.addNode result:`, newNode);
+                        } catch (e) {
+                            console.error(`🎯 store.addNode FAILED:`, e);
+                        }
+
                         // Track preference and boost pattern weight
                         preferenceTracker.recordAccept(label, suggestionType);
                         metaLearner.trackSuggestionAccepted(label, false); // false = not Add All
@@ -43146,55 +43184,74 @@ showKeyboardHints();
                     const parentId = suggestionsList.dataset.parentId; // Get from container
                     const parentNode = store.findNode(parentId);
                     let added = 0;
-                    
+                    let failed = 0;
+
+                    if (!parentNode) {
+                        console.error('Add All: parentNode not found for parentId:', parentId);
+                        showToast('Parent node not found', 'error');
+                        return;
+                    }
+
                     // Only add suggestions that haven't been added yet
                     suggestionsList.querySelectorAll('.neural-suggestion:not(.added)').forEach(el => {
                         const label = el.dataset.label;
                         const description = el.dataset.description || '';
                         const suggestionType = el.dataset.type || 'ai';
                         if (label) {
-                            store.addNode(parentId, { 
-                                label, 
-                                description,
-                                color: parentNode?.color,
-                                source: 'smart-expand'
-                            });
+                            // Try-catch for each node addition
+                            let newNode;
+                            try {
+                                newNode = store.addNode(parentId, {
+                                    label,
+                                    description,
+                                    color: parentNode?.color,
+                                    source: 'smart-expand'
+                                });
+                                if (!newNode) {
+                                    console.error(`Add All: store.addNode returned null for "${label}"`);
+                                    failed++;
+                                    return; // Skip this one, continue with others
+                                }
+                            } catch (e) {
+                                console.error(`Add All: store.addNode failed for "${label}":`, e);
+                                failed++;
+                                return; // Skip this one, continue with others
+                            }
+
                             added++;
-                            
+
                             // Track preference and boost pattern weight
                             preferenceTracker.recordAccept(label, suggestionType);
                             metaLearner.trackSuggestionAccepted(label, true); // true = Add All
-                            if (parentNode) {
-                                neuralNet.boostPattern(parentNode.label, label, suggestionType);
+                            neuralNet.boostPattern(parentNode.label, label, suggestionType);
 
-                                // LOCAL BRAIN FEEDBACK - Train Graph Transformer (batch accept)
-                                // LocalBrain handles auto-reconnect internally
-                                if (typeof LocalBrain !== 'undefined') {
-                                    LocalBrain.recordFeedback(parentId, 'accepted_batch', {
-                                        parentLabel: parentNode.label,
-                                        acceptedLabel: label,
-                                        suggestionType: suggestionType,
-                                        batchMode: true,
-                                        timestamp: Date.now()
-                                    });
-                                }
+                            // LOCAL BRAIN FEEDBACK - Train Graph Transformer (batch accept)
+                            // ALWAYS send feedback, don't skip if parentNode check already passed above
+                            if (typeof LocalBrain !== 'undefined') {
+                                LocalBrain.recordFeedback(parentId, 'accepted_batch', {
+                                    parentLabel: parentNode.label,
+                                    acceptedLabel: label,
+                                    suggestionType: suggestionType,
+                                    batchMode: true,
+                                    timestamp: Date.now()
+                                }).catch(e => console.warn(`Batch feedback failed for "${label}":`, e));
+                            }
 
-                                // Store semantic memory
-                                semanticMemory.addMemory(
-                                    'suggestion_accepted',
-                                    `User accepted ${suggestionType} suggestion "${label}" under "${parentNode.label}"`,
-                                    { parentLabel: parentNode.label, childLabel: label, suggestionType }
-                                );
+                            // Store semantic memory
+                            semanticMemory.addMemory(
+                                'suggestion_accepted',
+                                `User accepted ${suggestionType} suggestion "${label}" under "${parentNode.label}"`,
+                                { parentLabel: parentNode.label, childLabel: label, suggestionType }
+                            );
 
-                                // Real-time session learning
-                                if (typeof chatManager !== 'undefined') {
-                                    chatManager.recordSessionLearning('feedback', {
-                                        action: 'accepted',
-                                        type: 'expansion',
-                                        detail: `accepted "${label}" under "${parentNode.label}"`
-                                    });
-                                    chatManager.recordSessionLearning('pattern', `${parentNode.label} → ${label}`);
-                                }
+                            // Real-time session learning
+                            if (typeof chatManager !== 'undefined') {
+                                chatManager.recordSessionLearning('feedback', {
+                                    action: 'accepted',
+                                    type: 'expansion',
+                                    detail: `accepted "${label}" under "${parentNode.label}"`
+                                });
+                                chatManager.recordSessionLearning('pattern', `${parentNode.label} → ${label}`);
                             }
 
                             // Mark as added
@@ -43210,22 +43267,32 @@ showKeyboardHints();
                         }
                     });
                     
-                    if (added === 0) {
+                    if (added === 0 && failed === 0) {
                         showToast('All suggestions already added', 'info');
                         return;
                     }
-                    
+
+                    if (added === 0 && failed > 0) {
+                        showToast(`Failed to add ${failed} nodes`, 'error');
+                        return;
+                    }
+
                     buildScene();
-                    
+
                     // Expand the parent
                     const parentMesh = nodes.get(parentId);
                     if (parentMesh && !parentMesh.userData.isExpanded) {
                         expandNode(parentMesh);
                     }
-                    
+
                     // Hide the button
                     document.getElementById('neural-add-all-btn').style.display = 'none';
-                    showToast(`Added ${added} nodes`, 'success');
+
+                    if (failed > 0) {
+                        showToast(`Added ${added} nodes (${failed} failed)`, 'warning');
+                    } else {
+                        showToast(`Added ${added} nodes`, 'success');
+                    }
                     audio.success();
                     
                     // Close the panel to reveal new nodes

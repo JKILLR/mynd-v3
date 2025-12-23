@@ -700,19 +700,34 @@ class MYNDBrain:
                 print(f"⚠️ GT training on feedback failed: {e}")
                 import traceback
                 traceback.print_exc()
+                # Return error info instead of None
+                return {
+                    "status": "error",
+                    "error": str(e),
+                    "buffered": True
+                }
 
         # Fallback: buffer for batch training
         if len(self.feedback_buffer) >= 10:
             await self._train_on_feedback()
 
+        # Return acknowledgement even if no immediate training happened
+        return {
+            "status": "buffered",
+            "buffer_size": len(self.feedback_buffer)
+        }
+
     async def _train_on_feedback(self):
         """Train on accumulated feedback (batch mode)."""
         if not self.feedback_buffer:
-            return
+            return {'trained': 0, 'failed': 0, 'skipped': 0}
 
         print(f"🔄 Batch training on {len(self.feedback_buffer)} feedback samples...")
 
         trained = 0
+        failed = 0
+        skipped = 0
+
         for fb in self.feedback_buffer:
             context = fb.get('context', {})
             parent_label = context.get('parentLabel')
@@ -733,9 +748,15 @@ class MYNDBrain:
                     trained += 1
                 except Exception as e:
                     print(f"⚠️ Batch training error: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    failed += 1
+            else:
+                skipped += 1
 
         self.feedback_buffer = []
-        print(f"✅ Batch training complete: {trained} examples")
+        print(f"✅ Batch training complete: {trained} trained, {failed} failed, {skipped} skipped")
+        return {'trained': trained, 'failed': failed, 'skipped': skipped}
 
     async def transcribe(self, audio_data: bytes, language: str = None, task: str = "transcribe") -> Dict:
         """Transcribe audio to text using Whisper."""
@@ -1154,12 +1175,17 @@ async def lifespan(app: FastAPI):
                     result = unified_brain.run_background_training()
                     if result.get('status') == 'trained':
                         # Save weights after successful training
-                        gt_weights_path = pathlib.Path(__file__).parent / "data" / "gt_weights.pt"
-                        brain.graph_transformer.save_weights(str(gt_weights_path))
+                        # FIX: Use unified_brain.ml_brain instead of undefined 'brain'
+                        if unified_brain.ml_brain and unified_brain.ml_brain.graph_transformer:
+                            gt_weights_path = pathlib.Path(__file__).parent / "data" / "gt_weights.pt"
+                            unified_brain.ml_brain.graph_transformer.save_weights(str(gt_weights_path))
+                            print(f"💾 GT weights saved after background training")
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 print(f"⚠️ Background training loop error: {e}")
+                import traceback
+                traceback.print_exc()
 
     # Start background training task
     training_task = asyncio.create_task(background_training_loop())
@@ -3937,16 +3963,22 @@ async def asa_learn_from_text(request: LearnTextRequest):
     Manually trigger ASA learning from text.
     Use this to feed any text into the semantic graph.
     """
-    asa = get_asa()
-    result = asa.learn_from_text(request.text, source=request.source)
+    try:
+        asa = get_asa()
+        result = asa.learn_from_text(request.text, source=request.source)
 
-    if result['atoms_activated'] > 0:
-        print(f"🧬 ASA learned from {request.source}: {result['atoms_activated']} atoms")
+        if result.get('atoms_activated', 0) > 0:
+            print(f"🧬 ASA learned from {request.source}: {result['atoms_activated']} atoms")
 
-    return {
-        "success": True,
-        **result
-    }
+        return {
+            "success": True,
+            **result
+        }
+    except Exception as e:
+        print(f"⚠️ ASA learn error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"ASA learning failed: {str(e)}")
 
 
 @app.get("/asa/learning-stats")
