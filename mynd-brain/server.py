@@ -1457,6 +1457,8 @@ async def learn_from_connection(learning: ConnectionLearning):
 class ConnectionRejection(BaseModel):
     source_id: str
     target_id: str
+    rejected_label: Optional[str] = None  # The label that was rejected (for on-the-fly embedding)
+    rejection_type: Optional[str] = None  # 'node', 'connection', 'expansion'
 
 
 @app.post("/brain/reject-connection")
@@ -1466,10 +1468,49 @@ async def reject_connection(rejection: ConnectionRejection):
     This provides NEGATIVE training examples to the Graph Transformer.
 
     Call this when user explicitly rejects a connection suggestion.
+    Supports both ID-based rejections (existing nodes) and label-based rejections
+    (for suggestions that were never created).
     """
     if unified_brain is None:
         raise HTTPException(status_code=503, detail="Unified brain not initialized")
+    if brain is None:
+        raise HTTPException(status_code=503, detail="Brain not initialized")
 
+    print(f"🚫 /brain/reject-connection: {rejection.source_id} → {rejection.rejected_label or rejection.target_id}")
+
+    # If we have a rejected_label but no real target node, embed the label on-the-fly
+    if rejection.rejected_label and rejection.target_id.startswith('rejected-'):
+        # Get source embedding
+        if rejection.source_id not in brain.map_node_index:
+            return {
+                "status": "buffered",
+                "reason": f"Source node {rejection.source_id} not in map yet"
+            }
+
+        source_idx = brain.map_node_index[rejection.source_id]
+        source_embedding = brain.map_embeddings[source_idx]
+
+        # Create embedding for the rejected label on-the-fly
+        target_embedding = brain.embedder.embed(rejection.rejected_label)
+
+        # Train GT with should_connect=False (negative example)
+        training_result = brain.graph_transformer.train_connection_step(
+            source_embedding=source_embedding,
+            target_embedding=target_embedding,
+            should_connect=False,  # This is a REJECTION
+            adjacency=brain.map_adjacency
+        )
+
+        print(f"🎓 GT rejection trained: loss={training_result.get('loss', 0):.4f}")
+
+        return {
+            "status": "rejected",
+            "source_id": rejection.source_id,
+            "rejected_label": rejection.rejected_label,
+            "gt_training": training_result
+        }
+
+    # Standard ID-based rejection (both nodes exist)
     result = unified_brain.reject_connection(
         rejection.source_id,
         rejection.target_id
