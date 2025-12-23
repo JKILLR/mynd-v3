@@ -1,30 +1,291 @@
 """
-Living ASA Integration for MYND
-================================
-Semantic backbone with metabolism.
+Hybrid ASE + Living ASA for MYND
+=================================
+Combines Atomic Semantic Embeddings (vector-based) with Living ASA (graph-based).
 
-This module converts MYND's node tree into a living semantic graph
-with shells, bonds, charge, energy, and continuous metabolism.
+ASE Components (learned vectors):
+- Nuclear vector: Stable identity ("what IS this concept")
+- Shell vector: Contextual variation ("how is it used")
+- Semantic charge: Polarity (-1 to +1) with magnitude
+- Charge propagation: Negation flipping, compositional logic
+
+Living ASA Components (structural):
+- Bond shells: Proximity layers (1=core to 4=peripheral)
+- Energy: Working memory activation (decays over time)
+- Mass: Knowledge stability (grows with age/use)
+- Typed bonds: IS_A, CAUSES, SUPPORTS, etc.
+- Metabolism: Continuous decay, migration, strengthening
 
 Integration points:
 - /map/sync → convert_map_to_asa()
-- /brain/context → get_asa_insights()
-- Background → metabolism heartbeat
+- /brain/context → learns from every message
+- /brain/receive-from-claude → learns from Axel
+- Background → metabolism heartbeat (5s tick)
 """
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Any
+from typing import Dict, List, Optional, Set, Any, Tuple
 from enum import Enum
 import time
 import math
 import threading
 import logging
+import re
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# ASE: ATOMIC SEMANTIC ENCODER (Neural Component)
+# =============================================================================
+
+class AtomicEncoder(nn.Module):
+    """
+    Minimal Atomic Semantic Encoder.
+
+    Encodes text into:
+    - Nuclear vector (stable identity)
+    - Shell vector (contextual)
+    - Charge (polarity + magnitude)
+
+    ~500K parameters, runs on CPU.
+    """
+
+    def __init__(self, input_dim: int = 384, nuclear_dim: int = 64,
+                 shell_dim: int = 128, device: str = None):
+        super().__init__()
+
+        self.input_dim = input_dim
+        self.nuclear_dim = nuclear_dim
+        self.shell_dim = shell_dim
+
+        # Determine device
+        if device is None:
+            if torch.backends.mps.is_available():
+                self.device = torch.device("mps")
+            elif torch.cuda.is_available():
+                self.device = torch.device("cuda")
+            else:
+                self.device = torch.device("cpu")
+        else:
+            self.device = torch.device(device)
+
+        # Nuclear projection - stable identity
+        self.nuclear_proj = nn.Sequential(
+            nn.Linear(input_dim, 128),
+            nn.LayerNorm(128),
+            nn.ReLU(),
+            nn.Linear(128, nuclear_dim),
+        )
+
+        # Shell projection - contextual variation
+        self.shell_proj = nn.Sequential(
+            nn.Linear(input_dim, 256),
+            nn.LayerNorm(256),
+            nn.ReLU(),
+            nn.Linear(256, shell_dim),
+        )
+
+        # Charge head - polarity and magnitude
+        self.charge_head = nn.Sequential(
+            nn.Linear(input_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, 2),  # [polarity, magnitude]
+        )
+
+        self.to(self.device)
+        self._init_weights()
+
+    def _init_weights(self):
+        """Initialize weights for stable training."""
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
+
+    def forward(self, embedding: torch.Tensor) -> Dict[str, torch.Tensor]:
+        """
+        Encode an embedding into atomic components.
+
+        Args:
+            embedding: Input embedding (batch, input_dim) or (input_dim,)
+
+        Returns:
+            Dict with nuclear, shell, polarity, magnitude, effective_charge
+        """
+        if embedding.dim() == 1:
+            embedding = embedding.unsqueeze(0)
+
+        embedding = embedding.to(self.device)
+
+        # Project to nuclear (identity) and shell (context)
+        nuclear = self.nuclear_proj(embedding)
+        shell = self.shell_proj(embedding)
+
+        # Compute charge
+        charge_raw = self.charge_head(embedding)
+        polarity = torch.tanh(charge_raw[..., 0])      # -1 to 1
+        magnitude = torch.sigmoid(charge_raw[..., 1])  # 0 to 1
+        effective_charge = polarity * magnitude
+
+        return {
+            'nuclear': nuclear,
+            'shell': shell,
+            'polarity': polarity,
+            'magnitude': magnitude,
+            'effective_charge': effective_charge,
+        }
+
+    def encode_with_context(self, embedding: torch.Tensor,
+                            context_embeddings: List[torch.Tensor] = None) -> Dict:
+        """
+        Encode with optional context for shell modulation.
+        """
+        base = self.forward(embedding)
+
+        if context_embeddings and len(context_embeddings) > 0:
+            # Modulate shell based on context
+            context_stack = torch.stack([
+                self.forward(c)['shell'] for c in context_embeddings
+            ])
+            context_mean = context_stack.mean(dim=0)
+
+            # Shell becomes a blend of self and context
+            base['shell'] = 0.7 * base['shell'] + 0.3 * context_mean
+
+        return base
+
+
+class ChargePropagator:
+    """
+    Handles charge propagation through semantic structures.
+
+    Key operations:
+    - Negation flipping: "not X" → -charge(X)
+    - Composition: sentence charge from word charges
+    - Inheritance: charge flows through IS_A bonds
+    """
+
+    # Negation words that flip charge
+    NEGATIONS = {
+        'not', 'no', 'never', 'none', 'nothing', 'neither', 'nobody',
+        "n't", 'dont', "don't", 'doesnt', "doesn't", 'didnt', "didn't",
+        'wont', "won't", 'cant', "can't", 'isnt', "isn't", 'arent', "aren't",
+        'wasnt', "wasn't", 'werent', "weren't", 'without', 'lack', 'lacks',
+        'lacking', 'absent', 'fail', 'fails', 'failed', 'failing',
+    }
+
+    # Intensifiers that boost magnitude
+    INTENSIFIERS = {
+        'very': 1.3, 'extremely': 1.5, 'incredibly': 1.5, 'absolutely': 1.4,
+        'really': 1.2, 'truly': 1.2, 'highly': 1.3, 'deeply': 1.3,
+        'completely': 1.4, 'totally': 1.3, 'utterly': 1.4,
+    }
+
+    # Diminishers that reduce magnitude
+    DIMINISHERS = {
+        'slightly': 0.5, 'somewhat': 0.6, 'a bit': 0.5, 'a little': 0.5,
+        'fairly': 0.7, 'rather': 0.7, 'kind of': 0.5, 'sort of': 0.5,
+        'barely': 0.3, 'hardly': 0.3, 'scarcely': 0.3,
+    }
+
+    @classmethod
+    def detect_negation(cls, text: str) -> Tuple[bool, int]:
+        """
+        Detect if text contains negation and count negations.
+
+        Returns:
+            (is_negated, negation_count)
+        """
+        text_lower = text.lower()
+        words = re.findall(r"\b\w+(?:'\w+)?\b", text_lower)
+
+        negation_count = sum(1 for w in words if w in cls.NEGATIONS)
+
+        # Odd number of negations = negated, even = positive
+        is_negated = negation_count % 2 == 1
+
+        return is_negated, negation_count
+
+    @classmethod
+    def get_intensity_modifier(cls, text: str) -> float:
+        """Get intensity modifier from intensifiers/diminishers."""
+        text_lower = text.lower()
+
+        modifier = 1.0
+
+        for word, mult in cls.INTENSIFIERS.items():
+            if word in text_lower:
+                modifier = max(modifier, mult)
+
+        for phrase, mult in cls.DIMINISHERS.items():
+            if phrase in text_lower:
+                modifier = min(modifier, mult)
+
+        return modifier
+
+    @classmethod
+    def propagate_charge(cls, base_charge: float, text: str) -> float:
+        """
+        Propagate charge through text, handling negation and intensity.
+
+        Args:
+            base_charge: The base semantic charge (-1 to 1)
+            text: The text context
+
+        Returns:
+            Modified charge after propagation
+        """
+        is_negated, _ = cls.detect_negation(text)
+        intensity = cls.get_intensity_modifier(text)
+
+        # Apply negation (flip sign)
+        if is_negated:
+            base_charge = -base_charge
+
+        # Apply intensity (scale magnitude, preserve sign)
+        sign = 1 if base_charge >= 0 else -1
+        magnitude = abs(base_charge) * intensity
+
+        # Clamp to [-1, 1]
+        return sign * min(1.0, magnitude)
+
+    @classmethod
+    def compose_sentence_charge(cls, word_charges: List[Tuple[str, float]],
+                                 weights: List[float] = None) -> float:
+        """
+        Compose sentence charge from word charges.
+
+        Args:
+            word_charges: List of (word, charge) tuples
+            weights: Optional attention weights
+
+        Returns:
+            Composite sentence charge
+        """
+        if not word_charges:
+            return 0.0
+
+        if weights is None:
+            weights = [1.0] * len(word_charges)
+
+        # Normalize weights
+        total_weight = sum(weights)
+        if total_weight == 0:
+            return 0.0
+
+        weights = [w / total_weight for w in weights]
+
+        # Weighted sum of charges
+        composite = sum(c * w for (_, c), w in zip(word_charges, weights))
+
+        return max(-1.0, min(1.0, composite))
 
 
 # =============================================================================
@@ -105,23 +366,53 @@ class ValenceSlot:
 
 @dataclass
 class SemanticAtom:
-    """A LIVING semantic atom - wraps a MYND node."""
+    """
+    A LIVING semantic atom - wraps a MYND node.
+
+    Combines ASE vector properties with Living ASA structural properties.
+    """
     id: str  # MYND node ID
     name: str  # Node label
 
     # Original MYND data reference
     mynd_node: Dict = field(default_factory=dict)
 
-    # Structure
+    # Structure (Living ASA)
     shells: Dict[int, List[Bond]] = field(default_factory=lambda: {1: [], 2: [], 3: [], 4: []})
     valence: Dict[RelationType, ValenceSlot] = field(default_factory=dict)
 
-    # Dynamic state
-    charge: float = 0.0
-    energy: float = 0.0
-    mass: float = 1.0
+    # === ASE VECTOR COMPONENTS ===
+    # Nuclear vector - stable identity ("what IS this")
+    nuclear: Optional[np.ndarray] = None  # (64,)
 
-    # Embedding (from MYND's embeddings)
+    # Shell vector - contextual variation ("how it's used")
+    context_shell: Optional[np.ndarray] = None  # (128,)
+
+    # Semantic charge - learned polarity
+    semantic_charge: float = 0.0      # -1 to 1 (polarity)
+    charge_magnitude: float = 0.5     # 0 to 1 (confidence)
+
+    # === LIVING ASA DYNAMIC STATE ===
+    # Structural charge (valence satisfaction) - renamed for clarity
+    valence_charge: float = 0.0       # From unfilled slots
+    energy: float = 0.0               # Working memory activation
+    mass: float = 1.0                 # Stability/age
+
+    # Combined effective charge (ASE semantic + Living ASA structural)
+    @property
+    def effective_charge(self) -> float:
+        """Combined charge: semantic polarity weighted by structural state."""
+        # Semantic charge weighted by magnitude, plus structural charge
+        semantic = self.semantic_charge * self.charge_magnitude
+        structural = self.valence_charge * 0.3  # Structural contributes less
+        return max(-1.0, min(1.0, semantic + structural))
+
+    # Legacy alias for backward compatibility
+    @property
+    def charge(self) -> float:
+        return self.effective_charge
+
+    # Base embedding (from MYND's embeddings - input to ASE encoder)
     embedding: Optional[np.ndarray] = None
 
     # Temporal
@@ -170,7 +461,12 @@ class SemanticAtom:
         return {
             'id': self.id,
             'name': self.name,
-            'charge': round(self.charge, 3),
+            # ASE charge components
+            'semantic_charge': round(self.semantic_charge, 3),
+            'charge_magnitude': round(self.charge_magnitude, 3),
+            'valence_charge': round(self.valence_charge, 3),
+            'effective_charge': round(self.effective_charge, 3),
+            # Living ASA state
             'energy': round(self.energy, 3),
             'mass': round(self.mass, 2),
             'total_bonds': self.count_bonds(),
@@ -178,6 +474,10 @@ class SemanticAtom:
             'shells': {
                 f'shell_{i}': len(bonds) for i, bonds in self.shells.items()
             },
+            # ASE vectors present?
+            'has_nuclear': self.nuclear is not None,
+            'has_context_shell': self.context_shell is not None,
+            # MYND properties
             'importance': self.importance,
             'depth': self.depth,
         }
@@ -189,9 +489,14 @@ class SemanticAtom:
 
 class MYNDLivingASA:
     """
-    Living Atomic Semantic Architecture for MYND.
+    Hybrid ASE + Living Atomic Semantic Architecture for MYND.
 
-    Converts MYND's node tree into a metabolizing semantic graph.
+    Combines:
+    - ASE: Neural encoder for nuclear/shell vectors and semantic charge
+    - Living ASA: Structural bonds, energy, mass, metabolism
+
+    Converts MYND's node tree into a metabolizing semantic graph that
+    learns continuously from conversations.
     """
 
     def __init__(self, embedding_dim: int = 384):
@@ -200,7 +505,19 @@ class MYNDLivingASA:
         # Atom storage
         self.atoms: Dict[str, SemanticAtom] = {}
 
-        # Shell configuration
+        # === ASE NEURAL ENCODER ===
+        self.atomic_encoder = AtomicEncoder(
+            input_dim=embedding_dim,
+            nuclear_dim=64,
+            shell_dim=128,
+        )
+        self.charge_propagator = ChargePropagator()
+
+        # ASE training state
+        self._ase_optimizer = None
+        self._ase_training_initialized = False
+
+        # Shell configuration (Living ASA)
         self.shell_config = {
             1: {'binding_energy': 0.95, 'capacity': 3, 'name': 'core', 'decay_rate': 0.01},
             2: {'binding_energy': 0.70, 'capacity': 6, 'name': 'inner', 'decay_rate': 0.03},
@@ -219,7 +536,16 @@ class MYNDLivingASA:
         self._running = False
         self._metabolism_thread = None
 
-        logger.info("MYNDLivingASA initialized")
+        # Learning stats
+        self._learning_stats = {
+            'texts_processed': 0,
+            'atoms_activated': 0,
+            'bonds_created': 0,
+            'bonds_strengthened': 0,
+            'charges_learned': 0,
+        }
+
+        logger.info("Hybrid ASE + Living ASA initialized")
 
     # =========================================================================
     # MAP CONVERSION - Convert MYND nodes to atoms
@@ -454,7 +780,7 @@ class MYNDLivingASA:
     # =========================================================================
 
     def _update_charge(self, atom: SemanticAtom):
-        """Update charge based on valence satisfaction."""
+        """Update valence charge based on structural satisfaction."""
         unfilled = atom.count_unfilled_slots()
         contradictions = atom.contradiction_count
 
@@ -464,7 +790,8 @@ class MYNDLivingASA:
         seeking_pull = -0.08 * unfilled
         repelling_push = 0.3 * contradictions
 
-        atom.charge = max(-1.0, min(1.0, seeking_pull + repelling_push + importance_factor))
+        # Update valence_charge (structural component of total charge)
+        atom.valence_charge = max(-1.0, min(1.0, seeking_pull + repelling_push + importance_factor))
 
     def _update_mass(self, atom: SemanticAtom):
         """Update mass based on age, connectivity, and importance."""
@@ -876,7 +1203,7 @@ class MYNDLivingASA:
     # =========================================================================
 
     def get_stats(self) -> Dict:
-        """Get overall ASA statistics."""
+        """Get overall ASA statistics including ASE components."""
         total_bonds = sum(a.count_bonds() for a in self.atoms.values())
         total_gaps = sum(a.count_unfilled_slots() for a in self.atoms.values())
 
@@ -885,16 +1212,33 @@ class MYNDLivingASA:
             for shell_idx, bonds in atom.shells.items():
                 shell_counts[shell_idx] += len(bonds)
 
+        # ASE stats
+        atoms_with_nuclear = sum(1 for a in self.atoms.values() if a.nuclear is not None)
+        atoms_with_charge = sum(1 for a in self.atoms.values() if a.semantic_charge != 0)
+        positive_atoms = sum(1 for a in self.atoms.values() if a.effective_charge > 0.2)
+        negative_atoms = sum(1 for a in self.atoms.values() if a.effective_charge < -0.2)
+
         return {
+            # Living ASA stats
             'atom_count': len(self.atoms),
             'total_bonds': total_bonds,
             'total_gaps': total_gaps,
             'avg_energy': sum(a.energy for a in self.atoms.values()) / max(len(self.atoms), 1),
             'avg_mass': sum(a.mass for a in self.atoms.values()) / max(len(self.atoms), 1),
             'hot_atoms': len([a for a in self.atoms.values() if a.energy > 0.3]),
-            'seeking_atoms': len([a for a in self.atoms.values() if a.charge < -0.3]),
+            'seeking_atoms': len([a for a in self.atoms.values() if a.valence_charge < -0.3]),
             'bonds_by_shell': dict(shell_counts),
             'metabolism_running': self._running,
+            # ASE stats
+            'ase': {
+                'atoms_encoded': atoms_with_nuclear,
+                'atoms_with_charge': atoms_with_charge,
+                'positive_atoms': positive_atoms,
+                'negative_atoms': negative_atoms,
+                'encoder_device': str(self.atomic_encoder.device),
+            },
+            # Learning stats
+            'learning': self._learning_stats,
         }
 
     # =========================================================================
@@ -906,11 +1250,12 @@ class MYNDLivingASA:
         """
         Learn from any text input - conversations, thoughts, user messages.
 
-        This is the CORE of the living system:
+        This is the CORE of the hybrid ASE + Living ASA system:
         1. Find which atoms are mentioned in the text
         2. Boost their energy (bring to working memory)
-        3. Strengthen bonds between co-occurring atoms
-        4. Track patterns for future learning
+        3. Apply ASE charge propagation (negation, intensity)
+        4. Strengthen bonds between co-occurring atoms
+        5. Update learning statistics
 
         Args:
             text: The text to learn from
@@ -921,7 +1266,7 @@ class MYNDLivingASA:
             Dict with learning stats
         """
         if not text or not self.atoms:
-            return {'atoms_activated': 0, 'bonds_strengthened': 0}
+            return {'atoms_activated': 0, 'bonds_strengthened': 0, 'charge_updates': 0}
 
         text_lower = text.lower()
 
@@ -929,21 +1274,48 @@ class MYNDLivingASA:
         mentioned = self._find_mentioned_atoms(text_lower)
 
         if not mentioned:
-            return {'atoms_activated': 0, 'bonds_strengthened': 0}
+            return {'atoms_activated': 0, 'bonds_strengthened': 0, 'charge_updates': 0}
 
-        # Boost energy on mentioned atoms
+        # === ASE: Detect negation and intensity in context ===
+        is_negated, negation_count = self.charge_propagator.detect_negation(text)
+        intensity_modifier = self.charge_propagator.get_intensity_modifier(text)
+
+        # Boost energy and update charges on mentioned atoms
+        charge_updates = 0
         for atom_id in mentioned:
             self.access_atom(atom_id, energy_boost)
+
+            # Apply ASE charge propagation
+            atom = self.atoms[atom_id]
+            if is_negated:
+                # Flip semantic charge if text is negated
+                atom.semantic_charge = -atom.semantic_charge
+                charge_updates += 1
+
+            # Intensity affects magnitude
+            if intensity_modifier != 1.0:
+                atom.charge_magnitude = min(1.0, atom.charge_magnitude * intensity_modifier)
+                charge_updates += 1
 
         # Strengthen bonds between co-occurring atoms
         bonds_strengthened = self._strengthen_cooccurrence(mentioned, source)
 
+        # Update learning stats
+        self._learning_stats['texts_processed'] += 1
+        self._learning_stats['atoms_activated'] += len(mentioned)
+        self._learning_stats['bonds_strengthened'] += bonds_strengthened
+        self._learning_stats['charges_learned'] += charge_updates
+
         # Log learning
-        logger.info(f"ASA learned from {source}: {len(mentioned)} atoms, {bonds_strengthened} bonds")
+        negation_str = " (NEGATED)" if is_negated else ""
+        logger.info(f"ASA learned from {source}{negation_str}: {len(mentioned)} atoms, {bonds_strengthened} bonds")
 
         return {
             'atoms_activated': len(mentioned),
             'bonds_strengthened': bonds_strengthened,
+            'charge_updates': charge_updates,
+            'negated': is_negated,
+            'intensity': intensity_modifier,
             'activated_names': [self.atoms[aid].name for aid in mentioned if aid in self.atoms][:10],
             'source': source
         }
@@ -1053,6 +1425,170 @@ class MYNDLivingASA:
             return True
 
         return False
+
+    # =========================================================================
+    # ASE ENCODING - Generate nuclear/shell vectors
+    # =========================================================================
+
+    def encode_atom(self, atom_id: str) -> bool:
+        """
+        Encode an atom's embedding into ASE nuclear/shell vectors.
+
+        Requires the atom to have a base embedding (from MYND).
+
+        Returns:
+            True if encoding succeeded
+        """
+        if atom_id not in self.atoms:
+            return False
+
+        atom = self.atoms[atom_id]
+        if atom.embedding is None:
+            return False
+
+        try:
+            # Convert embedding to tensor
+            embedding_tensor = torch.tensor(atom.embedding, dtype=torch.float32)
+
+            # Encode through ASE
+            with torch.no_grad():
+                result = self.atomic_encoder.forward(embedding_tensor)
+
+            # Store results in atom
+            atom.nuclear = result['nuclear'].cpu().numpy().squeeze()
+            atom.context_shell = result['shell'].cpu().numpy().squeeze()
+            atom.semantic_charge = float(result['polarity'].cpu().item())
+            atom.charge_magnitude = float(result['magnitude'].cpu().item())
+
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to encode atom {atom_id}: {e}")
+            return False
+
+    def encode_all_atoms(self) -> Dict[str, int]:
+        """
+        Encode all atoms that have embeddings.
+
+        Returns:
+            Dict with encoding stats
+        """
+        encoded = 0
+        skipped = 0
+        failed = 0
+
+        for atom_id, atom in self.atoms.items():
+            if atom.embedding is None:
+                skipped += 1
+                continue
+
+            if self.encode_atom(atom_id):
+                encoded += 1
+            else:
+                failed += 1
+
+        logger.info(f"ASE encoding: {encoded} encoded, {skipped} skipped (no embedding), {failed} failed")
+
+        return {
+            'encoded': encoded,
+            'skipped': skipped,
+            'failed': failed
+        }
+
+    def compute_semantic_similarity(self, atom_id1: str, atom_id2: str,
+                                     use_nuclear: bool = True) -> float:
+        """
+        Compute semantic similarity between two atoms using ASE vectors.
+
+        Args:
+            atom_id1, atom_id2: Atom IDs to compare
+            use_nuclear: If True, use nuclear (identity), else use shell (context)
+
+        Returns:
+            Cosine similarity (-1 to 1)
+        """
+        if atom_id1 not in self.atoms or atom_id2 not in self.atoms:
+            return 0.0
+
+        atom1 = self.atoms[atom_id1]
+        atom2 = self.atoms[atom_id2]
+
+        if use_nuclear:
+            v1, v2 = atom1.nuclear, atom2.nuclear
+        else:
+            v1, v2 = atom1.context_shell, atom2.context_shell
+
+        if v1 is None or v2 is None:
+            return 0.0
+
+        # Cosine similarity
+        dot = np.dot(v1, v2)
+        norm1 = np.linalg.norm(v1)
+        norm2 = np.linalg.norm(v2)
+
+        if norm1 == 0 or norm2 == 0:
+            return 0.0
+
+        return float(dot / (norm1 * norm2))
+
+    def get_learning_stats(self) -> Dict:
+        """Get ASE learning statistics."""
+        atoms_with_nuclear = sum(1 for a in self.atoms.values() if a.nuclear is not None)
+        atoms_with_charge = sum(1 for a in self.atoms.values() if a.semantic_charge != 0)
+
+        return {
+            **self._learning_stats,
+            'total_atoms': len(self.atoms),
+            'atoms_with_nuclear': atoms_with_nuclear,
+            'atoms_with_semantic_charge': atoms_with_charge,
+            'encoder_device': str(self.atomic_encoder.device),
+        }
+
+    def compute_sentence_charge(self, text: str) -> Dict:
+        """
+        Compute the overall semantic charge of a sentence.
+
+        Uses ASE charge propagation with negation and intensity detection.
+
+        Returns:
+            Dict with charge analysis
+        """
+        # Find mentioned atoms and their charges
+        text_lower = text.lower()
+        mentioned = self._find_mentioned_atoms(text_lower)
+
+        if not mentioned:
+            return {
+                'sentence_charge': 0.0,
+                'confidence': 0.0,
+                'atoms_found': 0,
+                'negated': False
+            }
+
+        # Gather atom charges
+        word_charges = []
+        for atom_id in mentioned:
+            atom = self.atoms[atom_id]
+            word_charges.append((atom.name, atom.effective_charge))
+
+        # Detect negation
+        is_negated, _ = self.charge_propagator.detect_negation(text)
+        intensity = self.charge_propagator.get_intensity_modifier(text)
+
+        # Compose sentence charge
+        base_charge = self.charge_propagator.compose_sentence_charge(word_charges)
+
+        # Apply negation and intensity
+        final_charge = self.charge_propagator.propagate_charge(base_charge, text)
+
+        return {
+            'sentence_charge': final_charge,
+            'base_charge': base_charge,
+            'negated': is_negated,
+            'intensity': intensity,
+            'atoms_found': len(mentioned),
+            'atom_charges': word_charges[:5],  # Top 5
+            'confidence': sum(self.atoms[aid].charge_magnitude for aid in mentioned) / len(mentioned)
+        }
 
 
 # =============================================================================

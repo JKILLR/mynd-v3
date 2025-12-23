@@ -1067,6 +1067,22 @@ async def lifespan(app: FastAPI):
     # Load persisted learning state (meta-learner, knowledge distiller, predictions)
     unified_brain.load_learning_state()
 
+    # ═══════════════════════════════════════════════════════════════════
+    # AUTO-SYNC LIVING ASA FROM MAP VECTOR DB
+    # ═══════════════════════════════════════════════════════════════════
+    if _asa_available and map_vector_db:
+        try:
+            map_data = map_vector_db.export_to_browser_map()
+            if map_data:
+                asa = get_asa()
+                asa.convert_map_to_asa(map_data)
+                asa.start_metabolism(tick_interval=5.0)
+                print(f"🧬 Living ASA auto-synced: {len(asa.atoms)} atoms, metabolism running")
+            else:
+                print("⚠️ ASA: No map data to sync (MapVectorDB empty)")
+        except Exception as e:
+            print(f"⚠️ ASA auto-sync failed: {e}")
+
     # Initialize knowledge extractor (API key optional - uses rule-based fallback)
     api_key = os.environ.get('ANTHROPIC_API_KEY')
     knowledge_extractor = KnowledgeExtractor(map_vector_db, api_key=api_key)
