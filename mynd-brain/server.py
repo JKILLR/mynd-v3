@@ -953,14 +953,19 @@ class MYNDBrain:
                 target_embedding = self.map_embeddings[target_idx]
 
                 # Train on this buffered connection
-                result = self.graph_transformer.train_connection_step(
-                    source_embedding=source_embedding,
-                    target_embedding=target_embedding,
-                    should_connect=conn['should_connect'],
-                    adjacency=self.map_adjacency
-                )
-                processed += 1
-                print(f"🎓 Processed buffered connection: {source_id} → {target_id}, loss={result.get('loss', 0):.4f}")
+                try:
+                    result = self.graph_transformer.train_connection_step(
+                        source_embedding=source_embedding,
+                        target_embedding=target_embedding,
+                        should_connect=conn['should_connect'],
+                        adjacency=self.map_adjacency
+                    )
+                    processed += 1
+                    print(f"🎓 Processed buffered connection: {source_id} → {target_id}, loss={result.get('loss', 0):.4f}")
+                except Exception as e:
+                    print(f"⚠️ GT training error for {source_id} → {target_id}: {e}")
+                    import traceback
+                    traceback.print_exc()
             else:
                 # Still waiting for nodes - keep in buffer (but expire after 5 min)
                 if time.time() - conn['timestamp'] < 300:
