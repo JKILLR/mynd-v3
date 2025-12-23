@@ -27777,14 +27777,19 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         }
 
         // Unified Brain: Learn from parent-child connection
+        console.log(`🔄 node:added event - LocalBrain available: ${typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable}`);
         if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+            console.log(`📡 Calling LocalBrain.learnFromConnection: ${parent.id} → ${node.id} (${node.source || 'manual'})`);
             LocalBrain.learnFromConnection(parent.id, node.id, node.source || 'manual')
                 .then(result => {
+                    console.log(`📥 learnFromConnection result:`, result);
                     if (result.was_predicted) {
                         console.log(`🧠 Brain predicted this connection! Accuracy: ${(result.accuracy * 100).toFixed(1)}%`);
                     }
                 })
                 .catch(e => console.warn('Brain connection learning failed:', e));
+        } else {
+            console.log(`⚠️ LocalBrain not available for learning - typeof: ${typeof LocalBrain}, isAvailable: ${LocalBrain?.isAvailable}`);
         }
 
         // Update UI stats
