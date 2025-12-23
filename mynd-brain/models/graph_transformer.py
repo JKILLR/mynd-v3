@@ -652,6 +652,8 @@ class MYNDGraphTransformer(nn.Module):
         Returns:
             Dict with 'loss' and 'prediction' values
         """
+        print(f"🎯 GT train_connection_step called: should_connect={should_connect}")
+
         # Initialize training if needed
         self._init_training()
 

@@ -1361,6 +1361,8 @@ async def learn_from_connection(learning: ConnectionLearning):
     - If predicted: Reinforces the pattern (brain was right!)
     - If not predicted: Learns new pattern (brain missed this)
     """
+    print(f"📥 /brain/learn-connection called: {learning.source_id} → {learning.target_id} ({learning.connection_type})")
+
     if unified_brain is None:
         raise HTTPException(status_code=503, detail="Unified brain not initialized")
 
@@ -1369,6 +1371,7 @@ async def learn_from_connection(learning: ConnectionLearning):
         learning.target_id,
         learning.connection_type
     )
+    print(f"📤 learn_from_connection result: {result}")
 
     response = {
         "status": "learned",
