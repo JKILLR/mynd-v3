@@ -33484,71 +33484,84 @@ CURRENT REQUEST CONTEXT
                     // ═══════════════════════════════════════════════════════════════
                     // OPEN THREADS ACTIONS - Task tracking for user and Axel
                     // ═══════════════════════════════════════════════════════════════
-                    else if (action.action === 'thread_add') {
-                        // Add a node to Open Threads
-                        const targetId = action.targetId;
-                        if (!targetId) {
+                    // TODO LIST ACTIONS - Simple task management
+                    // ═══════════════════════════════════════════════════════════════
+                    else if (action.action === 'thread_add' || action.action === 'todo_add') {
+                        // Add a new todo task (text-based, not tied to nodes)
+                        const text = action.text || action.label;
+                        if (!text) {
                             result.success = false;
-                            result.description = 'targetId is required for thread_add';
-                        } else {
-                            const node = store.findNode(targetId);
-                            if (!node) {
-                                result.success = false;
-                                result.description = `Node not found: ${targetId}`;
-                            } else if (typeof OpenThreadsPanel !== 'undefined' && OpenThreadsPanel.add) {
-                                const added = OpenThreadsPanel.add(targetId, node.label, 'axel');
-                                if (added) {
-                                    result.success = true;
-                                    result.description = `Added to Open Threads: "${node.label}"`;
-                                    console.log(`📋 Axel added thread: ${node.label}`);
-                                } else {
-                                    result.success = false;
-                                    result.description = `Thread already exists for: "${node.label}"`;
-                                }
-                            } else {
-                                result.success = false;
-                                result.description = 'OpenThreadsPanel not available';
-                            }
-                        }
-                    } else if (action.action === 'thread_complete') {
-                        // Mark a thread as complete
-                        const targetId = action.targetId;
-                        if (!targetId) {
-                            result.success = false;
-                            result.description = 'targetId is required for thread_complete';
-                        } else if (typeof OpenThreadsPanel !== 'undefined' && OpenThreadsPanel.complete) {
-                            const completed = OpenThreadsPanel.complete(targetId);
-                            if (completed) {
+                            result.description = 'text is required for todo_add';
+                        } else if (typeof OpenThreadsPanel !== 'undefined' && OpenThreadsPanel.add) {
+                            const added = OpenThreadsPanel.add(text, 'axel');
+                            if (added) {
                                 result.success = true;
-                                result.description = `Marked thread as complete`;
-                                console.log(`📋 Axel completed thread: ${targetId}`);
+                                result.description = `Added todo: "${text}"`;
+                                console.log(`✓ Axel added todo: ${text}`);
                             } else {
                                 result.success = false;
-                                result.description = `Thread not found: ${targetId}`;
+                                result.description = `Failed to add todo: "${text}"`;
                             }
                         } else {
                             result.success = false;
-                            result.description = 'OpenThreadsPanel not available';
+                            result.description = 'ToDos panel not available';
                         }
-                    } else if (action.action === 'thread_remove') {
-                        // Remove a thread entirely
-                        const targetId = action.targetId;
-                        if (!targetId) {
-                            result.success = false;
-                            result.description = 'targetId is required for thread_remove';
-                        } else if (typeof OpenThreadsPanel !== 'undefined' && OpenThreadsPanel.remove) {
-                            const removed = OpenThreadsPanel.remove(targetId);
-                            if (removed) {
+                    } else if (action.action === 'thread_complete' || action.action === 'todo_complete') {
+                        // Mark a todo as complete - by id or by matching text
+                        const targetId = action.targetId || action.id;
+                        const targetText = action.text;
+
+                        if (typeof OpenThreadsPanel !== 'undefined' && OpenThreadsPanel.todos) {
+                            let todo = null;
+                            if (targetId) {
+                                todo = OpenThreadsPanel.todos.find(t => t.id === targetId);
+                            } else if (targetText) {
+                                // Find by text match (partial match)
+                                todo = OpenThreadsPanel.todos.find(t =>
+                                    t.text.toLowerCase().includes(targetText.toLowerCase()) && !t.completed
+                                );
+                            }
+
+                            if (todo) {
+                                OpenThreadsPanel.complete(todo.id);
                                 result.success = true;
-                                result.description = `Removed thread`;
-                                console.log(`📋 Axel removed thread: ${targetId}`);
+                                result.description = `Completed: "${todo.text}"`;
+                                console.log(`✓ Axel completed todo: ${todo.text}`);
                             } else {
                                 result.success = false;
-                                result.description = `Thread not found: ${targetId}`;
+                                result.description = `Todo not found: ${targetId || targetText}`;
                             }
                         } else {
                             result.success = false;
-                            result.description = 'OpenThreadsPanel not available';
+                            result.description = 'ToDos panel not available';
+                        }
+                    } else if (action.action === 'thread_remove' || action.action === 'todo_remove') {
+                        // Remove a todo - by id or by matching text
+                        const targetId = action.targetId || action.id;
+                        const targetText = action.text;
+
+                        if (typeof OpenThreadsPanel !== 'undefined' && OpenThreadsPanel.todos) {
+                            let todo = null;
+                            if (targetId) {
+                                todo = OpenThreadsPanel.todos.find(t => t.id === targetId);
+                            } else if (targetText) {
+                                todo = OpenThreadsPanel.todos.find(t =>
+                                    t.text.toLowerCase().includes(targetText.toLowerCase())
+                                );
+                            }
+
+                            if (todo) {
+                                OpenThreadsPanel.remove(todo.id);
+                                result.success = true;
+                                result.description = `Removed: "${todo.text}"`;
+                                console.log(`✓ Axel removed todo: ${todo.text}`);
+                            } else {
+                                result.success = false;
+                                result.description = `Todo not found: ${targetId || targetText}`;
+                            }
+                        } else {
+                            result.success = false;
+                            result.description = 'ToDos panel not available';
                         }
                     }
 
@@ -40343,85 +40356,83 @@ showKeyboardHints();
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // OPEN THREADS PANEL - Persistent task tracking for user and Axel
+    // TODOS PANEL - Simple task tracking for user and Axel
     // ═══════════════════════════════════════════════════════════════════
 
     const OpenThreadsPanel = {
-        threads: [],
+        todos: [],
         collapsed: false,
         panel: null,
 
         init() {
-            this.threads = this.load();
+            this.todos = this.load();
             this.createPanel();
             this.render();
-            console.log(`📋 Open Threads initialized with ${this.threads.length} threads`);
+            console.log(`✓ ToDos panel initialized with ${this.todos.length} tasks`);
         },
 
         load() {
             try {
-                return JSON.parse(localStorage.getItem('mynd_open_threads') || '[]');
+                return JSON.parse(localStorage.getItem('mynd_todos') || '[]');
             } catch (e) {
-                console.warn('Failed to load open threads:', e);
+                console.warn('Failed to load todos:', e);
                 return [];
             }
         },
 
         save() {
             try {
-                localStorage.setItem('mynd_open_threads', JSON.stringify(this.threads));
+                localStorage.setItem('mynd_todos', JSON.stringify(this.todos));
             } catch (e) {
-                console.warn('Failed to save open threads:', e);
+                console.warn('Failed to save todos:', e);
             }
         },
 
         createPanel() {
-            // Remove existing panel if any
             const existing = document.getElementById('open-threads-panel');
             if (existing) existing.remove();
 
             const panel = document.createElement('div');
             panel.id = 'open-threads-panel';
-            panel.className = 'open-threads-panel';
 
-            // Apply critical styles inline to ensure they work
+            // Match the app's UI style - glass morphism, taller
             Object.assign(panel.style, {
                 position: 'fixed',
                 left: '20px',
                 top: '50%',
                 transform: 'translateY(-50%)',
-                width: '250px',
-                maxHeight: '400px',
-                background: 'rgba(22, 22, 30, 0.85)',
+                width: '260px',
+                maxHeight: '500px',
+                minHeight: '200px',
+                background: 'rgba(22, 22, 30, 0.9)',
                 backdropFilter: 'blur(24px)',
                 WebkitBackdropFilter: 'blur(24px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '12px',
-                padding: '12px',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '16px',
+                padding: '0',
                 zIndex: '500',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
                 display: 'flex',
                 flexDirection: 'column',
                 pointerEvents: 'auto',
                 fontFamily: 'system-ui, -apple-system, sans-serif',
                 fontSize: '13px',
-                color: 'rgba(255, 255, 255, 0.9)'
+                color: 'rgba(255, 255, 255, 0.9)',
+                overflow: 'hidden'
             });
 
             document.body.appendChild(panel);
             this.panel = panel;
         },
 
-        add(nodeId, label, addedBy = 'user') {
-            // Check for duplicates
-            if (this.threads.find(t => t.nodeId === nodeId)) {
-                console.log(`📋 Thread already exists for node: ${label}`);
-                return false;
-            }
+        // Add a new todo - can be called by user or Axel
+        add(text, addedBy = 'user') {
+            if (!text || !text.trim()) return false;
 
-            this.threads.push({
-                nodeId,
-                label: label || 'Untitled',
+            const id = `todo-${Date.now()}`;
+            this.todos.push({
+                id,
+                text: text.trim(),
                 completed: false,
                 addedAt: Date.now(),
                 addedBy
@@ -40431,45 +40442,57 @@ showKeyboardHints();
             this.render();
 
             if (addedBy === 'axel') {
-                showToast(`Added to Open Threads: ${label}`, 'success');
+                showToast(`Axel added task: ${text}`, 'success');
             }
-            console.log(`📋 Thread added: "${label}" by ${addedBy}`);
+            console.log(`✓ Todo added: "${text}" by ${addedBy}`);
             return true;
         },
 
-        complete(nodeId) {
-            const thread = this.threads.find(t => t.nodeId === nodeId);
-            if (thread) {
-                thread.completed = true;
+        // Complete/uncomplete a todo
+        toggle(id) {
+            const todo = this.todos.find(t => t.id === id);
+            if (todo) {
+                todo.completed = !todo.completed;
+                todo.completedAt = todo.completed ? Date.now() : null;
                 this.save();
                 this.render();
-                console.log(`📋 Thread completed: "${thread.label}"`);
                 return true;
             }
             return false;
         },
 
-        remove(nodeId) {
-            const index = this.threads.findIndex(t => t.nodeId === nodeId);
+        // Mark as complete (for Axel)
+        complete(id) {
+            const todo = this.todos.find(t => t.id === id);
+            if (todo && !todo.completed) {
+                todo.completed = true;
+                todo.completedAt = Date.now();
+                this.save();
+                this.render();
+                console.log(`✓ Todo completed: "${todo.text}"`);
+                return true;
+            }
+            return false;
+        },
+
+        // Remove a todo
+        remove(id) {
+            const index = this.todos.findIndex(t => t.id === id);
             if (index !== -1) {
-                const removed = this.threads.splice(index, 1)[0];
+                const removed = this.todos.splice(index, 1)[0];
                 this.save();
                 this.render();
-                console.log(`📋 Thread removed: "${removed.label}"`);
+                console.log(`✓ Todo removed: "${removed.text}"`);
                 return true;
             }
             return false;
         },
 
-        toggle(nodeId) {
-            const thread = this.threads.find(t => t.nodeId === nodeId);
-            if (thread) {
-                thread.completed = !thread.completed;
-                this.save();
-                this.render();
-                return true;
-            }
-            return false;
+        // Clear completed todos
+        clearCompleted() {
+            this.todos = this.todos.filter(t => !t.completed);
+            this.save();
+            this.render();
         },
 
         toggleCollapse() {
@@ -40477,160 +40500,171 @@ showKeyboardHints();
             this.render();
         },
 
-        focusNode(nodeId) {
-            // Expand path to node and focus on it
-            const node = store.findNode(nodeId);
-            if (node) {
-                // Expand all ancestors
-                let current = node;
-                while (current.parent) {
-                    store.expandedNodes.add(current.parent.id);
-                    current = current.parent;
+        // Handle input keypress
+        handleKeyPress(e) {
+            if (e.key === 'Enter') {
+                const input = e.target;
+                const text = input.value.trim();
+                if (text) {
+                    this.add(text, 'user');
+                    input.value = '';
                 }
-
-                // Select and focus
-                store.selectedId = nodeId;
-                buildScene();
-
-                // Find mesh and focus camera
-                setTimeout(() => {
-                    const mesh = scene?.children?.find(m => m.userData?.id === nodeId);
-                    if (mesh && typeof focusOnNode === 'function') {
-                        focusOnNode(mesh);
-                    }
-                }, 100);
-            } else {
-                showToast('Node not found in map', 'warning');
             }
         },
 
-        addSelectedNode() {
-            const selectedId = store.selectedId;
-            if (!selectedId) {
-                showToast('No node selected', 'warning');
-                return;
-            }
-
-            const node = store.findNode(selectedId);
-            if (node) {
-                this.add(selectedId, node.label, 'user');
+        // Add from input button click
+        addFromInput() {
+            const input = document.getElementById('todo-input');
+            if (input && input.value.trim()) {
+                this.add(input.value.trim(), 'user');
+                input.value = '';
+                input.focus();
             }
         },
 
+        // Get active todos for AI context
         getActiveThreads() {
-            return this.threads.filter(t => !t.completed);
+            return this.todos.filter(t => !t.completed);
         },
 
         getThreadsForPrompt() {
-            // Format threads for AI context
             const active = this.getActiveThreads();
             if (active.length === 0) return null;
 
             return active.map(t => ({
-                nodeId: t.nodeId,
-                label: t.label,
-                addedBy: t.addedBy,
-                addedAt: new Date(t.addedAt).toISOString()
+                id: t.id,
+                text: t.text,
+                addedBy: t.addedBy
             }));
         },
 
         render() {
             if (!this.panel) return;
 
+            const activeCount = this.todos.filter(t => !t.completed).length;
+
             if (this.collapsed) {
+                Object.assign(this.panel.style, {
+                    width: 'auto',
+                    minHeight: 'auto',
+                    padding: '8px'
+                });
                 this.panel.innerHTML = `
-                    <div class="open-threads-collapsed" title="Open Threads (${this.threads.filter(t => !t.completed).length} active)">
-                        <button class="threads-expand-btn" onclick="OpenThreadsPanel.toggleCollapse()">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
-                                <rect x="9" y="3" width="6" height="4" rx="1"/>
-                                <path d="M9 12h6"/>
-                                <path d="M9 16h6"/>
-                            </svg>
-                            ${this.threads.filter(t => !t.completed).length}
-                        </button>
-                    </div>
+                    <button onclick="OpenThreadsPanel.toggleCollapse()"
+                            style="display:flex;align-items:center;gap:6px;background:none;border:none;color:rgba(255,255,255,0.8);cursor:pointer;font-size:13px;padding:4px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
+                            <rect x="9" y="3" width="6" height="4" rx="1"/>
+                        </svg>
+                        <span style="background:rgba(147,112,219,0.3);padding:2px 8px;border-radius:10px;font-size:12px;">${activeCount}</span>
+                    </button>
                 `;
-                this.panel.classList.add('collapsed');
                 return;
             }
 
-            this.panel.classList.remove('collapsed');
+            // Reset to full size
+            Object.assign(this.panel.style, {
+                width: '260px',
+                minHeight: '200px',
+                padding: '0'
+            });
 
-            const activeThreads = this.threads.filter(t => !t.completed);
-            const completedThreads = this.threads.filter(t => t.completed);
+            const activeTodos = this.todos.filter(t => !t.completed);
+            const completedTodos = this.todos.filter(t => t.completed);
 
             let html = `
-                <div class="open-threads-header">
-                    <span>Open Threads</span>
-                    <button class="threads-collapse-btn" onclick="OpenThreadsPanel.toggleCollapse()" title="Minimize">
+                <div style="padding:16px 16px 12px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-weight:600;font-size:14px;color:rgba(255,255,255,0.95);">ToDos</span>
+                    <button onclick="OpenThreadsPanel.toggleCollapse()"
+                            style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;padding:4px;border-radius:4px;"
+                            onmouseover="this.style.background='rgba(255,255,255,0.1)'"
+                            onmouseout="this.style.background='none'">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M5 12h14"/>
                         </svg>
                     </button>
                 </div>
-                <div class="open-threads-list">
+
+                <div style="flex:1;overflow-y:auto;padding:8px 12px;">
             `;
 
-            // Active threads
-            for (const thread of activeThreads) {
-                const addedByBadge = thread.addedBy === 'axel' ? '<span class="thread-badge">Axel</span>' : '';
+            // Active todos
+            for (const todo of activeTodos) {
+                const badge = todo.addedBy === 'axel'
+                    ? '<span style="font-size:10px;background:rgba(147,112,219,0.3);color:rgba(147,112,219,1);padding:2px 6px;border-radius:8px;margin-left:6px;">Axel</span>'
+                    : '';
                 html += `
-                    <div class="thread-item" data-node-id="${thread.nodeId}">
-                        <input type="checkbox" class="thread-checkbox"
-                               onchange="OpenThreadsPanel.toggle('${thread.nodeId}')"
-                               ${thread.completed ? 'checked' : ''}>
-                        <span class="thread-label" onclick="OpenThreadsPanel.focusNode('${thread.nodeId}')" title="${thread.label}">
-                            ${thread.label}
-                        </span>
-                        ${addedByBadge}
-                        <button class="thread-remove" onclick="OpenThreadsPanel.remove('${thread.nodeId}')" title="Remove">×</button>
+                    <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 4px;border-radius:8px;transition:background 0.15s;"
+                         onmouseover="this.style.background='rgba(255,255,255,0.03)'"
+                         onmouseout="this.style.background='none'">
+                        <input type="checkbox"
+                               onchange="OpenThreadsPanel.toggle('${todo.id}')"
+                               style="width:16px;height:16px;margin-top:2px;accent-color:#9370DB;cursor:pointer;">
+                        <span style="flex:1;line-height:1.4;color:rgba(255,255,255,0.9);">${todo.text}${badge}</span>
+                        <button onclick="OpenThreadsPanel.remove('${todo.id}')"
+                                style="background:none;border:none;color:rgba(255,255,255,0.3);cursor:pointer;padding:2px;font-size:16px;line-height:1;"
+                                onmouseover="this.style.color='rgba(255,100,100,0.8)'"
+                                onmouseout="this.style.color='rgba(255,255,255,0.3)'">×</button>
                     </div>
                 `;
             }
 
-            // Completed threads (show dimmed)
-            for (const thread of completedThreads) {
+            // Completed todos
+            if (completedTodos.length > 0) {
+                html += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <span style="font-size:11px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.5px;">Completed</span>
+                        <button onclick="OpenThreadsPanel.clearCompleted()"
+                                style="background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:11px;"
+                                onmouseover="this.style.color='rgba(255,255,255,0.7)'"
+                                onmouseout="this.style.color='rgba(255,255,255,0.4)'">Clear</button>
+                    </div>
+                `;
+                for (const todo of completedTodos) {
+                    html += `
+                        <div style="display:flex;align-items:flex-start;gap:10px;padding:6px 4px;opacity:0.5;">
+                            <input type="checkbox" checked
+                                   onchange="OpenThreadsPanel.toggle('${todo.id}')"
+                                   style="width:16px;height:16px;margin-top:2px;accent-color:#9370DB;cursor:pointer;">
+                            <span style="flex:1;line-height:1.4;text-decoration:line-through;color:rgba(255,255,255,0.5);">${todo.text}</span>
+                            <button onclick="OpenThreadsPanel.remove('${todo.id}')"
+                                    style="background:none;border:none;color:rgba(255,255,255,0.3);cursor:pointer;padding:2px;font-size:16px;line-height:1;">×</button>
+                        </div>
+                    `;
+                }
+                html += '</div>';
+            }
+
+            // Empty state
+            if (this.todos.length === 0) {
                 html += `
-                    <div class="thread-item completed" data-node-id="${thread.nodeId}">
-                        <input type="checkbox" class="thread-checkbox"
-                               onchange="OpenThreadsPanel.toggle('${thread.nodeId}')"
-                               checked>
-                        <span class="thread-label" onclick="OpenThreadsPanel.focusNode('${thread.nodeId}')" title="${thread.label}">
-                            ${thread.label}
-                        </span>
-                        <button class="thread-remove" onclick="OpenThreadsPanel.remove('${thread.nodeId}')" title="Remove">×</button>
+                    <div style="text-align:center;padding:24px 16px;color:rgba(255,255,255,0.4);">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:8px;opacity:0.5;">
+                            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
+                            <rect x="9" y="3" width="6" height="4" rx="1"/>
+                            <path d="M12 11v6"/>
+                            <path d="M9 14h6"/>
+                        </svg>
+                        <p style="font-size:13px;margin:0;">No tasks yet</p>
                     </div>
                 `;
             }
 
             html += `
                 </div>
-                <button class="add-thread-btn" onclick="OpenThreadsPanel.addSelectedNode()">
-                    + Add Selected
-                </button>
-            `;
 
-            // Empty state
-            if (this.threads.length === 0) {
-                html = `
-                    <div class="open-threads-header">
-                        <span>Open Threads</span>
-                        <button class="threads-collapse-btn" onclick="OpenThreadsPanel.toggleCollapse()" title="Minimize">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M5 12h14"/>
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="open-threads-empty">
-                        <p>No open threads</p>
-                        <p class="hint">Select a node and click below to track it</p>
-                    </div>
-                    <button class="add-thread-btn" onclick="OpenThreadsPanel.addSelectedNode()">
-                        + Add Selected
-                    </button>
-                `;
-            }
+                <div style="padding:12px;border-top:1px solid rgba(255,255,255,0.06);display:flex;gap:8px;">
+                    <input type="text" id="todo-input" placeholder="Add a task..."
+                           onkeypress="OpenThreadsPanel.handleKeyPress(event)"
+                           style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:white;font-size:13px;outline:none;"
+                           onfocus="this.style.borderColor='rgba(147,112,219,0.5)'"
+                           onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+                    <button onclick="OpenThreadsPanel.addFromInput()"
+                            style="background:rgba(147,112,219,0.2);border:1px solid rgba(147,112,219,0.3);border-radius:8px;padding:10px 14px;color:rgba(147,112,219,1);cursor:pointer;font-size:13px;font-weight:500;"
+                            onmouseover="this.style.background='rgba(147,112,219,0.3)'"
+                            onmouseout="this.style.background='rgba(147,112,219,0.2)'">Add</button>
+                </div>
+            `;
 
             this.panel.innerHTML = html;
         }
