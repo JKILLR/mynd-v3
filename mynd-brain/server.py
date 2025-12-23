@@ -1481,7 +1481,10 @@ async def get_brain_context(request: BrainContextRequest):
             asa = get_asa()
             learn_result = asa.learn_from_text(request.user_message, source="user")
             if learn_result['atoms_activated'] > 0:
-                print(f"🧬 ASA learned from user: {learn_result['atoms_activated']} atoms, {learn_result['bonds_strengthened']} bonds")
+                encoder_info = ""
+                if learn_result.get('encoder_trained'):
+                    encoder_info = f", encoder_loss={learn_result.get('encoder_loss', 0):.4f}"
+                print(f"🧬 ASA learned from user: {learn_result['atoms_activated']} atoms, {learn_result['bonds_strengthened']} bonds{encoder_info}")
 
             # === ASA CONTRIBUTES WORKING MEMORY TO CONTEXT ===
             # This is crucial - tell Axel what topics are "hot" (recently discussed)
@@ -1843,7 +1846,10 @@ async def receive_from_claude(claude_response: ClaudeResponse):
             if response_text:
                 learn_result = asa.learn_from_text(response_text, source="axel")
                 if learn_result['atoms_activated'] > 0:
-                    print(f"🧬 ASA learned from Axel: {learn_result['atoms_activated']} atoms, {learn_result['bonds_strengthened']} bonds")
+                    encoder_info = ""
+                    if learn_result.get('encoder_trained'):
+                        encoder_info = f", encoder_loss={learn_result.get('encoder_loss', 0):.4f}"
+                    print(f"🧬 ASA learned from Axel: {learn_result['atoms_activated']} atoms, {learn_result['bonds_strengthened']} bonds{encoder_info}")
 
             # Also learn from structured insights
             for insight in (data.get('insights') or []):
