@@ -27743,6 +27743,11 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         // Direct server call - bypasses LocalBrain.isAvailable which can be stale
         // ═══════════════════════════════════════════════════════════════
         console.log(`📡 GT Training: ${parent.id} → ${node.id} (${node.source || 'manual'})`);
+
+        // Use AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
         fetch('http://localhost:8420/brain/learn-connection', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -27750,16 +27755,28 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 source_id: parent.id,
                 target_id: node.id,
                 connection_type: node.source || 'manual'
-            })
+            }),
+            signal: controller.signal
         })
-        .then(res => res.ok ? res.json() : Promise.reject(`Server ${res.status}`))
+        .then(res => {
+            clearTimeout(timeoutId);
+            console.log(`📡 GT Training response status: ${res.status}`);
+            return res.ok ? res.json() : Promise.reject(`Server ${res.status}`);
+        })
         .then(result => {
             console.log(`📥 GT Training result:`, result);
             if (result.was_predicted) {
                 console.log(`🧠 Brain predicted this connection! Accuracy: ${(result.accuracy * 100).toFixed(1)}%`);
             }
         })
-        .catch(e => console.log('📡 GT Training: server unavailable -', e));
+        .catch(e => {
+            clearTimeout(timeoutId);
+            if (e.name === 'AbortError') {
+                console.log('📡 GT Training: request timed out after 5s');
+            } else {
+                console.log('📡 GT Training: failed -', e);
+            }
+        });
 
         // CGT: Record create action (also independent of neuralNet)
         cognitiveGT.recordAction('create', node.id, {
