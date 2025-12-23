@@ -43047,20 +43047,26 @@ showKeyboardHints();
                         // Track preference and boost pattern weight
                         preferenceTracker.recordAccept(label, suggestionType);
                         metaLearner.trackSuggestionAccepted(label, false); // false = not Add All
+
+                        console.log(`🎯 Suggestion accepted: "${label}" under parent ${parentId}`);
+                        console.log(`   parentNode exists: ${!!parentNode}, LocalBrain exists: ${typeof LocalBrain !== 'undefined'}`);
+
                         if (parentNode) {
                             neuralNet.boostPattern(parentNode.label, label, suggestionType);
 
                             // LOCAL BRAIN FEEDBACK - Train Graph Transformer on user decisions
                             // LocalBrain handles auto-reconnect internally
                             if (typeof LocalBrain !== 'undefined') {
+                                console.log(`🎯 Calling LocalBrain.recordFeedback...`);
                                 LocalBrain.recordFeedback(parentId, 'accepted', {
                                     parentLabel: parentNode.label,
                                     acceptedLabel: label,
                                     suggestionType: suggestionType,
                                     timestamp: Date.now()
                                 });
+                            } else {
+                                console.warn('🎯 LocalBrain is undefined!');
                             }
-
                             // Store semantic memory
                             semanticMemory.addMemory(
                                 'suggestion_accepted',
@@ -43077,6 +43083,8 @@ showKeyboardHints();
                                 });
                                 chatManager.recordSessionLearning('pattern', `${parentNode.label} → ${label}`);
                             }
+                        } else {
+                            console.warn(`🎯 parentNode is null for parentId: ${parentId}`);
                         }
                         
                         buildScene();

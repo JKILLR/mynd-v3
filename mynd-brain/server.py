@@ -3211,11 +3211,15 @@ async def predict_category(request: PredictCategoryRequest):
 @app.post("/train/feedback")
 async def train_feedback(request: TrainFeedbackRequest):
     """Record feedback for learning."""
+    print(f"📥 /train/feedback called: node_id={request.node_id}, action={request.action}")
+    print(f"   context={request.context}")
+
     if brain is None:
         raise HTTPException(status_code=503, detail="Brain not initialized")
 
-    await brain.record_feedback(request)
-    return {"status": "recorded", "buffer_size": len(brain.feedback_buffer)}
+    result = await brain.record_feedback(request)
+    print(f"   ✅ Feedback processed, buffer_size={len(brain.feedback_buffer)}")
+    return {"status": "recorded", "buffer_size": len(brain.feedback_buffer), "training": result}
 
 # ═══════════════════════════════════════════════════════════════════
 # VOICE ENDPOINTS
