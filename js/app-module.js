@@ -26766,8 +26766,19 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                 // Perform reparent on release
                 const targetId = reparentTarget.userData.id;
                 const nodeId = reparentNode.userData.id;
-                
+
                 if (store.moveNode(nodeId, targetId)) {
+                    // TRAIN GT: Learn from drag-drop reparent decisions
+                    if (typeof LocalBrain !== 'undefined') {
+                        LocalBrain.learnFromConnection(targetId, nodeId, 'drag_reparent')
+                            .then(res => {
+                                if (res?.learning_signal > 0) {
+                                    console.log(`🧠 GT learned from drag-reparent: ${reparentNode.userData.label} → ${reparentTarget.userData.label}`);
+                                }
+                            })
+                            .catch(e => console.warn('Drag reparent learning failed:', e));
+                    }
+
                     showToast(`Moved to "${reparentTarget.userData.label}"`, 'success');
                     cleanupReparentDrag(false); // Don't restore connection line since we're rebuilding
                     buildScene();
@@ -27068,10 +27079,24 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
             } else if (spotlightInput.value.trim()) {
                 // Create new node with input text
                 const parentId = selectedNode?.userData.id || currentContextId || store.data.id;
-                store.addNode(parentId, { label: spotlightInput.value.trim() });
+                const newLabel = spotlightInput.value.trim();
+                const newNode = store.addNode(parentId, { label: newLabel });
+
+                // TRAIN GT: Manual node creation via spotlight
+                if (newNode && typeof LocalBrain !== 'undefined') {
+                    const parentNode = store.findNode(parentId);
+                    LocalBrain.recordFeedback(parentId, 'manual_create', {
+                        parentLabel: parentNode?.label || 'root',
+                        acceptedLabel: newLabel,
+                        suggestionType: 'manual',
+                        source: 'spotlight',
+                        timestamp: Date.now()
+                    }).catch(e => console.warn('Spotlight feedback failed:', e));
+                }
+
                 buildScene();
                 closeSpotlight();
-                showToast(`Created "${spotlightInput.value.trim()}"`, 'success');
+                showToast(`Created "${newLabel}"`, 'success');
             }
         }
     });
@@ -27206,10 +27231,23 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                 color: selectedColor,
                 description: inputDesc.value.trim()
             });
-            
+
             if (newNode) {
+                // TRAIN GT: Manual node creation via modal
+                if (typeof LocalBrain !== 'undefined') {
+                    const parentNode = store.findNode(modalParentId);
+                    LocalBrain.recordFeedback(modalParentId, 'manual_create', {
+                        parentLabel: parentNode?.label || 'root',
+                        acceptedLabel: name,
+                        suggestionType: 'manual',
+                        source: 'modal_add',
+                        description: inputDesc.value.trim(),
+                        timestamp: Date.now()
+                    }).catch(e => console.warn('Modal add feedback failed:', e));
+                }
+
                 buildScene();
-                
+
                 // Celebration!
                 const mesh = nodes.get(newNode.id);
                 if (mesh) {
@@ -27219,18 +27257,30 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                     createCelebration(x, y, selectedColor, 6);
                     selectNode(mesh);
                 }
-                
+
                 audio.success();
                 haptic.success();
                 showToast(`Created "${name}"`, 'success');
             }
         } else if (modalMode === 'edit' && modalEditId) {
+            const oldNode = store.findNode(modalEditId);
             store.updateNode(modalEditId, {
                 label: name,
                 color: selectedColor,
                 description: inputDesc.value.trim()
             });
-            
+
+            // TRAIN GT: Node refinement via modal edit
+            if (typeof LocalBrain !== 'undefined') {
+                LocalBrain.recordFeedback(modalEditId, 'edited', {
+                    oldLabel: oldNode?.label,
+                    newLabel: name,
+                    suggestionType: 'refinement',
+                    source: 'modal_edit',
+                    timestamp: Date.now()
+                }).catch(e => console.warn('Modal edit feedback failed:', e));
+            }
+
             buildScene();
             showToast(`Updated "${name}"`, 'success');
         }
@@ -27329,8 +27379,19 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             if (Array.isArray(ideas)) {
                 ideas.forEach(idea => {
                     store.addNode(nodeId, { label: idea, color: node.color });
+
+                    // TRAIN GT: Learn from brainstorm ideas
+                    if (typeof LocalBrain !== 'undefined') {
+                        LocalBrain.recordFeedback(nodeId, 'brainstorm_accepted', {
+                            parentLabel: node.label,
+                            acceptedLabel: idea,
+                            suggestionType: 'brainstorm',
+                            source: 'brainstorm_simple',
+                            timestamp: Date.now()
+                        }).catch(e => console.warn('Brainstorm feedback failed:', e));
+                    }
                 });
-                
+
                 // Mark node as expanded BEFORE building scene so children are visible
                 store.expandedNodes.add(nodeId);
                 
@@ -27398,8 +27459,22 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
     infoColorPicker.addEventListener('click', (e) => {
         const colorEl = e.target.closest('[data-color]');
         if (colorEl && selectedNode) {
+            const oldColor = selectedNode.userData.color;
             const newColor = colorEl.dataset.color;
             store.updateNode(selectedNode.userData.id, { color: newColor });
+
+            // TRAIN GT: Color changes indicate categorization preference
+            if (typeof LocalBrain !== 'undefined') {
+                LocalBrain.recordFeedback(selectedNode.userData.id, 'color_updated', {
+                    nodeLabel: selectedNode.userData.label,
+                    oldColor: oldColor,
+                    newColor: newColor,
+                    suggestionType: 'style_choice',
+                    source: 'color_picker',
+                    timestamp: Date.now()
+                }).catch(e => console.warn('Color feedback failed:', e));
+            }
+
             selectedNode.userData.color = newColor;
             selectedNode.material.color.set(newColor);
             selectedNode.material.emissive.set(newColor);
@@ -27431,12 +27506,26 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
     // Inline title editing
     infoTitle.addEventListener('change', () => {
         if (selectedNode && infoTitle.value.trim()) {
-            store.updateNode(selectedNode.userData.id, { label: infoTitle.value.trim() });
-            selectedNode.userData.label = infoTitle.value.trim();
+            const oldLabel = selectedNode.userData.label;
+            const newLabel = infoTitle.value.trim();
+            store.updateNode(selectedNode.userData.id, { label: newLabel });
+
+            // TRAIN GT: Label refinement indicates semantic correction
+            if (typeof LocalBrain !== 'undefined' && oldLabel !== newLabel) {
+                LocalBrain.recordFeedback(selectedNode.userData.id, 'label_updated', {
+                    oldLabel: oldLabel,
+                    newLabel: newLabel,
+                    suggestionType: 'refinement',
+                    source: 'info_panel',
+                    timestamp: Date.now()
+                }).catch(e => console.warn('Label feedback failed:', e));
+            }
+
+            selectedNode.userData.label = newLabel;
             // Update label sprite
             if (selectedNode.userData.labelSprite) {
                 const oldSprite = selectedNode.userData.labelSprite;
-                const newSprite = createLabelSprite(infoTitle.value.trim(), selectedNode.userData.color);
+                const newSprite = createLabelSprite(newLabel, selectedNode.userData.color);
                 newSprite.position.copy(oldSprite.position);
                 newSprite.scale.copy(oldSprite.scale);
                 newSprite.visible = oldSprite.visible;
@@ -27460,12 +27549,29 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
     
     // Importance slider
     const infoImportance = document.getElementById('info-importance');
+    let importanceDebounce = null;
     infoImportance.addEventListener('input', () => {
         if (selectedNode) {
             const scale = parseFloat(infoImportance.value);
+            const oldImportance = selectedNode.userData.importance || 1;
             selectedNode.userData.importance = scale;
             store.updateNode(selectedNode.userData.id, { importance: scale });
-            
+
+            // TRAIN GT: Importance changes indicate user priorities (debounced)
+            if (typeof LocalBrain !== 'undefined') {
+                clearTimeout(importanceDebounce);
+                importanceDebounce = setTimeout(() => {
+                    LocalBrain.recordFeedback(selectedNode.userData.id, 'importance_updated', {
+                        nodeLabel: selectedNode.userData.label,
+                        oldImportance: oldImportance,
+                        newImportance: scale,
+                        suggestionType: 'priority_choice',
+                        source: 'importance_slider',
+                        timestamp: Date.now()
+                    }).catch(e => console.warn('Importance feedback failed:', e));
+                }, 500); // Debounce 500ms
+            }
+
             // Update node size
             const baseSize = selectedNode.userData.baseSize || 1;
             const newSize = baseSize * scale;
@@ -27474,7 +27580,7 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
             if (selectedNode.userData.outlineMesh) {
                 selectedNode.userData.outlineMesh.scale.set(newSize * 1.03, newSize * 1.03, newSize * 1.03);
             }
-            
+
             // Update spring scale target
             selectedNode.userData.spring.scaleTarget = newSize;
         }
@@ -28190,11 +28296,24 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
     quickInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && quickInput.value.trim()) {
             const parentId = selectedNode?.userData.id || currentContextId || store.data.id;
-            const newNode = store.addNode(parentId, { label: quickInput.value.trim() });
-            
+            const newLabel = quickInput.value.trim();
+            const newNode = store.addNode(parentId, { label: newLabel });
+
             if (newNode) {
+                // TRAIN GT: Manual node creation via quick input
+                if (typeof LocalBrain !== 'undefined') {
+                    const parentNode = store.findNode(parentId);
+                    LocalBrain.recordFeedback(parentId, 'manual_create', {
+                        parentLabel: parentNode?.label || 'root',
+                        acceptedLabel: newLabel,
+                        suggestionType: 'manual',
+                        source: 'quick_input',
+                        timestamp: Date.now()
+                    }).catch(e => console.warn('Quick input feedback failed:', e));
+                }
+
                 buildScene();
-                
+
                 const mesh = nodes.get(newNode.id);
                 if (mesh) {
                     const screenPos = mesh.position.clone().project(camera);
@@ -28203,12 +28322,12 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                     createCelebration(x, y, newNode.color, 6);
                     selectNode(mesh);
                 }
-                
+
                 audio.pop();
                 haptic.light();
                 showToast(`Added "${newNode.label}"`, 'success');
             }
-            
+
             quickInput.value = '';
         }
     });
@@ -42741,11 +42860,23 @@ showKeyboardHints();
                     if (confirm(`Move "${nodeData.label}" under "${newParent.label}"?`)) {
                         // Use store.moveNode
                         if (store.moveNode(nodeToMove, newParent.id)) {
+                            // TRAIN GT: User accepted AI's reorganization suggestion
+                            if (typeof LocalBrain !== 'undefined') {
+                                LocalBrain.recordFeedback(newParent.id, 'accepted', {
+                                    parentLabel: newParent.label,
+                                    acceptedLabel: nodeData.label,
+                                    suggestionType: 'reorganization',
+                                    source: 'neural_suggestion',
+                                    reasoning: claudeSuggestionEl.querySelector('.neural-suggestion-text + div')?.textContent || '',
+                                    timestamp: Date.now()
+                                }).catch(e => console.warn('Neural suggestion feedback failed:', e));
+                            }
+
                             // Update color to match new parent
                             nodeData.color = newParent.color;
                             store.save();
                             buildScene();
-                            
+
                             // Focus on the moved node in its new location
                             setTimeout(() => {
                                 const movedMesh = nodes.get(nodeToMove);
@@ -42754,7 +42885,7 @@ showKeyboardHints();
                                     focusOnNode(movedMesh);
                                 }
                             }, 100);
-                            
+
                             this.close();
                             showToast(`Moved to "${newParent.label}"`, 'success');
                         } else {
@@ -43642,14 +43773,26 @@ Consider these learned patterns when generating suggestions.`;
                     // Handle both old format (string) and new format (object with label/description)
                     const label = typeof idea === 'string' ? idea : idea.label;
                     const desc = typeof idea === 'string' ? '' : (idea.description || '');
-                    store.addNode(nodeId, { 
-                        label, 
+                    store.addNode(nodeId, {
+                        label,
                         description: desc,
-                        color: node.color, 
-                        source: 'brainstorm' 
+                        color: node.color,
+                        source: 'brainstorm'
                     });
+
+                    // TRAIN GT: Learn from enhanced brainstorm ideas
+                    if (typeof LocalBrain !== 'undefined') {
+                        LocalBrain.recordFeedback(nodeId, 'brainstorm_accepted', {
+                            parentLabel: node.label,
+                            acceptedLabel: label,
+                            suggestionType: 'brainstorm',
+                            source: 'brainstorm_enhanced',
+                            description: desc,
+                            timestamp: Date.now()
+                        }).catch(e => console.warn('Enhanced brainstorm feedback failed:', e));
+                    }
                 });
-                
+
                 buildScene();
                 
                 // Focus on the parent node
