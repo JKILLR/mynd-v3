@@ -1549,7 +1549,15 @@ async def receive_from_claude(claude_response: ClaudeResponse):
     if unified_brain is None:
         raise HTTPException(status_code=503, detail="Unified brain not initialized")
 
-    result = unified_brain.receive_from_claude(claude_response.model_dump())
+    data = claude_response.model_dump()
+    response_preview = (data.get('response', '') or '')[:100]
+    print(f"📚 /brain/receive-from-claude: {len(data.get('response', '') or '')} chars, insights={len(data.get('insights') or [])}")
+    print(f"   Preview: {response_preview}...")
+
+    result = unified_brain.receive_from_claude(data)
+
+    extracted = result.get('extracted', {})
+    print(f"   Extracted: {len(extracted.get('insights', []))} insights, {len(extracted.get('patterns', []))} patterns")
 
     return {
         "status": "learned",
