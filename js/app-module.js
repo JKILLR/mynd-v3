@@ -27725,28 +27725,40 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
     // INCREMENTAL LEARNING - Learn from every node addition
     // ═══════════════════════════════════════════════════════════════════
     bus.on('node:added', ({ parent, node }) => {
-        if (!neuralNet.isReady) return;
-        
         // Calculate depth first (needed for multiple systems)
         const path = store.getPath(node.id);
         const depth = path.length - 1; // Depth is path length minus 1 (root is depth 0)
-        
-        // Learn the parent->child pattern
-        neuralNet.incrementalLearnPattern(parent.label, node.label, node.source || 'user', depth);
-        
-        // Queue embedding for new node
-        const nodeText = node.description 
-            ? `${node.label}. ${node.description}`
-            : node.label;
-        neuralNet.queueEmbedding(nodeText);
-        
-        // Track in user profile
+
+        // ═══════════════════════════════════════════════════════════════
+        // UNIFIED BRAIN: Learn from parent-child connection (runs first, always)
+        // This is independent of in-browser neural net readiness
+        // ═══════════════════════════════════════════════════════════════
+        if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+            console.log(`📡 GT Training: ${parent.id} → ${node.id} (${node.source || 'manual'})`);
+            LocalBrain.learnFromConnection(parent.id, node.id, node.source || 'manual')
+                .then(result => {
+                    console.log(`📥 GT Training result:`, result);
+                    if (result.was_predicted) {
+                        console.log(`🧠 Brain predicted this connection! Accuracy: ${(result.accuracy * 100).toFixed(1)}%`);
+                    }
+                })
+                .catch(e => console.warn('Brain connection learning failed:', e));
+        }
+
+        // CGT: Record create action (also independent of neuralNet)
+        cognitiveGT.recordAction('create', node.id, {
+            parentId: parent.id,
+            nodeDepth: depth,
+            source: node.source || 'user'
+        });
+
+        // Track in user profile (independent of neuralNet)
         userProfile.trackNodeCreated(node, parent, depth, store);
-        
-        // Track in meta-learner (how user thinks)
+
+        // Track in meta-learner (independent of neuralNet)
         metaLearner.trackNodeCreated(node, parent, depth, store);
-        
-        // Store semantic memory for significant events
+
+        // Store semantic memory for significant events (independent of neuralNet)
         const source = node.source || 'user';
         if (source === 'user') {
             semanticMemory.addMemory(
@@ -27763,33 +27775,24 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 { parentLabel: parent.label, childLabel: node.label, source: 'brainstorm' }
             );
         }
-        
-        // CGT: Record create action
-        cognitiveGT.recordAction('create', node.id, { 
-            parentId: parent.id, 
-            nodeDepth: depth,
-            source: node.source || 'user'
-        });
-        
+
         // StyleTransfer: Learn from creation
         if (styleTransfer.initialized) {
             styleTransfer.learnFromCreation(node, parent, store);
         }
 
-        // Unified Brain: Learn from parent-child connection
-        console.log(`🔄 node:added event - LocalBrain available: ${typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable}`);
-        if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
-            console.log(`📡 Calling LocalBrain.learnFromConnection: ${parent.id} → ${node.id} (${node.source || 'manual'})`);
-            LocalBrain.learnFromConnection(parent.id, node.id, node.source || 'manual')
-                .then(result => {
-                    console.log(`📥 learnFromConnection result:`, result);
-                    if (result.was_predicted) {
-                        console.log(`🧠 Brain predicted this connection! Accuracy: ${(result.accuracy * 100).toFixed(1)}%`);
-                    }
-                })
-                .catch(e => console.warn('Brain connection learning failed:', e));
-        } else {
-            console.log(`⚠️ LocalBrain not available for learning - typeof: ${typeof LocalBrain}, isAvailable: ${LocalBrain?.isAvailable}`);
+        // ═══════════════════════════════════════════════════════════════
+        // IN-BROWSER NEURAL NET: Only if ready
+        // ═══════════════════════════════════════════════════════════════
+        if (neuralNet.isReady) {
+            // Learn the parent->child pattern
+            neuralNet.incrementalLearnPattern(parent.label, node.label, node.source || 'user', depth);
+
+            // Queue embedding for new node
+            const nodeText = node.description
+                ? `${node.label}. ${node.description}`
+                : node.label;
+            neuralNet.queueEmbedding(nodeText);
         }
 
         // Update UI stats

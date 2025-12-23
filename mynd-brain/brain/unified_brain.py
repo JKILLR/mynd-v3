@@ -302,6 +302,7 @@ class KnowledgeDistiller:
         """
         Process Claude's response and extract learnable information.
         Claude should return structured insights alongside its response.
+        If no structured data, extract from raw text.
         """
         extracted = {
             'insights': [],
@@ -311,30 +312,107 @@ class KnowledgeDistiller:
         }
 
         # Extract structured insights if Claude provided them
-        if 'insights' in response:
+        if 'insights' in response and response['insights']:
             for insight in response['insights']:
                 self._process_insight(insight)
                 extracted['insights'].append(insight)
 
         # Extract patterns Claude identified
-        if 'patterns' in response:
+        if 'patterns' in response and response['patterns']:
             for pattern in response['patterns']:
                 self._learn_pattern(pattern)
                 extracted['patterns'].append(pattern)
 
         # Extract corrections Claude made
-        if 'corrections' in response:
+        if 'corrections' in response and response['corrections']:
             for correction in response['corrections']:
                 self._store_correction(correction)
                 extracted['corrections'].append(correction)
 
         # Extract explanations Claude provided
-        if 'explanations' in response:
+        if 'explanations' in response and response['explanations']:
             for concept, explanation in response['explanations'].items():
                 self._store_explanation(concept, explanation)
                 extracted['explanations'].append({concept: explanation})
 
+        # ═══════════════════════════════════════════════════════════════════
+        # AUTO-EXTRACT from raw response text when no structured data provided
+        # ═══════════════════════════════════════════════════════════════════
+        if not extracted['insights'] and not extracted['patterns']:
+            raw_text = response.get('response', '')
+            metadata = response.get('metadata', {})
+
+            if raw_text and len(raw_text) > 50:  # Meaningful response
+                auto_insights = self._extract_insights_from_text(raw_text, metadata)
+                for insight in auto_insights:
+                    self._process_insight(insight)
+                    extracted['insights'].append(insight)
+
         return extracted
+
+    def _extract_insights_from_text(self, text: str, metadata: Dict = None) -> list:
+        """
+        Extract learnable insights from Claude's raw response text.
+        Uses simple heuristics to identify key facts and patterns.
+        """
+        insights = []
+        metadata = metadata or {}
+        user_query = metadata.get('userQuery', '')
+        selected_node = metadata.get('selectedNode', '')
+
+        # Split into sentences
+        import re
+        sentences = re.split(r'[.!?]+', text)
+
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence) < 20 or len(sentence) > 300:
+                continue
+
+            # Look for definitional patterns ("X is Y", "X means Y")
+            is_match = re.search(r'^(\w+(?:\s+\w+)?)\s+(?:is|are|means?|refers?\s+to)\s+(.+)', sentence, re.I)
+            if is_match:
+                insights.append({
+                    'content': sentence,
+                    'type': 'definition',
+                    'confidence': 0.7,
+                    'context': selected_node
+                })
+                continue
+
+            # Look for causal patterns ("because", "therefore", "so")
+            if re.search(r'\b(because|therefore|thus|hence|so\s+that)\b', sentence, re.I):
+                insights.append({
+                    'content': sentence,
+                    'type': 'causal',
+                    'confidence': 0.6,
+                    'context': selected_node
+                })
+                continue
+
+            # Look for actionable advice ("you should", "try", "consider")
+            if re.search(r'\b(you\s+(?:should|could|might)|try\s+to|consider\s+\w+ing|recommend)\b', sentence, re.I):
+                insights.append({
+                    'content': sentence,
+                    'type': 'advice',
+                    'confidence': 0.65,
+                    'context': user_query[:50] if user_query else None
+                })
+                continue
+
+            # Look for factual claims with numbers or specific terms
+            if re.search(r'\b\d+(?:\.\d+)?(?:\s*%|\s+(?:times|percent|years?|days?))\b', sentence, re.I):
+                insights.append({
+                    'content': sentence,
+                    'type': 'fact',
+                    'confidence': 0.75,
+                    'context': selected_node
+                })
+                continue
+
+        # Limit to top 5 most confident insights per response
+        insights.sort(key=lambda x: x.get('confidence', 0), reverse=True)
+        return insights[:5]
 
     def _process_insight(self, insight: Dict):
         """Process and potentially distill an insight"""
