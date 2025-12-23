@@ -161,6 +161,95 @@ class AtomicEncoder(nn.Module):
 
         return base
 
+    def setup_training(self, lr: float = 1e-4):
+        """Initialize optimizer for training."""
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+        self.training_stats = {
+            'steps': 0,
+            'total_loss': 0.0,
+            'charge_loss': 0.0,
+            'similarity_loss': 0.0,
+        }
+        self.train()  # Set to training mode
+
+    def train_step(self, embeddings: List[torch.Tensor],
+                   target_charges: List[float],
+                   co_occurring_pairs: List[Tuple[int, int]] = None) -> Dict:
+        """
+        Train the encoder on conversation data.
+
+        Args:
+            embeddings: List of embeddings for mentioned atoms
+            target_charges: Target charge values (-1 to 1) based on context
+            co_occurring_pairs: Indices of atoms that appeared together (for similarity)
+
+        Returns:
+            Training stats dict
+        """
+        if not hasattr(self, 'optimizer'):
+            self.setup_training()
+
+        if len(embeddings) == 0:
+            return {'loss': 0.0, 'trained': False}
+
+        self.optimizer.zero_grad()
+
+        # Stack embeddings
+        emb_tensor = torch.stack([
+            torch.tensor(e, dtype=torch.float32) if not isinstance(e, torch.Tensor) else e
+            for e in embeddings
+        ]).to(self.device)
+
+        # Forward pass
+        output = self.forward(emb_tensor)
+
+        total_loss = torch.tensor(0.0, device=self.device, requires_grad=True)
+
+        # === CHARGE PREDICTION LOSS ===
+        if target_charges:
+            target_tensor = torch.tensor(target_charges, dtype=torch.float32, device=self.device)
+            predicted_charge = output['effective_charge'].squeeze()
+
+            # MSE loss on charge prediction
+            charge_loss = F.mse_loss(predicted_charge, target_tensor)
+            total_loss = total_loss + charge_loss
+            self.training_stats['charge_loss'] += charge_loss.item()
+
+        # === CO-OCCURRENCE SIMILARITY LOSS ===
+        if co_occurring_pairs and len(co_occurring_pairs) > 0:
+            shell_vectors = output['shell']
+            similarity_loss = torch.tensor(0.0, device=self.device)
+
+            for i, j in co_occurring_pairs:
+                if i < len(shell_vectors) and j < len(shell_vectors):
+                    # Atoms mentioned together should have similar shells
+                    sim = F.cosine_similarity(
+                        shell_vectors[i].unsqueeze(0),
+                        shell_vectors[j].unsqueeze(0)
+                    )
+                    # Loss: 1 - similarity (want similarity close to 1)
+                    similarity_loss = similarity_loss + (1 - sim.mean())
+
+            if len(co_occurring_pairs) > 0:
+                similarity_loss = similarity_loss / len(co_occurring_pairs)
+                total_loss = total_loss + 0.5 * similarity_loss
+                self.training_stats['similarity_loss'] += similarity_loss.item()
+
+        # Backprop
+        if total_loss.requires_grad and total_loss.item() > 0:
+            total_loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
+            self.optimizer.step()
+
+        self.training_stats['steps'] += 1
+        self.training_stats['total_loss'] += total_loss.item()
+
+        return {
+            'loss': total_loss.item(),
+            'trained': True,
+            'steps': self.training_stats['steps'],
+        }
+
 
 class ChargePropagator:
     """
@@ -1306,9 +1395,54 @@ class MYNDLivingASA:
         self._learning_stats['bonds_strengthened'] += bonds_strengthened
         self._learning_stats['charges_learned'] += charge_updates
 
+        # === NEURAL TRAINING: Train AtomicEncoder on this conversation ===
+        encoder_trained = False
+        encoder_loss = 0.0
+
+        if self.encoder is not None and len(mentioned) >= 2:
+            try:
+                # Collect embeddings for mentioned atoms
+                embeddings = []
+                target_charges = []
+
+                for atom_id in mentioned:
+                    atom = self.atoms.get(atom_id)
+                    if atom and atom.embedding is not None:
+                        embeddings.append(atom.embedding)
+                        # Target charge: based on context (negated = flip, intensity = scale)
+                        base_charge = atom.semantic_charge if atom.semantic_charge != 0 else 0.1
+                        if is_negated:
+                            base_charge = -base_charge
+                        target_charges.append(base_charge * intensity_modifier)
+
+                # Generate co-occurring pairs (all atoms mentioned together)
+                co_occurring_pairs = []
+                mentioned_list = list(mentioned)
+                for i in range(len(mentioned_list)):
+                    for j in range(i + 1, len(mentioned_list)):
+                        co_occurring_pairs.append((i, j))
+
+                # Train the encoder!
+                if len(embeddings) >= 2:
+                    train_result = self.encoder.train_step(
+                        embeddings=embeddings,
+                        target_charges=target_charges,
+                        co_occurring_pairs=co_occurring_pairs[:10]  # Limit pairs
+                    )
+                    encoder_trained = train_result.get('trained', False)
+                    encoder_loss = train_result.get('loss', 0.0)
+
+                    if encoder_trained:
+                        self._learning_stats['encoder_steps'] = self._learning_stats.get('encoder_steps', 0) + 1
+                        logger.info(f"🧠 ASE trained: loss={encoder_loss:.4f}, step={self._learning_stats.get('encoder_steps', 0)}")
+
+            except Exception as e:
+                logger.warning(f"ASE training error: {e}")
+
         # Log learning
         negation_str = " (NEGATED)" if is_negated else ""
-        logger.info(f"ASA learned from {source}{negation_str}: {len(mentioned)} atoms, {bonds_strengthened} bonds")
+        train_str = f", encoder_loss={encoder_loss:.4f}" if encoder_trained else ""
+        logger.info(f"ASA learned from {source}{negation_str}: {len(mentioned)} atoms, {bonds_strengthened} bonds{train_str}")
 
         return {
             'atoms_activated': len(mentioned),
@@ -1317,7 +1451,9 @@ class MYNDLivingASA:
             'negated': is_negated,
             'intensity': intensity_modifier,
             'activated_names': [self.atoms[aid].name for aid in mentioned if aid in self.atoms][:10],
-            'source': source
+            'source': source,
+            'encoder_trained': encoder_trained,
+            'encoder_loss': encoder_loss
         }
 
     def _find_mentioned_atoms(self, text_lower: str) -> List[str]:

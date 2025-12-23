@@ -255,8 +255,12 @@ const LocalBrain = {
      * CRITICAL: Uses auto-reconnect to ensure we capture all user feedback
      */
     async recordFeedback(nodeId, action, context) {
+        console.log(`🧠 LocalBrain.recordFeedback CALLED: nodeId=${nodeId}, action=${action}`);
+        console.log(`   context:`, context);
+
         // Always try to record on server with auto-reconnect
-        await this._tryWithReconnect(async () => {
+        const result = await this._tryWithReconnect(async () => {
+            console.log(`🧠 Sending to ${this.serverUrl}/train/feedback...`);
             const res = await fetch(`${this.serverUrl}/train/feedback`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -267,11 +271,15 @@ const LocalBrain = {
                 })
             });
             if (res.ok) {
-                console.log(`🧠 LocalBrain.recordFeedback: ${action}`);
-                return true;
+                const data = await res.json();
+                console.log(`🧠 LocalBrain.recordFeedback SUCCESS:`, data);
+                return data;
             }
-            throw new Error('Request failed');
+            console.error(`🧠 LocalBrain.recordFeedback FAILED: ${res.status}`);
+            throw new Error(`Request failed: ${res.status}`);
         }, false);
+
+        console.log(`🧠 recordFeedback result:`, result);
 
         // Also record in browser (for redundancy)
         if (typeof preferenceTracker !== 'undefined') {
@@ -279,6 +287,8 @@ const LocalBrain = {
                 preferenceTracker.recordAccept?.(nodeId);
             }
         }
+
+        return result;
     },
 
     /**
