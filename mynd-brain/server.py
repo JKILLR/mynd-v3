@@ -3373,12 +3373,32 @@ async def sync_map_to_server(request: MapSyncRequest):
             print(f"🎓 GT Training: Processed {pending_result['processed']} buffered connections after unified map sync")
             gt_processed = pending_result['processed']
 
+    # === SYNC ASA FROM LATEST MAP DATA ===
+    asa_stats = None
+    if _asa_available:
+        try:
+            # Re-sync ASA from the updated map
+            map_data = map_vector_db.export_to_browser_map()
+            if map_data:
+                asa = get_asa()
+                asa.convert_map_to_asa(map_data)
+                if not asa._running:
+                    asa.start_metabolism(tick_interval=5.0)
+                asa_stats = {
+                    'atoms': len(asa.atoms),
+                    'metabolism': 'running' if asa._running else 'stopped'
+                }
+                print(f"🧬 ASA synced from unified map: {len(asa.atoms)} atoms")
+        except Exception as e:
+            print(f"⚠️ ASA sync error: {e}")
+
     return {
         "status": "synced",
         "nodes": stats['total_nodes'],
         "embedded": stats['embedded_nodes'],
         "time_ms": elapsed,
-        "gt_training_processed": gt_processed
+        "gt_training_processed": gt_processed,
+        "asa": asa_stats
     }
 
 @app.get("/unified/map/export")
