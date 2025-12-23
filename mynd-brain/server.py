@@ -661,7 +661,7 @@ class MYNDBrain:
         return 'relates_to'
 
     async def record_feedback(self, feedback: TrainFeedbackRequest):
-        """Record feedback and trigger immediate GT training."""
+        """Record feedback and trigger immediate GT + ASA training."""
         feedback_data = {
             "node_id": feedback.node_id,
             "action": feedback.action,
@@ -674,28 +674,67 @@ class MYNDBrain:
         context = feedback.context or {}
         parent_label = context.get('parentLabel')
         child_label = context.get('acceptedLabel')
+        suggestion_type = context.get('suggestionType', 'unknown')
+        source = context.get('source', 'unknown')
+
+        # Handle different feedback types - extract labels appropriately
+        # For edits/updates, use node label or old/new labels
+        if not parent_label:
+            parent_label = context.get('nodeLabel') or context.get('oldLabel')
+        if not child_label:
+            child_label = context.get('newLabel') or context.get('nodeLabel')
+
+        gt_result = None
+        asa_result = None
+
+        # Determine if this is a positive training signal
+        # All user-initiated actions are positive (they made a choice)
+        positive_actions = ['accepted', 'manual_create', 'edited', 'brainstorm',
+                           'color_updated', 'label_updated', 'importance_updated',
+                           'move_action', 'reorganization', 'chat_action']
+        is_positive = any(pa in feedback.action for pa in positive_actions)
 
         if parent_label and child_label:
             try:
-                # Generate embeddings from labels
+                # === TRAIN GT (Graph Transformer) ===
                 parent_emb = await self.embed(parent_label)
                 child_emb = await self.embed(child_label)
 
-                # Determine training signal
-                is_accepted = 'accepted' in feedback.action  # 'accepted' or 'accepted_batch'
-
-                # Train GT on this connection
-                result = self.graph_transformer.train_connection_step(
+                # Train GT on this connection (all user actions are positive signals)
+                gt_result = self.graph_transformer.train_connection_step(
                     source_embedding=parent_emb,
                     target_embedding=child_emb,
-                    should_connect=is_accepted,
+                    should_connect=is_positive,
                     adjacency=self.map_adjacency if hasattr(self, 'map_adjacency') else None
                 )
 
-                print(f"🎓 GT trained on suggestion feedback: {parent_label} → {child_label}")
-                print(f"   action={feedback.action}, loss={result.get('loss', 0):.4f}")
+                print(f"🎓 GT trained: {parent_label} → {child_label}, action={feedback.action}, loss={gt_result.get('loss', 0):.4f}")
 
-                return result
+                # === TRAIN ASA (Atomic Semantic Architecture) ===
+                try:
+                    from models.living_asa import get_asa
+                    asa = get_asa()
+                    if asa:
+                        # Construct semantic text from feedback for ASA learning
+                        feedback_text = f"{parent_label} relates to {child_label}"
+                        if context.get('description'):
+                            feedback_text += f". {child_label}: {context.get('description')}"
+
+                        asa_result = asa.learn_from_text(
+                            feedback_text,
+                            source=f"feedback_{source}",
+                            intensity=1.2 if is_positive else 0.5
+                        )
+                        if asa_result.get('atoms_activated', 0) > 0:
+                            print(f"🧬 ASA trained: {asa_result.get('atoms_activated')} atoms, {asa_result.get('bonds_strengthened', 0)} bonds")
+                except Exception as asa_e:
+                    print(f"⚠️ ASA training on feedback failed: {asa_e}")
+
+                return {
+                    "status": "trained",
+                    "gt": gt_result,
+                    "asa": asa_result
+                }
             except Exception as e:
                 print(f"⚠️ GT training on feedback failed: {e}")
                 import traceback
@@ -707,6 +746,10 @@ class MYNDBrain:
                     "buffered": True
                 }
 
+        # If we got here, we couldn't train immediately (missing labels)
+        print(f"⚠️ Feedback buffered (no labels): action={feedback.action}, parent={parent_label}, child={child_label}")
+        print(f"   Full context: {context}")
+
         # Fallback: buffer for batch training
         if len(self.feedback_buffer) >= 10:
             await self._train_on_feedback()
@@ -714,7 +757,8 @@ class MYNDBrain:
         # Return acknowledgement even if no immediate training happened
         return {
             "status": "buffered",
-            "buffer_size": len(self.feedback_buffer)
+            "buffer_size": len(self.feedback_buffer),
+            "reason": "missing_labels"
         }
 
     async def _train_on_feedback(self):
