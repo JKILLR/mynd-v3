@@ -1279,7 +1279,43 @@ async def sync_map(map_data: MapData):
     if _asa_available:
         try:
             asa = get_asa()
-            asa.convert_map_to_asa(map_data.dict())
+
+            # Convert flat nodes list to tree structure for ASA
+            # Build a dict of parent_id -> children
+            nodes_by_id = {n.id: n for n in map_data.nodes}
+            children_map = {}
+            root_nodes = []
+
+            for node in map_data.nodes:
+                if node.parentId and node.parentId in nodes_by_id:
+                    if node.parentId not in children_map:
+                        children_map[node.parentId] = []
+                    children_map[node.parentId].append(node)
+                else:
+                    root_nodes.append(node)
+
+            def build_tree(node):
+                node_dict = {
+                    'id': node.id,
+                    'label': node.label,
+                    'description': getattr(node, 'description', ''),
+                    'children': []
+                }
+                if node.id in children_map:
+                    node_dict['children'] = [build_tree(child) for child in children_map[node.id]]
+                return node_dict
+
+            # Use first root node as the tree root (or create synthetic root)
+            if root_nodes:
+                tree_data = build_tree(root_nodes[0])
+                # Add other root nodes as children if multiple roots
+                if len(root_nodes) > 1:
+                    for root in root_nodes[1:]:
+                        tree_data['children'].append(build_tree(root))
+            else:
+                tree_data = {'id': 'root', 'label': 'Root', 'children': []}
+
+            asa.convert_map_to_asa(tree_data)
 
             # Start metabolism if not running
             if not asa._running:
@@ -1293,6 +1329,8 @@ async def sync_map(map_data: MapData):
             print(f"🧬 ASA synced: {len(asa.atoms)} atoms")
         except Exception as e:
             print(f"⚠️ ASA sync error: {e}")
+            import traceback
+            traceback.print_exc()
             result['asa_error'] = str(e)
 
     return result
