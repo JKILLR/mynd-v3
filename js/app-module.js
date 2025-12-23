@@ -23340,7 +23340,52 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         div.textContent = str;
         return div.innerHTML;
     }
-    
+
+    // Sanitize strings for JSON - removes invalid Unicode surrogates that break JSON.stringify
+    function sanitizeForJSON(str) {
+        if (typeof str !== 'string') return str;
+        // Remove unpaired surrogates (causes "no low surrogate" JSON errors)
+        // Uses a simpler regex that works in all browsers
+        let result = '';
+        for (let i = 0; i < str.length; i++) {
+            const code = str.charCodeAt(i);
+            // High surrogate (D800-DBFF)
+            if (code >= 0xD800 && code <= 0xDBFF) {
+                const nextCode = str.charCodeAt(i + 1);
+                // Check if followed by low surrogate (DC00-DFFF)
+                if (nextCode >= 0xDC00 && nextCode <= 0xDFFF) {
+                    result += str[i] + str[i + 1];
+                    i++; // Skip the low surrogate
+                } else {
+                    result += '\uFFFD'; // Replace unpaired high surrogate
+                }
+            }
+            // Low surrogate without preceding high surrogate
+            else if (code >= 0xDC00 && code <= 0xDFFF) {
+                result += '\uFFFD'; // Replace unpaired low surrogate
+            }
+            else {
+                result += str[i];
+            }
+        }
+        return result;
+    }
+
+    // Deep sanitize an object for JSON encoding
+    function sanitizeObjectForJSON(obj) {
+        if (obj === null || obj === undefined) return obj;
+        if (typeof obj === 'string') return sanitizeForJSON(obj);
+        if (Array.isArray(obj)) return obj.map(sanitizeObjectForJSON);
+        if (typeof obj === 'object') {
+            const result = {};
+            for (const [key, value] of Object.entries(obj)) {
+                result[key] = sanitizeObjectForJSON(value);
+            }
+            return result;
+        }
+        return obj;
+    }
+
     function throttle(fn, delay) {
         let lastCall = 0;
         let timeoutId = null;
@@ -32581,6 +32626,10 @@ CURRENT REQUEST CONTEXT
                 while (iterations < maxIterations) {
                     iterations++;
 
+                    // Sanitize all content to remove invalid Unicode surrogates that break JSON
+                    const sanitizedMessages = sanitizeObjectForJSON(currentMessages);
+                    const sanitizedSystemPrompt = sanitizeObjectForJSON(systemPromptArray);
+
                     const response = await fetch(CONFIG.EDGE_FUNCTION_URL, {
                         method: 'POST',
                         headers: {
@@ -32588,8 +32637,8 @@ CURRENT REQUEST CONTEXT
                             'Authorization': `Bearer ${session.access_token}`
                         },
                         body: JSON.stringify({
-                            messages: currentMessages,
-                            systemPrompt: systemPromptArray,  // Prompt caching: system array with cache_control
+                            messages: sanitizedMessages,
+                            systemPrompt: sanitizedSystemPrompt,  // Prompt caching: system array with cache_control
                             maxTokens: 8192,
                             webSearch: shouldUseWebSearch,
                             enableCodebaseTools: typeof ReflectionDaemon !== 'undefined',
@@ -32680,11 +32729,12 @@ CURRENT REQUEST CONTEXT
                 }
 
                 // Build request body - with prompt caching for direct API calls
+                // Sanitize to remove invalid Unicode surrogates that break JSON
                 const requestBody = {
                     model: CONFIG.CLAUDE_MODEL,
                     max_tokens: 8192,
-                    system: systemPromptArray,  // Prompt caching: system array with cache_control
-                    messages: messages
+                    system: sanitizeObjectForJSON(systemPromptArray),  // Prompt caching: system array with cache_control
+                    messages: sanitizeObjectForJSON(messages)
                 };
 
                 // Build tools array
