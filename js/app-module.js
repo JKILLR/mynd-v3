@@ -33220,6 +33220,21 @@ CURRENT REQUEST CONTEXT
                                 heatTracker.recordAccess(parentId, 'ai_creation');
                                 heatTracker.recordAccess(newNode.id, 'ai_modification');
                             }
+
+                            // TRAIN GT: Record this as an accepted suggestion (chat-based add)
+                            if (typeof LocalBrain !== 'undefined') {
+                                const parentNode = store.findNode(parentId);
+                                LocalBrain.recordFeedback(parentId, 'accepted', {
+                                    parentLabel: parentNode?.label || 'root',
+                                    acceptedLabel: action.label,
+                                    suggestionType: 'chat_action',
+                                    source: 'axel_chat',
+                                    description: action.description || '',
+                                    timestamp: Date.now()
+                                }).then(res => {
+                                    if (res) console.log(`🧠 GT trained on chat action: "${action.label}"`, res);
+                                }).catch(e => console.warn('Chat action feedback failed:', e));
+                            }
                         }
                     } else if (action.action === 'edit') {
                         const targetId = resolveId(action.targetId);
@@ -33279,6 +33294,19 @@ CURRENT REQUEST CONTEXT
                             if (moved) {
                                 result.success = true;
                                 result.description = `Moved node`;
+
+                                // TRAIN GT: Learn from move decisions (structural reorganization)
+                                if (typeof LocalBrain !== 'undefined') {
+                                    const targetNode = store.findNode(targetId);
+                                    const newParent = store.findNode(parentId);
+                                    LocalBrain.recordFeedback(parentId, 'accepted', {
+                                        parentLabel: newParent?.label || 'root',
+                                        acceptedLabel: targetNode?.label || 'node',
+                                        suggestionType: 'move_action',
+                                        source: 'axel_chat',
+                                        timestamp: Date.now()
+                                    }).catch(e => console.warn('Move action feedback failed:', e));
+                                }
                             } else {
                                 result.description = `Move operation failed`;
                             }
