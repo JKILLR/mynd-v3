@@ -43027,23 +43027,37 @@ showKeyboardHints();
                 }
                 
                 // Add click handlers for individual suggestions
+                console.log(`🎯 Binding click handlers to ${suggestionsList.querySelectorAll('.neural-suggestion[data-label]').length} suggestions`);
                 suggestionsList.querySelectorAll('.neural-suggestion[data-label]').forEach(el => {
+                    console.log(`🎯 Adding click handler for: "${el.dataset.label}"`);
                     el.addEventListener('click', () => {
-                        if (el.classList.contains('added')) return; // Already added
-                        
+                        console.log(`🎯 CLICK DETECTED on: "${el.dataset.label}"`);
+                        if (el.classList.contains('added')) {
+                            console.log(`🎯 Already added, skipping`);
+                            return;
+                        }
+
                         const label = el.dataset.label;
                         const description = el.dataset.description || '';
                         const suggestionType = el.dataset.type; // 'ml' or 'ai'
                         const parentId = suggestionsList.dataset.parentId; // Get from container, not selectedNode
                         const parentNode = store.findNode(parentId);
-                        
-                        store.addNode(parentId, { 
-                            label, 
-                            description,
-                            color: parentNode?.color,
-                            source: 'smart-expand'
-                        });
-                        
+
+                        console.log(`🎯 Creating node: "${label}" under parentId=${parentId}`);
+                        console.log(`   parentNode:`, parentNode);
+
+                        try {
+                            const newNode = store.addNode(parentId, {
+                                label,
+                                description,
+                                color: parentNode?.color,
+                                source: 'smart-expand'
+                            });
+                            console.log(`🎯 store.addNode result:`, newNode);
+                        } catch (e) {
+                            console.error(`🎯 store.addNode FAILED:`, e);
+                        }
+
                         // Track preference and boost pattern weight
                         preferenceTracker.recordAccept(label, suggestionType);
                         metaLearner.trackSuggestionAccepted(label, false); // false = not Add All
