@@ -1399,7 +1399,7 @@ class MYNDLivingASA:
         encoder_trained = False
         encoder_loss = 0.0
 
-        if self.encoder is not None and len(mentioned) >= 2:
+        if self.atomic_encoder is not None and len(mentioned) >= 2:
             try:
                 # Collect embeddings for mentioned atoms
                 embeddings = []
@@ -1424,7 +1424,7 @@ class MYNDLivingASA:
 
                 # Train the encoder!
                 if len(embeddings) >= 2:
-                    train_result = self.encoder.train_step(
+                    train_result = self.atomic_encoder.train_step(
                         embeddings=embeddings,
                         target_charges=target_charges,
                         co_occurring_pairs=co_occurring_pairs[:10]  # Limit pairs
