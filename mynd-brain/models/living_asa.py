@@ -897,6 +897,163 @@ class MYNDLivingASA:
             'metabolism_running': self._running,
         }
 
+    # =========================================================================
+    # LEARN FROM TEXT - The key to continuous learning
+    # =========================================================================
+
+    def learn_from_text(self, text: str, source: str = "conversation",
+                        energy_boost: float = 0.3) -> Dict:
+        """
+        Learn from any text input - conversations, thoughts, user messages.
+
+        This is the CORE of the living system:
+        1. Find which atoms are mentioned in the text
+        2. Boost their energy (bring to working memory)
+        3. Strengthen bonds between co-occurring atoms
+        4. Track patterns for future learning
+
+        Args:
+            text: The text to learn from
+            source: Where this came from ("user", "axel", "system")
+            energy_boost: How much energy to add to mentioned atoms
+
+        Returns:
+            Dict with learning stats
+        """
+        if not text or not self.atoms:
+            return {'atoms_activated': 0, 'bonds_strengthened': 0}
+
+        text_lower = text.lower()
+
+        # Find mentioned atoms
+        mentioned = self._find_mentioned_atoms(text_lower)
+
+        if not mentioned:
+            return {'atoms_activated': 0, 'bonds_strengthened': 0}
+
+        # Boost energy on mentioned atoms
+        for atom_id in mentioned:
+            self.access_atom(atom_id, energy_boost)
+
+        # Strengthen bonds between co-occurring atoms
+        bonds_strengthened = self._strengthen_cooccurrence(mentioned, source)
+
+        # Log learning
+        logger.info(f"ASA learned from {source}: {len(mentioned)} atoms, {bonds_strengthened} bonds")
+
+        return {
+            'atoms_activated': len(mentioned),
+            'bonds_strengthened': bonds_strengthened,
+            'activated_names': [self.atoms[aid].name for aid in mentioned if aid in self.atoms][:10],
+            'source': source
+        }
+
+    def _find_mentioned_atoms(self, text_lower: str) -> List[str]:
+        """
+        Find atoms that are mentioned in the text.
+        Uses fuzzy matching on atom names.
+        """
+        mentioned = []
+
+        for atom_id, atom in self.atoms.items():
+            # Check if atom name (or significant part) appears in text
+            name_lower = atom.name.lower()
+
+            # Direct mention
+            if name_lower in text_lower:
+                mentioned.append(atom_id)
+                continue
+
+            # Word-based matching for multi-word names
+            words = name_lower.split()
+            if len(words) > 1:
+                # If most words match, consider it mentioned
+                matches = sum(1 for w in words if w in text_lower and len(w) > 2)
+                if matches >= len(words) * 0.7:
+                    mentioned.append(atom_id)
+                    continue
+
+            # Single significant word (must be longer to avoid false positives)
+            if len(name_lower) >= 5 and name_lower in text_lower:
+                mentioned.append(atom_id)
+
+        return mentioned
+
+    def _strengthen_cooccurrence(self, atom_ids: List[str], source: str) -> int:
+        """
+        Strengthen bonds between atoms that co-occur in the same text.
+        If no bond exists, create a weak RELATED_TO bond.
+        """
+        bonds_strengthened = 0
+
+        for i, aid1 in enumerate(atom_ids):
+            for aid2 in atom_ids[i+1:]:
+                if aid1 not in self.atoms or aid2 not in self.atoms:
+                    continue
+
+                atom1 = self.atoms[aid1]
+                atom2 = self.atoms[aid2]
+
+                # Check for existing bond in either direction
+                existing_bond = None
+                for bond in atom1.get_all_bonds():
+                    if bond.target_id == aid2:
+                        existing_bond = bond
+                        break
+
+                if existing_bond:
+                    # Strengthen existing bond
+                    existing_bond.strength = min(1.0, existing_bond.strength + 0.05)
+                    existing_bond.access_count += 1
+                    existing_bond.last_accessed = time.time()
+                    bonds_strengthened += 1
+                else:
+                    # Create weak RELATED_TO bond (starts in outer shell)
+                    self._create_bond(
+                        aid1, aid2,
+                        RelationType.RELATED_TO,
+                        strength=0.2,  # Start weak
+                        source=f"cooccur_{source}"
+                    )
+                    bonds_strengthened += 1
+
+        return bonds_strengthened
+
+    def learn_from_insight(self, insight: Dict) -> bool:
+        """
+        Learn from a structured insight (from Claude/Axel).
+
+        insight format:
+        {
+            'subject': 'concept name',
+            'relation': 'causes/has_part/etc',
+            'object': 'another concept',
+            'confidence': 0.8
+        }
+        """
+        subject = insight.get('subject', '').lower()
+        relation = insight.get('relation', 'related_to')
+        obj = insight.get('object', '').lower()
+        confidence = insight.get('confidence', 0.5)
+
+        # Find matching atoms
+        subject_id = None
+        object_id = None
+
+        for atom_id, atom in self.atoms.items():
+            if atom.name.lower() == subject:
+                subject_id = atom_id
+            if atom.name.lower() == obj:
+                object_id = atom_id
+
+        if subject_id and object_id:
+            rel_type = RelationType.from_mynd_link(relation)
+            self._create_bond(subject_id, object_id, rel_type,
+                            strength=confidence, source="insight")
+            return True
+
+        return False
+
 
 # =============================================================================
 # SINGLETON INSTANCE

@@ -654,66 +654,73 @@ class MYNDGraphTransformer(nn.Module):
         """
         print(f"🎯 GT train_connection_step called: should_connect={should_connect}")
 
-        # Initialize training if needed
-        self._init_training()
+        try:
+            # Initialize training if needed
+            self._init_training()
 
-        # Set model to training mode
-        self.train()
+            # Set model to training mode
+            self.train()
 
-        # Convert inputs to tensors
-        source_t = torch.tensor(source_embedding, dtype=torch.float32, device=self.device)
-        target_t = torch.tensor(target_embedding, dtype=torch.float32, device=self.device)
-        label = torch.tensor([1.0 if should_connect else 0.0], dtype=torch.float32, device=self.device)
+            # Convert inputs to tensors
+            source_t = torch.tensor(source_embedding, dtype=torch.float32, device=self.device)
+            target_t = torch.tensor(target_embedding, dtype=torch.float32, device=self.device)
+            label = torch.tensor([1.0 if should_connect else 0.0], dtype=torch.float32, device=self.device)
 
-        # Add batch dimension if needed
-        if source_t.dim() == 1:
-            source_t = source_t.unsqueeze(0)
-        if target_t.dim() == 1:
-            target_t = target_t.unsqueeze(0)
+            # Add batch dimension if needed
+            if source_t.dim() == 1:
+                source_t = source_t.unsqueeze(0)
+            if target_t.dim() == 1:
+                target_t = target_t.unsqueeze(0)
 
-        # Project through input projection to get hidden dim representations
-        source_hidden = self.input_proj(source_t)
-        target_hidden = self.input_proj(target_t)
+            # Project through input projection to get hidden dim representations
+            source_hidden = self.input_proj(source_t)
+            target_hidden = self.input_proj(target_t)
 
-        # Combine embeddings for connection head
-        combined = torch.cat([source_hidden, target_hidden], dim=-1)
+            # Combine embeddings for connection head
+            combined = torch.cat([source_hidden, target_hidden], dim=-1)
 
-        # Forward through connection head
-        logit = self.connection_head(combined)
-        prediction = torch.sigmoid(logit)
+            # Forward through connection head
+            logit = self.connection_head(combined)
+            prediction = torch.sigmoid(logit)
 
-        # Binary cross-entropy loss
-        loss = F.binary_cross_entropy(prediction.squeeze(), label.squeeze())
+            # Binary cross-entropy loss
+            loss = F.binary_cross_entropy(prediction.squeeze(), label.squeeze())
 
-        # Backward pass
-        self._optimizer.zero_grad()
-        loss.backward()
+            # Backward pass
+            self._optimizer.zero_grad()
+            loss.backward()
 
-        # Gradient clipping for stability
-        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
+            # Gradient clipping for stability
+            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
 
-        # Update weights
-        self._optimizer.step()
+            # Update weights
+            self._optimizer.step()
 
-        # Set back to eval mode
-        self.eval()
+            # Set back to eval mode
+            self.eval()
 
-        # Update stats
-        loss_val = loss.item()
-        self._training_stats['total_steps'] += 1
-        self._training_stats['connection_losses'].append(loss_val)
-        # Keep only last 100 losses for memory efficiency
-        if len(self._training_stats['connection_losses']) > 100:
-            self._training_stats['connection_losses'] = self._training_stats['connection_losses'][-100:]
-        self._training_stats['avg_loss'] = sum(self._training_stats['connection_losses']) / len(self._training_stats['connection_losses'])
-        self._training_stats['last_trained'] = time.time()
+            # Update stats
+            loss_val = loss.item()
+            self._training_stats['total_steps'] += 1
+            self._training_stats['connection_losses'].append(loss_val)
+            # Keep only last 100 losses for memory efficiency
+            if len(self._training_stats['connection_losses']) > 100:
+                self._training_stats['connection_losses'] = self._training_stats['connection_losses'][-100:]
+            self._training_stats['avg_loss'] = sum(self._training_stats['connection_losses']) / len(self._training_stats['connection_losses'])
+            self._training_stats['last_trained'] = time.time()
 
-        return {
-            'loss': loss_val,
-            'prediction': prediction.item(),
-            'label': float(should_connect),
-            'total_steps': self._training_stats['total_steps']
-        }
+            return {
+                'loss': loss_val,
+                'prediction': prediction.item(),
+                'label': float(should_connect),
+                'total_steps': self._training_stats['total_steps']
+            }
+        except Exception as e:
+            print(f"❌ GT train_connection_step error: {e}")
+            import traceback
+            traceback.print_exc()
+            # Return empty result instead of crashing
+            return {'loss': 0.0, 'prediction': 0.5, 'label': float(should_connect), 'error': str(e)}
 
     def train_batch(
         self,
