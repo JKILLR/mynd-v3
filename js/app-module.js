@@ -20660,6 +20660,39 @@ Respond with ONLY a JSON array:
 
             // Trigger BATCH learning if enough feedback has accumulated
             this.checkAndTriggerLearning(feedback);
+
+            // ═══════════════════════════════════════════════════════════════
+            // GT REJECTION TRAINING - Negative examples are critical for learning
+            // When user rejects a node/connection suggestion, train GT with should_connect=False
+            // ═══════════════════════════════════════════════════════════════
+            if (action === 'rejected' && ['node', 'connection', 'expansion'].includes(feedback.type)) {
+                const parentId = feedback.context?.parentId;
+                const suggestedLabel = feedback.content?.label || feedback.content?.predicted || feedback.content?.targetNode;
+
+                if (parentId && suggestedLabel) {
+                    console.log(`🚫 GT Rejection Training: ${parentId} → "${suggestedLabel}" (${feedback.type})`);
+
+                    // Send rejection signal to server
+                    fetch('http://localhost:8420/brain/reject-connection', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            source_id: parentId,
+                            target_id: `rejected-${Date.now()}`, // Synthetic ID for rejected suggestion
+                            rejected_label: suggestedLabel,
+                            rejection_type: feedback.type
+                        })
+                    })
+                    .then(res => res.ok ? res.json() : Promise.reject(`Server ${res.status}`))
+                    .then(result => {
+                        console.log(`📥 GT Rejection result:`, result);
+                        if (result.gt_training) {
+                            console.log(`🧠 GT learned from rejection: loss=${result.gt_training.loss?.toFixed(4) || 'N/A'}`);
+                        }
+                    })
+                    .catch(e => console.log('🚫 GT Rejection training failed:', e));
+                }
+            }
         },
 
         // Create a semantic memory from feedback
