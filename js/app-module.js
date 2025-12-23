@@ -31005,11 +31005,104 @@ Just respond with the greeting message, nothing else.`;
 
             // ═══════════════════════════════════════════════════════════════
             // CONVERSATION CONTEXT - Past AI conversations for unified understanding
+            // PRIMARY: Supabase (persistent across sessions)
+            // FALLBACK: LocalBrain → SemanticMemory
             // ═══════════════════════════════════════════════════════════════
             let conversationContext = '';
+            let supabaseContextLoaded = false;
 
-            // Try LocalBrain first - always attempt connection
-            if (typeof LocalBrain !== 'undefined') {
+            // ─── PRIMARY: Supabase conversation recall ───────────────────────
+            if (typeof supabase !== 'undefined' && supabase) {
+                try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                        // Get recent chat messages (last 50 for context)
+                        const { data: recentChats, error: chatError } = await supabase
+                            .from('chat_conversations')
+                            .select('role, content, message_timestamp')
+                            .eq('user_id', user.id)
+                            .order('message_timestamp', { ascending: false })
+                            .limit(50);
+
+                        // Get AI memories (persistent facts/preferences)
+                        const { data: aiMemories, error: memError } = await supabase
+                            .from('ai_memory')
+                            .select('memory_type, content, importance, created_at')
+                            .eq('user_id', user.id)
+                            .order('importance', { ascending: false })
+                            .limit(20);
+
+                        // Get recent session summaries (last 7 days)
+                        const cutoffDate = new Date();
+                        cutoffDate.setDate(cutoffDate.getDate() - 7);
+                        const { data: sessions, error: sessError } = await supabase
+                            .from('session_summaries')
+                            .select('summary, key_outcomes, open_threads, session_ended, topics_discussed')
+                            .eq('user_id', user.id)
+                            .gte('session_ended', cutoffDate.toISOString())
+                            .order('session_ended', { ascending: false })
+                            .limit(10);
+
+                        // Build context from Supabase data
+                        let supabaseContext = '';
+
+                        // Add AI memories (most important first)
+                        if (aiMemories && aiMemories.length > 0 && !memError) {
+                            supabaseContext += '\n=== YOUR PERSISTENT MEMORIES ===\n';
+                            supabaseContext += 'Important things you remember about this user:\n\n';
+                            for (const mem of aiMemories.slice(0, 10)) {
+                                const importance = mem.importance ? ` [importance: ${mem.importance.toFixed(1)}]` : '';
+                                supabaseContext += `• [${mem.memory_type}]${importance} ${mem.content}\n`;
+                            }
+                            supabaseContext += '\n';
+                        }
+
+                        // Add session summaries (for continuity)
+                        if (sessions && sessions.length > 0 && !sessError) {
+                            supabaseContext += '=== RECENT SESSION SUMMARIES ===\n';
+                            supabaseContext += 'What happened in previous conversations:\n\n';
+                            for (const sess of sessions.slice(0, 5)) {
+                                const date = new Date(sess.session_ended).toLocaleDateString();
+                                const topics = sess.topics_discussed?.slice(0, 5).join(', ') || 'various topics';
+                                supabaseContext += `[${date}] ${sess.summary || 'Session ended'}\n`;
+                                if (sess.key_outcomes?.length > 0) {
+                                    supabaseContext += `  Outcomes: ${sess.key_outcomes.slice(0, 3).join('; ')}\n`;
+                                }
+                                if (sess.open_threads?.length > 0) {
+                                    supabaseContext += `  Open threads: ${sess.open_threads.slice(0, 2).join('; ')}\n`;
+                                }
+                                supabaseContext += '\n';
+                            }
+                        }
+
+                        // Add recent conversation exchanges (for immediate context)
+                        if (recentChats && recentChats.length > 0 && !chatError) {
+                            // Reverse to get chronological order, take last 20 for context
+                            const chronological = recentChats.slice(0, 20).reverse();
+                            supabaseContext += '=== RECENT CONVERSATION HISTORY ===\n';
+                            for (const msg of chronological) {
+                                const role = msg.role === 'user' ? 'User' : 'Axel';
+                                const content = msg.content?.slice(0, 500) || '';
+                                if (content) {
+                                    supabaseContext += `${role}: ${content}${content.length >= 500 ? '...' : ''}\n`;
+                                }
+                            }
+                            supabaseContext += '\n';
+                        }
+
+                        if (supabaseContext.length > 0) {
+                            conversationContext = supabaseContext;
+                            supabaseContextLoaded = true;
+                            console.log(`💾 Supabase context: ${conversationContext.length} chars (${aiMemories?.length || 0} memories, ${sessions?.length || 0} sessions, ${recentChats?.length || 0} messages)`);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Supabase conversation context error:', e);
+                }
+            }
+
+            // ─── FALLBACK 1: LocalBrain (if Supabase failed) ─────────────────
+            if (!supabaseContextLoaded && typeof LocalBrain !== 'undefined') {
                 try {
                     const convResult = await LocalBrain.getConversationContext(
                         userMessage,
@@ -31019,14 +31112,14 @@ Just respond with the greeting message, nothing else.`;
 
                     if (convResult.context && convResult.chars > 0) {
                         conversationContext = convResult.context;
-                        console.log(`💬 Conversation context: ${convResult.chars} chars from past AI discussions`);
+                        console.log(`💬 LocalBrain context: ${convResult.chars} chars from past AI discussions`);
                     }
                 } catch (e) {
-                    console.warn('Conversation context error:', e);
+                    console.warn('LocalBrain context error:', e);
                 }
             }
 
-            // Fallback: Use local SemanticMemory for conversation recall
+            // ─── FALLBACK 2: SemanticMemory (if LocalBrain also failed) ──────
             if (!conversationContext && typeof semanticMemory !== 'undefined' && semanticMemory.loaded) {
                 try {
                     // Recall relevant past conversations using embedding similarity
