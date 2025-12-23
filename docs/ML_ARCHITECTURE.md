@@ -105,7 +105,17 @@ POST /brain/receive-from-claude - Knowledge distillation
 POST /brain/ask-to-teach        - Generate teaching request
 GET  /brain/knowledge           - Get learned knowledge
 GET  /brain/teaching-prompt     - Teaching instructions
-GET  /brain/learning            - Learning stats
+GET  /brain/learning            - Learning stats + GT training stats
+```
+
+**Graph Transformer Training (NEW):**
+```
+POST /brain/learn-connection    - Learn from accepted connection (positive training)
+POST /brain/reject-connection   - Learn from rejected connection (negative training)
+GET  /brain/gt-training         - Get GT training statistics
+POST /brain/gt-save             - Manually save GT weights
+POST /brain/background-training - Trigger background batch training
+GET  /brain/training-buffer     - Get training buffer status
 ```
 
 **Meta-Learning:**
@@ -199,6 +209,44 @@ Output Predictions
 - Multi-head specialization: Each head learns different relationship types
 - Graph positional encoding: Captures hierarchy and structure
 - Pre-norm architecture: Stable training with residual connections
+
+**Training Loop (NEW - Dec 2024):**
+```
+User Action (accept/reject connection)
+  │
+  ▼
+UnifiedBrain.learn_from_connection() / reject_connection()
+  │
+  ├── Record prediction outcome (PredictionTracker)
+  ├── Update meta-learning stats (MetaLearner)
+  │
+  └── Train Graph Transformer ← NEW CLOSED LOOP
+      │
+      ▼
+    MYNDBrain.train_connection(source_id, target_id, should_connect)
+      │
+      ▼
+    MYNDGraphTransformer.train_connection_step()
+      │
+      ├── Get source/target embeddings
+      ├── Forward through input_proj → hidden representations
+      ├── Combine and forward through connection_head
+      ├── Compute binary cross-entropy loss
+      ├── Backward pass + gradient clipping
+      └── Optimizer step (AdamW, lr=1e-4)
+```
+
+**Training Infrastructure:**
+- Lazy initialization: Optimizer only created on first training step
+- Gradient clipping: max_norm=1.0 for stability
+- Stats tracking: Total steps, avg loss, last trained timestamp
+- Weight persistence: Auto-save on shutdown, load on startup
+- Background training: Runs every 5 minutes on buffered examples
+
+**Training Sources:**
+1. **Immediate training**: Every connection accept/reject
+2. **Background batch**: Buffered examples (up to 50) trained in batch
+3. **Replay**: Future: Train on historical connection data
 
 ### 2.3 Other Models
 
@@ -883,6 +931,7 @@ Every piece of user data flows into the unified context system:
 |---------|----------|
 | Graph vector DB | `mynd-brain/data/graph/graph.json` |
 | Learning state | `mynd-brain/data/learning/*.json` |
+| GT trained weights | `mynd-brain/data/gt_weights.pt` |
 | Conversation archive | Local + Supabase |
 | AI memories | Supabase |
 

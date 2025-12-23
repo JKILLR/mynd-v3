@@ -1467,7 +1467,17 @@ class UnifiedBrain:
         self.context_requests = 0
         self.growth_events_today = 0
 
+        # ═══════════════════════════════════════════════════════════════════
+        # BACKGROUND TRAINING BUFFER
+        # Stores connection examples for batch training
+        # ═══════════════════════════════════════════════════════════════════
+        self._training_buffer = []
+        self._training_buffer_max = 50  # Max examples to buffer before training
+        self._last_background_training = 0
+        self._background_training_interval = 300  # 5 minutes
+
         print("🧠 UnifiedBrain initialized with MetaLearner + SelfImprover + ContextSynthesizer")
+        print("🎓 Background training buffer enabled")
 
     def set_ml_brain(self, ml_brain):
         """Connect to the ML brain for neural operations"""
@@ -1833,6 +1843,23 @@ class UnifiedBrain:
         else:
             self.meta_learner.record_strategy_outcome('learn_from_miss', 0.7)  # Still learning
 
+        # ═══ GRAPH TRANSFORMER TRAINING ═══
+        # This is the KEY step that closes the learning loop!
+        # Train the GT on this positive example (user created connection)
+        training_result = None
+        if self.ml_brain is not None:
+            try:
+                training_result = self.ml_brain.train_connection(
+                    source_id=source_id,
+                    target_id=target_id,
+                    should_connect=True  # User created this connection
+                )
+                if 'error' not in training_result:
+                    print(f"🎓 GT trained: loss={training_result.get('loss', 0):.4f}, "
+                          f"steps={training_result.get('total_steps', 0)}")
+            except Exception as e:
+                print(f"⚠️ GT training failed: {e}")
+
         # Record growth event
         self.self_awareness.record_growth({
             'type': 'connection_learning',
@@ -1862,7 +1889,187 @@ class UnifiedBrain:
         else:
             print(f"🧠 Self-learning: New pattern discovered {source_id}→{target_id}")
 
+        # Include training result in response
+        if training_result:
+            result['gt_training'] = training_result
+
         return result
+
+    def reject_connection(self, source_id: str, target_id: str) -> Dict:
+        """
+        Learn from a rejected connection suggestion.
+        This provides negative training examples to the GT.
+
+        Called when user explicitly rejects a suggested connection.
+
+        Returns:
+            Dict with learning result
+        """
+        result = {
+            'type': 'rejection',
+            'source_id': source_id,
+            'target_id': target_id,
+            'should_connect': False
+        }
+
+        # ═══ GRAPH TRANSFORMER TRAINING ═══
+        # Train the GT on this NEGATIVE example
+        if self.ml_brain is not None:
+            try:
+                training_result = self.ml_brain.train_connection(
+                    source_id=source_id,
+                    target_id=target_id,
+                    should_connect=False  # User rejected this connection
+                )
+                result['gt_training'] = training_result
+                if 'error' not in training_result:
+                    print(f"🎓 GT trained (negative): loss={training_result.get('loss', 0):.4f}, "
+                          f"steps={training_result.get('total_steps', 0)}")
+            except Exception as e:
+                print(f"⚠️ GT training failed: {e}")
+                result['error'] = str(e)
+
+        # Record in meta-learner (wrong prediction)
+        self.meta_learner.record_source_usage(
+            'predictions',
+            success=False,  # Prediction was wrong
+            context={'source': source_id, 'target': target_id, 'rejected': True}
+        )
+
+        # Store in memory
+        self.memory.remember({
+            'type': 'connection_rejected',
+            'source_id': source_id,
+            'target_id': target_id,
+            'learning_signal': 'negative_example'
+        }, importance=0.5)
+
+        return result
+
+    # ═══════════════════════════════════════════════════════════════════
+    # BACKGROUND TRAINING - Continuous learning from buffered examples
+    # ═══════════════════════════════════════════════════════════════════
+
+    def add_training_example(self, source_id: str, target_id: str, should_connect: bool):
+        """
+        Add a training example to the buffer for background training.
+
+        Examples are buffered and trained in batches for efficiency.
+        This is called in addition to immediate training for important examples.
+        """
+        if self.ml_brain is None:
+            return
+
+        # Get embeddings
+        if not self.ml_brain.map_state or not self.ml_brain.map_node_index:
+            return
+
+        if source_id not in self.ml_brain.map_node_index:
+            return
+        if target_id not in self.ml_brain.map_node_index:
+            return
+
+        source_idx = self.ml_brain.map_node_index[source_id]
+        target_idx = self.ml_brain.map_node_index[target_id]
+
+        # Store embeddings as lists for JSON serialization
+        example = {
+            'source_embedding': self.ml_brain.map_embeddings[source_idx].tolist(),
+            'target_embedding': self.ml_brain.map_embeddings[target_idx].tolist(),
+            'should_connect': should_connect,
+            'timestamp': time.time()
+        }
+
+        self._training_buffer.append(example)
+
+        # Trim buffer if too large
+        if len(self._training_buffer) > self._training_buffer_max:
+            self._training_buffer = self._training_buffer[-self._training_buffer_max:]
+
+    def run_background_training(self, force: bool = False) -> Dict:
+        """
+        Run background training on buffered examples.
+
+        Called periodically by the server or when buffer is full.
+
+        Args:
+            force: Run training even if interval hasn't passed
+
+        Returns:
+            Training result dict
+        """
+        current_time = time.time()
+
+        # Check if we should train
+        if not force:
+            time_since_last = current_time - self._last_background_training
+            if time_since_last < self._background_training_interval:
+                return {
+                    'status': 'skipped',
+                    'reason': f'Interval not passed ({time_since_last:.0f}s < {self._background_training_interval}s)',
+                    'buffer_size': len(self._training_buffer)
+                }
+
+        if not self._training_buffer:
+            return {
+                'status': 'skipped',
+                'reason': 'No examples in buffer',
+                'buffer_size': 0
+            }
+
+        if self.ml_brain is None:
+            return {
+                'status': 'error',
+                'reason': 'ML brain not connected',
+                'buffer_size': len(self._training_buffer)
+            }
+
+        # Get examples to train on
+        examples = self._training_buffer.copy()
+
+        try:
+            # Train in batch
+            import numpy as np
+            batch_examples = [{
+                'source_embedding': np.array(ex['source_embedding']),
+                'target_embedding': np.array(ex['target_embedding']),
+                'should_connect': ex['should_connect']
+            } for ex in examples]
+
+            result = self.ml_brain.graph_transformer.train_batch(batch_examples)
+
+            # Clear buffer after successful training
+            self._training_buffer = []
+            self._last_background_training = current_time
+
+            print(f"🎓 Background training: {result.get('num_examples', 0)} examples, "
+                  f"loss={result.get('loss', 0):.4f}, "
+                  f"accuracy={result.get('accuracy', 0):.1%}")
+
+            return {
+                'status': 'trained',
+                'examples_trained': len(examples),
+                'training_result': result
+            }
+
+        except Exception as e:
+            print(f"⚠️ Background training failed: {e}")
+            return {
+                'status': 'error',
+                'reason': str(e),
+                'buffer_size': len(self._training_buffer)
+            }
+
+    def get_training_buffer_status(self) -> Dict:
+        """Get status of the training buffer."""
+        return {
+            'buffer_size': len(self._training_buffer),
+            'buffer_max': self._training_buffer_max,
+            'last_training': self._last_background_training,
+            'training_interval': self._background_training_interval,
+            'seconds_until_next': max(0, self._background_training_interval -
+                                       (time.time() - self._last_background_training))
+        }
 
     def get_prediction_accuracy(self) -> Dict:
         """Get prediction accuracy stats"""
