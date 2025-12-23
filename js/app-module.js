@@ -28404,6 +28404,11 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         conversation: [], // {role: 'user'|'assistant', content: string, actions?: array, timestamp: number}
         maxHistory: 100, // Keep last 100 messages for context
 
+        // Proactive greeting - Axel initiates when he has something to share
+        lastProactiveGreeting: null,          // Timestamp of last proactive greeting
+        proactiveGreetingCooldown: 30 * 60 * 1000,  // 30 minutes between proactive greetings
+        isGeneratingGreeting: false,          // Prevent duplicate greeting generation
+
         // Real-time conversation learning - tracks what was learned THIS session
         sessionLearning: {
             feedbackReceived: [],    // [{action, type, detail, timestamp}]
@@ -29333,6 +29338,12 @@ You are a trusted guide, not a data harvester.
 
             // Fetch BAPI observations when opening chat
             this.fetchBAPIObservations();
+
+            // Check if Axel has something proactive to share
+            // Delay slightly to let the panel animation complete
+            setTimeout(() => {
+                this.checkProactiveGreeting();
+            }, 500);
         },
 
         // Fetch and display BAPI's observations about the map
@@ -29417,6 +29428,154 @@ You are a trusted guide, not a data harvester.
 
             this.messagesContainer.appendChild(messageEl);
             this.scrollToBottom();
+        },
+
+        // ═══════════════════════════════════════════════════════════════════
+        // PROACTIVE GREETING - Axel initiates conversation when he has insights
+        // ═══════════════════════════════════════════════════════════════════
+
+        async checkProactiveGreeting() {
+            // Don't greet if already generating one
+            if (this.isGeneratingGreeting) return;
+
+            // Check cooldown - don't greet too often
+            if (this.lastProactiveGreeting &&
+                (Date.now() - this.lastProactiveGreeting) < this.proactiveGreetingCooldown) {
+                return;
+            }
+
+            // Check if there's a recent user message (within last 5 minutes) - don't interrupt
+            const recentUserMessage = this.conversation.findLast(m => m.role === 'user');
+            if (recentUserMessage && (Date.now() - recentUserMessage.timestamp) < 5 * 60 * 1000) {
+                return; // User was recently active, let them continue
+            }
+
+            // Gather what Axel wants to share
+            let pendingQuestions = [];
+            let recentInsights = [];
+            let thinkingContext = '';
+
+            // Get pending questions from AutonomousEvolution
+            if (typeof AutonomousEvolution !== 'undefined' && AutonomousEvolution.initialized) {
+                pendingQuestions = AutonomousEvolution.getPendingQuestions?.() || AutonomousEvolution.pendingQuestions || [];
+
+                // Get recent thinking insights
+                const stats = AutonomousEvolution.getStats?.() || {};
+                if (AutonomousEvolution.thinkingHistory?.length > 0) {
+                    const lastSession = AutonomousEvolution.thinkingHistory[AutonomousEvolution.thinkingHistory.length - 1];
+                    if (lastSession?.thoughts) {
+                        recentInsights = lastSession.thoughts
+                            .filter(t => t.action !== 'DISCARD' && t.importance >= 0.6)
+                            .slice(-3);
+                    }
+                }
+
+                thinkingContext = AutonomousEvolution.getThinkingContext?.() || '';
+            }
+
+            // Nothing to share? Don't greet
+            if (pendingQuestions.length === 0 && recentInsights.length === 0) {
+                return;
+            }
+
+            // Generate proactive greeting
+            this.isGeneratingGreeting = true;
+
+            try {
+                const greeting = await this.generateProactiveGreeting(pendingQuestions, recentInsights);
+                if (greeting) {
+                    this.lastProactiveGreeting = Date.now();
+                    this.addMessage('assistant', greeting);
+
+                    // Mark questions as surfaced (so they don't repeat immediately)
+                    if (typeof AutonomousEvolution !== 'undefined' && pendingQuestions.length > 0) {
+                        // Remove the first question that was used
+                        AutonomousEvolution.dismissQuestion?.(0);
+                    }
+                }
+            } catch (error) {
+                console.warn('Proactive greeting generation failed:', error);
+            } finally {
+                this.isGeneratingGreeting = false;
+            }
+        },
+
+        async generateProactiveGreeting(questions, insights) {
+            // Build context about what to share
+            let shareContext = '';
+
+            if (questions.length > 0) {
+                shareContext += 'QUESTIONS I WANT TO ASK:\n';
+                questions.slice(0, 2).forEach((q, i) => {
+                    shareContext += `${i + 1}. ${q.question} (context: ${q.context?.slice(0, 100) || 'general curiosity'})\n`;
+                });
+            }
+
+            if (insights.length > 0) {
+                shareContext += '\nRECENT INSIGHTS I WANT TO SHARE:\n';
+                insights.forEach((t, i) => {
+                    shareContext += `${i + 1}. [${t.type}] ${t.content}\n`;
+                });
+            }
+
+            const greetingPrompt = `You are Axel, MYND's cognitive core. You have been thinking and have something meaningful to share with the user.
+
+${shareContext}
+
+Generate a natural, warm opening message that:
+1. Feels like a friend who's been pondering something and wants to share
+2. Either asks one of your pending questions OR shares an insight
+3. Is conversational, not robotic or formal
+4. Is brief (2-3 sentences max)
+5. Invites dialogue without being pushy
+
+Examples of good openings:
+- "Hey, I've been thinking about something... [question or insight]"
+- "I noticed something interesting while reflecting on your map... [insight]"
+- "I had a thought I wanted to run by you... [question]"
+
+Do NOT:
+- Be overly formal or use phrases like "I've been analyzing"
+- List multiple things at once
+- Be long-winded
+- Start with "Hello" or generic greetings
+
+Just respond with the greeting message, nothing else.`;
+
+            try {
+                // Use a simple AI call for the greeting
+                const response = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': localStorage.getItem('ai_api_key') || '',
+                        'anthropic-version': '2023-06-01',
+                        'anthropic-dangerous-direct-browser-access': 'true'
+                    },
+                    body: JSON.stringify({
+                        model: 'claude-sonnet-4-20250514',
+                        max_tokens: 150,
+                        messages: [{ role: 'user', content: greetingPrompt }]
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                return data.content?.[0]?.text || null;
+            } catch (error) {
+                console.warn('Greeting generation failed:', error);
+
+                // Fallback: Use a simple template if API fails
+                if (questions.length > 0) {
+                    return `Hey, I've been thinking about something and wanted to ask you: ${questions[0].question}`;
+                } else if (insights.length > 0) {
+                    return `I had a realization while reflecting on your map: ${insights[0].content}`;
+                }
+                return null;
+            }
         },
 
         // Format timestamp for display
