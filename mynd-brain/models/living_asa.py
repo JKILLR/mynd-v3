@@ -333,15 +333,87 @@ class MYNDLivingASA:
     # BOND MANAGEMENT
     # =========================================================================
 
+    def _get_ancestors(self, atom_id: str, visited: Set[str] = None) -> Set[str]:
+        """Get all is_a ancestors of an atom (follows the inheritance chain)."""
+        if visited is None:
+            visited = set()
+        if atom_id in visited or atom_id not in self.atoms:
+            return set()
+        visited.add(atom_id)
+
+        ancestors = set()
+        atom = self.atoms[atom_id]
+        for bond in atom.get_bonds_by_relation(RelationType.IS_A):
+            ancestors.add(bond.target_id)
+            ancestors |= self._get_ancestors(bond.target_id, visited.copy())
+        return ancestors
+
+    def _check_contradiction(self, atom1_id: str, atom2_id: str) -> bool:
+        """
+        Check if two atoms contradict, including through is_a inheritance.
+
+        Example: If Dog CONTRADICTS Cat, and Poodle IS_A Dog,
+        then Poodle trying to be IS_A Cat should be blocked.
+        """
+        if atom1_id not in self.atoms or atom2_id not in self.atoms:
+            return False
+
+        # Get all ancestors for both atoms
+        atom1_line = {atom1_id} | self._get_ancestors(atom1_id)
+        atom2_line = {atom2_id} | self._get_ancestors(atom2_id)
+
+        # Check if any atom in line 1 contradicts any atom in line 2
+        for a1_id in atom1_line:
+            if a1_id not in self.atoms:
+                continue
+            a1 = self.atoms[a1_id]
+            for bond in a1.get_all_bonds():
+                if bond.relation == RelationType.CONTRADICTS and bond.target_id in atom2_line:
+                    return True
+
+        # Check reverse direction too
+        for a2_id in atom2_line:
+            if a2_id not in self.atoms:
+                continue
+            a2 = self.atoms[a2_id]
+            for bond in a2.get_all_bonds():
+                if bond.relation == RelationType.CONTRADICTS and bond.target_id in atom1_line:
+                    return True
+
+        return False
+
     def _create_bond(self, source_id: str, target_id: str, relation: RelationType,
                      strength: float = 1.0, source: str = "explicit",
                      start_shell: int = 4) -> bool:
         """Create a bond between atoms."""
         if source_id not in self.atoms:
             return False
+        if target_id not in self.atoms:
+            return False
 
         atom = self.atoms[source_id]
+        target = self.atoms[target_id]
         now = time.time()
+
+        # === PAULI EXCLUSION CHECK ===
+        # For IS_A bonds, check if this would create a contradiction
+        if relation == RelationType.IS_A:
+            # Check if source already has is_a parents that contradict the new target
+            existing_parents = atom.get_bonds_by_relation(RelationType.IS_A)
+            for parent_bond in existing_parents:
+                if self._check_contradiction(parent_bond.target_id, target_id):
+                    logger.warning(f"Pauli violation: {atom.name} can't be both "
+                                 f"{self.atoms[parent_bond.target_id].name} and {target.name}")
+                    atom.contradiction_count += 1
+                    self._update_charge(atom)
+                    return False
+
+            # Also check if target's lineage contradicts source's existing lineage
+            if self._check_contradiction(source_id, target_id):
+                logger.warning(f"Pauli violation: {atom.name} contradicts {target.name} through inheritance")
+                atom.contradiction_count += 1
+                self._update_charge(atom)
+                return False
 
         # Check if bond already exists
         for bond in atom.get_all_bonds():
