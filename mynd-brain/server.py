@@ -862,6 +862,59 @@ class MYNDBrain:
             "last_sync": self.map_last_sync
         }
 
+    # ═══════════════════════════════════════════════════════════════════
+    # TRAINING METHODS - Close the learning loop
+    # ═══════════════════════════════════════════════════════════════════
+
+    def train_connection(
+        self,
+        source_id: str,
+        target_id: str,
+        should_connect: bool
+    ) -> Dict:
+        """
+        Train the Graph Transformer on a connection decision.
+
+        This is called when user accepts/rejects a connection suggestion,
+        or when they manually create a connection (positive example).
+
+        Args:
+            source_id: ID of source node
+            target_id: ID of target node
+            should_connect: True if connection should exist, False otherwise
+
+        Returns:
+            Training result dict with loss, prediction, etc.
+        """
+        # Get embeddings for the nodes
+        if not self.map_state or not self.map_node_index:
+            return {'error': 'Map not synced - call /map/sync first'}
+
+        if source_id not in self.map_node_index:
+            return {'error': f'Source node {source_id} not in synced map'}
+        if target_id not in self.map_node_index:
+            return {'error': f'Target node {target_id} not in synced map'}
+
+        source_idx = self.map_node_index[source_id]
+        target_idx = self.map_node_index[target_id]
+
+        source_embedding = self.map_embeddings[source_idx]
+        target_embedding = self.map_embeddings[target_idx]
+
+        # Train the GT
+        result = self.graph_transformer.train_connection_step(
+            source_embedding=source_embedding,
+            target_embedding=target_embedding,
+            should_connect=should_connect,
+            adjacency=self.map_adjacency
+        )
+
+        return result
+
+    def get_training_stats(self) -> Dict:
+        """Get Graph Transformer training statistics."""
+        return self.graph_transformer.get_training_stats()
+
     def get_health(self) -> Dict:
         """Get health status."""
         return {
@@ -895,6 +948,10 @@ async def lifespan(app: FastAPI):
 
     # Initialize ML brain
     brain = MYNDBrain()
+
+    # Load trained GT weights if they exist
+    gt_weights_path = pathlib.Path(__file__).parent / "data" / "gt_weights.pt"
+    brain.graph_transformer.load_weights(str(gt_weights_path))
 
     # Initialize unified brain with reference to ML brain
     base_dir = pathlib.Path(__file__).parent.parent
@@ -951,13 +1008,50 @@ async def lifespan(app: FastAPI):
     knowledge_extractor = KnowledgeExtractor(map_vector_db, api_key=api_key)
     print(f"🧠 Knowledge Extractor initialized (AI: {'enabled' if api_key else 'disabled - using rule-based'})")
 
+    # ═══════════════════════════════════════════════════════════════════
+    # BACKGROUND TRAINING TASK
+    # Runs every 5 minutes to train on buffered examples
+    # ═══════════════════════════════════════════════════════════════════
+    background_training_running = True
+
+    async def background_training_loop():
+        """Periodically run background training on buffered examples."""
+        while background_training_running:
+            try:
+                await asyncio.sleep(300)  # 5 minutes
+                if unified_brain is not None:
+                    result = unified_brain.run_background_training()
+                    if result.get('status') == 'trained':
+                        # Save weights after successful training
+                        gt_weights_path = pathlib.Path(__file__).parent / "data" / "gt_weights.pt"
+                        brain.graph_transformer.save_weights(str(gt_weights_path))
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                print(f"⚠️ Background training loop error: {e}")
+
+    # Start background training task
+    training_task = asyncio.create_task(background_training_loop())
+    print("🎓 Background training loop started (runs every 5 minutes)")
+
     yield
+    # Stop background training
+    background_training_running = False
+    training_task.cancel()
+    try:
+        await training_task
+    except asyncio.CancelledError:
+        pass
     # Cleanup
     if map_vector_db:
         map_vector_db.save()
         print("💾 MapVectorDB saved")
     if unified_brain:
         unified_brain.save_learning_state()
+    # Save GT trained weights
+    if brain and brain.graph_transformer:
+        gt_weights_path = pathlib.Path(__file__).parent / "data" / "gt_weights.pt"
+        brain.graph_transformer.save_weights(str(gt_weights_path))
     print("🧠 MYND Brain shutting down...")
 
 app = FastAPI(
@@ -1276,7 +1370,7 @@ async def learn_from_connection(learning: ConnectionLearning):
         learning.connection_type
     )
 
-    return {
+    response = {
         "status": "learned",
         "was_predicted": result['was_predicted'],
         "prediction_score": result['prediction_score'],
@@ -1284,20 +1378,141 @@ async def learn_from_connection(learning: ConnectionLearning):
         "accuracy": unified_brain.predictions.get_accuracy()
     }
 
-@app.get("/brain/learning")
-async def get_learning_stats():
+    # Include GT training result if available
+    if 'gt_training' in result:
+        response['gt_training'] = result['gt_training']
+
+    return response
+
+
+class ConnectionRejection(BaseModel):
+    source_id: str
+    target_id: str
+
+
+@app.post("/brain/reject-connection")
+async def reject_connection(rejection: ConnectionRejection):
     """
-    Get the brain's learning statistics.
-    Shows prediction accuracy and what the brain has learned.
+    Tell the brain that a suggested connection was rejected.
+    This provides NEGATIVE training examples to the Graph Transformer.
+
+    Call this when user explicitly rejects a connection suggestion.
     """
     if unified_brain is None:
         raise HTTPException(status_code=503, detail="Unified brain not initialized")
 
+    result = unified_brain.reject_connection(
+        rejection.source_id,
+        rejection.target_id
+    )
+
+    response = {
+        "status": "rejected",
+        "source_id": rejection.source_id,
+        "target_id": rejection.target_id
+    }
+
+    if 'gt_training' in result:
+        response['gt_training'] = result['gt_training']
+
+    return response
+
+
+@app.get("/brain/gt-training")
+async def get_gt_training_stats():
+    """
+    Get Graph Transformer training statistics.
+
+    Returns training step count, average loss, and when last trained.
+    """
+    if brain is None:
+        raise HTTPException(status_code=503, detail="Brain not initialized")
+
+    stats = brain.get_training_stats()
     return {
+        "status": "ok",
+        "training_stats": stats
+    }
+
+
+@app.post("/brain/gt-save")
+async def save_gt_weights():
+    """
+    Manually save Graph Transformer weights.
+
+    Weights are automatically saved on shutdown, but this allows manual saves.
+    """
+    if brain is None:
+        raise HTTPException(status_code=503, detail="Brain not initialized")
+
+    gt_weights_path = pathlib.Path(__file__).parent / "data" / "gt_weights.pt"
+    success = brain.graph_transformer.save_weights(str(gt_weights_path))
+
+    return {
+        "status": "saved" if success else "failed",
+        "path": str(gt_weights_path),
+        "training_stats": brain.get_training_stats()
+    }
+
+
+@app.post("/brain/background-training")
+async def run_background_training(force: bool = False):
+    """
+    Trigger background training on buffered examples.
+
+    This runs training on connection examples that have been buffered.
+    Normally runs automatically every 5 minutes if buffer has examples.
+
+    Args:
+        force: Run training even if interval hasn't passed
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    result = unified_brain.run_background_training(force=force)
+
+    # Save weights after training if successful
+    if result.get('status') == 'trained' and brain is not None:
+        gt_weights_path = pathlib.Path(__file__).parent / "data" / "gt_weights.pt"
+        brain.graph_transformer.save_weights(str(gt_weights_path))
+
+    return result
+
+
+@app.get("/brain/training-buffer")
+async def get_training_buffer_status():
+    """
+    Get status of the training buffer.
+
+    Shows how many examples are buffered and when background training will run.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    return unified_brain.get_training_buffer_status()
+
+
+@app.get("/brain/learning")
+async def get_learning_stats():
+    """
+    Get the brain's learning statistics.
+    Shows prediction accuracy, GT training stats, and what the brain has learned.
+    """
+    if unified_brain is None:
+        raise HTTPException(status_code=503, detail="Unified brain not initialized")
+
+    response = {
         "stats": unified_brain.get_prediction_accuracy(),
         "summary": unified_brain.get_learning_summary(),
         "growth_events_today": unified_brain.growth_events_today
     }
+
+    # Include GT training stats if available
+    if brain is not None:
+        response["gt_training"] = brain.get_training_stats()
+        response["training_buffer"] = unified_brain.get_training_buffer_status()
+
+    return response
 
 # ═══════════════════════════════════════════════════════════════════
 # CLAUDE ↔ BRAIN - Bidirectional Learning & Knowledge Distillation

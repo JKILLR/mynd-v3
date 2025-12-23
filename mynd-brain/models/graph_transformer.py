@@ -12,12 +12,13 @@ Each attention head learns its own set of query, key, and value transformations,
 allowing the model to attend to different types of relationships simultaneously."
 """
 
+import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import math
-from typing import Optional, Tuple, List, Dict
+from typing import Optional, Tuple, List, Dict, Any
 
 
 class GraphPositionalEncoding(nn.Module):
@@ -337,6 +338,19 @@ class MYNDGraphTransformer(nn.Module):
 
         self.to(self.device)
 
+        # ═══════════════════════════════════════════════════════════════════
+        # TRAINING INFRASTRUCTURE (lazy initialization to avoid overhead)
+        # ═══════════════════════════════════════════════════════════════════
+        self._optimizer = None
+        self._training_initialized = False
+        self._learning_rate = 1e-4
+        self._training_stats = {
+            'total_steps': 0,
+            'connection_losses': [],
+            'avg_loss': 0.0,
+            'last_trained': None
+        }
+
         # Count parameters
         total_params = sum(p.numel() for p in self.parameters())
         trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
@@ -345,6 +359,7 @@ class MYNDGraphTransformer(nn.Module):
         print(f"   - {num_heads} attention heads")
         print(f"   - {hidden_dim} hidden dimension")
         print(f"   - {num_layers} transformer layers")
+        print(f"   - Training capability: ENABLED")
 
     def forward(
         self,
@@ -593,3 +608,283 @@ class MYNDGraphTransformer(nn.Module):
         # Sort by score and return top_k
         suggestions.sort(key=lambda x: x[2], reverse=True)
         return suggestions[:top_k]
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # TRAINING METHODS - Close the learning loop
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _init_training(self, learning_rate: float = None):
+        """
+        Lazy initialization of training infrastructure.
+        Called automatically on first training step.
+        """
+        if self._training_initialized:
+            return
+
+        lr = learning_rate or self._learning_rate
+        self._optimizer = torch.optim.AdamW(
+            self.parameters(),
+            lr=lr,
+            weight_decay=0.01  # Small regularization
+        )
+        self._training_initialized = True
+        print(f"🎓 Graph Transformer training initialized (lr={lr})")
+
+    def train_connection_step(
+        self,
+        source_embedding: np.ndarray,
+        target_embedding: np.ndarray,
+        should_connect: bool,
+        adjacency: Optional[np.ndarray] = None
+    ) -> Dict[str, float]:
+        """
+        Single training step for connection prediction.
+
+        This is the KEY method that closes the learning loop.
+        Called when user accepts/rejects a connection suggestion.
+
+        Args:
+            source_embedding: Embedding of source node (384 dims)
+            target_embedding: Embedding of target node (384 dims)
+            should_connect: True if user accepted, False if rejected
+            adjacency: Optional current adjacency matrix for context
+
+        Returns:
+            Dict with 'loss' and 'prediction' values
+        """
+        # Initialize training if needed
+        self._init_training()
+
+        # Set model to training mode
+        self.train()
+
+        # Convert inputs to tensors
+        source_t = torch.tensor(source_embedding, dtype=torch.float32, device=self.device)
+        target_t = torch.tensor(target_embedding, dtype=torch.float32, device=self.device)
+        label = torch.tensor([1.0 if should_connect else 0.0], dtype=torch.float32, device=self.device)
+
+        # Add batch dimension if needed
+        if source_t.dim() == 1:
+            source_t = source_t.unsqueeze(0)
+        if target_t.dim() == 1:
+            target_t = target_t.unsqueeze(0)
+
+        # Project through input projection to get hidden dim representations
+        source_hidden = self.input_proj(source_t)
+        target_hidden = self.input_proj(target_t)
+
+        # Combine embeddings for connection head
+        combined = torch.cat([source_hidden, target_hidden], dim=-1)
+
+        # Forward through connection head
+        logit = self.connection_head(combined)
+        prediction = torch.sigmoid(logit)
+
+        # Binary cross-entropy loss
+        loss = F.binary_cross_entropy(prediction.squeeze(), label.squeeze())
+
+        # Backward pass
+        self._optimizer.zero_grad()
+        loss.backward()
+
+        # Gradient clipping for stability
+        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
+
+        # Update weights
+        self._optimizer.step()
+
+        # Set back to eval mode
+        self.eval()
+
+        # Update stats
+        loss_val = loss.item()
+        self._training_stats['total_steps'] += 1
+        self._training_stats['connection_losses'].append(loss_val)
+        # Keep only last 100 losses for memory efficiency
+        if len(self._training_stats['connection_losses']) > 100:
+            self._training_stats['connection_losses'] = self._training_stats['connection_losses'][-100:]
+        self._training_stats['avg_loss'] = sum(self._training_stats['connection_losses']) / len(self._training_stats['connection_losses'])
+        self._training_stats['last_trained'] = time.time()
+
+        return {
+            'loss': loss_val,
+            'prediction': prediction.item(),
+            'label': float(should_connect),
+            'total_steps': self._training_stats['total_steps']
+        }
+
+    def train_batch(
+        self,
+        examples: List[Dict],
+        adjacency: Optional[np.ndarray] = None
+    ) -> Dict[str, float]:
+        """
+        Train on a batch of connection examples.
+
+        More efficient than individual steps for background training.
+
+        Args:
+            examples: List of dicts with 'source_embedding', 'target_embedding', 'should_connect'
+            adjacency: Optional adjacency matrix
+
+        Returns:
+            Dict with batch training stats
+        """
+        if not examples:
+            return {'loss': 0.0, 'num_examples': 0}
+
+        # Initialize training if needed
+        self._init_training()
+
+        self.train()
+
+        total_loss = 0.0
+        correct = 0
+
+        for example in examples:
+            source_t = torch.tensor(example['source_embedding'], dtype=torch.float32, device=self.device)
+            target_t = torch.tensor(example['target_embedding'], dtype=torch.float32, device=self.device)
+            label = torch.tensor([1.0 if example['should_connect'] else 0.0], dtype=torch.float32, device=self.device)
+
+            if source_t.dim() == 1:
+                source_t = source_t.unsqueeze(0)
+            if target_t.dim() == 1:
+                target_t = target_t.unsqueeze(0)
+
+            source_hidden = self.input_proj(source_t)
+            target_hidden = self.input_proj(target_t)
+            combined = torch.cat([source_hidden, target_hidden], dim=-1)
+
+            logit = self.connection_head(combined)
+            prediction = torch.sigmoid(logit)
+
+            loss = F.binary_cross_entropy(prediction.squeeze(), label.squeeze())
+            total_loss += loss.item()
+
+            # Track accuracy
+            pred_binary = prediction.item() > 0.5
+            if pred_binary == example['should_connect']:
+                correct += 1
+
+            # Accumulate gradients
+            self._optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
+            self._optimizer.step()
+
+        self.eval()
+
+        # Update stats
+        avg_loss = total_loss / len(examples)
+        self._training_stats['total_steps'] += len(examples)
+        self._training_stats['connection_losses'].append(avg_loss)
+        if len(self._training_stats['connection_losses']) > 100:
+            self._training_stats['connection_losses'] = self._training_stats['connection_losses'][-100:]
+        self._training_stats['avg_loss'] = sum(self._training_stats['connection_losses']) / len(self._training_stats['connection_losses'])
+        self._training_stats['last_trained'] = time.time()
+
+        return {
+            'loss': avg_loss,
+            'num_examples': len(examples),
+            'accuracy': correct / len(examples),
+            'total_steps': self._training_stats['total_steps']
+        }
+
+    def get_training_stats(self) -> Dict[str, Any]:
+        """Get current training statistics."""
+        return {
+            **self._training_stats,
+            'training_initialized': self._training_initialized,
+            'learning_rate': self._learning_rate
+        }
+
+    def save_weights(self, filepath: str) -> bool:
+        """
+        Save model weights for persistence across restarts.
+
+        Args:
+            filepath: Path to save weights (e.g., 'data/gt_weights.pt')
+
+        Returns:
+            True if successful
+        """
+        try:
+            from pathlib import Path
+            Path(filepath).parent.mkdir(parents=True, exist_ok=True)
+
+            save_dict = {
+                'model_state_dict': self.state_dict(),
+                'training_stats': self._training_stats,
+                'training_initialized': self._training_initialized,
+                'learning_rate': self._learning_rate,
+                'hidden_dim': self.hidden_dim,
+                'num_heads': self.num_heads
+            }
+
+            # Also save optimizer state if training was initialized
+            if self._optimizer is not None:
+                save_dict['optimizer_state_dict'] = self._optimizer.state_dict()
+
+            torch.save(save_dict, filepath)
+            print(f"💾 Graph Transformer weights saved: {filepath}")
+            print(f"   - Training steps: {self._training_stats['total_steps']}")
+            print(f"   - Avg loss: {self._training_stats['avg_loss']:.4f}")
+            return True
+        except Exception as e:
+            print(f"⚠️ Failed to save GT weights: {e}")
+            return False
+
+    def load_weights(self, filepath: str) -> bool:
+        """
+        Load model weights from file.
+
+        Args:
+            filepath: Path to load weights from
+
+        Returns:
+            True if successful
+        """
+        try:
+            from pathlib import Path
+            if not Path(filepath).exists():
+                print(f"📂 No saved weights found at {filepath}")
+                return False
+
+            checkpoint = torch.load(filepath, map_location=self.device)
+
+            # Verify architecture matches
+            if checkpoint.get('hidden_dim') != self.hidden_dim:
+                print(f"⚠️ Architecture mismatch: hidden_dim {checkpoint.get('hidden_dim')} vs {self.hidden_dim}")
+                return False
+            if checkpoint.get('num_heads') != self.num_heads:
+                print(f"⚠️ Architecture mismatch: num_heads {checkpoint.get('num_heads')} vs {self.num_heads}")
+                return False
+
+            # Load model weights
+            self.load_state_dict(checkpoint['model_state_dict'])
+
+            # Restore training state
+            self._training_stats = checkpoint.get('training_stats', self._training_stats)
+            self._training_initialized = checkpoint.get('training_initialized', False)
+            self._learning_rate = checkpoint.get('learning_rate', self._learning_rate)
+
+            # Restore optimizer if it was saved and training was initialized
+            if self._training_initialized and 'optimizer_state_dict' in checkpoint:
+                self._init_training()
+                self._optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+            print(f"📂 Graph Transformer weights loaded: {filepath}")
+            print(f"   - Training steps: {self._training_stats['total_steps']}")
+            print(f"   - Avg loss: {self._training_stats['avg_loss']:.4f}")
+            return True
+        except Exception as e:
+            print(f"⚠️ Failed to load GT weights: {e}")
+            return False
+
+    def set_learning_rate(self, lr: float):
+        """Update learning rate (takes effect on next training step)."""
+        self._learning_rate = lr
+        if self._optimizer is not None:
+            for param_group in self._optimizer.param_groups:
+                param_group['lr'] = lr
+        print(f"🎓 Learning rate updated to {lr}")
