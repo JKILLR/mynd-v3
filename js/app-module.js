@@ -2,6 +2,11 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
     // ═══════════════════════════════════════════════════════════════════
+    // DEBUG: Code version marker - if you see this, new code is loaded
+    // ═══════════════════════════════════════════════════════════════════
+    console.log('🚀 APP-MODULE LOADED - GT Debug Build 2024-12-23');
+
+    // ═══════════════════════════════════════════════════════════════════
     // CORE UTILITIES - Optimization infrastructure
     // ═══════════════════════════════════════════════════════════════════
 
@@ -27725,6 +27730,10 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
     // INCREMENTAL LEARNING - Learn from every node addition
     // ═══════════════════════════════════════════════════════════════════
     bus.on('node:added', ({ parent, node }) => {
+        // DEBUG: Log at very start to confirm event fires
+        console.log(`🔔 node:added EVENT FIRED: ${parent?.label} → ${node?.label}`);
+        console.log(`   LocalBrain defined: ${typeof LocalBrain !== 'undefined'}, isAvailable: ${typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable}`);
+
         // Calculate depth first (needed for multiple systems)
         const path = store.getPath(node.id);
         const depth = path.length - 1; // Depth is path length minus 1 (root is depth 0)
@@ -27743,6 +27752,8 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                     }
                 })
                 .catch(e => console.warn('Brain connection learning failed:', e));
+        } else {
+            console.log(`⚠️ LocalBrain NOT available - skipping GT training`);
         }
 
         // CGT: Record create action (also independent of neuralNet)
