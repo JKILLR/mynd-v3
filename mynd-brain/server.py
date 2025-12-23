@@ -1227,6 +1227,15 @@ async def root():
 # BAPI - Full Map Awareness
 # ═══════════════════════════════════════════════════════════════════
 
+# Import Living ASA here so it's available for map sync
+try:
+    from models.living_asa import get_asa, MYNDLivingASA
+    _asa_available = True
+    print("🧬 Living ASA module loaded")
+except Exception as e:
+    _asa_available = False
+    print(f"⚠️ Living ASA not available: {e}")
+
 @app.post("/map/sync")
 async def sync_map(map_data: MapData):
     """
@@ -1244,6 +1253,26 @@ async def sync_map(map_data: MapData):
     if pending_result['processed'] > 0:
         print(f"🎓 GT Training: Processed {pending_result['processed']} buffered connections after map sync")
         result['gt_training_processed'] = pending_result['processed']
+
+    # === SYNC TO LIVING ASA ===
+    if _asa_available:
+        try:
+            asa = get_asa()
+            asa.convert_map_to_asa(map_data.dict())
+
+            # Start metabolism if not running
+            if not asa._running:
+                asa.start_metabolism(tick_interval=5.0)
+                print("🧬 ASA metabolism started")
+
+            result['asa'] = {
+                'atoms': len(asa.atoms),
+                'metabolism': 'running' if asa._running else 'stopped'
+            }
+            print(f"🧬 ASA synced: {len(asa.atoms)} atoms")
+        except Exception as e:
+            print(f"⚠️ ASA sync error: {e}")
+            result['asa_error'] = str(e)
 
     return result
 
