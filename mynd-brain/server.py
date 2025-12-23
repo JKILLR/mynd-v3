@@ -3495,6 +3495,184 @@ async def get_archive_stats():
 
     return conversation_archive.get_stats()
 
+
+# ═══════════════════════════════════════════════════════════════════
+# LIVING ASA - Semantic Architecture with Metabolism
+# ═══════════════════════════════════════════════════════════════════
+
+from models.living_asa import get_asa, initialize_asa, MYNDLivingASA
+
+# Initialize ASA on first map sync
+_asa_initialized = False
+
+@app.post("/asa/sync")
+async def sync_asa(map_data: MapData):
+    """
+    Sync map to Living ASA and start metabolism.
+    Call after /map/sync to convert nodes to semantic atoms.
+    """
+    global _asa_initialized
+
+    try:
+        asa = get_asa()
+
+        # Get embeddings if available
+        embeddings = {}
+        if brain and brain.map_state:
+            for node in brain.map_state.nodes:
+                if hasattr(node, 'embedding') and node.embedding is not None:
+                    embeddings[node.id] = np.array(node.embedding)
+
+        # Convert map
+        asa.convert_map_to_asa(map_data.dict(), embeddings)
+
+        # Start metabolism if not running
+        if not _asa_initialized:
+            asa.start_metabolism(tick_interval=5.0)
+            _asa_initialized = True
+
+        return {
+            "success": True,
+            "atoms": len(asa.atoms),
+            "stats": asa.get_stats()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/asa/stats")
+async def get_asa_stats():
+    """Get ASA statistics."""
+    asa = get_asa()
+    return asa.get_stats()
+
+
+@app.get("/asa/attention")
+async def get_asa_attention(limit: int = 10):
+    """What needs attention? (high charge atoms)"""
+    asa = get_asa()
+    return {
+        "attention_needed": asa.get_attention_needed(limit),
+        "explanation": "Atoms with high charge need connections or have conflicts"
+    }
+
+
+@app.get("/asa/working-memory")
+async def get_asa_working_memory(threshold: float = 0.2):
+    """What's currently active? (high energy atoms)"""
+    asa = get_asa()
+    return {
+        "active": asa.get_working_memory(threshold),
+        "explanation": "These concepts are in working memory"
+    }
+
+
+@app.get("/asa/neglected")
+async def get_asa_neglected(days: float = 7.0):
+    """What's been neglected?"""
+    asa = get_asa()
+    return {
+        "neglected": asa.get_neglected(days),
+        "explanation": f"Concepts not accessed in {days}+ days"
+    }
+
+
+@app.get("/asa/core")
+async def get_asa_core(limit: int = 20):
+    """What's core knowledge? (high mass atoms)"""
+    asa = get_asa()
+    return {
+        "core": asa.get_core_knowledge(limit),
+        "explanation": "High-mass concepts are stable core knowledge"
+    }
+
+
+@app.get("/asa/gaps")
+async def get_asa_gaps(limit: int = 20):
+    """What's incomplete in thinking?"""
+    asa = get_asa()
+    return {
+        "gaps": asa.get_incomplete_thinking(limit),
+        "explanation": "Concepts with unfilled valence slots"
+    }
+
+
+@app.post("/asa/activation-preview")
+async def asa_activation_preview(node_ids: List[str], depth: int = 3):
+    """If user focuses on these nodes, what lights up?"""
+    asa = get_asa()
+    return {
+        "activated": asa.activation_preview(node_ids, depth),
+        "explanation": "Concepts that would activate through spreading"
+    }
+
+
+@app.get("/asa/decaying")
+async def get_asa_decaying(threshold: float = 0.3):
+    """What connections are about to be lost?"""
+    asa = get_asa()
+    return {
+        "decaying": asa.get_decaying_connections(threshold),
+        "explanation": "Connections that will fade without reinforcement"
+    }
+
+
+@app.post("/asa/access")
+async def asa_access_atom(node_id: str, energy_boost: float = 0.3):
+    """Access an atom - bring into working memory."""
+    asa = get_asa()
+    asa.access_atom(node_id, energy_boost)
+    return {"success": True, "node_id": node_id}
+
+
+@app.get("/asa/context")
+async def get_asa_context(focus_nodes: str = None, max_tokens: int = 2000):
+    """
+    Get ASA context block for Claude.
+    This integrates with /brain/context.
+    """
+    asa = get_asa()
+    focus_list = focus_nodes.split(",") if focus_nodes else None
+    return {
+        "context": asa.get_context_for_claude(focus_list, max_tokens),
+        "stats": asa.get_stats()
+    }
+
+
+@app.get("/asa/atom/{node_id}")
+async def get_asa_atom(node_id: str):
+    """Get full state of a specific atom."""
+    asa = get_asa()
+    if node_id not in asa.atoms:
+        raise HTTPException(status_code=404, detail="Atom not found")
+
+    atom = asa.atoms[node_id]
+    return atom.to_dict()
+
+
+@app.post("/asa/tick")
+async def asa_manual_tick(dt: float = 1.0):
+    """Manually trigger a metabolism tick (for testing)."""
+    asa = get_asa()
+    asa.tick(dt)
+    return {"success": True, "stats": asa.get_stats()}
+
+
+@app.post("/asa/gt-predictions")
+async def sync_gt_predictions_to_asa(predictions: List[Dict[str, Any]]):
+    """
+    Sync Graph Transformer predictions to ASA as weak bonds.
+    These start in the outer shell and can migrate inward if accessed.
+    """
+    asa = get_asa()
+    asa.sync_gt_predictions(predictions)
+    return {"success": True, "predictions_synced": len(predictions)}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# WEBSOCKET
+# ═══════════════════════════════════════════════════════════════════
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket for real-time communication (future use)."""
