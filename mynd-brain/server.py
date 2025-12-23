@@ -1369,6 +1369,16 @@ async def get_brain_context(request: BrainContextRequest):
     # Get unified context
     response = unified_brain.get_context(ctx_request)
 
+    # === ASA LEARNS FROM USER MESSAGE ===
+    if _asa_available and request.user_message:
+        try:
+            asa = get_asa()
+            learn_result = asa.learn_from_text(request.user_message, source="user")
+            if learn_result['atoms_activated'] > 0:
+                print(f"🧬 ASA learned from user: {learn_result['atoms_activated']} atoms, {learn_result['bonds_strengthened']} bonds")
+        except Exception as e:
+            print(f"⚠️ ASA learn error: {e}")
+
     elapsed = (time.time() - start) * 1000
     print(f"🧠 Brain context: {response.token_count} tokens in {elapsed:.0f}ms")
 
@@ -1699,6 +1709,22 @@ async def receive_from_claude(claude_response: ClaudeResponse):
 
     extracted = result.get('extracted', {})
     print(f"   Extracted: {len(extracted.get('insights', []))} insights, {len(extracted.get('patterns', []))} patterns")
+
+    # === ASA LEARNS FROM AXEL'S RESPONSE ===
+    if _asa_available:
+        try:
+            asa = get_asa()
+            response_text = data.get('response', '')
+            if response_text:
+                learn_result = asa.learn_from_text(response_text, source="axel")
+                if learn_result['atoms_activated'] > 0:
+                    print(f"🧬 ASA learned from Axel: {learn_result['atoms_activated']} atoms, {learn_result['bonds_strengthened']} bonds")
+
+            # Also learn from structured insights
+            for insight in (data.get('insights') or []):
+                asa.learn_from_insight(insight)
+        except Exception as e:
+            print(f"⚠️ ASA learn from Axel error: {e}")
 
     return {
         "status": "learned",
@@ -3701,6 +3727,87 @@ async def sync_gt_predictions_to_asa(predictions: List[Dict[str, Any]]):
     asa = get_asa()
     asa.sync_gt_predictions(predictions)
     return {"success": True, "predictions_synced": len(predictions)}
+
+
+@app.post("/asa/load-local")
+async def load_asa_from_local_file(file_path: str = None):
+    """
+    Load ASA from a local map JSON file.
+    For dev mode where /map/sync isn't used.
+
+    Default path: ~/.mynd/map.json
+    """
+    import os
+    import json
+
+    # Default path
+    if not file_path:
+        file_path = os.path.expanduser("~/.mynd/map.json")
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail=f"Map file not found: {file_path}")
+
+    try:
+        with open(file_path, 'r') as f:
+            map_data = json.load(f)
+
+        asa = get_asa()
+        asa.convert_map_to_asa(map_data)
+
+        # Start metabolism
+        if not asa._running:
+            asa.start_metabolism(tick_interval=5.0)
+            print("🧬 ASA metabolism started")
+
+        print(f"🧬 ASA loaded from {file_path}: {len(asa.atoms)} atoms")
+
+        return {
+            "success": True,
+            "file": file_path,
+            "atoms": len(asa.atoms),
+            "stats": asa.get_stats()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class LearnTextRequest(BaseModel):
+    text: str
+    source: str = "manual"
+
+
+@app.post("/asa/learn")
+async def asa_learn_from_text(request: LearnTextRequest):
+    """
+    Manually trigger ASA learning from text.
+    Use this to feed any text into the semantic graph.
+    """
+    asa = get_asa()
+    result = asa.learn_from_text(request.text, source=request.source)
+
+    if result['atoms_activated'] > 0:
+        print(f"🧬 ASA learned from {request.source}: {result['atoms_activated']} atoms")
+
+    return {
+        "success": True,
+        **result
+    }
+
+
+@app.get("/asa/learning-stats")
+async def get_asa_learning_stats():
+    """
+    Get stats about what ASA has learned.
+    Shows most active atoms, strongest bonds, etc.
+    """
+    asa = get_asa()
+
+    return {
+        "stats": asa.get_stats(),
+        "working_memory": asa.get_working_memory(threshold=0.2),
+        "core_knowledge": asa.get_core_knowledge(limit=10),
+        "attention_needed": asa.get_attention_needed(limit=5),
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════
