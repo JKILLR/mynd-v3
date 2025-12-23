@@ -565,6 +565,7 @@ class MYNDBrain:
 
         # Learning state
         self.feedback_buffer = []
+        self.pending_connections = []  # Buffer for connections waiting for map sync
 
         # Full map state (BAPI's context window)
         self.map_state = None
@@ -888,12 +889,29 @@ class MYNDBrain:
         """
         # Get embeddings for the nodes
         if not self.map_state or not self.map_node_index:
-            return {'error': 'Map not synced - call /map/sync first'}
+            # Buffer for later - map not synced yet
+            self.pending_connections.append({
+                'source_id': source_id,
+                'target_id': target_id,
+                'should_connect': should_connect,
+                'timestamp': time.time()
+            })
+            return {'status': 'buffered', 'reason': 'Map not synced yet'}
 
-        if source_id not in self.map_node_index:
-            return {'error': f'Source node {source_id} not in synced map'}
-        if target_id not in self.map_node_index:
-            return {'error': f'Target node {target_id} not in synced map'}
+        # Check if nodes exist, if not buffer for later
+        if source_id not in self.map_node_index or target_id not in self.map_node_index:
+            self.pending_connections.append({
+                'source_id': source_id,
+                'target_id': target_id,
+                'should_connect': should_connect,
+                'timestamp': time.time()
+            })
+            missing = []
+            if source_id not in self.map_node_index:
+                missing.append(f'source {source_id}')
+            if target_id not in self.map_node_index:
+                missing.append(f'target {target_id}')
+            return {'status': 'buffered', 'reason': f'Waiting for {", ".join(missing)} to sync'}
 
         source_idx = self.map_node_index[source_id]
         target_idx = self.map_node_index[target_id]
@@ -910,6 +928,47 @@ class MYNDBrain:
         )
 
         return result
+
+    def process_pending_connections(self) -> Dict:
+        """
+        Process any buffered connections now that map may be synced.
+        Called after map sync completes.
+        """
+        if not self.pending_connections:
+            return {'processed': 0, 'remaining': 0}
+
+        processed = 0
+        still_pending = []
+
+        for conn in self.pending_connections:
+            source_id = conn['source_id']
+            target_id = conn['target_id']
+
+            # Check if both nodes are now available
+            if source_id in self.map_node_index and target_id in self.map_node_index:
+                source_idx = self.map_node_index[source_id]
+                target_idx = self.map_node_index[target_id]
+
+                source_embedding = self.map_embeddings[source_idx]
+                target_embedding = self.map_embeddings[target_idx]
+
+                # Train on this buffered connection
+                result = self.graph_transformer.train_connection_step(
+                    source_embedding=source_embedding,
+                    target_embedding=target_embedding,
+                    should_connect=conn['should_connect'],
+                    adjacency=self.map_adjacency
+                )
+                processed += 1
+                print(f"🎓 Processed buffered connection: {source_id} → {target_id}, loss={result.get('loss', 0):.4f}")
+            else:
+                # Still waiting for nodes - keep in buffer (but expire after 5 min)
+                if time.time() - conn['timestamp'] < 300:
+                    still_pending.append(conn)
+
+        self.pending_connections = still_pending
+
+        return {'processed': processed, 'remaining': len(still_pending)}
 
     def get_training_stats(self) -> Dict:
         """Get Graph Transformer training statistics."""
@@ -1179,6 +1238,13 @@ async def sync_map(map_data: MapData):
         raise HTTPException(status_code=503, detail="Brain not initialized")
 
     result = await brain.sync_map(map_data)
+
+    # Process any buffered connection training now that map is synced
+    pending_result = brain.process_pending_connections()
+    if pending_result['processed'] > 0:
+        print(f"🎓 GT Training: Processed {pending_result['processed']} buffered connections after map sync")
+        result['gt_training_processed'] = pending_result['processed']
+
     return result
 
 @app.get("/map/analyze")
@@ -3162,11 +3228,20 @@ async def sync_map_to_server(request: MapSyncRequest):
     stats = map_vector_db.get_stats()
     elapsed = (time.time() - start) * 1000
 
+    # Also process any buffered GT training connections
+    gt_processed = 0
+    if brain is not None:
+        pending_result = brain.process_pending_connections()
+        if pending_result['processed'] > 0:
+            print(f"🎓 GT Training: Processed {pending_result['processed']} buffered connections after unified map sync")
+            gt_processed = pending_result['processed']
+
     return {
         "status": "synced",
         "nodes": stats['total_nodes'],
         "embedded": stats['embedded_nodes'],
-        "time_ms": elapsed
+        "time_ms": elapsed,
+        "gt_training_processed": gt_processed
     }
 
 @app.get("/unified/map/export")
