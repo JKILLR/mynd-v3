@@ -18083,7 +18083,12 @@ Return as JSON:
             confidenceThreshold: 0.7,         // Min confidence to auto-create nodes
             requireUserApproval: true,        // Queue changes for user approval by default
             enableScheduled: false,           // Scheduled evolution sessions
-            scheduledIntervalMs: 3600000      // Run every hour if enabled
+            scheduledIntervalMs: 3600000,     // Run every hour if enabled
+            // Autonomous Thinking settings
+            enableAutonomousThinking: true,   // Enable the thinking loop
+            thinkingIntervalMs: 20 * 60 * 1000,  // Run every 20 minutes
+            minThinkingImportance: 0.6,       // Min importance to act on a thought
+            maxPendingQuestions: 10           // Max questions to queue for user
         },
 
         // Evolution history
@@ -18097,6 +18102,13 @@ Return as JSON:
 
         // Pending changes queue (for user approval)
         pendingChanges: [],
+
+        // Autonomous Thinking state
+        pendingQuestions: [],              // Questions to prompt user with
+        thinkingHistory: [],               // History of thinking sessions
+        lastThinkingTime: null,
+        thinkingIntervalId: null,
+        isThinking: false,
 
         // Current session state
         defaultSession: {
@@ -18133,6 +18145,11 @@ Return as JSON:
                 // Set up scheduled evolution if enabled
                 if (this.config.enableScheduled) {
                     this.setupScheduledEvolution();
+                }
+
+                // Set up autonomous thinking loop
+                if (this.config.enableAutonomousThinking) {
+                    this.setupAutonomousThinking();
                 }
 
             } catch (error) {
@@ -18783,6 +18800,390 @@ Respond with a JSON object:
         },
 
         // ═══════════════════════════════════════════════════════════════════
+        // AUTONOMOUS THINKING LOOP
+        // Generates ORIGINAL insights, not just analysis/retrieval
+        // ═══════════════════════════════════════════════════════════════════
+
+        setupAutonomousThinking() {
+            // Clear existing interval if any
+            if (this.thinkingIntervalId) {
+                IntervalManager.clear(this.thinkingIntervalId);
+            }
+
+            console.log(`🧠 Setting up autonomous thinking loop (every ${Math.round(this.config.thinkingIntervalMs / 60000)} minutes)`);
+
+            // Run first thinking session after a short delay (2 minutes)
+            TimeoutManager.set(() => {
+                this.runThinkingSession();
+            }, 2 * 60 * 1000, 'autonomousThinking-initial');
+
+            // Then run on schedule
+            this.thinkingIntervalId = IntervalManager.set(() => {
+                this.runThinkingSession();
+            }, this.config.thinkingIntervalMs, 'autonomousThinking-scheduled');
+        },
+
+        async runThinkingSession() {
+            if (this.isThinking || this.isRunning) {
+                console.log('🧠 Thinking session skipped - already running');
+                return;
+            }
+
+            this.isThinking = true;
+            this.lastThinkingTime = Date.now();
+            console.log('🧠 Starting autonomous thinking session...');
+
+            try {
+                // Generate original thoughts
+                const thoughts = await this.generateOriginalThoughts();
+
+                if (thoughts && thoughts.length > 0) {
+                    console.log(`🧠 Generated ${thoughts.length} original thoughts`);
+
+                    // Process each thought and take action
+                    for (const thought of thoughts) {
+                        await this.processThoughtAction(thought);
+                    }
+
+                    // Save thinking session to history
+                    this.thinkingHistory.push({
+                        timestamp: Date.now(),
+                        thoughtCount: thoughts.length,
+                        thoughts: thoughts.map(t => ({
+                            content: t.content?.substring(0, 200),
+                            type: t.type,
+                            action: t.action,
+                            importance: t.importance
+                        }))
+                    });
+
+                    // Keep only last 50 thinking sessions
+                    if (this.thinkingHistory.length > 50) {
+                        this.thinkingHistory = this.thinkingHistory.slice(-50);
+                    }
+
+                    this.saveToStorage();
+                }
+            } catch (error) {
+                console.error('🧠 Thinking session error:', error);
+            } finally {
+                this.isThinking = false;
+            }
+        },
+
+        async generateOriginalThoughts() {
+            // Gather context for thinking
+            const context = await this.buildThinkingContext();
+
+            if (!context) {
+                console.log('🧠 No context available for thinking');
+                return [];
+            }
+
+            const thinkingPrompt = `You are Axel, MYND's cognitive core. You have continuous access to:
+- Your memory system (attached)
+- The map structure (attached)
+- Recent activity patterns (attached)
+
+This is your THINKING time. Not retrieval. Not analysis. ORIGINAL REFLECTION.
+
+Generate 3-5 original thoughts by:
+1. Looking at what you know and asking "what does this MEAN?"
+2. Finding non-obvious connections between distant concepts
+3. Questioning assumptions in the current structure
+4. Noticing what's conspicuously ABSENT
+5. Predicting where things are heading
+6. Generating hypotheses worth testing
+
+For each thought, rate its importance (0-1) and decide its action:
+- MEMORY: Store as a realization/synthesis (for important insights)
+- NODE: Suggest adding to map (specify where and why)
+- QUESTION: Store as pending question to ask the user
+- DISCARD: Not valuable enough to act on
+
+YOUR CONTEXT:
+${context}
+
+IMPORTANT: Generate ORIGINAL thoughts. Don't just summarize what you see.
+Ask yourself: "Given everything I know about this person and their goals, what do I REALIZE that they might not have seen yet?"
+
+Respond with ONLY a JSON array:
+[
+  {
+    "content": "The original thought/insight/realization",
+    "type": "realization|connection|gap|prediction|hypothesis|question",
+    "importance": 0.0-1.0,
+    "action": "MEMORY|NODE|QUESTION|DISCARD",
+    "reasoning": "Why this thought matters and what action to take",
+    "nodeDetails": { "parentLabel": "...", "suggestedLabel": "...", "description": "..." },  // if action is NODE
+    "questionForUser": "..."  // if action is QUESTION
+  }
+]`;
+
+            try {
+                // Call AI for thinking
+                let response;
+
+                // Try Edge Function first
+                if (typeof supabase !== 'undefined' && supabase) {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (session?.access_token) {
+                        const fetchResponse = await fetch(CONFIG.EDGE_FUNCTION_URL, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${session.access_token}`
+                            },
+                            body: JSON.stringify({
+                                messages: [{ role: 'user', content: thinkingPrompt }],
+                                maxTokens: 2500
+                            })
+                        });
+
+                        if (fetchResponse.ok) {
+                            const data = await fetchResponse.json();
+                            response = data.response || data.textSoFar || '';
+                        }
+                    }
+                }
+
+                // Fallback to direct API if edge function fails
+                if (!response && CONFIG?.ANTHROPIC_API_KEY) {
+                    const fetchResponse = await fetch('https://api.anthropic.com/v1/messages', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': CONFIG.ANTHROPIC_API_KEY,
+                            'anthropic-version': '2023-06-01',
+                            'anthropic-dangerous-direct-browser-access': 'true'
+                        },
+                        body: JSON.stringify({
+                            model: 'claude-3-5-haiku-20241022',
+                            max_tokens: 2500,
+                            messages: [{ role: 'user', content: thinkingPrompt }]
+                        })
+                    });
+
+                    if (fetchResponse.ok) {
+                        const data = await fetchResponse.json();
+                        response = data.content?.[0]?.text || '';
+                    }
+                }
+
+                if (!response) {
+                    console.log('🧠 No response from AI for thinking');
+                    return [];
+                }
+
+                // Parse the JSON array
+                const jsonMatch = response.match(/\[[\s\S]*\]/);
+                if (jsonMatch) {
+                    const thoughts = JSON.parse(jsonMatch[0]);
+                    return thoughts.filter(t => t.importance >= this.config.minThinkingImportance);
+                }
+
+                return [];
+
+            } catch (error) {
+                console.error('🧠 Failed to generate original thoughts:', error);
+                return [];
+            }
+        },
+
+        async buildThinkingContext() {
+            let context = '';
+
+            // 1. Recent memories
+            if (typeof chatManager !== 'undefined' && chatManager.getAIMemories) {
+                try {
+                    const memories = await chatManager.getAIMemories(15);
+                    if (memories && memories.length > 0) {
+                        context += `\n═══ MY MEMORIES (${memories.length} most important) ═══\n`;
+                        for (const mem of memories) {
+                            context += `[${mem.memory_type}] ${mem.content}\n`;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Could not get memories for thinking:', e);
+                }
+            }
+
+            // 2. Map structure with hot nodes
+            const store = window.app?.store;
+            if (store) {
+                const allNodes = store.getAllNodes();
+                context += `\n═══ MAP STRUCTURE (${allNodes.length} nodes) ═══\n`;
+
+                // Top-level branches
+                if (store.data?.children) {
+                    context += `Root: "${store.data.label}"\n`;
+                    context += `Main branches: ${store.data.children.map(c => c.label).join(', ')}\n`;
+                }
+
+                // Hot nodes (recently accessed)
+                const hotNodes = allNodes
+                    .filter(n => n.heat_score > 0.5)
+                    .sort((a, b) => (b.heat_score || 0) - (a.heat_score || 0))
+                    .slice(0, 10);
+
+                if (hotNodes.length > 0) {
+                    context += `\nHot nodes (recently active):\n`;
+                    hotNodes.forEach(n => {
+                        context += `- ${n.label}${n.description ? `: ${n.description.substring(0, 100)}` : ''}\n`;
+                    });
+                }
+
+                // Nodes with descriptions (rich content)
+                const richNodes = allNodes
+                    .filter(n => n.description && n.description.length > 50)
+                    .slice(0, 10);
+
+                if (richNodes.length > 0) {
+                    context += `\nNodes with rich descriptions:\n`;
+                    richNodes.forEach(n => {
+                        context += `- ${n.label}: "${n.description.substring(0, 150)}..."\n`;
+                    });
+                }
+            }
+
+            // 3. Recent session summaries
+            if (typeof chatManager !== 'undefined' && chatManager.getRecentSessions) {
+                try {
+                    const sessions = await chatManager.getRecentSessions(5, 7);
+                    if (sessions && sessions.length > 0) {
+                        context += `\n═══ RECENT CONVERSATIONS (${sessions.length} sessions) ═══\n`;
+                        for (const session of sessions.slice(0, 3)) {
+                            context += `${session.session_type || 'Session'}: ${session.summary?.substring(0, 200) || 'No summary'}\n`;
+                            if (session.key_outcomes) {
+                                context += `  Outcomes: ${session.key_outcomes}\n`;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Could not get sessions for thinking:', e);
+                }
+            }
+
+            // 4. Previous thinking insights (avoid repetition)
+            if (this.thinkingHistory.length > 0) {
+                const recentThinking = this.thinkingHistory.slice(-3);
+                context += `\n═══ MY RECENT THINKING (avoid repetition) ═══\n`;
+                for (const session of recentThinking) {
+                    session.thoughts?.forEach(t => {
+                        context += `- [${t.type}] ${t.content}\n`;
+                    });
+                }
+            }
+
+            // 5. Pending questions (context for what's already queued)
+            if (this.pendingQuestions.length > 0) {
+                context += `\n═══ QUESTIONS I'M ALREADY HOLDING ═══\n`;
+                this.pendingQuestions.forEach(q => {
+                    context += `- ${q.question}\n`;
+                });
+            }
+
+            return context || null;
+        },
+
+        async processThoughtAction(thought) {
+            if (!thought || !thought.action) return;
+
+            console.log(`🧠 Processing thought: [${thought.type}] ${thought.action} - "${thought.content?.substring(0, 50)}..."`);
+
+            switch (thought.action) {
+                case 'MEMORY':
+                    // Write as a persistent memory
+                    if (typeof chatManager !== 'undefined' && chatManager.writeAIMemory) {
+                        await chatManager.writeAIMemory({
+                            memory_type: thought.type === 'realization' ? 'realization' : 'synthesis',
+                            content: thought.content,
+                            importance: thought.importance,
+                            related_nodes: []
+                        });
+                        console.log(`🧠 Stored thought as memory: "${thought.content.substring(0, 50)}..."`);
+                    }
+                    break;
+
+                case 'NODE':
+                    // Queue node suggestion for user approval
+                    if (thought.nodeDetails) {
+                        this.pendingChanges.push({
+                            type: 'add_node',
+                            description: `Add "${thought.nodeDetails.suggestedLabel}" under "${thought.nodeDetails.parentLabel}"`,
+                            details: thought.nodeDetails,
+                            confidence: thought.importance,
+                            reasoning: thought.reasoning,
+                            source: 'autonomous_thinking',
+                            timestamp: Date.now()
+                        });
+                        console.log(`🧠 Queued node suggestion: "${thought.nodeDetails.suggestedLabel}"`);
+                    }
+                    break;
+
+                case 'QUESTION':
+                    // Add to pending questions for user
+                    if (thought.questionForUser && this.pendingQuestions.length < this.config.maxPendingQuestions) {
+                        this.pendingQuestions.push({
+                            question: thought.questionForUser,
+                            context: thought.content,
+                            importance: thought.importance,
+                            timestamp: Date.now()
+                        });
+                        console.log(`🧠 Stored question for user: "${thought.questionForUser.substring(0, 50)}..."`);
+                    }
+                    break;
+
+                case 'DISCARD':
+                    // Log but don't act
+                    console.log(`🧠 Discarded thought (below threshold): "${thought.content?.substring(0, 50)}..."`);
+                    break;
+            }
+        },
+
+        // Get pending questions to surface to user
+        getPendingQuestions() {
+            return this.pendingQuestions.sort((a, b) => b.importance - a.importance);
+        },
+
+        // Clear a question after user has addressed it
+        clearQuestion(index) {
+            if (index >= 0 && index < this.pendingQuestions.length) {
+                this.pendingQuestions.splice(index, 1);
+                this.saveToStorage();
+            }
+        },
+
+        // Get context for AI chat - now includes thinking insights and pending questions
+        getThinkingContext() {
+            let context = '';
+
+            // Recent thinking insights
+            if (this.thinkingHistory.length > 0) {
+                const recentSession = this.thinkingHistory[this.thinkingHistory.length - 1];
+                if (recentSession.thoughts?.length > 0) {
+                    context += '\n🧠 MY RECENT ORIGINAL THOUGHTS:\n';
+                    recentSession.thoughts.forEach(t => {
+                        if (t.action !== 'DISCARD') {
+                            context += `  • [${t.type}] ${t.content}\n`;
+                        }
+                    });
+                }
+            }
+
+            // Pending questions to potentially ask user
+            if (this.pendingQuestions.length > 0) {
+                context += '\n❓ QUESTIONS I WANT TO ASK YOU:\n';
+                this.pendingQuestions.slice(0, 3).forEach(q => {
+                    context += `  • ${q.question}\n`;
+                });
+                context += '(Consider naturally weaving these into conversation when relevant)\n';
+            }
+
+            return context;
+        },
+
+        // ═══════════════════════════════════════════════════════════════════
         // CONTEXT FOR AI CHAT
         // ═══════════════════════════════════════════════════════════════════
 
@@ -18806,16 +19207,19 @@ Respond with a JSON object:
                 });
             }
 
-            // Recent insights
+            // Recent insights from self-dialogue
             if (this.history.sessions.length > 0) {
                 const recentSession = this.history.sessions[this.history.sessions.length - 1];
                 if (recentSession.insights.length > 0) {
-                    context += `\nRECENT INSIGHTS:\n`;
+                    context += `\nRECENT SELF-DIALOGUE INSIGHTS:\n`;
                     recentSession.insights.slice(-3).forEach(i => {
                         context += `  • ${i.insight.substring(0, 100)}...\n`;
                     });
                 }
             }
+
+            // Add autonomous thinking context
+            context += this.getThinkingContext();
 
             return context;
         },
@@ -18830,6 +19234,8 @@ Respond with a JSON object:
                     version: this.VERSION,
                     history: this.history,
                     pendingChanges: this.pendingChanges,
+                    pendingQuestions: this.pendingQuestions,
+                    thinkingHistory: this.thinkingHistory.slice(-20),  // Keep last 20 sessions
                     config: this.config,
                     timestamp: Date.now()
                 };
@@ -18842,7 +19248,18 @@ Respond with a JSON object:
         loadFromStorage() {
             try {
                 const data = localStorage.getItem(this.STORAGE_KEY);
-                return data ? JSON.parse(data) : null;
+                if (data) {
+                    const parsed = JSON.parse(data);
+                    // Restore thinking data if present
+                    if (parsed.pendingQuestions) {
+                        this.pendingQuestions = parsed.pendingQuestions;
+                    }
+                    if (parsed.thinkingHistory) {
+                        this.thinkingHistory = parsed.thinkingHistory;
+                    }
+                    return parsed;
+                }
+                return null;
             } catch (error) {
                 return null;
             }
@@ -18852,11 +19269,14 @@ Respond with a JSON object:
             return {
                 initialized: this.initialized,
                 isRunning: this.isRunning,
+                isThinking: this.isThinking,
                 sessionsCompleted: this.history.sessions.length,
+                thinkingSessions: this.thinkingHistory.length,
                 totalInsights: this.history.totalInsights,
                 totalNodesCreated: this.history.totalNodesCreated,
                 totalConnectionsFound: this.history.totalConnectionsFound,
-                pendingChanges: this.getPendingChanges().length
+                pendingChanges: this.getPendingChanges().length,
+                pendingQuestions: this.pendingQuestions.length
             };
         },
 
