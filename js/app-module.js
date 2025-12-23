@@ -40309,6 +40309,31 @@ showKeyboardHints();
             const panel = document.createElement('div');
             panel.id = 'open-threads-panel';
             panel.className = 'open-threads-panel';
+
+            // Apply critical styles inline to ensure they work
+            Object.assign(panel.style, {
+                position: 'fixed',
+                left: '20px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: '250px',
+                maxHeight: '400px',
+                background: 'rgba(22, 22, 30, 0.85)',
+                backdropFilter: 'blur(24px)',
+                WebkitBackdropFilter: 'blur(24px)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '12px',
+                padding: '12px',
+                zIndex: '500',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+                display: 'flex',
+                flexDirection: 'column',
+                pointerEvents: 'auto',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+                fontSize: '13px',
+                color: 'rgba(255, 255, 255, 0.9)'
+            });
+
             document.body.appendChild(panel);
             this.panel = panel;
         },
