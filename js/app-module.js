@@ -22407,7 +22407,8 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                 }
 
                 // Sync to LocalBrain server (debounced) - browser is source of truth
-                if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                // LocalBrain now handles auto-reconnect internally
+                if (typeof LocalBrain !== 'undefined') {
                     this._scheduleLocalBrainSync();
                 }
             } catch (e) {
@@ -27886,7 +27887,8 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         }
 
         // Unified Brain: Learn from new parent-child connection
-        if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+        // LocalBrain now handles auto-reconnect internally
+        if (typeof LocalBrain !== 'undefined') {
             LocalBrain.learnFromConnection(newParentId, nodeId, 'reparent')
                 .then(result => {
                     if (result.learning_signal > 0) {
@@ -30149,7 +30151,8 @@ Just respond with the greeting message, nothing else.`;
                         });
 
                         // Also try to save to LocalBrain for persistent storage
-                        if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                        // LocalBrain now handles auto-reconnect internally
+                        if (typeof LocalBrain !== 'undefined') {
                             LocalBrain.importConversation(
                                 exchangeContent,
                                 'mynd-chat',
@@ -30947,7 +30950,8 @@ Just respond with the greeting message, nothing else.`;
             // ═══════════════════════════════════════════════════════════════
             let brainContext = '';
             let brainState = null;
-            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+            // ALWAYS try to get brain context - ASA learns from every message
+            if (typeof LocalBrain !== 'undefined') {
                 try {
                     // Get user_id for AI memory queries
                     let userId = null;
@@ -31004,8 +31008,8 @@ Just respond with the greeting message, nothing else.`;
             // ═══════════════════════════════════════════════════════════════
             let conversationContext = '';
 
-            // Try LocalBrain first (if server is running)
-            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+            // Try LocalBrain first - always attempt connection
+            if (typeof LocalBrain !== 'undefined') {
                 try {
                     const convResult = await LocalBrain.getConversationContext(
                         userMessage,
@@ -33007,8 +33011,9 @@ CURRENT REQUEST CONTEXT
 
             // ═══════════════════════════════════════════════════════════════
             // UNIFIED BRAIN LEARNING - Distill knowledge from Claude's response
+            // CRITICAL: LocalBrain handles auto-reconnect - ASA learns from every response
             // ═══════════════════════════════════════════════════════════════
-            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable && parsedResult.message) {
+            if (typeof LocalBrain !== 'undefined' && parsedResult.message) {
                 // Fire and forget - don't block the response
                 LocalBrain.sendToBrain({
                     response: parsedResult.message,
@@ -43046,7 +43051,8 @@ showKeyboardHints();
                             neuralNet.boostPattern(parentNode.label, label, suggestionType);
 
                             // LOCAL BRAIN FEEDBACK - Train Graph Transformer on user decisions
-                            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                            // LocalBrain handles auto-reconnect internally
+                            if (typeof LocalBrain !== 'undefined') {
                                 LocalBrain.recordFeedback(parentId, 'accepted', {
                                     parentLabel: parentNode.label,
                                     acceptedLabel: label,
@@ -43154,7 +43160,8 @@ showKeyboardHints();
                                 neuralNet.boostPattern(parentNode.label, label, suggestionType);
 
                                 // LOCAL BRAIN FEEDBACK - Train Graph Transformer (batch accept)
-                                if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                                // LocalBrain handles auto-reconnect internally
+                                if (typeof LocalBrain !== 'undefined') {
                                     LocalBrain.recordFeedback(parentId, 'accepted_batch', {
                                         parentLabel: parentNode.label,
                                         acceptedLabel: label,

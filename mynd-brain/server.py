@@ -1386,21 +1386,41 @@ async def get_brain_context(request: BrainContextRequest):
     response = unified_brain.get_context(ctx_request)
 
     # === ASA LEARNS FROM USER MESSAGE ===
+    asa_context = ""
     if _asa_available and request.user_message:
         try:
             asa = get_asa()
             learn_result = asa.learn_from_text(request.user_message, source="user")
             if learn_result['atoms_activated'] > 0:
                 print(f"🧬 ASA learned from user: {learn_result['atoms_activated']} atoms, {learn_result['bonds_strengthened']} bonds")
+
+            # === ASA CONTRIBUTES WORKING MEMORY TO CONTEXT ===
+            # This is crucial - tell Axel what topics are "hot" (recently discussed)
+            working_memory = asa.get_working_memory(threshold=0.15)
+            if working_memory:
+                asa_context = "\n\n## Recent Discussion Context (ASA Working Memory)\n"
+                asa_context += "These topics have been active in recent conversation:\n"
+                for item in working_memory[:10]:
+                    asa_context += f"- **{item['name']}** (energy: {item['energy']:.0%})\n"
+
+                # Also show what's activated together
+                if learn_result.get('activated_names'):
+                    asa_context += f"\nJust mentioned together: {', '.join(learn_result['activated_names'][:5])}\n"
+
         except Exception as e:
             print(f"⚠️ ASA learn error: {e}")
+
+    # Append ASA context to the response
+    enhanced_context = response.context_document
+    if asa_context:
+        enhanced_context += asa_context
 
     elapsed = (time.time() - start) * 1000
     print(f"🧠 Brain context: {response.token_count} tokens in {elapsed:.0f}ms")
 
     return BrainContextResponse(
-        context_document=response.context_document,
-        token_count=response.token_count,
+        context_document=enhanced_context,
+        token_count=response.token_count + len(asa_context.split()),
         breakdown=response.breakdown,
         brain_state=response.brain_state,
         time_ms=elapsed
@@ -3353,12 +3373,32 @@ async def sync_map_to_server(request: MapSyncRequest):
             print(f"🎓 GT Training: Processed {pending_result['processed']} buffered connections after unified map sync")
             gt_processed = pending_result['processed']
 
+    # === SYNC ASA FROM LATEST MAP DATA ===
+    asa_stats = None
+    if _asa_available:
+        try:
+            # Re-sync ASA from the updated map
+            map_data = map_vector_db.export_to_browser_map()
+            if map_data:
+                asa = get_asa()
+                asa.convert_map_to_asa(map_data)
+                if not asa._running:
+                    asa.start_metabolism(tick_interval=5.0)
+                asa_stats = {
+                    'atoms': len(asa.atoms),
+                    'metabolism': 'running' if asa._running else 'stopped'
+                }
+                print(f"🧬 ASA synced from unified map: {len(asa.atoms)} atoms")
+        except Exception as e:
+            print(f"⚠️ ASA sync error: {e}")
+
     return {
         "status": "synced",
         "nodes": stats['total_nodes'],
         "embedded": stats['embedded_nodes'],
         "time_ms": elapsed,
-        "gt_training_processed": gt_processed
+        "gt_training_processed": gt_processed,
+        "asa": asa_stats
     }
 
 @app.get("/unified/map/export")

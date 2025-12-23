@@ -102,6 +102,38 @@ const LocalBrain = {
     },
 
     /**
+     * Auto-reconnect wrapper for any async request.
+     * Ensures we always try to connect before critical operations.
+     * Updates isAvailable based on actual request success/failure.
+     *
+     * @param {Function} requestFn - Async function that makes the actual request
+     * @param {*} fallbackValue - Value to return if request fails
+     * @returns {Promise<*>} Result of requestFn or fallbackValue
+     */
+    async _tryWithReconnect(requestFn, fallbackValue = null) {
+        // Try to reconnect if we think we're not available
+        if (!this.isAvailable) {
+            console.log('🧠 LocalBrain: Attempting to reconnect before request...');
+            await this.checkAvailability();
+        }
+
+        // Now try the actual request
+        try {
+            const result = await requestFn();
+            // Success - mark as available
+            this.isAvailable = true;
+            this.status.connected = true;
+            return result;
+        } catch (e) {
+            console.warn('🧠 LocalBrain request failed:', e.message);
+            // Mark as unavailable so we try reconnect next time
+            this.isAvailable = false;
+            this.status.connected = false;
+            return fallbackValue;
+        }
+    },
+
+    /**
      * Generate embedding for text
      * Falls back to browser neuralNet if server unavailable
      */
@@ -220,24 +252,26 @@ const LocalBrain = {
 
     /**
      * Record feedback for learning
+     * CRITICAL: Uses auto-reconnect to ensure we capture all user feedback
      */
     async recordFeedback(nodeId, action, context) {
-        if (this.isAvailable) {
-            try {
-                await fetch(`${this.serverUrl}/train/feedback`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        node_id: nodeId,
-                        action: action,
-                        context: context
-                    })
-                });
+        // Always try to record on server with auto-reconnect
+        await this._tryWithReconnect(async () => {
+            const res = await fetch(`${this.serverUrl}/train/feedback`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    node_id: nodeId,
+                    action: action,
+                    context: context
+                })
+            });
+            if (res.ok) {
                 console.log(`🧠 LocalBrain.recordFeedback: ${action}`);
-            } catch (e) {
-                console.warn('LocalBrain.recordFeedback failed:', e);
+                return true;
             }
-        }
+            throw new Error('Request failed');
+        }, false);
 
         // Also record in browser (for redundancy)
         if (typeof preferenceTracker !== 'undefined') {
@@ -366,15 +400,10 @@ const LocalBrain = {
      * @returns {Promise<{synced: number, time_ms: number}>}
      */
     async syncMap(mapData) {
-        if (!this.isAvailable) {
-            console.log('🧠 LocalBrain.syncMap: Server not available');
-            return { synced: 0, time_ms: 0 };
-        }
-
-        try {
-            const formattedMap = this._formatMapForServer(mapData);
+        // CRITICAL: Uses auto-reconnect to ensure map stays synced
+        const formattedMap = this._formatMapForServer(mapData);
+        return this._tryWithReconnect(async () => {
             const start = performance.now();
-
             const res = await fetch(`${this.serverUrl}/map/sync`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -386,11 +415,8 @@ const LocalBrain = {
                 console.log(`🧠 BAPI synced: ${result.synced} nodes in ${result.time_ms.toFixed(0)}ms`);
                 return result;
             }
-        } catch (e) {
-            console.warn('LocalBrain.syncMap failed:', e);
-        }
-
-        return { synced: 0, time_ms: 0 };
+            throw new Error('Request failed');
+        }, { synced: 0, time_ms: 0 });
     },
 
     /**
@@ -457,9 +483,13 @@ const LocalBrain = {
      * @returns {Promise<{contextDocument: string, tokenCount: number, brainState: Object}>}
      */
     async getBrainContext(options = {}) {
+        // ALWAYS try to get brain context - don't bail early
+        // This ensures ASA learns from every conversation
+
+        // Try to reconnect if we think we're not available
         if (!this.isAvailable) {
-            console.log('🧠 LocalBrain.getBrainContext: Server not available');
-            return { contextDocument: null, error: 'Server not available' };
+            console.log('🧠 LocalBrain.getBrainContext: Attempting to reconnect...');
+            await this.checkAvailability();
         }
 
         try {
@@ -498,6 +528,10 @@ const LocalBrain = {
                 const latency = performance.now() - start;
                 console.log(`🧠 Brain context: ${result.token_count} tokens in ${latency.toFixed(0)}ms`);
 
+                // Mark as available since call succeeded
+                this.isAvailable = true;
+                this.status.connected = true;
+
                 return {
                     contextDocument: result.context_document,
                     tokenCount: result.token_count,
@@ -508,6 +542,9 @@ const LocalBrain = {
             }
         } catch (e) {
             console.warn('LocalBrain.getBrainContext failed:', e);
+            // Mark as unavailable so we retry next time
+            this.isAvailable = false;
+            this.status.connected = false;
         }
 
         return { contextDocument: null, error: 'Failed to get brain context' };
@@ -538,11 +575,8 @@ const LocalBrain = {
      * Call this when user accepts, rejects, or corrects something
      */
     async recordBrainFeedback(nodeId, action, context = {}) {
-        if (!this.isAvailable) {
-            return { error: 'Server not available' };
-        }
-
-        try {
+        // CRITICAL: Uses auto-reconnect to ensure all user feedback is captured
+        return this._tryWithReconnect(async () => {
             const res = await fetch(`${this.serverUrl}/brain/feedback`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -558,11 +592,8 @@ const LocalBrain = {
                 console.log(`🧠 Brain feedback recorded: ${action}`);
                 return result;
             }
-        } catch (e) {
-            console.warn('LocalBrain.recordBrainFeedback failed:', e);
-        }
-
-        return { error: 'Failed to record feedback' };
+            throw new Error('Request failed');
+        }, { error: 'Failed to record feedback' });
     },
 
     // ═══════════════════════════════════════════════════════════════════
@@ -618,11 +649,8 @@ const LocalBrain = {
      * @returns {Promise<{was_predicted, learning_signal, accuracy}>}
      */
     async learnFromConnection(sourceId, targetId, connectionType = 'manual') {
-        if (!this.isAvailable) {
-            return { error: 'Server not available' };
-        }
-
-        try {
+        // CRITICAL: Uses auto-reconnect to ensure we learn from every user action
+        return this._tryWithReconnect(async () => {
             const res = await fetch(`${this.serverUrl}/brain/learn-connection`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -642,11 +670,8 @@ const LocalBrain = {
                 }
                 return result;
             }
-        } catch (e) {
-            console.warn('LocalBrain.learnFromConnection failed:', e);
-        }
-
-        return { error: 'Failed to learn from connection' };
+            throw new Error('Request failed');
+        }, { error: 'Failed to learn from connection' });
     },
 
     /**
@@ -677,6 +702,7 @@ const LocalBrain = {
     /**
      * Send Claude's response to the brain for knowledge extraction.
      * This is how Claude TEACHES the brain.
+     * CRITICAL: Uses auto-reconnect to ensure ASA always learns from conversations.
      *
      * @param {Object} claudeResponse - Structured response from Claude
      * @param {string} claudeResponse.response - The text response
@@ -686,11 +712,7 @@ const LocalBrain = {
      * @param {Object} claudeResponse.explanations - Concept explanations
      */
     async sendToBrain(claudeResponse) {
-        if (!this.isAvailable) {
-            return { error: 'Server not available' };
-        }
-
-        try {
+        return this._tryWithReconnect(async () => {
             const res = await fetch(`${this.serverUrl}/brain/receive-from-claude`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -703,11 +725,8 @@ const LocalBrain = {
                 console.log(`🧠 Brain learned from Claude: ${stats.distilled_facts || 0} facts, ${stats.patterns_learned || 0} patterns`);
                 return result;
             }
-        } catch (e) {
-            console.warn('LocalBrain.sendToBrain failed:', e);
-        }
-
-        return { error: 'Failed to send to brain' };
+            throw new Error('Request failed');
+        }, { error: 'Failed to send to brain' });
     },
 
     /**
@@ -1700,12 +1719,8 @@ const LocalBrain = {
      * @returns {Promise<{status, id, title, chars}>}
      */
     async importConversation(text, source = 'unknown', title = null) {
-        if (!this.isAvailable) {
-            return { error: 'Server not available' };
-        }
-
-        try {
-            const start = performance.now();
+        // CRITICAL: Uses auto-reconnect to ensure conversations are captured
+        return this._tryWithReconnect(async () => {
             const res = await fetch(`${this.serverUrl}/conversations/import`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1717,11 +1732,8 @@ const LocalBrain = {
                 console.log(`💬 Conversation imported: "${result.title}" (${result.chars} chars)`);
                 return result;
             }
-        } catch (e) {
-            console.warn('LocalBrain.importConversation failed:', e);
-        }
-
-        return { error: 'Failed to import conversation' };
+            throw new Error('Request failed');
+        }, { error: 'Failed to import conversation' });
     },
 
     /**
@@ -1907,11 +1919,8 @@ const LocalBrain = {
      * @returns {Promise<{status, nodes, embedded, time_ms}>}
      */
     async syncMapToServer(mapData, reEmbedAll = false) {
-        if (!this.isAvailable) {
-            return { error: 'Server not available' };
-        }
-
-        try {
+        // CRITICAL: Uses auto-reconnect to ensure map changes are synced
+        return this._tryWithReconnect(async () => {
             const res = await fetch(`${this.serverUrl}/unified/map/sync`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1926,11 +1935,8 @@ const LocalBrain = {
                 console.log(`🗺️ Map synced to server: ${result.nodes} nodes, ${result.embedded} embedded`);
                 return result;
             }
-        } catch (e) {
-            console.warn('LocalBrain.syncMapToServer failed:', e);
-        }
-
-        return { error: 'Failed to sync map' };
+            throw new Error('Request failed');
+        }, { error: 'Failed to sync map' });
     },
 
     /**
