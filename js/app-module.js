@@ -30947,7 +30947,8 @@ Just respond with the greeting message, nothing else.`;
             // ═══════════════════════════════════════════════════════════════
             let brainContext = '';
             let brainState = null;
-            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+            // ALWAYS try to get brain context - ASA learns from every message
+            if (typeof LocalBrain !== 'undefined') {
                 try {
                     // Get user_id for AI memory queries
                     let userId = null;
@@ -31004,8 +31005,8 @@ Just respond with the greeting message, nothing else.`;
             // ═══════════════════════════════════════════════════════════════
             let conversationContext = '';
 
-            // Try LocalBrain first (if server is running)
-            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+            // Try LocalBrain first - always attempt connection
+            if (typeof LocalBrain !== 'undefined') {
                 try {
                     const convResult = await LocalBrain.getConversationContext(
                         userMessage,

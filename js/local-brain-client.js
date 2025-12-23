@@ -457,9 +457,13 @@ const LocalBrain = {
      * @returns {Promise<{contextDocument: string, tokenCount: number, brainState: Object}>}
      */
     async getBrainContext(options = {}) {
+        // ALWAYS try to get brain context - don't bail early
+        // This ensures ASA learns from every conversation
+
+        // Try to reconnect if we think we're not available
         if (!this.isAvailable) {
-            console.log('🧠 LocalBrain.getBrainContext: Server not available');
-            return { contextDocument: null, error: 'Server not available' };
+            console.log('🧠 LocalBrain.getBrainContext: Attempting to reconnect...');
+            await this.checkAvailability();
         }
 
         try {
@@ -498,6 +502,10 @@ const LocalBrain = {
                 const latency = performance.now() - start;
                 console.log(`🧠 Brain context: ${result.token_count} tokens in ${latency.toFixed(0)}ms`);
 
+                // Mark as available since call succeeded
+                this.isAvailable = true;
+                this.status.connected = true;
+
                 return {
                     contextDocument: result.context_document,
                     tokenCount: result.token_count,
@@ -508,6 +516,9 @@ const LocalBrain = {
             }
         } catch (e) {
             console.warn('LocalBrain.getBrainContext failed:', e);
+            // Mark as unavailable so we retry next time
+            this.isAvailable = false;
+            this.status.connected = false;
         }
 
         return { contextDocument: null, error: 'Failed to get brain context' };
