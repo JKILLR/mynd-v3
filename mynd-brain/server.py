@@ -661,30 +661,81 @@ class MYNDBrain:
         return 'relates_to'
 
     async def record_feedback(self, feedback: TrainFeedbackRequest):
-        """Record feedback for future training."""
-        self.feedback_buffer.append({
+        """Record feedback and trigger immediate GT training."""
+        feedback_data = {
             "node_id": feedback.node_id,
             "action": feedback.action,
             "context": feedback.context,
             "timestamp": time.time()
-        })
+        }
+        self.feedback_buffer.append(feedback_data)
 
-        # Trigger training if buffer is large enough
+        # Train immediately on this feedback if we have the context
+        context = feedback.context or {}
+        parent_label = context.get('parentLabel')
+        child_label = context.get('acceptedLabel')
+
+        if parent_label and child_label:
+            try:
+                # Generate embeddings from labels
+                parent_emb = await self.embed(parent_label)
+                child_emb = await self.embed(child_label)
+
+                # Determine training signal
+                is_accepted = 'accepted' in feedback.action  # 'accepted' or 'accepted_batch'
+
+                # Train GT on this connection
+                result = self.graph_transformer.train_connection_step(
+                    source_embedding=parent_emb,
+                    target_embedding=child_emb,
+                    should_connect=is_accepted,
+                    adjacency=self.map_adjacency if hasattr(self, 'map_adjacency') else None
+                )
+
+                print(f"🎓 GT trained on suggestion feedback: {parent_label} → {child_label}")
+                print(f"   action={feedback.action}, loss={result.get('loss', 0):.4f}")
+
+                return result
+            except Exception as e:
+                print(f"⚠️ GT training on feedback failed: {e}")
+                import traceback
+                traceback.print_exc()
+
+        # Fallback: buffer for batch training
         if len(self.feedback_buffer) >= 10:
             await self._train_on_feedback()
 
     async def _train_on_feedback(self):
-        """Train on accumulated feedback."""
+        """Train on accumulated feedback (batch mode)."""
         if not self.feedback_buffer:
             return
 
-        print(f"🔄 Training on {len(self.feedback_buffer)} feedback samples...")
+        print(f"🔄 Batch training on {len(self.feedback_buffer)} feedback samples...")
 
-        # TODO: Implement actual training loop
-        # For now, just clear the buffer
+        trained = 0
+        for fb in self.feedback_buffer:
+            context = fb.get('context', {})
+            parent_label = context.get('parentLabel')
+            child_label = context.get('acceptedLabel')
+
+            if parent_label and child_label:
+                try:
+                    parent_emb = await self.embed(parent_label)
+                    child_emb = await self.embed(child_label)
+                    is_accepted = 'accepted' in fb.get('action', '')
+
+                    self.graph_transformer.train_connection_step(
+                        source_embedding=parent_emb,
+                        target_embedding=child_emb,
+                        should_connect=is_accepted,
+                        adjacency=self.map_adjacency if hasattr(self, 'map_adjacency') else None
+                    )
+                    trained += 1
+                except Exception as e:
+                    print(f"⚠️ Batch training error: {e}")
+
         self.feedback_buffer = []
-
-        print("✅ Training complete")
+        print(f"✅ Batch training complete: {trained} examples")
 
     async def transcribe(self, audio_data: bytes, language: str = None, task: str = "transcribe") -> Dict:
         """Transcribe audio to text using Whisper."""
