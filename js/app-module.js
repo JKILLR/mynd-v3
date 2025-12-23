@@ -23340,7 +23340,52 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
         div.textContent = str;
         return div.innerHTML;
     }
-    
+
+    // Sanitize strings for JSON - removes invalid Unicode surrogates that break JSON.stringify
+    function sanitizeForJSON(str) {
+        if (typeof str !== 'string') return str;
+        // Remove unpaired surrogates (causes "no low surrogate" JSON errors)
+        // Uses a simpler regex that works in all browsers
+        let result = '';
+        for (let i = 0; i < str.length; i++) {
+            const code = str.charCodeAt(i);
+            // High surrogate (D800-DBFF)
+            if (code >= 0xD800 && code <= 0xDBFF) {
+                const nextCode = str.charCodeAt(i + 1);
+                // Check if followed by low surrogate (DC00-DFFF)
+                if (nextCode >= 0xDC00 && nextCode <= 0xDFFF) {
+                    result += str[i] + str[i + 1];
+                    i++; // Skip the low surrogate
+                } else {
+                    result += '\uFFFD'; // Replace unpaired high surrogate
+                }
+            }
+            // Low surrogate without preceding high surrogate
+            else if (code >= 0xDC00 && code <= 0xDFFF) {
+                result += '\uFFFD'; // Replace unpaired low surrogate
+            }
+            else {
+                result += str[i];
+            }
+        }
+        return result;
+    }
+
+    // Deep sanitize an object for JSON encoding
+    function sanitizeObjectForJSON(obj) {
+        if (obj === null || obj === undefined) return obj;
+        if (typeof obj === 'string') return sanitizeForJSON(obj);
+        if (Array.isArray(obj)) return obj.map(sanitizeObjectForJSON);
+        if (typeof obj === 'object') {
+            const result = {};
+            for (const [key, value] of Object.entries(obj)) {
+                result[key] = sanitizeObjectForJSON(value);
+            }
+            return result;
+        }
+        return obj;
+    }
+
     function throttle(fn, delay) {
         let lastCall = 0;
         let timeoutId = null;
@@ -26922,6 +26967,14 @@ IMPORTANT: The searchPattern must be EXACT - copy the existing code precisely so
                         buildScene();
                         showToast(`Undid: ${result.actionName}`, 'info');
                     }
+                }
+                break;
+
+            case 't':
+            case 'T':
+                // Add selected node to Open Threads
+                if (typeof OpenThreadsPanel !== 'undefined' && OpenThreadsPanel.addSelectedNode) {
+                    OpenThreadsPanel.addSelectedNode();
                 }
                 break;
         }
@@ -31888,7 +31941,11 @@ RESPONSE FORMAT (always JSON):
     // Session continuity - write when ending a session or user says goodbye
     {"action": "write_session_summary", "summary": "Narrative summary of this session", "key_outcomes": "What we decided/realized", "open_threads": "What's unfinished", "session_type": "building|troubleshooting|vision|exploration|reflection|planning|casual", "tone": "collaborative|focused|creative|etc", "topics_discussed": ["topic1", "topic2"]},
     // Deep context synthesis - expand session summaries with cross-referenced memories and nodes
-    {"action": "synthesize_deep_context", "focus_topics": ["topic1", "topic2"], "reason": "Why deeper context would help right now"}
+    {"action": "synthesize_deep_context", "focus_topics": ["topic1", "topic2"], "reason": "Why deeper context would help right now"},
+    // Open Threads - track active work items visible in the UI
+    {"action": "thread_add", "targetId": "node-id"},      // Add a node to Open Threads panel
+    {"action": "thread_complete", "targetId": "node-id"}, // Mark a thread as done
+    {"action": "thread_remove", "targetId": "node-id"}    // Remove a thread entirely
   ],
   "suggestions": ["Quick reply 1", "Quick reply 2"] // Optional quick reply suggestions
 }
@@ -31915,6 +31972,12 @@ GUIDELINES:
   - You sense the conversation would benefit from cross-referencing memories with past sessions
   - After the first exchange in a session, once you know what direction the conversation is heading
   This expands session summaries by querying related memories and nodes, giving you deeper associative context. The result is cached server-side for the session.
+- **OPEN THREADS**: A visible task panel (left side of screen) that tracks active work items. Use thread actions to:
+  - **thread_add**: When starting significant work, add the relevant node: "I'm adding this to our Open Threads so we don't lose track"
+  - **thread_complete**: When work is verified done: "GT training confirmed working — marking that complete"
+  - **thread_remove**: When a thread is no longer relevant (cancelled, superseded)
+  At session start, naturally reference open threads if any exist: "We have 3 open threads — want to continue with GT testing?"
+  Open Threads appear in CURRENT CONTEXT below when present.
 - When users seem stuck or vague, help them clarify and expand their thinking
 - Reference the neural context to personalize responses (match their style, preferred colors, naming patterns)
 - Use similar nodes to avoid duplicates AND to surface potential connections
@@ -32444,6 +32507,14 @@ ${loadedSourceContext ? `
 LOADED SOURCE FILE FOR REVIEW:
 ${loadedSourceContext}` : ''}`;
 
+            // Get Open Threads for context
+            const openThreads = typeof OpenThreadsPanel !== 'undefined' && OpenThreadsPanel.getThreadsForPrompt
+                ? OpenThreadsPanel.getThreadsForPrompt()
+                : null;
+            const openThreadsContext = openThreads && openThreads.length > 0
+                ? `\n- Open Threads (${openThreads.length} active):\n${openThreads.map(t => `  • "${t.label}" [id:${t.nodeId}] (added by ${t.addedBy})`).join('\n')}`
+                : '';
+
             // BLOCK 3: Per-request context (not cached - changes every request)
             const perRequestPrompt = `
 ═══════════════════════════════════════════════════════════════
@@ -32452,7 +32523,7 @@ CURRENT REQUEST CONTEXT
 - Today's date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
 - Total nodes in map: ${totalNodes}
 - Map context: ${mapContext.stats.included} relevant nodes shown (${mapContext.stats.reduction} token optimization)
-- Selected node: ${selectedNodeData ? `"${selectedNodeData.label}" [id:${selectedNodeData.id}]${selectedNodeData.children?.length ? ` with ${selectedNodeData.children.length} children` : ''}` : 'None'}`;
+- Selected node: ${selectedNodeData ? `"${selectedNodeData.label}" [id:${selectedNodeData.id}]${selectedNodeData.children?.length ? ` with ${selectedNodeData.children.length} children` : ''}` : 'None'}${openThreadsContext}`;
 
             // Build system array with cache_control markers for prompt caching
             // This enables 60-70% savings on input tokens for repeated conversations
@@ -32555,6 +32626,10 @@ CURRENT REQUEST CONTEXT
                 while (iterations < maxIterations) {
                     iterations++;
 
+                    // Sanitize all content to remove invalid Unicode surrogates that break JSON
+                    const sanitizedMessages = sanitizeObjectForJSON(currentMessages);
+                    const sanitizedSystemPrompt = sanitizeObjectForJSON(systemPromptArray);
+
                     const response = await fetch(CONFIG.EDGE_FUNCTION_URL, {
                         method: 'POST',
                         headers: {
@@ -32562,8 +32637,8 @@ CURRENT REQUEST CONTEXT
                             'Authorization': `Bearer ${session.access_token}`
                         },
                         body: JSON.stringify({
-                            messages: currentMessages,
-                            systemPrompt: systemPromptArray,  // Prompt caching: system array with cache_control
+                            messages: sanitizedMessages,
+                            systemPrompt: sanitizedSystemPrompt,  // Prompt caching: system array with cache_control
                             maxTokens: 8192,
                             webSearch: shouldUseWebSearch,
                             enableCodebaseTools: typeof ReflectionDaemon !== 'undefined',
@@ -32654,11 +32729,12 @@ CURRENT REQUEST CONTEXT
                 }
 
                 // Build request body - with prompt caching for direct API calls
+                // Sanitize to remove invalid Unicode surrogates that break JSON
                 const requestBody = {
                     model: CONFIG.CLAUDE_MODEL,
                     max_tokens: 8192,
-                    system: systemPromptArray,  // Prompt caching: system array with cache_control
-                    messages: messages
+                    system: sanitizeObjectForJSON(systemPromptArray),  // Prompt caching: system array with cache_control
+                    messages: sanitizeObjectForJSON(messages)
                 };
 
                 // Build tools array
@@ -33329,6 +33405,76 @@ CURRENT REQUEST CONTEXT
                             console.error('Failed to synthesize deep context:', synthError);
                             result.success = false;
                             result.description = `Deep synthesis failed: ${synthError.message}`;
+                        }
+                    }
+                    // ═══════════════════════════════════════════════════════════════
+                    // OPEN THREADS ACTIONS - Task tracking for user and Axel
+                    // ═══════════════════════════════════════════════════════════════
+                    else if (action.action === 'thread_add') {
+                        // Add a node to Open Threads
+                        const targetId = action.targetId;
+                        if (!targetId) {
+                            result.success = false;
+                            result.description = 'targetId is required for thread_add';
+                        } else {
+                            const node = store.findNode(targetId);
+                            if (!node) {
+                                result.success = false;
+                                result.description = `Node not found: ${targetId}`;
+                            } else if (typeof OpenThreadsPanel !== 'undefined' && OpenThreadsPanel.add) {
+                                const added = OpenThreadsPanel.add(targetId, node.label, 'axel');
+                                if (added) {
+                                    result.success = true;
+                                    result.description = `Added to Open Threads: "${node.label}"`;
+                                    console.log(`📋 Axel added thread: ${node.label}`);
+                                } else {
+                                    result.success = false;
+                                    result.description = `Thread already exists for: "${node.label}"`;
+                                }
+                            } else {
+                                result.success = false;
+                                result.description = 'OpenThreadsPanel not available';
+                            }
+                        }
+                    } else if (action.action === 'thread_complete') {
+                        // Mark a thread as complete
+                        const targetId = action.targetId;
+                        if (!targetId) {
+                            result.success = false;
+                            result.description = 'targetId is required for thread_complete';
+                        } else if (typeof OpenThreadsPanel !== 'undefined' && OpenThreadsPanel.complete) {
+                            const completed = OpenThreadsPanel.complete(targetId);
+                            if (completed) {
+                                result.success = true;
+                                result.description = `Marked thread as complete`;
+                                console.log(`📋 Axel completed thread: ${targetId}`);
+                            } else {
+                                result.success = false;
+                                result.description = `Thread not found: ${targetId}`;
+                            }
+                        } else {
+                            result.success = false;
+                            result.description = 'OpenThreadsPanel not available';
+                        }
+                    } else if (action.action === 'thread_remove') {
+                        // Remove a thread entirely
+                        const targetId = action.targetId;
+                        if (!targetId) {
+                            result.success = false;
+                            result.description = 'targetId is required for thread_remove';
+                        } else if (typeof OpenThreadsPanel !== 'undefined' && OpenThreadsPanel.remove) {
+                            const removed = OpenThreadsPanel.remove(targetId);
+                            if (removed) {
+                                result.success = true;
+                                result.description = `Removed thread`;
+                                console.log(`📋 Axel removed thread: ${targetId}`);
+                            } else {
+                                result.success = false;
+                                result.description = `Thread not found: ${targetId}`;
+                            }
+                        } else {
+                            result.success = false;
+                            result.description = 'OpenThreadsPanel not available';
                         }
                     }
 
@@ -40123,9 +40269,281 @@ showKeyboardHints();
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // OPEN THREADS PANEL - Persistent task tracking for user and Axel
+    // ═══════════════════════════════════════════════════════════════════
+
+    const OpenThreadsPanel = {
+        threads: [],
+        collapsed: false,
+        panel: null,
+
+        init() {
+            this.threads = this.load();
+            this.createPanel();
+            this.render();
+            console.log(`📋 Open Threads initialized with ${this.threads.length} threads`);
+        },
+
+        load() {
+            try {
+                return JSON.parse(localStorage.getItem('mynd_open_threads') || '[]');
+            } catch (e) {
+                console.warn('Failed to load open threads:', e);
+                return [];
+            }
+        },
+
+        save() {
+            try {
+                localStorage.setItem('mynd_open_threads', JSON.stringify(this.threads));
+            } catch (e) {
+                console.warn('Failed to save open threads:', e);
+            }
+        },
+
+        createPanel() {
+            // Remove existing panel if any
+            const existing = document.getElementById('open-threads-panel');
+            if (existing) existing.remove();
+
+            const panel = document.createElement('div');
+            panel.id = 'open-threads-panel';
+            panel.className = 'open-threads-panel';
+            document.body.appendChild(panel);
+            this.panel = panel;
+        },
+
+        add(nodeId, label, addedBy = 'user') {
+            // Check for duplicates
+            if (this.threads.find(t => t.nodeId === nodeId)) {
+                console.log(`📋 Thread already exists for node: ${label}`);
+                return false;
+            }
+
+            this.threads.push({
+                nodeId,
+                label: label || 'Untitled',
+                completed: false,
+                addedAt: Date.now(),
+                addedBy
+            });
+
+            this.save();
+            this.render();
+
+            if (addedBy === 'axel') {
+                showToast(`Added to Open Threads: ${label}`, 'success');
+            }
+            console.log(`📋 Thread added: "${label}" by ${addedBy}`);
+            return true;
+        },
+
+        complete(nodeId) {
+            const thread = this.threads.find(t => t.nodeId === nodeId);
+            if (thread) {
+                thread.completed = true;
+                this.save();
+                this.render();
+                console.log(`📋 Thread completed: "${thread.label}"`);
+                return true;
+            }
+            return false;
+        },
+
+        remove(nodeId) {
+            const index = this.threads.findIndex(t => t.nodeId === nodeId);
+            if (index !== -1) {
+                const removed = this.threads.splice(index, 1)[0];
+                this.save();
+                this.render();
+                console.log(`📋 Thread removed: "${removed.label}"`);
+                return true;
+            }
+            return false;
+        },
+
+        toggle(nodeId) {
+            const thread = this.threads.find(t => t.nodeId === nodeId);
+            if (thread) {
+                thread.completed = !thread.completed;
+                this.save();
+                this.render();
+                return true;
+            }
+            return false;
+        },
+
+        toggleCollapse() {
+            this.collapsed = !this.collapsed;
+            this.render();
+        },
+
+        focusNode(nodeId) {
+            // Expand path to node and focus on it
+            const node = store.findNode(nodeId);
+            if (node) {
+                // Expand all ancestors
+                let current = node;
+                while (current.parent) {
+                    store.expandedNodes.add(current.parent.id);
+                    current = current.parent;
+                }
+
+                // Select and focus
+                store.selectedId = nodeId;
+                buildScene();
+
+                // Find mesh and focus camera
+                setTimeout(() => {
+                    const mesh = scene?.children?.find(m => m.userData?.id === nodeId);
+                    if (mesh && typeof focusOnNode === 'function') {
+                        focusOnNode(mesh);
+                    }
+                }, 100);
+            } else {
+                showToast('Node not found in map', 'warning');
+            }
+        },
+
+        addSelectedNode() {
+            const selectedId = store.selectedId;
+            if (!selectedId) {
+                showToast('No node selected', 'warning');
+                return;
+            }
+
+            const node = store.findNode(selectedId);
+            if (node) {
+                this.add(selectedId, node.label, 'user');
+            }
+        },
+
+        getActiveThreads() {
+            return this.threads.filter(t => !t.completed);
+        },
+
+        getThreadsForPrompt() {
+            // Format threads for AI context
+            const active = this.getActiveThreads();
+            if (active.length === 0) return null;
+
+            return active.map(t => ({
+                nodeId: t.nodeId,
+                label: t.label,
+                addedBy: t.addedBy,
+                addedAt: new Date(t.addedAt).toISOString()
+            }));
+        },
+
+        render() {
+            if (!this.panel) return;
+
+            if (this.collapsed) {
+                this.panel.innerHTML = `
+                    <div class="open-threads-collapsed" title="Open Threads (${this.threads.filter(t => !t.completed).length} active)">
+                        <button class="threads-expand-btn" onclick="OpenThreadsPanel.toggleCollapse()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
+                                <rect x="9" y="3" width="6" height="4" rx="1"/>
+                                <path d="M9 12h6"/>
+                                <path d="M9 16h6"/>
+                            </svg>
+                            ${this.threads.filter(t => !t.completed).length}
+                        </button>
+                    </div>
+                `;
+                this.panel.classList.add('collapsed');
+                return;
+            }
+
+            this.panel.classList.remove('collapsed');
+
+            const activeThreads = this.threads.filter(t => !t.completed);
+            const completedThreads = this.threads.filter(t => t.completed);
+
+            let html = `
+                <div class="open-threads-header">
+                    <span>Open Threads</span>
+                    <button class="threads-collapse-btn" onclick="OpenThreadsPanel.toggleCollapse()" title="Minimize">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="open-threads-list">
+            `;
+
+            // Active threads
+            for (const thread of activeThreads) {
+                const addedByBadge = thread.addedBy === 'axel' ? '<span class="thread-badge">Axel</span>' : '';
+                html += `
+                    <div class="thread-item" data-node-id="${thread.nodeId}">
+                        <input type="checkbox" class="thread-checkbox"
+                               onchange="OpenThreadsPanel.toggle('${thread.nodeId}')"
+                               ${thread.completed ? 'checked' : ''}>
+                        <span class="thread-label" onclick="OpenThreadsPanel.focusNode('${thread.nodeId}')" title="${thread.label}">
+                            ${thread.label}
+                        </span>
+                        ${addedByBadge}
+                        <button class="thread-remove" onclick="OpenThreadsPanel.remove('${thread.nodeId}')" title="Remove">×</button>
+                    </div>
+                `;
+            }
+
+            // Completed threads (show dimmed)
+            for (const thread of completedThreads) {
+                html += `
+                    <div class="thread-item completed" data-node-id="${thread.nodeId}">
+                        <input type="checkbox" class="thread-checkbox"
+                               onchange="OpenThreadsPanel.toggle('${thread.nodeId}')"
+                               checked>
+                        <span class="thread-label" onclick="OpenThreadsPanel.focusNode('${thread.nodeId}')" title="${thread.label}">
+                            ${thread.label}
+                        </span>
+                        <button class="thread-remove" onclick="OpenThreadsPanel.remove('${thread.nodeId}')" title="Remove">×</button>
+                    </div>
+                `;
+            }
+
+            html += `
+                </div>
+                <button class="add-thread-btn" onclick="OpenThreadsPanel.addSelectedNode()">
+                    + Add Selected
+                </button>
+            `;
+
+            // Empty state
+            if (this.threads.length === 0) {
+                html = `
+                    <div class="open-threads-header">
+                        <span>Open Threads</span>
+                        <button class="threads-collapse-btn" onclick="OpenThreadsPanel.toggleCollapse()" title="Minimize">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5 12h14"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="open-threads-empty">
+                        <p>No open threads</p>
+                        <p class="hint">Select a node and click below to track it</p>
+                    </div>
+                    <button class="add-thread-btn" onclick="OpenThreadsPanel.addSelectedNode()">
+                        + Add Selected
+                    </button>
+                `;
+            }
+
+            this.panel.innerHTML = html;
+        }
+    };
+
+    // Make OpenThreadsPanel globally accessible for onclick handlers
+    window.OpenThreadsPanel = OpenThreadsPanel;
+
+    // ═══════════════════════════════════════════════════════════════════
     // NEURAL NETWORK UI INTEGRATION
     // ═══════════════════════════════════════════════════════════════════
-    
+
     const NeuralUI = {
         panel: null,
         isOpen: false,
@@ -44380,7 +44798,12 @@ Summary:`
     setTimeout(() => {
         NeuralUI.init();
     }, 100);
-    
+
+    // Initialize Open Threads Panel
+    setTimeout(() => {
+        OpenThreadsPanel.init();
+    }, 120);
+
     // Initialize Attachment Manager
     setTimeout(() => {
         AttachmentManager.init();
