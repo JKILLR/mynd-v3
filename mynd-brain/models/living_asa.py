@@ -1113,6 +1113,52 @@ class MYNDLivingASA:
                 })
         return sorted(results, key=lambda x: -x['days_neglected'])
 
+    def find_related_atoms(self, query: str, limit: int = 10) -> List[Dict]:
+        """
+        Find atoms related to a query (for GT integration).
+        Returns atoms that match the query or are bonded to matching atoms.
+        """
+        query_lower = query.lower()
+        results = []
+
+        # First, find atoms that match the query
+        matching_atoms = []
+        for atom in self.atoms.values():
+            if query_lower in atom.name.lower() or atom.name.lower() in query_lower:
+                matching_atoms.append(atom)
+
+        # If no direct match, try partial word matching
+        if not matching_atoms:
+            query_words = set(query_lower.split())
+            for atom in self.atoms.values():
+                atom_words = set(atom.name.lower().split())
+                if query_words & atom_words:  # Intersection
+                    matching_atoms.append(atom)
+
+        # Get bonded atoms from matching atoms
+        for atom in matching_atoms:
+            # Get all bonds (from all shells)
+            for shell_idx, shell in enumerate(atom.shells):
+                for bonded_id, bond_strength in shell.items():
+                    bonded_atom = self.atoms.get(bonded_id)
+                    if bonded_atom:
+                        results.append({
+                            'id': bonded_atom.id,
+                            'name': bonded_atom.name,
+                            'bond_strength': bond_strength,
+                            'shell': shell_idx,
+                            'via_atom': atom.name,
+                            'energy': bonded_atom.energy,
+                        })
+
+        # Deduplicate by id, keeping highest bond strength
+        seen = {}
+        for r in results:
+            if r['id'] not in seen or r['bond_strength'] > seen[r['id']]['bond_strength']:
+                seen[r['id']] = r
+
+        return sorted(seen.values(), key=lambda x: -x['bond_strength'])[:limit]
+
     def get_core_knowledge(self, limit: int = 20) -> List[Dict]:
         """What's core/stable? (high mass)"""
         results = []

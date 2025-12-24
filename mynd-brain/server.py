@@ -594,6 +594,10 @@ class MYNDBrain:
         """
         Predict potential connections for a node using Graph Transformer attention.
         This is the key capability - nodes can "see" the entire map.
+
+        Now INTEGRATES with ASA:
+        - GT provides base connection scores
+        - ASA boosts scores for contextually relevant nodes (high energy atoms)
         """
         nodes = map_data.nodes
 
@@ -620,6 +624,36 @@ class MYNDBrain:
             source_idx
         )
 
+        # === ASA INTEGRATION: Get semantic context boosts ===
+        asa_boosts = {}
+        try:
+            from models.living_asa import get_asa
+            asa = get_asa()
+            if asa:
+                # Get working memory (active atoms)
+                working_memory = asa.get_working_memory(threshold=0.1)
+                for item in working_memory:
+                    atom_name = item.get('name', '').lower()
+                    atom_energy = item.get('energy', 0)
+                    # Map atom names to node labels for boosting
+                    for node in nodes:
+                        if atom_name in node.label.lower() or node.label.lower() in atom_name:
+                            # Boost = 1.0 + (energy * 0.5), so high energy atoms get up to 1.5x boost
+                            asa_boosts[node.id] = 1.0 + (atom_energy * 0.5)
+
+                # Also check source node's related atoms
+                source_atoms = asa.find_related_atoms(source_node.label, limit=5) if hasattr(asa, 'find_related_atoms') else []
+                for related in source_atoms:
+                    related_name = related.get('name', '').lower()
+                    bond_strength = related.get('bond_strength', 0.5)
+                    for node in nodes:
+                        if related_name in node.label.lower() or node.label.lower() in related_name:
+                            # Related atoms get boost based on bond strength
+                            current_boost = asa_boosts.get(node.id, 1.0)
+                            asa_boosts[node.id] = max(current_boost, 1.0 + (bond_strength * 0.3))
+        except Exception as e:
+            print(f"⚠️ ASA boost lookup failed: {e}")
+
         # Get top-k predictions (excluding self and existing connections)
         existing_connections = set(source_node.children or [])
         if source_node.parentId:
@@ -632,20 +666,33 @@ class MYNDBrain:
             if node.id in existing_connections:
                 continue
 
+            # Apply ASA boost to GT score
+            base_score = float(score)
+            asa_boost = asa_boosts.get(node.id, 1.0)
+            combined_score = base_score * asa_boost
+
             predictions.append({
                 "target_id": node.id,
                 "target_label": node.label,
-                "score": float(score),
+                "score": combined_score,
+                "gt_score": base_score,
+                "asa_boost": asa_boost,
                 "relationship_type": self._infer_relationship(source_node.label, node.label)
             })
 
-        # Sort by score and take top_k
+        # Sort by COMBINED score and take top_k
         predictions.sort(key=lambda x: x["score"], reverse=True)
         predictions = predictions[:top_k]
 
+        # Log if ASA influenced the predictions
+        boosted_count = sum(1 for p in predictions if p.get('asa_boost', 1.0) > 1.0)
+        if boosted_count > 0:
+            print(f"🧬 ASA boosted {boosted_count}/{len(predictions)} predictions for '{source_node.label}'")
+
         return {
             "connections": predictions,
-            "attention_weights": {nodes[i].id: float(w) for i, w in enumerate(attention_weights)}
+            "attention_weights": {nodes[i].id: float(w) for i, w in enumerate(attention_weights)},
+            "asa_influenced": boosted_count > 0
         }
 
     def _infer_relationship(self, source: str, target: str) -> str:
