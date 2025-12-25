@@ -4234,6 +4234,204 @@ async def get_asa_learning_stats():
 
 
 # ═══════════════════════════════════════════════════════════════════
+# AXEL CONTINUITY - Memory → Training Signal
+# ═══════════════════════════════════════════════════════════════════
+
+class ProcessMemoryRequest(BaseModel):
+    """Request to process a memory into training signal."""
+    memory_type: str  # realization, synthesis, pattern, etc.
+    content: str  # The actual memory text
+    importance: float = 0.5  # 0-1
+    related_nodes: List[str] = []  # Node IDs if any
+
+class TrainingTriple(BaseModel):
+    """A subject-predicate-object training pair."""
+    subject: str
+    predicate: str
+    object: str
+    confidence: float
+
+@app.post("/brain/process-memory")
+async def process_memory_to_training(request: ProcessMemoryRequest):
+    """
+    AXEL CONTINUITY: Convert memory writes into training signal.
+
+    This is the key to processing continuity - when Axel writes
+    "I realized X about Y", this becomes:
+    - Training pairs for GT (connection learning)
+    - Content for ASA (semantic atoms)
+    - Embedding updates for future retrieval
+
+    This transforms memories from passive text into active shaping
+    of how the system processes meaning.
+    """
+    import re
+
+    content = request.content
+    memory_type = request.memory_type
+    importance = request.importance
+
+    # === EXTRACT TRAINING TRIPLES ===
+    triples = []
+
+    # Pattern 1: "X realized/noticed/observed that Y about Z"
+    insight_patterns = [
+        r"(?:Axel |I |Claude )?(?:realized|noticed|observed|understood|learned|discovered) (?:that )?(.+?)(?:\s+about\s+|\s+regarding\s+|\s+with\s+)(.+?)(?:\.|$)",
+        r"(.+?) (?:is related to|connects to|links to) (.+?)(?:\.|$)",
+        r"(?:User |They )?(?:prefers?|likes?|wants?) (.+?) (?:over|instead of|rather than) (.+?)(?:\.|$)",
+        r"(.+?) (?:means|implies|suggests) (.+?)(?:\.|$)",
+        r"(?:The connection between|Link between) (.+?) and (.+)",
+    ]
+
+    for pattern in insight_patterns:
+        matches = re.findall(pattern, content, re.IGNORECASE)
+        for match in matches:
+            if len(match) >= 2:
+                triples.append({
+                    "subject": match[0].strip()[:100],
+                    "predicate": memory_type,  # realization, synthesis, pattern
+                    "object": match[1].strip()[:100],
+                    "confidence": importance
+                })
+
+    # Pattern 2: Extract key phrases (concepts) from the memory
+    key_phrases = []
+
+    # Quoted terms
+    quoted = re.findall(r'"([^"]+)"', content)
+    key_phrases.extend(quoted)
+
+    # CamelCase or snake_case (technical terms)
+    camel = re.findall(r'\b([A-Z][a-z]+(?:[A-Z][a-z]+)+)\b', content)
+    snake = re.findall(r'\b([a-z]+(?:_[a-z]+)+)\b', content)
+    key_phrases.extend(camel)
+    key_phrases.extend(snake)
+
+    # Capitalized phrases (proper nouns, concepts)
+    caps = re.findall(r'\b([A-Z][a-z]+(?: [A-Z][a-z]+){0,3})\b', content)
+    key_phrases.extend([c for c in caps if len(c) > 3])
+
+    # Remove duplicates
+    key_phrases = list(set(key_phrases))[:10]
+
+    # === FEED TO GT ===
+    gt_trained = 0
+    gt_loss = None
+
+    if unified_brain and unified_brain.ml_brain and len(triples) > 0:
+        try:
+            brain = unified_brain.ml_brain
+
+            for triple in triples:
+                # Create embeddings for subject and object
+                subj_emb = brain.model.encode(triple["subject"], convert_to_tensor=True)
+                obj_emb = brain.model.encode(triple["object"], convert_to_tensor=True)
+
+                # Train GT on this connection
+                # Create pseudo adjacency: connected = 1
+                result = brain.graph_transformer.train_connection_step(
+                    torch.stack([subj_emb, obj_emb]),  # 2 x embedding_dim
+                    torch.tensor([[0, 1], [1, 0]], dtype=torch.float32),  # Connected
+                    labels=torch.tensor([[0, 1], [1, 0]], dtype=torch.float32)  # Reinforce
+                )
+
+                if result:
+                    gt_trained += 1
+                    gt_loss = result.get('loss', gt_loss)
+
+            if gt_trained > 0:
+                print(f"🔮 GT learned from memory: {gt_trained} triples, loss={gt_loss:.4f if gt_loss else 'N/A'}")
+
+        except Exception as e:
+            print(f"⚠️ GT memory learning error: {e}")
+
+    # === FEED TO ASA ===
+    asa_learned = 0
+
+    if _asa_available:
+        try:
+            asa = get_asa()
+
+            # Learn the full memory content
+            content_result = asa.learn_content(content, source=f"memory:{memory_type}")
+            asa_learned = content_result.get('concepts_learned', 0)
+
+            # Also create bonds between extracted concepts
+            if len(key_phrases) >= 2:
+                # Activate all phrases together to strengthen bonds
+                for phrase in key_phrases:
+                    asa.learn_from_text(phrase, source=f"memory_concept:{memory_type}", energy_boost=importance * 0.5)
+
+            if asa_learned > 0:
+                print(f"🧬 ASA learned from memory: {asa_learned} concepts from '{content[:50]}...'")
+
+        except Exception as e:
+            print(f"⚠️ ASA memory learning error: {e}")
+
+    # === ACCUMULATE FOR FUTURE FINE-TUNING ===
+    # Store triples in a format suitable for LoRA training data
+    training_data_path = os.path.expanduser("~/.mynd/training_pairs.jsonl")
+    try:
+        import json
+        os.makedirs(os.path.dirname(training_data_path), exist_ok=True)
+
+        with open(training_data_path, 'a') as f:
+            for triple in triples:
+                f.write(json.dumps({
+                    "timestamp": time.time(),
+                    "memory_type": memory_type,
+                    "triple": triple,
+                    "raw_content": content[:500],
+                    "importance": importance
+                }) + "\n")
+
+    except Exception as e:
+        print(f"⚠️ Could not save training pair: {e}")
+
+    return {
+        "processed": True,
+        "triples_extracted": len(triples),
+        "triples": triples,
+        "concepts_found": key_phrases,
+        "gt_trained": gt_trained,
+        "gt_loss": gt_loss,
+        "asa_learned": asa_learned,
+        "training_data_saved": len(triples) > 0
+    }
+
+
+@app.get("/brain/training-pairs")
+async def get_training_pairs(limit: int = 100):
+    """
+    Get accumulated training pairs from memory processing.
+    These can be used for LoRA fine-tuning or analysis.
+    """
+    training_data_path = os.path.expanduser("~/.mynd/training_pairs.jsonl")
+
+    if not os.path.exists(training_data_path):
+        return {"pairs": [], "total": 0}
+
+    try:
+        import json
+        pairs = []
+        with open(training_data_path, 'r') as f:
+            for line in f:
+                if line.strip():
+                    pairs.append(json.loads(line))
+
+        # Return most recent
+        pairs = pairs[-limit:]
+
+        return {
+            "pairs": pairs,
+            "total": len(pairs),
+            "path": training_data_path
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════════
 # WEBSOCKET
 # ═══════════════════════════════════════════════════════════════════
 

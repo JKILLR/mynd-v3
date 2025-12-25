@@ -33942,6 +33942,33 @@ CURRENT REQUEST CONTEXT
 
                 const evergreenIcon = isEvergreen ? '⚓' : '';
                 console.log(`🧠 Wrote new memory: [${memory_type}]${evergreenIcon} ID=${data.id} "${content.slice(0, 50)}..."`);
+
+                // === AXEL CONTINUITY: Convert memory to training signal ===
+                // This is the key to processing continuity - memories become training data
+                try {
+                    const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
+                    const trainingResponse = await fetch(`${brainUrl}/brain/process-memory`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            memory_type,
+                            content,
+                            importance: Math.max(0, Math.min(1, importance)),
+                            related_nodes: related_nodes || []
+                        })
+                    });
+
+                    if (trainingResponse.ok) {
+                        const trainingResult = await trainingResponse.json();
+                        if (trainingResult.triples_extracted > 0 || trainingResult.asa_learned > 0) {
+                            console.log(`🔄 Memory → Training: ${trainingResult.triples_extracted} triples, ${trainingResult.asa_learned} concepts learned`);
+                        }
+                    }
+                } catch (trainError) {
+                    // Non-fatal - memory is already saved, training is bonus
+                    console.debug('Memory training signal skipped:', trainError.message);
+                }
+
                 return data;
             } catch (e) {
                 console.error('AI memory write error:', e.message || e);
