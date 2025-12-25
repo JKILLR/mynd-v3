@@ -31178,17 +31178,29 @@ Just respond with the greeting message, nothing else.`;
 
                         // Add session summaries (for continuity)
                         if (sessions && sessions.length > 0 && !sessError) {
+                            // Helper to safely parse JSON arrays (Supabase may store as strings)
+                            const safeArray = (val) => {
+                                if (Array.isArray(val)) return val;
+                                if (typeof val === 'string' && val.startsWith('[')) {
+                                    try { return JSON.parse(val); } catch { return []; }
+                                }
+                                return [];
+                            };
+
                             supabaseContext += '=== RECENT SESSION SUMMARIES ===\n';
                             supabaseContext += 'What happened in previous conversations:\n\n';
                             for (const sess of sessions.slice(0, 5)) {
                                 const date = new Date(sess.session_ended).toLocaleDateString();
-                                const topics = sess.topics_discussed?.slice(0, 5).join(', ') || 'various topics';
+                                const topicsArr = safeArray(sess.topics_discussed);
+                                const topics = topicsArr.length > 0 ? topicsArr.slice(0, 5).join(', ') : 'various topics';
                                 supabaseContext += `[${date}] ${sess.summary || 'Session ended'}\n`;
-                                if (sess.key_outcomes?.length > 0) {
-                                    supabaseContext += `  Outcomes: ${sess.key_outcomes.slice(0, 3).join('; ')}\n`;
+                                const keyOutcomes = safeArray(sess.key_outcomes);
+                                if (keyOutcomes.length > 0) {
+                                    supabaseContext += `  Outcomes: ${keyOutcomes.slice(0, 3).join('; ')}\n`;
                                 }
-                                if (sess.open_threads?.length > 0) {
-                                    supabaseContext += `  Open threads: ${sess.open_threads.slice(0, 2).join('; ')}\n`;
+                                const openThreads = safeArray(sess.open_threads);
+                                if (openThreads.length > 0) {
+                                    supabaseContext += `  Open threads: ${openThreads.slice(0, 2).join('; ')}\n`;
                                 }
                                 supabaseContext += '\n';
                             }
