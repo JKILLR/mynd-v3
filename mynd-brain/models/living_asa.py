@@ -41,7 +41,353 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# ASE: ATOMIC SEMANTIC ENCODER (Neural Component)
+# PHYSICS CONSTANTS - Dimensional structure of atomic embeddings
+# =============================================================================
+
+class PhysicsConstants:
+    """
+    Defines the dimensional structure of physics-based atomic embeddings.
+
+    Total: 720 dimensions per atom
+    - Mirrors atomic physics: charge, electron shells, nucleus, mass, valence
+    """
+    CHARGE_DIM = 8       # Electrostatic charge vector
+    SHELL_1_DIM = 64     # Innermost electron shell (core context)
+    SHELL_2_DIM = 128    # Middle shell (working context)
+    SHELL_3_DIM = 256    # Outermost shell (peripheral context)
+    NUCLEUS_DIM = 248    # Stable identity core
+    MASS_DIM = 8         # Inertial/stability properties
+    VALENCE_DIM = 8      # Bonding capacity
+
+    # Computed totals
+    TOTAL_SHELL_DIM = SHELL_1_DIM + SHELL_2_DIM + SHELL_3_DIM  # 448
+    TOTAL_DIM = CHARGE_DIM + TOTAL_SHELL_DIM + NUCLEUS_DIM + MASS_DIM + VALENCE_DIM  # 720
+
+    # Physics interaction weights
+    CHARGE_REPULSION_WEIGHT = 0.3
+    SHELL_ATTRACTION_WEIGHT = 0.4
+    DISTANCE_WEIGHT = 0.2
+    MASS_WEIGHT = 0.1
+
+
+@dataclass
+class AtomicStructure:
+    """
+    Physics-based atomic embedding structure.
+
+    Each component mirrors real atomic physics:
+    - charge: Electrostatic properties (like/unlike attract/repel)
+    - shells: Electron shells at different energy levels
+    - nucleus: Stable core identity (what IS this concept)
+    - mass: Inertial properties (resistance to change)
+    - valence: Bonding capacity (how many connections it wants)
+    """
+    charge: torch.Tensor      # (batch, 8)
+    shell_1: torch.Tensor     # (batch, 64) - innermost
+    shell_2: torch.Tensor     # (batch, 128) - middle
+    shell_3: torch.Tensor     # (batch, 256) - outermost
+    nucleus: torch.Tensor     # (batch, 248) - stable identity
+    mass: torch.Tensor        # (batch, 8) - stability
+    valence: torch.Tensor     # (batch, 8) - bonding capacity
+
+    def to_tensor(self) -> torch.Tensor:
+        """Concatenate all components into single tensor (batch, 720)."""
+        return torch.cat([
+            self.charge, self.shell_1, self.shell_2, self.shell_3,
+            self.nucleus, self.mass, self.valence
+        ], dim=-1)
+
+    @classmethod
+    def from_tensor(cls, tensor: torch.Tensor) -> 'AtomicStructure':
+        """Split a 720d tensor back into atomic components."""
+        pc = PhysicsConstants
+        idx = 0
+
+        charge = tensor[..., idx:idx + pc.CHARGE_DIM]
+        idx += pc.CHARGE_DIM
+
+        shell_1 = tensor[..., idx:idx + pc.SHELL_1_DIM]
+        idx += pc.SHELL_1_DIM
+
+        shell_2 = tensor[..., idx:idx + pc.SHELL_2_DIM]
+        idx += pc.SHELL_2_DIM
+
+        shell_3 = tensor[..., idx:idx + pc.SHELL_3_DIM]
+        idx += pc.SHELL_3_DIM
+
+        nucleus = tensor[..., idx:idx + pc.NUCLEUS_DIM]
+        idx += pc.NUCLEUS_DIM
+
+        mass = tensor[..., idx:idx + pc.MASS_DIM]
+        idx += pc.MASS_DIM
+
+        valence = tensor[..., idx:idx + pc.VALENCE_DIM]
+
+        return cls(
+            charge=charge, shell_1=shell_1, shell_2=shell_2, shell_3=shell_3,
+            nucleus=nucleus, mass=mass, valence=valence
+        )
+
+    def get_all_shells(self) -> torch.Tensor:
+        """Get concatenated shell vectors (batch, 448)."""
+        return torch.cat([self.shell_1, self.shell_2, self.shell_3], dim=-1)
+
+    def to_numpy(self) -> Dict[str, np.ndarray]:
+        """Convert to numpy arrays for storage."""
+        return {
+            'charge': self.charge.detach().cpu().numpy(),
+            'shell_1': self.shell_1.detach().cpu().numpy(),
+            'shell_2': self.shell_2.detach().cpu().numpy(),
+            'shell_3': self.shell_3.detach().cpu().numpy(),
+            'nucleus': self.nucleus.detach().cpu().numpy(),
+            'mass': self.mass.detach().cpu().numpy(),
+            'valence': self.valence.detach().cpu().numpy(),
+        }
+
+
+class AtomicEmbedding(nn.Module):
+    """
+    Creates physics-based atomic embeddings from input embeddings.
+
+    Unlike standard embeddings, this produces structured atomic components
+    that can interact via physics rules (charge repulsion, shell attraction).
+    """
+
+    def __init__(self, input_dim: int = 384, device: str = None):
+        super().__init__()
+
+        self.input_dim = input_dim
+        pc = PhysicsConstants
+
+        # Determine device
+        if device is None:
+            if torch.backends.mps.is_available():
+                self.device = torch.device("mps")
+            elif torch.cuda.is_available():
+                self.device = torch.device("cuda")
+            else:
+                self.device = torch.device("cpu")
+        else:
+            self.device = torch.device(device)
+
+        # Project input to each atomic component
+        # Charge - electrostatic properties
+        self.charge_proj = nn.Sequential(
+            nn.Linear(input_dim, 32),
+            nn.LayerNorm(32),
+            nn.Tanh(),  # Charge can be positive or negative
+            nn.Linear(32, pc.CHARGE_DIM),
+        )
+
+        # Shell 1 - innermost, most stable context
+        self.shell_1_proj = nn.Sequential(
+            nn.Linear(input_dim, 128),
+            nn.LayerNorm(128),
+            nn.ReLU(),
+            nn.Linear(128, pc.SHELL_1_DIM),
+        )
+
+        # Shell 2 - middle context
+        self.shell_2_proj = nn.Sequential(
+            nn.Linear(input_dim, 256),
+            nn.LayerNorm(256),
+            nn.ReLU(),
+            nn.Linear(256, pc.SHELL_2_DIM),
+        )
+
+        # Shell 3 - outermost, most variable context
+        self.shell_3_proj = nn.Sequential(
+            nn.Linear(input_dim, 384),
+            nn.LayerNorm(384),
+            nn.ReLU(),
+            nn.Linear(384, pc.SHELL_3_DIM),
+        )
+
+        # Nucleus - stable identity core
+        self.nucleus_proj = nn.Sequential(
+            nn.Linear(input_dim, 384),
+            nn.LayerNorm(384),
+            nn.ReLU(),
+            nn.Linear(384, pc.NUCLEUS_DIM),
+        )
+
+        # Mass - stability/inertia
+        self.mass_proj = nn.Sequential(
+            nn.Linear(input_dim, 32),
+            nn.LayerNorm(32),
+            nn.ReLU(),
+            nn.Linear(32, pc.MASS_DIM),
+            nn.Softplus(),  # Mass is always positive
+        )
+
+        # Valence - bonding capacity
+        self.valence_proj = nn.Sequential(
+            nn.Linear(input_dim, 32),
+            nn.LayerNorm(32),
+            nn.ReLU(),
+            nn.Linear(32, pc.VALENCE_DIM),
+            nn.Sigmoid(),  # Valence between 0 and 1
+        )
+
+        self.to(self.device)
+        self._init_weights()
+
+    def _init_weights(self):
+        """Initialize weights for stable training."""
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
+
+    def forward(self, embedding: torch.Tensor) -> AtomicStructure:
+        """
+        Convert input embedding to atomic structure.
+
+        Args:
+            embedding: Input embedding (batch, input_dim) or (input_dim,)
+
+        Returns:
+            AtomicStructure with all components
+        """
+        if embedding.dim() == 1:
+            embedding = embedding.unsqueeze(0)
+
+        embedding = embedding.to(self.device)
+
+        return AtomicStructure(
+            charge=self.charge_proj(embedding),
+            shell_1=self.shell_1_proj(embedding),
+            shell_2=self.shell_2_proj(embedding),
+            shell_3=self.shell_3_proj(embedding),
+            nucleus=self.nucleus_proj(embedding),
+            mass=self.mass_proj(embedding),
+            valence=self.valence_proj(embedding),
+        )
+
+
+class FixedPhysicsEngine(nn.Module):
+    """
+    Computes interaction energy between atoms using physics rules.
+
+    Energy is computed from:
+    1. Charge repulsion: Like charges repel (positive energy)
+    2. Shell attraction: Similar shells attract (negative energy)
+    3. Distance factor: Closer atoms have stronger interactions
+    4. Mass factor: Higher mass = more stable = lower energy
+
+    This energy becomes the attention score in TrueASAAttention.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.pc = PhysicsConstants
+
+    def compute_energy(self, atom_i: AtomicStructure, atom_j: AtomicStructure,
+                       distance: float = 1.0) -> torch.Tensor:
+        """
+        Compute interaction energy between two atoms.
+
+        Lower energy = more stable = stronger bond affinity
+
+        Args:
+            atom_i: First atom structure
+            atom_j: Second atom structure
+            distance: Positional distance (1.0 = adjacent)
+
+        Returns:
+            Energy tensor (batch,) - lower is more stable
+        """
+        # 1. Charge repulsion: dot product of charge vectors
+        # Like charges (same sign) → positive dot → repulsion
+        charge_energy = torch.sum(atom_i.charge * atom_j.charge, dim=-1)
+
+        # 2. Shell attraction: cosine similarity of shells
+        # Similar shells → negative energy → attraction
+        shell_1_sim = F.cosine_similarity(atom_i.shell_1, atom_j.shell_1, dim=-1)
+        shell_2_sim = F.cosine_similarity(atom_i.shell_2, atom_j.shell_2, dim=-1)
+        shell_3_sim = F.cosine_similarity(atom_i.shell_3, atom_j.shell_3, dim=-1)
+
+        # Weight inner shells more (they're more stable)
+        shell_energy = -(0.5 * shell_1_sim + 0.3 * shell_2_sim + 0.2 * shell_3_sim)
+
+        # 3. Distance factor: energy increases with distance
+        distance_energy = torch.tensor(distance, device=atom_i.charge.device)
+
+        # 4. Mass factor: higher combined mass = more stable = lower energy
+        mass_i = torch.mean(atom_i.mass, dim=-1)
+        mass_j = torch.mean(atom_j.mass, dim=-1)
+        mass_energy = -0.1 * (mass_i + mass_j)
+
+        # Combine with physics weights
+        total_energy = (
+            self.pc.CHARGE_REPULSION_WEIGHT * charge_energy +
+            self.pc.SHELL_ATTRACTION_WEIGHT * shell_energy +
+            self.pc.DISTANCE_WEIGHT * distance_energy +
+            self.pc.MASS_WEIGHT * mass_energy
+        )
+
+        return total_energy
+
+    def compute_pairwise_energy(self, atoms: AtomicStructure) -> torch.Tensor:
+        """
+        Compute pairwise energy matrix for a batch of atoms.
+
+        Args:
+            atoms: AtomicStructure with batch dimension (batch, dim)
+
+        Returns:
+            Energy matrix (batch, batch) - can be used as attention scores
+        """
+        batch_size = atoms.charge.shape[0]
+        device = atoms.charge.device
+
+        # Initialize energy matrix
+        energy = torch.zeros(batch_size, batch_size, device=device)
+
+        for i in range(batch_size):
+            for j in range(batch_size):
+                if i != j:
+                    atom_i = AtomicStructure(
+                        charge=atoms.charge[i:i+1],
+                        shell_1=atoms.shell_1[i:i+1],
+                        shell_2=atoms.shell_2[i:i+1],
+                        shell_3=atoms.shell_3[i:i+1],
+                        nucleus=atoms.nucleus[i:i+1],
+                        mass=atoms.mass[i:i+1],
+                        valence=atoms.valence[i:i+1],
+                    )
+                    atom_j = AtomicStructure(
+                        charge=atoms.charge[j:j+1],
+                        shell_1=atoms.shell_1[j:j+1],
+                        shell_2=atoms.shell_2[j:j+1],
+                        shell_3=atoms.shell_3[j:j+1],
+                        nucleus=atoms.nucleus[j:j+1],
+                        mass=atoms.mass[j:j+1],
+                        valence=atoms.valence[j:j+1],
+                    )
+                    # Distance based on position difference
+                    distance = abs(i - j) / batch_size
+                    energy[i, j] = self.compute_energy(atom_i, atom_j, distance).squeeze()
+
+        return energy
+
+    def compute_bonding_affinity(self, atom_i: AtomicStructure,
+                                  atom_j: AtomicStructure) -> torch.Tensor:
+        """
+        Compute bonding affinity between atoms (0 to 1).
+
+        Higher = more likely to bond.
+        Uses softmax(-energy) so lower energy = higher affinity.
+        """
+        energy = self.compute_energy(atom_i, atom_j)
+        # Convert energy to affinity: lower energy = higher affinity
+        affinity = torch.sigmoid(-energy)
+        return affinity
+
+
+# =============================================================================
+# LEGACY: ATOMIC SEMANTIC ENCODER (Kept for backward compatibility)
 # =============================================================================
 
 class AtomicEncoder(nn.Module):
@@ -459,6 +805,7 @@ class SemanticAtom:
     A LIVING semantic atom - wraps a MYND node.
 
     Combines ASE vector properties with Living ASA structural properties.
+    Now supports physics-based 720d atomic structure.
     """
     id: str  # MYND node ID
     name: str  # Node label
@@ -466,11 +813,29 @@ class SemanticAtom:
     # Original MYND data reference
     mynd_node: Dict = field(default_factory=dict)
 
-    # Structure (Living ASA)
+    # Structure (Living ASA) - discrete bond shells
     shells: Dict[int, List[Bond]] = field(default_factory=lambda: {1: [], 2: [], 3: [], 4: []})
     valence: Dict[RelationType, ValenceSlot] = field(default_factory=dict)
 
-    # === ASE VECTOR COMPONENTS ===
+    # === PHYSICS-BASED ATOMIC STRUCTURE (NEW - 720d total) ===
+    # Charge vector - electrostatic properties (8d)
+    physics_charge: Optional[np.ndarray] = None
+
+    # Shell vectors - electron shells at different energy levels
+    physics_shell_1: Optional[np.ndarray] = None   # (64,) - innermost, most stable
+    physics_shell_2: Optional[np.ndarray] = None   # (128,) - middle
+    physics_shell_3: Optional[np.ndarray] = None   # (256,) - outermost, most variable
+
+    # Nucleus - stable identity core (248d)
+    physics_nucleus: Optional[np.ndarray] = None
+
+    # Mass vector - inertial/stability properties (8d)
+    physics_mass: Optional[np.ndarray] = None
+
+    # Valence vector - bonding capacity (8d)
+    physics_valence: Optional[np.ndarray] = None
+
+    # === LEGACY ASE VECTOR COMPONENTS (kept for backward compatibility) ===
     # Nuclear vector - stable identity ("what IS this")
     nuclear: Optional[np.ndarray] = None  # (64,)
 
@@ -485,21 +850,45 @@ class SemanticAtom:
     # Structural charge (valence satisfaction) - renamed for clarity
     valence_charge: float = 0.0       # From unfilled slots
     energy: float = 0.0               # Working memory activation
-    mass: float = 1.0                 # Stability/age
+    mass: float = 1.0                 # Stability/age (scalar, distinct from physics_mass vector)
 
     # Combined effective charge (ASE semantic + Living ASA structural)
     @property
     def effective_charge(self) -> float:
         """Combined charge: semantic polarity weighted by structural state."""
-        # Semantic charge weighted by magnitude, plus structural charge
-        semantic = self.semantic_charge * self.charge_magnitude
+        # If we have physics charge, use its mean as the semantic component
+        if self.physics_charge is not None:
+            physics_semantic = float(np.mean(self.physics_charge))
+        else:
+            physics_semantic = self.semantic_charge * self.charge_magnitude
+
         structural = self.valence_charge * 0.3  # Structural contributes less
-        return max(-1.0, min(1.0, semantic + structural))
+        return max(-1.0, min(1.0, physics_semantic + structural))
 
     # Legacy alias for backward compatibility
     @property
     def charge(self) -> float:
         return self.effective_charge
+
+    @property
+    def has_physics_encoding(self) -> bool:
+        """Check if atom has full physics-based encoding."""
+        return self.physics_nucleus is not None
+
+    def get_physics_structure_tensor(self) -> Optional[torch.Tensor]:
+        """Get full 720d physics structure as tensor."""
+        if not self.has_physics_encoding:
+            return None
+
+        return torch.cat([
+            torch.tensor(self.physics_charge, dtype=torch.float32),
+            torch.tensor(self.physics_shell_1, dtype=torch.float32),
+            torch.tensor(self.physics_shell_2, dtype=torch.float32),
+            torch.tensor(self.physics_shell_3, dtype=torch.float32),
+            torch.tensor(self.physics_nucleus, dtype=torch.float32),
+            torch.tensor(self.physics_mass, dtype=torch.float32),
+            torch.tensor(self.physics_valence, dtype=torch.float32),
+        ])
 
     # Base embedding (from MYND's embeddings - input to ASE encoder)
     embedding: Optional[np.ndarray] = None
@@ -563,7 +952,9 @@ class SemanticAtom:
             'shells': {
                 f'shell_{i}': len(bonds) for i, bonds in self.shells.items()
             },
-            # ASE vectors present?
+            # Physics-based encoding (720d)
+            'has_physics_encoding': self.has_physics_encoding,
+            # Legacy ASE vectors present?
             'has_nuclear': self.nuclear is not None,
             'has_context_shell': self.context_shell is not None,
             # MYND properties
@@ -594,7 +985,11 @@ class MYNDLivingASA:
         # Atom storage
         self.atoms: Dict[str, SemanticAtom] = {}
 
-        # === ASE NEURAL ENCODER ===
+        # === PHYSICS-BASED ENCODER (NEW - 720d atomic structure) ===
+        self.physics_encoder = AtomicEmbedding(input_dim=embedding_dim)
+        self.physics_engine = FixedPhysicsEngine()
+
+        # === LEGACY ASE NEURAL ENCODER (kept for backward compatibility) ===
         self.atomic_encoder = AtomicEncoder(
             input_dim=embedding_dim,
             nuclear_dim=64,
@@ -632,9 +1027,10 @@ class MYNDLivingASA:
             'bonds_created': 0,
             'bonds_strengthened': 0,
             'charges_learned': 0,
+            'physics_encodings': 0,
         }
 
-        logger.info("Hybrid ASE + Living ASA initialized")
+        logger.info("Hybrid Physics-ASA + Living ASA initialized (720d atomic structure)")
 
     # =========================================================================
     # MAP CONVERSION - Convert MYND nodes to atoms
@@ -1712,17 +2108,201 @@ class MYNDLivingASA:
 
         return float(dot / (norm1 * norm2))
 
+    # =========================================================================
+    # PHYSICS-BASED ENCODING - Generate 720d atomic structure
+    # =========================================================================
+
+    def encode_atom_physics(self, atom_id: str) -> bool:
+        """
+        Encode an atom's embedding into physics-based 720d atomic structure.
+
+        This is the NEW encoding that provides:
+        - 8d charge vector (electrostatic properties)
+        - 64d shell_1 + 128d shell_2 + 256d shell_3 (electron shells)
+        - 248d nucleus (stable identity)
+        - 8d mass vector (stability/inertia)
+        - 8d valence vector (bonding capacity)
+
+        Requires the atom to have a base embedding (from MYND).
+
+        Returns:
+            True if encoding succeeded
+        """
+        if atom_id not in self.atoms:
+            return False
+
+        atom = self.atoms[atom_id]
+        if atom.embedding is None:
+            return False
+
+        try:
+            # Convert embedding to tensor
+            embedding_tensor = torch.tensor(atom.embedding, dtype=torch.float32)
+
+            # Encode through physics encoder
+            with torch.no_grad():
+                result = self.physics_encoder.forward(embedding_tensor)
+
+            # Store physics components in atom
+            atom.physics_charge = result.charge.cpu().numpy().squeeze()
+            atom.physics_shell_1 = result.shell_1.cpu().numpy().squeeze()
+            atom.physics_shell_2 = result.shell_2.cpu().numpy().squeeze()
+            atom.physics_shell_3 = result.shell_3.cpu().numpy().squeeze()
+            atom.physics_nucleus = result.nucleus.cpu().numpy().squeeze()
+            atom.physics_mass = result.mass.cpu().numpy().squeeze()
+            atom.physics_valence = result.valence.cpu().numpy().squeeze()
+
+            self._learning_stats['physics_encodings'] += 1
+
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to physics-encode atom {atom_id}: {e}")
+            return False
+
+    def encode_all_atoms_physics(self) -> Dict[str, int]:
+        """
+        Encode all atoms with physics-based 720d structure.
+
+        Returns:
+            Dict with encoding stats
+        """
+        encoded = 0
+        skipped = 0
+        failed = 0
+
+        for atom_id, atom in self.atoms.items():
+            if atom.embedding is None:
+                skipped += 1
+                continue
+
+            if self.encode_atom_physics(atom_id):
+                encoded += 1
+            else:
+                failed += 1
+
+        logger.info(f"Physics encoding: {encoded} encoded, {skipped} skipped (no embedding), {failed} failed")
+
+        return {
+            'encoded': encoded,
+            'skipped': skipped,
+            'failed': failed
+        }
+
+    def compute_physics_bonding_affinity(self, atom_id1: str, atom_id2: str) -> float:
+        """
+        Compute bonding affinity between two atoms using physics engine.
+
+        This uses the FixedPhysicsEngine to compute interaction energy,
+        then converts to affinity (0 to 1, higher = more likely to bond).
+
+        Physics factors:
+        - Charge repulsion: Like charges repel
+        - Shell attraction: Similar shells attract
+        - Mass stability: Higher mass = more stable bond
+
+        Returns:
+            Bonding affinity (0 to 1), or 0.0 if atoms lack physics encoding
+        """
+        if atom_id1 not in self.atoms or atom_id2 not in self.atoms:
+            return 0.0
+
+        atom1 = self.atoms[atom_id1]
+        atom2 = self.atoms[atom_id2]
+
+        # Check if both have physics encoding
+        if not atom1.has_physics_encoding or not atom2.has_physics_encoding:
+            return 0.0
+
+        try:
+            # Build AtomicStructure for each atom
+            struct1 = AtomicStructure(
+                charge=torch.tensor(atom1.physics_charge, dtype=torch.float32).unsqueeze(0),
+                shell_1=torch.tensor(atom1.physics_shell_1, dtype=torch.float32).unsqueeze(0),
+                shell_2=torch.tensor(atom1.physics_shell_2, dtype=torch.float32).unsqueeze(0),
+                shell_3=torch.tensor(atom1.physics_shell_3, dtype=torch.float32).unsqueeze(0),
+                nucleus=torch.tensor(atom1.physics_nucleus, dtype=torch.float32).unsqueeze(0),
+                mass=torch.tensor(atom1.physics_mass, dtype=torch.float32).unsqueeze(0),
+                valence=torch.tensor(atom1.physics_valence, dtype=torch.float32).unsqueeze(0),
+            )
+            struct2 = AtomicStructure(
+                charge=torch.tensor(atom2.physics_charge, dtype=torch.float32).unsqueeze(0),
+                shell_1=torch.tensor(atom2.physics_shell_1, dtype=torch.float32).unsqueeze(0),
+                shell_2=torch.tensor(atom2.physics_shell_2, dtype=torch.float32).unsqueeze(0),
+                shell_3=torch.tensor(atom2.physics_shell_3, dtype=torch.float32).unsqueeze(0),
+                nucleus=torch.tensor(atom2.physics_nucleus, dtype=torch.float32).unsqueeze(0),
+                mass=torch.tensor(atom2.physics_mass, dtype=torch.float32).unsqueeze(0),
+                valence=torch.tensor(atom2.physics_valence, dtype=torch.float32).unsqueeze(0),
+            )
+
+            # Compute bonding affinity
+            affinity = self.physics_engine.compute_bonding_affinity(struct1, struct2)
+            return float(affinity.item())
+
+        except Exception as e:
+            logger.warning(f"Failed to compute physics affinity between {atom_id1} and {atom_id2}: {e}")
+            return 0.0
+
+    def compute_physics_energy(self, atom_id1: str, atom_id2: str) -> float:
+        """
+        Compute raw interaction energy between two atoms.
+
+        Lower energy = more stable = stronger bond affinity.
+
+        Returns:
+            Energy value (can be negative for attractive), or 0.0 if atoms lack physics encoding
+        """
+        if atom_id1 not in self.atoms or atom_id2 not in self.atoms:
+            return 0.0
+
+        atom1 = self.atoms[atom_id1]
+        atom2 = self.atoms[atom_id2]
+
+        if not atom1.has_physics_encoding or not atom2.has_physics_encoding:
+            return 0.0
+
+        try:
+            struct1 = AtomicStructure(
+                charge=torch.tensor(atom1.physics_charge, dtype=torch.float32).unsqueeze(0),
+                shell_1=torch.tensor(atom1.physics_shell_1, dtype=torch.float32).unsqueeze(0),
+                shell_2=torch.tensor(atom1.physics_shell_2, dtype=torch.float32).unsqueeze(0),
+                shell_3=torch.tensor(atom1.physics_shell_3, dtype=torch.float32).unsqueeze(0),
+                nucleus=torch.tensor(atom1.physics_nucleus, dtype=torch.float32).unsqueeze(0),
+                mass=torch.tensor(atom1.physics_mass, dtype=torch.float32).unsqueeze(0),
+                valence=torch.tensor(atom1.physics_valence, dtype=torch.float32).unsqueeze(0),
+            )
+            struct2 = AtomicStructure(
+                charge=torch.tensor(atom2.physics_charge, dtype=torch.float32).unsqueeze(0),
+                shell_1=torch.tensor(atom2.physics_shell_1, dtype=torch.float32).unsqueeze(0),
+                shell_2=torch.tensor(atom2.physics_shell_2, dtype=torch.float32).unsqueeze(0),
+                shell_3=torch.tensor(atom2.physics_shell_3, dtype=torch.float32).unsqueeze(0),
+                nucleus=torch.tensor(atom2.physics_nucleus, dtype=torch.float32).unsqueeze(0),
+                mass=torch.tensor(atom2.physics_mass, dtype=torch.float32).unsqueeze(0),
+                valence=torch.tensor(atom2.physics_valence, dtype=torch.float32).unsqueeze(0),
+            )
+
+            energy = self.physics_engine.compute_energy(struct1, struct2)
+            return float(energy.item())
+
+        except Exception as e:
+            logger.warning(f"Failed to compute physics energy between {atom_id1} and {atom_id2}: {e}")
+            return 0.0
+
     def get_learning_stats(self) -> Dict:
-        """Get ASE learning statistics."""
+        """Get ASE and physics encoding statistics."""
         atoms_with_nuclear = sum(1 for a in self.atoms.values() if a.nuclear is not None)
         atoms_with_charge = sum(1 for a in self.atoms.values() if a.semantic_charge != 0)
+        atoms_with_physics = sum(1 for a in self.atoms.values() if a.has_physics_encoding)
 
         return {
             **self._learning_stats,
             'total_atoms': len(self.atoms),
+            # Legacy ASE stats
             'atoms_with_nuclear': atoms_with_nuclear,
             'atoms_with_semantic_charge': atoms_with_charge,
             'encoder_device': str(self.atomic_encoder.device),
+            # Physics encoding stats
+            'atoms_with_physics_encoding': atoms_with_physics,
+            'physics_encoder_device': str(self.physics_encoder.device),
         }
 
     def compute_sentence_charge(self, text: str) -> Dict:
