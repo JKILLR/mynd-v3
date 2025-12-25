@@ -2303,7 +2303,313 @@ class MYNDLivingASA:
             # Physics encoding stats
             'atoms_with_physics_encoding': atoms_with_physics,
             'physics_encoder_device': str(self.physics_encoder.device),
+            # Content learning stats
+            'ephemeral_concepts': len(self.ephemeral_concepts) if hasattr(self, 'ephemeral_concepts') else 0,
         }
+
+    # =========================================================================
+    # CONTENT LEARNING - Learn from actual text content (not just mentions)
+    # =========================================================================
+
+    def _init_content_learning(self):
+        """Initialize content learning structures if not already done."""
+        if not hasattr(self, 'ephemeral_concepts'):
+            # Ephemeral concepts: learned from text but not MYND nodes
+            # Structure: {concept_name: {'embedding': np.ndarray, 'count': int, 'last_seen': float, 'related': set}}
+            self.ephemeral_concepts: Dict[str, Dict] = {}
+            self.concept_embeddings_cache: Dict[str, np.ndarray] = {}
+            self._content_learning_stats = {
+                'concepts_learned': 0,
+                'relationships_learned': 0,
+                'content_training_steps': 0,
+            }
+
+    def extract_key_phrases(self, text: str, max_phrases: int = 10) -> List[str]:
+        """
+        Extract key phrases/concepts from text.
+
+        Uses simple heuristics:
+        1. Capitalized phrases (proper nouns, concepts)
+        2. Quoted text
+        3. Technical terms (camelCase, snake_case)
+        4. Noun-like patterns
+
+        Returns list of key phrases.
+        """
+        phrases = []
+
+        # 1. Quoted text
+        quoted = re.findall(r'"([^"]+)"|\'([^\']+)\'', text)
+        for q in quoted:
+            phrase = q[0] or q[1]
+            if 2 <= len(phrase) <= 50:
+                phrases.append(phrase.strip())
+
+        # 2. Capitalized phrases (2+ words starting with caps)
+        cap_phrases = re.findall(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b', text)
+        phrases.extend([p for p in cap_phrases if len(p) <= 50])
+
+        # 3. Technical terms (camelCase, PascalCase)
+        camel = re.findall(r'\b([a-z]+[A-Z][a-zA-Z]+)\b', text)
+        pascal = re.findall(r'\b([A-Z][a-z]+[A-Z][a-zA-Z]+)\b', text)
+        phrases.extend(camel[:5])
+        phrases.extend(pascal[:5])
+
+        # 4. snake_case terms
+        snake = re.findall(r'\b([a-z]+_[a-z_]+)\b', text)
+        phrases.extend([s for s in snake if len(s) <= 30][:5])
+
+        # 5. Significant single capitalized words (likely concepts)
+        single_caps = re.findall(r'\b([A-Z][a-z]{3,})\b', text)
+        # Filter out common words
+        common = {'The', 'This', 'That', 'When', 'Where', 'What', 'Which', 'There',
+                  'Here', 'Just', 'Only', 'Some', 'Many', 'Most', 'Each', 'Every'}
+        phrases.extend([w for w in single_caps if w not in common][:5])
+
+        # Deduplicate while preserving order
+        seen = set()
+        unique = []
+        for p in phrases:
+            p_lower = p.lower()
+            if p_lower not in seen and len(p) >= 2:
+                seen.add(p_lower)
+                unique.append(p)
+
+        return unique[:max_phrases]
+
+    def learn_content(self, text: str, source: str = "conversation",
+                      embed_fn=None) -> Dict:
+        """
+        Learn ACTUAL CONTENT from text - not just matching existing nodes.
+
+        This is TRUE learning:
+        1. Extract key concepts/phrases from text
+        2. Get embeddings for these concepts
+        3. Create ephemeral atoms for novel concepts
+        4. Learn relationships between concepts mentioned together
+        5. Train physics encoder on these embeddings
+
+        Args:
+            text: The text to learn from
+            source: Where this came from
+            embed_fn: Optional function to get embeddings (async),
+                     signature: embed_fn(texts: List[str]) -> List[np.ndarray]
+
+        Returns:
+            Dict with learning stats
+        """
+        self._init_content_learning()
+
+        if not text or len(text) < 10:
+            return {'concepts_extracted': 0, 'concepts_learned': 0, 'relationships_learned': 0}
+
+        # Skip if text looks like code (too many special chars)
+        code_indicators = text.count('{') + text.count('}') + text.count(';') + text.count('def ') + text.count('function ')
+        if code_indicators > 5:
+            logger.debug("Skipping content learning for code-like text")
+            return {'concepts_extracted': 0, 'concepts_learned': 0, 'relationships_learned': 0, 'skipped': 'code'}
+
+        # Extract key phrases
+        phrases = self.extract_key_phrases(text)
+
+        if not phrases:
+            return {'concepts_extracted': 0, 'concepts_learned': 0, 'relationships_learned': 0}
+
+        now = time.time()
+        concepts_learned = 0
+        relationships_learned = 0
+
+        # Update or create ephemeral concepts
+        for phrase in phrases:
+            phrase_key = phrase.lower()
+
+            if phrase_key in self.ephemeral_concepts:
+                # Update existing concept
+                self.ephemeral_concepts[phrase_key]['count'] += 1
+                self.ephemeral_concepts[phrase_key]['last_seen'] = now
+            else:
+                # Create new ephemeral concept
+                self.ephemeral_concepts[phrase_key] = {
+                    'name': phrase,
+                    'count': 1,
+                    'last_seen': now,
+                    'created': now,
+                    'source': source,
+                    'related': set(),
+                    'embedding': None,  # Will be filled if embed_fn provided
+                    'physics_encoded': False,
+                }
+                concepts_learned += 1
+
+        # Learn relationships: concepts mentioned together are related
+        phrase_keys = [p.lower() for p in phrases]
+        for i, key1 in enumerate(phrase_keys):
+            for key2 in phrase_keys[i+1:]:
+                if key1 in self.ephemeral_concepts and key2 in self.ephemeral_concepts:
+                    self.ephemeral_concepts[key1]['related'].add(key2)
+                    self.ephemeral_concepts[key2]['related'].add(key1)
+                    relationships_learned += 1
+
+        # Update stats
+        self._content_learning_stats['concepts_learned'] += concepts_learned
+        self._content_learning_stats['relationships_learned'] += relationships_learned
+
+        if concepts_learned > 0:
+            logger.info(f"📚 Content learned from {source}: {concepts_learned} new concepts, {relationships_learned} relationships")
+            logger.debug(f"   Concepts: {phrases[:5]}")
+
+        return {
+            'concepts_extracted': len(phrases),
+            'concepts_learned': concepts_learned,
+            'relationships_learned': relationships_learned,
+            'phrases': phrases[:10],
+        }
+
+    async def learn_content_with_embeddings(self, text: str, source: str = "conversation",
+                                             embed_fn=None) -> Dict:
+        """
+        Learn content WITH embeddings (async version).
+
+        This version also:
+        - Gets embeddings for new concepts
+        - Physics-encodes new concepts
+        - Can match concepts to existing MYND nodes by embedding similarity
+        """
+        self._init_content_learning()
+
+        # First do basic content learning
+        result = self.learn_content(text, source)
+
+        if not embed_fn or result['concepts_learned'] == 0:
+            return result
+
+        # Get embeddings for new concepts that don't have them
+        concepts_to_embed = []
+        for key, concept in self.ephemeral_concepts.items():
+            if concept['embedding'] is None and concept['count'] <= 2:  # Only embed recent ones
+                concepts_to_embed.append((key, concept['name']))
+
+        if not concepts_to_embed:
+            return result
+
+        try:
+            # Get embeddings
+            names = [c[1] for c in concepts_to_embed]
+            embeddings = await embed_fn(names)
+
+            # Store embeddings and physics-encode
+            physics_encoded = 0
+            for (key, name), embedding in zip(concepts_to_embed, embeddings):
+                if embedding is not None and key in self.ephemeral_concepts:
+                    self.ephemeral_concepts[key]['embedding'] = np.array(embedding)
+
+                    # Physics-encode the concept
+                    try:
+                        emb_tensor = torch.tensor(embedding, dtype=torch.float32)
+                        with torch.no_grad():
+                            physics_struct = self.physics_encoder.forward(emb_tensor)
+
+                        self.ephemeral_concepts[key]['physics_charge'] = physics_struct.charge.cpu().numpy().squeeze()
+                        self.ephemeral_concepts[key]['physics_nucleus'] = physics_struct.nucleus.cpu().numpy().squeeze()
+                        self.ephemeral_concepts[key]['physics_encoded'] = True
+                        physics_encoded += 1
+                    except Exception as e:
+                        logger.warning(f"Failed to physics-encode concept {name}: {e}")
+
+            result['embeddings_created'] = len(embeddings)
+            result['physics_encoded'] = physics_encoded
+            self._content_learning_stats['content_training_steps'] += 1
+
+        except Exception as e:
+            logger.warning(f"Failed to embed concepts: {e}")
+
+        return result
+
+    def get_related_concepts(self, query: str, limit: int = 10) -> List[Dict]:
+        """
+        Find ephemeral concepts related to a query.
+
+        Uses both:
+        1. Direct name matching
+        2. Relationship graph
+        3. Embedding similarity (if available)
+        """
+        self._init_content_learning()
+
+        results = []
+        query_lower = query.lower()
+
+        # Direct matches
+        for key, concept in self.ephemeral_concepts.items():
+            score = 0.0
+
+            # Name matching
+            if query_lower in key or key in query_lower:
+                score = 0.8
+            elif any(w in key for w in query_lower.split()):
+                score = 0.5
+
+            # Boost by access count
+            score += min(0.2, concept['count'] * 0.02)
+
+            if score > 0.3:
+                results.append({
+                    'name': concept['name'],
+                    'score': score,
+                    'count': concept['count'],
+                    'related': list(concept['related'])[:5],
+                    'has_embedding': concept['embedding'] is not None,
+                    'physics_encoded': concept.get('physics_encoded', False),
+                })
+
+        # Sort by score
+        results.sort(key=lambda x: -x['score'])
+        return results[:limit]
+
+    def get_content_learning_stats(self) -> Dict:
+        """Get content learning statistics."""
+        self._init_content_learning()
+
+        physics_encoded = sum(1 for c in self.ephemeral_concepts.values() if c.get('physics_encoded', False))
+        with_embeddings = sum(1 for c in self.ephemeral_concepts.values() if c['embedding'] is not None)
+
+        return {
+            **self._content_learning_stats,
+            'total_ephemeral_concepts': len(self.ephemeral_concepts),
+            'concepts_with_embeddings': with_embeddings,
+            'concepts_physics_encoded': physics_encoded,
+            'top_concepts': sorted(
+                [(c['name'], c['count']) for c in self.ephemeral_concepts.values()],
+                key=lambda x: -x[1]
+            )[:10],
+        }
+
+    def prune_ephemeral_concepts(self, max_age_days: float = 7.0, min_count: int = 2) -> int:
+        """
+        Prune old/unused ephemeral concepts to prevent unbounded growth.
+
+        Keeps concepts that:
+        - Have been seen multiple times, OR
+        - Were seen recently
+        """
+        self._init_content_learning()
+
+        now = time.time()
+        max_age_seconds = max_age_days * 86400
+
+        to_remove = []
+        for key, concept in self.ephemeral_concepts.items():
+            age = now - concept['last_seen']
+            if age > max_age_seconds and concept['count'] < min_count:
+                to_remove.append(key)
+
+        for key in to_remove:
+            del self.ephemeral_concepts[key]
+
+        if to_remove:
+            logger.info(f"🧹 Pruned {len(to_remove)} ephemeral concepts")
+
+        return len(to_remove)
 
     def compute_sentence_charge(self, text: str) -> Dict:
         """

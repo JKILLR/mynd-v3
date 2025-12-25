@@ -1616,12 +1616,19 @@ async def get_brain_context(request: BrainContextRequest):
     if _asa_available and request.user_message:
         try:
             asa = get_asa()
+
+            # 1. Original learning: match existing nodes, boost energy
             learn_result = asa.learn_from_text(request.user_message, source="user")
             if learn_result['atoms_activated'] > 0:
                 encoder_info = ""
                 if learn_result.get('encoder_trained'):
                     encoder_info = f", encoder_loss={learn_result.get('encoder_loss', 0):.4f}"
                 print(f"🧬 ASA learned from user: {learn_result['atoms_activated']} atoms, {learn_result['bonds_strengthened']} bonds{encoder_info}")
+
+            # 2. NEW: Content learning - learn actual concepts from text
+            content_result = asa.learn_content(request.user_message, source="user")
+            if content_result.get('concepts_learned', 0) > 0:
+                print(f"📚 Content learned: {content_result['concepts_learned']} new concepts, {content_result.get('relationships_learned', 0)} relationships")
 
             # === ASA CONTRIBUTES WORKING MEMORY TO CONTEXT ===
             # This is crucial - tell Axel what topics are "hot" (recently discussed)
@@ -1635,6 +1642,10 @@ async def get_brain_context(request: BrainContextRequest):
                 # Also show what's activated together
                 if learn_result.get('activated_names'):
                     asa_context += f"\nJust mentioned together: {', '.join(learn_result['activated_names'][:5])}\n"
+
+            # Add learned concepts to context (if any recent ones)
+            if content_result.get('phrases'):
+                asa_context += f"\nRecently discussed concepts: {', '.join(content_result['phrases'][:5])}\n"
 
         except Exception as e:
             print(f"⚠️ ASA learn error: {e}")
@@ -1981,12 +1992,18 @@ async def receive_from_claude(claude_response: ClaudeResponse):
             asa = get_asa()
             response_text = data.get('response', '')
             if response_text:
+                # 1. Original learning: match existing nodes
                 learn_result = asa.learn_from_text(response_text, source="axel")
                 if learn_result['atoms_activated'] > 0:
                     encoder_info = ""
                     if learn_result.get('encoder_trained'):
                         encoder_info = f", encoder_loss={learn_result.get('encoder_loss', 0):.4f}"
                     print(f"🧬 ASA learned from Axel: {learn_result['atoms_activated']} atoms, {learn_result['bonds_strengthened']} bonds{encoder_info}")
+
+                # 2. NEW: Content learning - learn actual concepts from Axel's response
+                content_result = asa.learn_content(response_text, source="axel")
+                if content_result.get('concepts_learned', 0) > 0:
+                    print(f"📚 Content from Axel: {content_result['concepts_learned']} new concepts")
 
             # Also learn from structured insights
             for insight in (data.get('insights') or []):
