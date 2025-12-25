@@ -686,6 +686,12 @@ class MYNDGraphTransformer(nn.Module):
             # Binary cross-entropy loss
             loss = F.binary_cross_entropy(prediction.squeeze(), label.squeeze())
 
+            # Ensure optimizer exists
+            if self._optimizer is None:
+                print("⚠️ GT optimizer not initialized, initializing now...")
+                self._training_initialized = False
+                self._init_training()
+
             # Backward pass
             self._optimizer.zero_grad()
             loss.backward()
