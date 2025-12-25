@@ -1655,17 +1655,74 @@ async def get_brain_context(request: BrainContextRequest):
         except Exception as e:
             print(f"⚠️ ASA learn error: {e}")
 
-    # Append ASA context to the response
+    # === GT CONTEXT - Graph Transformer insights ===
+    gt_context = ""
+    if unified_brain and unified_brain.ml_brain:
+        try:
+            brain = unified_brain.ml_brain
+            gt_stats = brain.graph_transformer.get_training_stats()
+
+            # Only add GT context if it has learned something
+            if gt_stats.get('total_connections_learned', 0) > 0:
+                gt_context = "\n\n## Graph Transformer Insights\n"
+                gt_context += f"GT has learned from {gt_stats['total_connections_learned']} connections over {gt_stats.get('epochs_completed', 0)} training cycles.\n"
+
+                # If we have current map data, show what GT sees
+                if request.map_data and brain.map_embeddings is not None:
+                    # Get node importance from GT
+                    importance = brain.graph_transformer.get_node_importance(
+                        brain.map_embeddings,
+                        adjacency=brain.map_adjacency
+                    )
+
+                    # Top 5 most important nodes according to GT
+                    import numpy as np
+                    top_indices = np.argsort(importance)[-5:][::-1]
+                    top_nodes = []
+                    for idx in top_indices:
+                        if idx < len(request.map_data.nodes):
+                            node = request.map_data.nodes[idx]
+                            top_nodes.append(f"{node.label} ({importance[idx]:.0%})")
+
+                    if top_nodes:
+                        gt_context += f"\nCentral themes in this map: {', '.join(top_nodes)}\n"
+
+                    # Get predicted missing connections
+                    missing = brain.graph_transformer.find_missing_connections(
+                        brain.map_embeddings,
+                        brain.map_adjacency,
+                        threshold=0.7,
+                        top_k=3
+                    )
+
+                    if missing:
+                        gt_context += "\nPotentially related concepts:\n"
+                        for src_idx, tgt_idx, score in missing[:3]:
+                            if src_idx < len(request.map_data.nodes) and tgt_idx < len(request.map_data.nodes):
+                                src_label = request.map_data.nodes[src_idx].label
+                                tgt_label = request.map_data.nodes[tgt_idx].label
+                                gt_context += f"- {src_label} ↔ {tgt_label} (confidence: {score:.0%})\n"
+
+                if gt_context:
+                    print(f"🔮 GT context: {len(gt_context)} chars")
+
+        except Exception as e:
+            print(f"⚠️ GT context error: {e}")
+
+    # Append ASA + GT context to the response
     enhanced_context = response.context_document
     if asa_context:
         enhanced_context += asa_context
+    if gt_context:
+        enhanced_context += gt_context
 
     elapsed = (time.time() - start) * 1000
     print(f"🧠 Brain context: {response.token_count} tokens in {elapsed:.0f}ms")
 
+    extra_tokens = len(asa_context.split()) + len(gt_context.split())
     return BrainContextResponse(
         context_document=enhanced_context,
-        token_count=response.token_count + len(asa_context.split()),
+        token_count=response.token_count + extra_tokens,
         breakdown=response.breakdown,
         brain_state=response.brain_state,
         time_ms=elapsed
