@@ -1784,6 +1784,11 @@ class ConnectionLearning(BaseModel):
     source_id: str
     target_id: str
     connection_type: str = "manual"
+    # Optional labels for on-the-fly embedding (when nodes don't exist yet)
+    source_label: Optional[str] = None
+    target_label: Optional[str] = None
+    should_connect: bool = True  # For feedback learning
+    feedback_type: Optional[str] = None  # 'node', 'category', 'connection', etc.
 
 @app.post("/brain/predictions")
 async def record_predictions(record: PredictionRecord):
@@ -1812,28 +1817,61 @@ async def learn_from_connection(learning: ConnectionLearning):
     This is the KEY self-learning endpoint:
     - If predicted: Reinforces the pattern (brain was right!)
     - If not predicted: Learns new pattern (brain missed this)
+
+    Also supports direct GT training with labels for feedback learning.
     """
-    print(f"📥 /brain/learn-connection called: {learning.source_id} → {learning.target_id} ({learning.connection_type})")
+    feedback_info = f" [{learning.feedback_type}]" if learning.feedback_type else ""
+    print(f"📥 /brain/learn-connection called: {learning.source_id} → {learning.target_id}{feedback_info}")
 
     if unified_brain is None:
         raise HTTPException(status_code=503, detail="Unified brain not initialized")
 
+    response = {
+        "status": "learned",
+        "was_predicted": False,
+        "prediction_score": 0,
+        "learning_signal": "feedback"
+    }
+
+    # === DIRECT GT TRAINING WITH LABELS ===
+    # When labels are provided, train GT directly (for feedback learning)
+    if learning.source_label and learning.target_label and unified_brain.ml_brain:
+        try:
+            brain = unified_brain.ml_brain
+
+            # Create embeddings from labels
+            source_emb = brain.model.encode(learning.source_label, convert_to_tensor=False)
+            target_emb = brain.model.encode(learning.target_label, convert_to_tensor=False)
+
+            # Train GT on this connection
+            gt_result = brain.graph_transformer.train_connection_step(
+                source_embedding=source_emb,
+                target_embedding=target_emb,
+                should_connect=learning.should_connect
+            )
+
+            if gt_result:
+                response['loss'] = gt_result.get('loss')
+                response['prediction'] = gt_result.get('prediction')
+                response['gt_trained'] = True
+                print(f"🧠 GT trained from feedback: {learning.source_label} → {learning.target_label}, loss={gt_result.get('loss', 0):.4f}")
+
+        except Exception as e:
+            print(f"⚠️ GT feedback training error: {e}")
+
+    # === EXISTING LOGIC: Learn from connection IDs ===
+    # This tracks prediction accuracy
     result = unified_brain.learn_from_connection(
         learning.source_id,
         learning.target_id,
         learning.connection_type
     )
-    print(f"📤 learn_from_connection result: {result}")
 
-    response = {
-        "status": "learned",
-        "was_predicted": result['was_predicted'],
-        "prediction_score": result['prediction_score'],
-        "learning_signal": result['learning_signal'],
-        "accuracy": unified_brain.predictions.get_accuracy()
-    }
+    response['was_predicted'] = result.get('was_predicted', False)
+    response['prediction_score'] = result.get('prediction_score', 0)
+    response['learning_signal'] = result.get('learning_signal', 'feedback')
 
-    # Include GT training result if available
+    # Include GT training result from existing logic if available
     if 'gt_training' in result:
         response['gt_training'] = result['gt_training']
 
