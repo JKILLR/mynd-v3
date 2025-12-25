@@ -18458,7 +18458,11 @@ Respond with a JSON object:
                             },
                             body: JSON.stringify({
                                 messages: [{ role: 'user', content: evolutionPrompt }],
-                                maxTokens: 2000
+                                systemPrompt: 'You are MYND, an AI assistant helping with map evolution. Respond with valid JSON only.',
+                                maxTokens: 2000,
+                                enableCodebaseTools: false,
+                                enableGithubTools: false,
+                                enableSelfQueryTools: false
                             })
                         });
 
@@ -18469,6 +18473,10 @@ Respond with a JSON object:
                             if (jsonMatch) {
                                 return JSON.parse(jsonMatch[0]);
                             }
+                        } else {
+                            // Log the actual error for debugging
+                            const errorText = await response.text().catch(() => 'Unknown error');
+                            console.warn(`🔄 Evolution edge function error (${response.status}):`, errorText.slice(0, 200));
                         }
                         return null;
                     }
