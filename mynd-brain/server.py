@@ -626,6 +626,7 @@ class MYNDBrain:
 
         # === ASA INTEGRATION: Get semantic context boosts ===
         asa_boosts = {}
+        physics_boosts = {}
         try:
             from models.living_asa import get_asa
             asa = get_asa()
@@ -651,8 +652,21 @@ class MYNDBrain:
                             # Related atoms get boost based on bond strength
                             current_boost = asa_boosts.get(node.id, 1.0)
                             asa_boosts[node.id] = max(current_boost, 1.0 + (bond_strength * 0.3))
+
+                # === PHYSICS-BASED BONDING AFFINITY (NEW) ===
+                # Use physics engine to compute bonding affinity between atoms
+                if hasattr(asa, 'compute_physics_bonding_affinity'):
+                    for node in nodes:
+                        if node.id == node_id:
+                            continue
+                        # Compute physics-based bonding affinity between source and target
+                        affinity = asa.compute_physics_bonding_affinity(node_id, node.id)
+                        if affinity > 0:
+                            # Physics boost = 1.0 + (affinity * 0.5), so high affinity gets up to 1.5x boost
+                            physics_boosts[node.id] = 1.0 + (affinity * 0.5)
+
         except Exception as e:
-            print(f"⚠️ ASA boost lookup failed: {e}")
+            print(f"⚠️ ASA/Physics boost lookup failed: {e}")
 
         # Get top-k predictions (excluding self and existing connections)
         existing_connections = set(source_node.children or [])
@@ -666,10 +680,13 @@ class MYNDBrain:
             if node.id in existing_connections:
                 continue
 
-            # Apply ASA boost to GT score
+            # Apply ASA and Physics boosts to GT score
             base_score = float(score)
             asa_boost = asa_boosts.get(node.id, 1.0)
-            combined_score = base_score * asa_boost
+            physics_boost = physics_boosts.get(node.id, 1.0)
+
+            # Combined score = GT * ASA * Physics
+            combined_score = base_score * asa_boost * physics_boost
 
             predictions.append({
                 "target_id": node.id,
@@ -677,6 +694,7 @@ class MYNDBrain:
                 "score": combined_score,
                 "gt_score": base_score,
                 "asa_boost": asa_boost,
+                "physics_boost": physics_boost,
                 "relationship_type": self._infer_relationship(source_node.label, node.label)
             })
 
@@ -684,15 +702,17 @@ class MYNDBrain:
         predictions.sort(key=lambda x: x["score"], reverse=True)
         predictions = predictions[:top_k]
 
-        # Log if ASA influenced the predictions
-        boosted_count = sum(1 for p in predictions if p.get('asa_boost', 1.0) > 1.0)
-        if boosted_count > 0:
-            print(f"🧬 ASA boosted {boosted_count}/{len(predictions)} predictions for '{source_node.label}'")
+        # Log if ASA or Physics influenced the predictions
+        asa_boosted = sum(1 for p in predictions if p.get('asa_boost', 1.0) > 1.0)
+        physics_boosted = sum(1 for p in predictions if p.get('physics_boost', 1.0) > 1.0)
+        if asa_boosted > 0 or physics_boosted > 0:
+            print(f"🧬 GT+ASA+Physics: {asa_boosted} ASA boosted, {physics_boosted} physics boosted for '{source_node.label}'")
 
         return {
             "connections": predictions,
             "attention_weights": {nodes[i].id: float(w) for i, w in enumerate(attention_weights)},
-            "asa_influenced": boosted_count > 0
+            "asa_influenced": asa_boosted > 0,
+            "physics_influenced": physics_boosted > 0
         }
 
     def _infer_relationship(self, source: str, target: str) -> str:
@@ -1596,12 +1616,19 @@ async def get_brain_context(request: BrainContextRequest):
     if _asa_available and request.user_message:
         try:
             asa = get_asa()
+
+            # 1. Original learning: match existing nodes, boost energy
             learn_result = asa.learn_from_text(request.user_message, source="user")
             if learn_result['atoms_activated'] > 0:
                 encoder_info = ""
                 if learn_result.get('encoder_trained'):
                     encoder_info = f", encoder_loss={learn_result.get('encoder_loss', 0):.4f}"
                 print(f"🧬 ASA learned from user: {learn_result['atoms_activated']} atoms, {learn_result['bonds_strengthened']} bonds{encoder_info}")
+
+            # 2. NEW: Content learning - learn actual concepts from text
+            content_result = asa.learn_content(request.user_message, source="user")
+            if content_result.get('concepts_learned', 0) > 0:
+                print(f"📚 Content learned: {content_result['concepts_learned']} new concepts, {content_result.get('relationships_learned', 0)} relationships")
 
             # === ASA CONTRIBUTES WORKING MEMORY TO CONTEXT ===
             # This is crucial - tell Axel what topics are "hot" (recently discussed)
@@ -1615,6 +1642,10 @@ async def get_brain_context(request: BrainContextRequest):
                 # Also show what's activated together
                 if learn_result.get('activated_names'):
                     asa_context += f"\nJust mentioned together: {', '.join(learn_result['activated_names'][:5])}\n"
+
+            # Add learned concepts to context (if any recent ones)
+            if content_result.get('phrases'):
+                asa_context += f"\nRecently discussed concepts: {', '.join(content_result['phrases'][:5])}\n"
 
         except Exception as e:
             print(f"⚠️ ASA learn error: {e}")
@@ -1961,12 +1992,18 @@ async def receive_from_claude(claude_response: ClaudeResponse):
             asa = get_asa()
             response_text = data.get('response', '')
             if response_text:
+                # 1. Original learning: match existing nodes
                 learn_result = asa.learn_from_text(response_text, source="axel")
                 if learn_result['atoms_activated'] > 0:
                     encoder_info = ""
                     if learn_result.get('encoder_trained'):
                         encoder_info = f", encoder_loss={learn_result.get('encoder_loss', 0):.4f}"
                     print(f"🧬 ASA learned from Axel: {learn_result['atoms_activated']} atoms, {learn_result['bonds_strengthened']} bonds{encoder_info}")
+
+                # 2. NEW: Content learning - learn actual concepts from Axel's response
+                content_result = asa.learn_content(response_text, source="axel")
+                if content_result.get('concepts_learned', 0) > 0:
+                    print(f"📚 Content from Axel: {content_result['concepts_learned']} new concepts")
 
             # Also learn from structured insights
             for insight in (data.get('insights') or []):
@@ -3858,6 +3895,12 @@ async def sync_asa(map_data: MapData):
         # Convert map
         asa.convert_map_to_asa(map_data.dict(), embeddings)
 
+        # Encode atoms with physics-based 720d structure (if embeddings available)
+        physics_stats = {'encoded': 0, 'skipped': 0, 'failed': 0}
+        if embeddings:
+            physics_stats = asa.encode_all_atoms_physics()
+            print(f"⚛️ Physics encoding: {physics_stats['encoded']} atoms encoded (720d atomic structure)")
+
         # Start metabolism if not running
         if not _asa_initialized:
             asa.start_metabolism(tick_interval=5.0)
@@ -3866,6 +3909,7 @@ async def sync_asa(map_data: MapData):
         return {
             "success": True,
             "atoms": len(asa.atoms),
+            "physics_encoded": physics_stats['encoded'],
             "stats": asa.get_stats()
         }
     except Exception as e:
