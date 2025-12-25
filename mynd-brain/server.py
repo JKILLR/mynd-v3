@@ -4318,21 +4318,24 @@ async def process_memory_to_training(request: ProcessMemoryRequest):
     gt_trained = 0
     gt_loss = None
 
+    # Use importance as training weight - high-conviction memories shape models more
+    training_weight = importance  # 0.0-1.0
+
     if unified_brain and unified_brain.ml_brain and len(triples) > 0:
         try:
             brain = unified_brain.ml_brain
 
             for triple in triples:
                 # Create embeddings for subject and object
-                subj_emb = brain.model.encode(triple["subject"], convert_to_tensor=True)
-                obj_emb = brain.model.encode(triple["object"], convert_to_tensor=True)
+                subj_emb = brain.model.encode(triple["subject"], convert_to_tensor=False)
+                obj_emb = brain.model.encode(triple["object"], convert_to_tensor=False)
 
-                # Train GT on this connection
-                # Create pseudo adjacency: connected = 1
+                # Train GT on this connection with importance as weight
                 result = brain.graph_transformer.train_connection_step(
-                    torch.stack([subj_emb, obj_emb]),  # 2 x embedding_dim
-                    torch.tensor([[0, 1], [1, 0]], dtype=torch.float32),  # Connected
-                    labels=torch.tensor([[0, 1], [1, 0]], dtype=torch.float32)  # Reinforce
+                    source_embedding=subj_emb,
+                    target_embedding=obj_emb,
+                    should_connect=True,  # Memory implies connection
+                    weight=training_weight  # Axel's importance signal
                 )
 
                 if result:
@@ -4340,7 +4343,7 @@ async def process_memory_to_training(request: ProcessMemoryRequest):
                     gt_loss = result.get('loss', gt_loss)
 
             if gt_trained > 0:
-                print(f"🔮 GT learned from memory: {gt_trained} triples, loss={gt_loss:.4f if gt_loss else 'N/A'}")
+                print(f"🔮 GT learned from memory: {gt_trained} triples, weight={training_weight:.2f}, loss={gt_loss:.4f if gt_loss else 'N/A'}")
 
         except Exception as e:
             print(f"⚠️ GT memory learning error: {e}")
@@ -4352,18 +4355,27 @@ async def process_memory_to_training(request: ProcessMemoryRequest):
         try:
             asa = get_asa()
 
-            # Learn the full memory content
-            content_result = asa.learn_content(content, source=f"memory:{memory_type}")
+            # Learn the full memory content with importance weighting
+            content_result = asa.learn_content(
+                content,
+                source=f"memory:{memory_type}",
+                importance=training_weight  # Axel's importance signal
+            )
             asa_learned = content_result.get('concepts_learned', 0)
 
             # Also create bonds between extracted concepts
             if len(key_phrases) >= 2:
                 # Activate all phrases together to strengthen bonds
+                # Energy boost scales with importance
                 for phrase in key_phrases:
-                    asa.learn_from_text(phrase, source=f"memory_concept:{memory_type}", energy_boost=importance * 0.5)
+                    asa.learn_from_text(
+                        phrase,
+                        source=f"memory_concept:{memory_type}",
+                        energy_boost=training_weight * 0.5  # importance 1.0 → 0.5 boost
+                    )
 
             if asa_learned > 0:
-                print(f"🧬 ASA learned from memory: {asa_learned} concepts from '{content[:50]}...'")
+                print(f"🧬 ASA learned from memory: {asa_learned} concepts, weight={training_weight:.2f}")
 
         except Exception as e:
             print(f"⚠️ ASA memory learning error: {e}")
@@ -4390,6 +4402,7 @@ async def process_memory_to_training(request: ProcessMemoryRequest):
 
     return {
         "processed": True,
+        "training_weight": training_weight,  # The importance signal Axel provided
         "triples_extracted": len(triples),
         "triples": triples,
         "concepts_found": key_phrases,

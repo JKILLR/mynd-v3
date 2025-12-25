@@ -2378,7 +2378,7 @@ class MYNDLivingASA:
         return unique[:max_phrases]
 
     def learn_content(self, text: str, source: str = "conversation",
-                      embed_fn=None) -> Dict:
+                      embed_fn=None, importance: float = 0.5) -> Dict:
         """
         Learn ACTUAL CONTENT from text - not just matching existing nodes.
 
@@ -2394,6 +2394,8 @@ class MYNDLivingASA:
             source: Where this came from
             embed_fn: Optional function to get embeddings (async),
                      signature: embed_fn(texts: List[str]) -> List[np.ndarray]
+            importance: Training weight 0.0-1.0 (high-conviction realizations
+                       shape understanding more than casual observations)
 
         Returns:
             Dict with learning stats
@@ -2420,24 +2422,32 @@ class MYNDLivingASA:
         relationships_learned = 0
 
         # Update or create ephemeral concepts
+        # Weight by importance: high-conviction memories (1.0) count more
+        count_boost = 1 + importance  # importance 1.0 → +2, importance 0.5 → +1.5
+
         for phrase in phrases:
             phrase_key = phrase.lower()
 
             if phrase_key in self.ephemeral_concepts:
-                # Update existing concept
-                self.ephemeral_concepts[phrase_key]['count'] += 1
+                # Update existing concept - importance affects how much this reinforces
+                self.ephemeral_concepts[phrase_key]['count'] += count_boost
                 self.ephemeral_concepts[phrase_key]['last_seen'] = now
+                self.ephemeral_concepts[phrase_key]['max_importance'] = max(
+                    self.ephemeral_concepts[phrase_key].get('max_importance', 0),
+                    importance
+                )
             else:
                 # Create new ephemeral concept
                 self.ephemeral_concepts[phrase_key] = {
                     'name': phrase,
-                    'count': 1,
+                    'count': count_boost,
                     'last_seen': now,
                     'created': now,
                     'source': source,
                     'related': set(),
                     'embedding': None,  # Will be filled if embed_fn provided
                     'physics_encoded': False,
+                    'max_importance': importance,  # Track highest importance mention
                 }
                 concepts_learned += 1
 
