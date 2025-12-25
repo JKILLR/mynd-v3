@@ -790,7 +790,7 @@ class MYNDBrain:
                         asa_result = asa.learn_from_text(
                             feedback_text,
                             source=f"feedback_{source}",
-                            intensity=1.2 if is_positive else 0.5
+                            energy_boost=0.4 if is_positive else 0.1
                         )
                         if asa_result.get('atoms_activated', 0) > 0:
                             print(f"🧬 ASA trained: {asa_result.get('atoms_activated')} atoms, {asa_result.get('bonds_strengthened', 0)} bonds")
