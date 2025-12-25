@@ -1667,8 +1667,10 @@ async def get_brain_context(request: BrainContextRequest):
                 gt_context = "\n\n## Graph Transformer Insights\n"
                 gt_context += f"GT has learned from {gt_stats['total_connections_learned']} connections over {gt_stats.get('epochs_completed', 0)} training cycles.\n"
 
-                # If we have current map data, show what GT sees
-                if request.map_data and brain.map_embeddings is not None:
+                # Skip expensive operations for large maps (>500 nodes)
+                # These operations are O(n^2) and can timeout
+                node_count = len(request.map_data.nodes) if request.map_data else 0
+                if request.map_data and brain.map_embeddings is not None and node_count <= 500:
                     # Get node importance from GT
                     importance = brain.graph_transformer.get_node_importance(
                         brain.map_embeddings,
@@ -1702,6 +1704,8 @@ async def get_brain_context(request: BrainContextRequest):
                                 src_label = request.map_data.nodes[src_idx].label
                                 tgt_label = request.map_data.nodes[tgt_idx].label
                                 gt_context += f"- {src_label} ↔ {tgt_label} (confidence: {score:.0%})\n"
+                elif node_count > 500:
+                    gt_context += f"\n(Detailed analysis skipped - map has {node_count} nodes)\n"
 
                 if gt_context:
                     print(f"🔮 GT context: {len(gt_context)} chars")
