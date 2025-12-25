@@ -1647,6 +1647,11 @@ async def get_brain_context(request: BrainContextRequest):
             if content_result.get('phrases'):
                 asa_context += f"\nRecently discussed concepts: {', '.join(content_result['phrases'][:5])}\n"
 
+            # AUTO-SAVE: Persist state after learning (every 5 messages)
+            total_processed = asa._learning_stats.get('texts_processed', 0)
+            if total_processed > 0 and total_processed % 5 == 0:
+                asa.save_state()
+
         except Exception as e:
             print(f"⚠️ ASA learn error: {e}")
 
@@ -3901,6 +3906,11 @@ async def sync_asa(map_data: MapData):
             physics_stats = asa.encode_all_atoms_physics()
             print(f"⚛️ Physics encoding: {physics_stats['encoded']} atoms encoded (720d atomic structure)")
 
+        # AUTO-LOAD: Restore learned state (ephemeral concepts, atom energy, etc.)
+        load_result = asa.load_state()
+        if load_result.get('success'):
+            print(f"📂 ASA state restored: {load_result.get('concepts_restored', 0)} concepts, {load_result.get('atoms_restored', 0)} atom states")
+
         # Start metabolism if not running
         if not _asa_initialized:
             asa.start_metabolism(tick_interval=5.0)
@@ -3910,6 +3920,7 @@ async def sync_asa(map_data: MapData):
             "success": True,
             "atoms": len(asa.atoms),
             "physics_encoded": physics_stats['encoded'],
+            "state_restored": load_result.get('success', False),
             "stats": asa.get_stats()
         }
     except Exception as e:
@@ -3921,6 +3932,39 @@ async def get_asa_stats():
     """Get ASA statistics."""
     asa = get_asa()
     return asa.get_stats()
+
+
+@app.post("/asa/save-state")
+async def save_asa_state():
+    """
+    Save ASA learned state to disk.
+
+    Saves ephemeral concepts, atom energy levels, learning stats.
+    Called automatically every 5 messages, but can be triggered manually.
+    """
+    asa = get_asa()
+    result = asa.save_state()
+    return result
+
+
+@app.post("/asa/load-state")
+async def load_asa_state():
+    """
+    Load ASA learned state from disk.
+
+    Restores ephemeral concepts and atom states.
+    Called automatically on /asa/sync, but can be triggered manually.
+    """
+    asa = get_asa()
+    result = asa.load_state()
+    return result
+
+
+@app.get("/asa/content-stats")
+async def get_asa_content_stats():
+    """Get content learning statistics (ephemeral concepts, etc.)."""
+    asa = get_asa()
+    return asa.get_content_learning_stats()
 
 
 @app.get("/asa/attention")
