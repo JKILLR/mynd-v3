@@ -635,7 +635,8 @@ class MYNDGraphTransformer(nn.Module):
         source_embedding: np.ndarray,
         target_embedding: np.ndarray,
         should_connect: bool,
-        adjacency: Optional[np.ndarray] = None
+        adjacency: Optional[np.ndarray] = None,
+        weight: float = 1.0
     ) -> Dict[str, float]:
         """
         Single training step for connection prediction.
@@ -648,11 +649,12 @@ class MYNDGraphTransformer(nn.Module):
             target_embedding: Embedding of target node (384 dims)
             should_connect: True if user accepted, False if rejected
             adjacency: Optional current adjacency matrix for context
+            weight: Training weight 0.0-1.0 (importance of this example)
 
         Returns:
             Dict with 'loss' and 'prediction' values
         """
-        print(f"🎯 GT train_connection_step called: should_connect={should_connect}")
+        print(f"🎯 GT train_connection_step called: should_connect={should_connect}, weight={weight:.2f}")
 
         try:
             # Initialize training if needed
@@ -683,8 +685,9 @@ class MYNDGraphTransformer(nn.Module):
             logit = self.connection_head(combined)
             prediction = torch.sigmoid(logit)
 
-            # Binary cross-entropy loss
+            # Binary cross-entropy loss, weighted by importance
             loss = F.binary_cross_entropy(prediction.squeeze(), label.squeeze())
+            loss = loss * weight  # High-conviction memories shape models more
 
             # Ensure optimizer exists
             if self._optimizer is None:

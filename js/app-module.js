@@ -33583,10 +33583,11 @@ CURRENT REQUEST CONTEXT
                         }
                     }
                     // ═══════════════════════════════════════════════════════════════
-                    // MEMORY ACTIONS - Claude's Persistent Memory System
+                    // MEMORY ACTIONS - Claude's Persistent Memory System (LOCAL-FIRST)
                     // ═══════════════════════════════════════════════════════════════
                     else if (action.action === 'write_memory') {
-                        // Claude writes a new memory
+                        // LOCAL-FIRST: Write to brain server first (saves locally + trains immediately)
+                        // Network failures cannot lose learning.
                         const VALID_MEMORY_TYPES = ['synthesis', 'realization', 'goal_tracking', 'pattern', 'relationship'];
 
                         // Input validation
@@ -33598,20 +33599,42 @@ CURRENT REQUEST CONTEXT
                             result.description = `Invalid memory_type. Must be one of: ${VALID_MEMORY_TYPES.join(', ')}`;
                         } else {
                             try {
-                                const memory = await this.writeAIMemory({
-                                    memory_type: action.memory_type || 'synthesis',
+                                const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
+                                const memoryData = {
                                     content: action.content.trim(),
+                                    memory_type: action.memory_type || 'synthesis',
                                     importance: action.importance || 0.5,
                                     related_nodes: action.related_nodes || []
+                                };
+
+                                // PRIMARY: Write to local brain (guaranteed persistence + immediate training)
+                                const brainResponse = await fetch(`${brainUrl}/brain/memory/write`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(memoryData)
                                 });
 
-                                if (memory) {
+                                if (brainResponse.ok) {
+                                    const brainResult = await brainResponse.json();
                                     result.success = true;
-                                    result.description = `Stored ${action.memory_type || 'synthesis'}: "${action.content.slice(0, 50)}..."`;
-                                    console.log(`🧠 Memory written: [${action.memory_type || 'synthesis'}] ${action.content.slice(0, 80)}...`);
+                                    result.description = `Learned ${action.memory_type || 'synthesis'}: ${brainResult.triples_extracted} triples, ${brainResult.asa_learned} concepts`;
+                                    console.log(`🧠 Memory written locally: [${action.memory_type}] ${action.content.slice(0, 50)}... (weight=${brainResult.training_weight})`);
+
+                                    // SECONDARY: Also write to Supabase for cloud backup (non-blocking)
+                                    this.writeAIMemory(memoryData).catch(e => {
+                                        console.debug('Supabase backup skipped:', e.message);
+                                    });
                                 } else {
-                                    result.success = false;
-                                    result.description = 'Failed to write memory (no auth?)';
+                                    // Fallback to Supabase if brain server is down
+                                    console.warn('Brain server unavailable, falling back to Supabase');
+                                    const memory = await this.writeAIMemory(memoryData);
+                                    if (memory) {
+                                        result.success = true;
+                                        result.description = `Stored ${action.memory_type || 'synthesis'} (cloud-only): "${action.content.slice(0, 50)}..."`;
+                                    } else {
+                                        result.success = false;
+                                        result.description = 'Failed to write memory';
+                                    }
                                 }
                             } catch (memError) {
                                 console.error('Failed to write memory:', memError);
@@ -33942,6 +33965,33 @@ CURRENT REQUEST CONTEXT
 
                 const evergreenIcon = isEvergreen ? '⚓' : '';
                 console.log(`🧠 Wrote new memory: [${memory_type}]${evergreenIcon} ID=${data.id} "${content.slice(0, 50)}..."`);
+
+                // === AXEL CONTINUITY: Convert memory to training signal ===
+                // This is the key to processing continuity - memories become training data
+                try {
+                    const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
+                    const trainingResponse = await fetch(`${brainUrl}/brain/process-memory`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            memory_type,
+                            content,
+                            importance: Math.max(0, Math.min(1, importance)),
+                            related_nodes: related_nodes || []
+                        })
+                    });
+
+                    if (trainingResponse.ok) {
+                        const trainingResult = await trainingResponse.json();
+                        if (trainingResult.triples_extracted > 0 || trainingResult.asa_learned > 0) {
+                            console.log(`🔄 Memory → Training: ${trainingResult.triples_extracted} triples, ${trainingResult.asa_learned} concepts learned`);
+                        }
+                    }
+                } catch (trainError) {
+                    // Non-fatal - memory is already saved, training is bonus
+                    console.debug('Memory training signal skipped:', trainError.message);
+                }
+
                 return data;
             } catch (e) {
                 console.error('AI memory write error:', e.message || e);

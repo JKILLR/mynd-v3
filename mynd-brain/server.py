@@ -4234,6 +4234,527 @@ async def get_asa_learning_stats():
 
 
 # ═══════════════════════════════════════════════════════════════════
+# AXEL CONTINUITY - Memory → Training Signal
+# ═══════════════════════════════════════════════════════════════════
+
+class ProcessMemoryRequest(BaseModel):
+    """Request to process a memory into training signal."""
+    memory_type: str  # realization, synthesis, pattern, etc.
+    content: str  # The actual memory text
+    importance: float = 0.5  # 0-1
+    related_nodes: List[str] = []  # Node IDs if any
+
+class TrainingTriple(BaseModel):
+    """A subject-predicate-object training pair."""
+    subject: str
+    predicate: str
+    object: str
+    confidence: float
+
+@app.post("/brain/process-memory")
+async def process_memory_to_training(request: ProcessMemoryRequest):
+    """
+    AXEL CONTINUITY: Convert memory writes into training signal.
+
+    This is the key to processing continuity - when Axel writes
+    "I realized X about Y", this becomes:
+    - Training pairs for GT (connection learning)
+    - Content for ASA (semantic atoms)
+    - Embedding updates for future retrieval
+
+    This transforms memories from passive text into active shaping
+    of how the system processes meaning.
+    """
+    import re
+
+    content = request.content
+    memory_type = request.memory_type
+    importance = request.importance
+
+    # === EXTRACT TRAINING TRIPLES ===
+    triples = []
+
+    # Pattern 1: "X realized/noticed/observed that Y about Z"
+    insight_patterns = [
+        r"(?:Axel |I |Claude )?(?:realized|noticed|observed|understood|learned|discovered) (?:that )?(.+?)(?:\s+about\s+|\s+regarding\s+|\s+with\s+)(.+?)(?:\.|$)",
+        r"(.+?) (?:is related to|connects to|links to) (.+?)(?:\.|$)",
+        r"(?:User |They )?(?:prefers?|likes?|wants?) (.+?) (?:over|instead of|rather than) (.+?)(?:\.|$)",
+        r"(.+?) (?:means|implies|suggests) (.+?)(?:\.|$)",
+        r"(?:The connection between|Link between) (.+?) and (.+)",
+    ]
+
+    for pattern in insight_patterns:
+        matches = re.findall(pattern, content, re.IGNORECASE)
+        for match in matches:
+            if len(match) >= 2:
+                triples.append({
+                    "subject": match[0].strip()[:100],
+                    "predicate": memory_type,  # realization, synthesis, pattern
+                    "object": match[1].strip()[:100],
+                    "confidence": importance
+                })
+
+    # Pattern 2: Extract key phrases (concepts) from the memory
+    key_phrases = []
+
+    # Quoted terms
+    quoted = re.findall(r'"([^"]+)"', content)
+    key_phrases.extend(quoted)
+
+    # CamelCase or snake_case (technical terms)
+    camel = re.findall(r'\b([A-Z][a-z]+(?:[A-Z][a-z]+)+)\b', content)
+    snake = re.findall(r'\b([a-z]+(?:_[a-z]+)+)\b', content)
+    key_phrases.extend(camel)
+    key_phrases.extend(snake)
+
+    # Capitalized phrases (proper nouns, concepts)
+    caps = re.findall(r'\b([A-Z][a-z]+(?: [A-Z][a-z]+){0,3})\b', content)
+    key_phrases.extend([c for c in caps if len(c) > 3])
+
+    # Remove duplicates
+    key_phrases = list(set(key_phrases))[:10]
+
+    # === FEED TO GT ===
+    gt_trained = 0
+    gt_loss = None
+
+    # Use importance as training weight - high-conviction memories shape models more
+    training_weight = importance  # 0.0-1.0
+
+    if unified_brain and unified_brain.ml_brain and len(triples) > 0:
+        try:
+            brain = unified_brain.ml_brain
+
+            for triple in triples:
+                # Create embeddings for subject and object
+                subj_emb = brain.model.encode(triple["subject"], convert_to_tensor=False)
+                obj_emb = brain.model.encode(triple["object"], convert_to_tensor=False)
+
+                # Train GT on this connection with importance as weight
+                result = brain.graph_transformer.train_connection_step(
+                    source_embedding=subj_emb,
+                    target_embedding=obj_emb,
+                    should_connect=True,  # Memory implies connection
+                    weight=training_weight  # Axel's importance signal
+                )
+
+                if result:
+                    gt_trained += 1
+                    gt_loss = result.get('loss', gt_loss)
+
+            if gt_trained > 0:
+                print(f"🔮 GT learned from memory: {gt_trained} triples, weight={training_weight:.2f}, loss={gt_loss:.4f if gt_loss else 'N/A'}")
+
+        except Exception as e:
+            print(f"⚠️ GT memory learning error: {e}")
+
+    # === FEED TO ASA ===
+    asa_learned = 0
+
+    if _asa_available:
+        try:
+            asa = get_asa()
+
+            # Learn the full memory content with importance weighting
+            content_result = asa.learn_content(
+                content,
+                source=f"memory:{memory_type}",
+                importance=training_weight  # Axel's importance signal
+            )
+            asa_learned = content_result.get('concepts_learned', 0)
+
+            # Also create bonds between extracted concepts
+            if len(key_phrases) >= 2:
+                # Activate all phrases together to strengthen bonds
+                # Energy boost scales with importance
+                for phrase in key_phrases:
+                    asa.learn_from_text(
+                        phrase,
+                        source=f"memory_concept:{memory_type}",
+                        energy_boost=training_weight * 0.5  # importance 1.0 → 0.5 boost
+                    )
+
+            if asa_learned > 0:
+                print(f"🧬 ASA learned from memory: {asa_learned} concepts, weight={training_weight:.2f}")
+
+        except Exception as e:
+            print(f"⚠️ ASA memory learning error: {e}")
+
+    # === ACCUMULATE FOR FUTURE FINE-TUNING ===
+    # Store triples in a format suitable for LoRA training data
+    training_data_path = os.path.expanduser("~/.mynd/training_pairs.jsonl")
+    try:
+        import json
+        os.makedirs(os.path.dirname(training_data_path), exist_ok=True)
+
+        with open(training_data_path, 'a') as f:
+            for triple in triples:
+                f.write(json.dumps({
+                    "timestamp": time.time(),
+                    "memory_type": memory_type,
+                    "triple": triple,
+                    "raw_content": content[:500],
+                    "importance": importance
+                }) + "\n")
+
+    except Exception as e:
+        print(f"⚠️ Could not save training pair: {e}")
+
+    return {
+        "processed": True,
+        "training_weight": training_weight,  # The importance signal Axel provided
+        "triples_extracted": len(triples),
+        "triples": triples,
+        "concepts_found": key_phrases,
+        "gt_trained": gt_trained,
+        "gt_loss": gt_loss,
+        "asa_learned": asa_learned,
+        "training_data_saved": len(triples) > 0
+    }
+
+
+@app.get("/brain/training-pairs")
+async def get_training_pairs(limit: int = 100):
+    """
+    Get accumulated training pairs from memory processing.
+    These can be used for LoRA fine-tuning or analysis.
+    """
+    training_data_path = os.path.expanduser("~/.mynd/training_pairs.jsonl")
+
+    if not os.path.exists(training_data_path):
+        return {"pairs": [], "total": 0}
+
+    try:
+        import json
+        pairs = []
+        with open(training_data_path, 'r') as f:
+            for line in f:
+                if line.strip():
+                    pairs.append(json.loads(line))
+
+        # Return most recent
+        pairs = pairs[-limit:]
+
+        return {
+            "pairs": pairs,
+            "total": len(pairs),
+            "path": training_data_path
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════════
+# LOCAL-FIRST MEMORY SYSTEM
+# ═══════════════════════════════════════════════════════════════════
+# Critical cognitive infrastructure should not depend on network.
+# Memories are saved locally FIRST, then synced to cloud as backup.
+
+import json
+from uuid import uuid4
+from datetime import datetime
+from pathlib import Path
+
+# Paths for local storage
+MYND_DIR = Path.home() / ".mynd"
+MEMORIES_PATH = MYND_DIR / "memories.jsonl"
+SYNC_STATUS_PATH = MYND_DIR / "sync_status.json"
+
+class LocalMemoryInput(BaseModel):
+    """Input for writing a memory locally."""
+    content: str
+    memory_type: str = "synthesis"  # synthesis, realization, pattern, goal_tracking, relationship
+    importance: float = 0.5  # 0.0-1.0
+    related_nodes: List[str] = []
+    evergreen: Optional[bool] = None  # Auto-determine if not specified
+
+class MemoryQueryRequest(BaseModel):
+    """Request to query memories."""
+    query: str
+    limit: int = 10
+    memory_types: Optional[List[str]] = None  # Filter by type
+
+
+def load_local_memories() -> List[Dict]:
+    """Load all memories from local JSONL file."""
+    if not MEMORIES_PATH.exists():
+        return []
+
+    memories = []
+    with open(MEMORIES_PATH, 'r') as f:
+        for line in f:
+            if line.strip():
+                try:
+                    memories.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    return memories
+
+
+def get_sync_status() -> Dict:
+    """Get current sync status."""
+    if not SYNC_STATUS_PATH.exists():
+        return {"last_sync": None, "synced_ids": []}
+
+    with open(SYNC_STATUS_PATH, 'r') as f:
+        return json.load(f)
+
+
+def save_sync_status(status: Dict):
+    """Save sync status."""
+    MYND_DIR.mkdir(parents=True, exist_ok=True)
+    with open(SYNC_STATUS_PATH, 'w') as f:
+        json.dump(status, f, indent=2)
+
+
+@app.post("/brain/memory/write")
+async def write_memory_local(memory: LocalMemoryInput):
+    """
+    LOCAL-FIRST MEMORY WRITE
+
+    This is the primary endpoint for Axel's memories.
+    1. Save locally FIRST (guaranteed persistence)
+    2. Extract triples and train immediately
+    3. Queue for Supabase sync (non-blocking)
+
+    Network failures cannot lose learning.
+    """
+    import re
+
+    # Ensure directory exists
+    MYND_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Generate unique ID
+    memory_id = str(uuid4())
+    timestamp = datetime.now().isoformat()
+
+    # Auto-determine evergreen
+    evergreen = memory.evergreen
+    if evergreen is None:
+        evergreen_types = ['synthesis', 'realization', 'pattern']
+        evergreen = memory.memory_type in evergreen_types
+
+    # 1. SAVE LOCALLY FIRST (critical path - must succeed)
+    memory_record = {
+        "id": memory_id,
+        "content": memory.content,
+        "memory_type": memory.memory_type,
+        "importance": memory.importance,
+        "related_nodes": memory.related_nodes,
+        "evergreen": evergreen,
+        "timestamp": timestamp,
+        "synced": False  # Track sync status
+    }
+
+    with open(MEMORIES_PATH, 'a') as f:
+        f.write(json.dumps(memory_record) + "\n")
+
+    print(f"💾 Memory saved locally: [{memory.memory_type}] {memory.content[:50]}...")
+
+    # 2. EXTRACT TRIPLES AND TRAIN IMMEDIATELY
+    training_weight = memory.importance
+    triples = []
+    gt_trained = 0
+    asa_learned = 0
+
+    # Extract triples using same patterns as process-memory
+    content = memory.content
+    insight_patterns = [
+        r"(?:Axel |I |Claude )?(?:realized|noticed|observed|understood|learned|discovered) (?:that )?(.+?)(?:\s+about\s+|\s+regarding\s+|\s+with\s+)(.+?)(?:\.|$)",
+        r"(.+?) (?:is related to|connects to|links to) (.+?)(?:\.|$)",
+        r"(?:User |They )?(?:prefers?|likes?|wants?) (.+?) (?:over|instead of|rather than) (.+?)(?:\.|$)",
+        r"(.+?) (?:means|implies|suggests) (.+?)(?:\.|$)",
+        r"(?:The connection between|Link between) (.+?) and (.+)",
+    ]
+
+    for pattern in insight_patterns:
+        matches = re.findall(pattern, content, re.IGNORECASE)
+        for match in matches:
+            if len(match) >= 2:
+                triples.append({
+                    "subject": match[0].strip()[:100],
+                    "predicate": memory.memory_type,
+                    "object": match[1].strip()[:100],
+                    "confidence": memory.importance
+                })
+
+    # Train GT on triples
+    if unified_brain and unified_brain.ml_brain and len(triples) > 0:
+        try:
+            brain = unified_brain.ml_brain
+            for triple in triples:
+                subj_emb = brain.model.encode(triple["subject"], convert_to_tensor=False)
+                obj_emb = brain.model.encode(triple["object"], convert_to_tensor=False)
+                result = brain.graph_transformer.train_connection_step(
+                    source_embedding=subj_emb,
+                    target_embedding=obj_emb,
+                    should_connect=True,
+                    weight=training_weight
+                )
+                if result:
+                    gt_trained += 1
+        except Exception as e:
+            print(f"⚠️ GT training error: {e}")
+
+    # Train ASA on content
+    if _asa_available:
+        try:
+            asa = get_asa()
+            content_result = asa.learn_content(
+                content,
+                source=f"memory:{memory.memory_type}",
+                importance=training_weight
+            )
+            asa_learned = content_result.get('concepts_learned', 0)
+        except Exception as e:
+            print(f"⚠️ ASA training error: {e}")
+
+    # Also save to training pairs for LoRA
+    training_data_path = MYND_DIR / "training_pairs.jsonl"
+    with open(training_data_path, 'a') as f:
+        for triple in triples:
+            f.write(json.dumps({
+                "timestamp": time.time(),
+                "memory_type": memory.memory_type,
+                "triple": triple,
+                "raw_content": content[:500],
+                "importance": memory.importance
+            }) + "\n")
+
+    print(f"🧠 Memory trained: {gt_trained} triples, {asa_learned} concepts, weight={training_weight:.2f}")
+
+    return {
+        "status": "learned",
+        "memory_id": memory_id,
+        "local_path": str(MEMORIES_PATH),
+        "triples_extracted": len(triples),
+        "gt_trained": gt_trained,
+        "asa_learned": asa_learned,
+        "training_weight": training_weight,
+        "synced": False  # Will be synced in background
+    }
+
+
+@app.post("/brain/memory/query")
+async def query_memories(request: MemoryQueryRequest):
+    """
+    Query memories using semantic search.
+    Searches local memories first, using embeddings for relevance.
+    """
+    memories = load_local_memories()
+
+    if not memories:
+        return {"memories": [], "total": 0}
+
+    # Filter by type if specified
+    if request.memory_types:
+        memories = [m for m in memories if m.get('memory_type') in request.memory_types]
+
+    if not memories:
+        return {"memories": [], "total": 0}
+
+    # Get query embedding
+    if unified_brain and unified_brain.ml_brain:
+        try:
+            brain = unified_brain.ml_brain
+            query_emb = brain.model.encode(request.query, convert_to_tensor=False)
+
+            # Get embeddings for all memories (cache these in future)
+            scored_memories = []
+            for mem in memories:
+                mem_emb = brain.model.encode(mem['content'][:500], convert_to_tensor=False)
+                # Cosine similarity
+                similarity = np.dot(query_emb, mem_emb) / (np.linalg.norm(query_emb) * np.linalg.norm(mem_emb) + 1e-8)
+                scored_memories.append((mem, float(similarity)))
+
+            # Sort by similarity
+            scored_memories.sort(key=lambda x: x[1], reverse=True)
+
+            # Return top results
+            results = []
+            for mem, score in scored_memories[:request.limit]:
+                results.append({
+                    **mem,
+                    "relevance_score": score
+                })
+
+            return {
+                "memories": results,
+                "total": len(memories),
+                "query": request.query
+            }
+
+        except Exception as e:
+            print(f"⚠️ Semantic search error: {e}")
+
+    # Fallback: simple text search
+    query_lower = request.query.lower()
+    results = [m for m in memories if query_lower in m.get('content', '').lower()]
+    results = results[:request.limit]
+
+    return {
+        "memories": results,
+        "total": len(memories),
+        "query": request.query,
+        "search_type": "text_fallback"
+    }
+
+
+@app.get("/brain/memory/all")
+async def get_all_memories(limit: int = 100, offset: int = 0):
+    """Get all local memories, paginated."""
+    memories = load_local_memories()
+
+    # Sort by timestamp (newest first)
+    memories.sort(key=lambda m: m.get('timestamp', ''), reverse=True)
+
+    # Paginate
+    paginated = memories[offset:offset + limit]
+
+    return {
+        "memories": paginated,
+        "total": len(memories),
+        "limit": limit,
+        "offset": offset
+    }
+
+
+@app.get("/brain/memory/stats")
+async def get_memory_stats():
+    """Get statistics about local memories."""
+    memories = load_local_memories()
+
+    if not memories:
+        return {
+            "total": 0,
+            "by_type": {},
+            "evergreen_count": 0,
+            "synced_count": 0
+        }
+
+    by_type = {}
+    evergreen_count = 0
+    synced_count = 0
+
+    for mem in memories:
+        mem_type = mem.get('memory_type', 'unknown')
+        by_type[mem_type] = by_type.get(mem_type, 0) + 1
+        if mem.get('evergreen'):
+            evergreen_count += 1
+        if mem.get('synced'):
+            synced_count += 1
+
+    return {
+        "total": len(memories),
+        "by_type": by_type,
+        "evergreen_count": evergreen_count,
+        "synced_count": synced_count,
+        "unsynced_count": len(memories) - synced_count,
+        "path": str(MEMORIES_PATH)
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════
 # WEBSOCKET
 # ═══════════════════════════════════════════════════════════════════
 
