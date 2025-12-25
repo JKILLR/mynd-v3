@@ -2658,6 +2658,166 @@ class MYNDLivingASA:
             'confidence': sum(self.atoms[aid].charge_magnitude for aid in mentioned) / len(mentioned)
         }
 
+    # =========================================================================
+    # STATE PERSISTENCE - Save/Load learned state
+    # =========================================================================
+
+    def save_state(self, path: str = None) -> Dict:
+        """
+        Save ASA learned state to disk.
+
+        Saves:
+        - Ephemeral concepts (learned from conversation)
+        - Atom energy levels (working memory)
+        - Atom access counts and timestamps
+        - Learning statistics
+
+        Does NOT save:
+        - The atoms themselves (those come from MYND map sync)
+        - Neural network weights (those are separate)
+
+        Args:
+            path: Path to save state. Default: ~/.mynd/asa_state.json
+
+        Returns:
+            Dict with save stats
+        """
+        import json
+        import os
+
+        self._init_content_learning()
+
+        if not path:
+            path = os.path.expanduser("~/.mynd/asa_state.json")
+
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+
+        # Build state to save
+        state = {
+            'version': 2,
+            'saved_at': time.time(),
+
+            # Ephemeral concepts (convert sets to lists for JSON)
+            'ephemeral_concepts': {
+                key: {
+                    **{k: v for k, v in concept.items() if k not in ('embedding', 'physics_charge', 'physics_nucleus', 'related')},
+                    'related': list(concept.get('related', set())),
+                }
+                for key, concept in self.ephemeral_concepts.items()
+            },
+
+            # Atom dynamic state (energy, access counts, etc.)
+            'atom_states': {
+                atom_id: {
+                    'energy': atom.energy,
+                    'access_count': atom.access_count,
+                    'last_accessed': atom.last_accessed,
+                    'semantic_charge': atom.semantic_charge,
+                    'charge_magnitude': atom.charge_magnitude,
+                }
+                for atom_id, atom in self.atoms.items()
+            },
+
+            # Learning stats
+            'learning_stats': self._learning_stats,
+            'content_learning_stats': getattr(self, '_content_learning_stats', {}),
+        }
+
+        try:
+            with open(path, 'w') as f:
+                json.dump(state, f, indent=2)
+
+            logger.info(f"💾 ASA state saved: {len(self.ephemeral_concepts)} concepts, {len(self.atoms)} atom states → {path}")
+
+            return {
+                'success': True,
+                'path': path,
+                'ephemeral_concepts': len(self.ephemeral_concepts),
+                'atom_states': len(self.atoms),
+            }
+        except Exception as e:
+            logger.error(f"Failed to save ASA state: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def load_state(self, path: str = None) -> Dict:
+        """
+        Load ASA learned state from disk.
+
+        Restores:
+        - Ephemeral concepts
+        - Atom energy levels (for atoms that still exist)
+        - Learning statistics
+
+        Args:
+            path: Path to load state from. Default: ~/.mynd/asa_state.json
+
+        Returns:
+            Dict with load stats
+        """
+        import json
+        import os
+
+        self._init_content_learning()
+
+        if not path:
+            path = os.path.expanduser("~/.mynd/asa_state.json")
+
+        if not os.path.exists(path):
+            logger.info(f"No ASA state file found at {path}")
+            return {'success': False, 'error': 'File not found', 'path': path}
+
+        try:
+            with open(path, 'r') as f:
+                state = json.load(f)
+
+            # Restore ephemeral concepts
+            concepts_restored = 0
+            for key, concept in state.get('ephemeral_concepts', {}).items():
+                # Convert related list back to set
+                concept['related'] = set(concept.get('related', []))
+                concept['embedding'] = None  # Will be re-embedded if needed
+                concept['physics_encoded'] = False
+                self.ephemeral_concepts[key] = concept
+                concepts_restored += 1
+
+            # Restore atom states (for atoms that exist)
+            atoms_restored = 0
+            for atom_id, atom_state in state.get('atom_states', {}).items():
+                if atom_id in self.atoms:
+                    atom = self.atoms[atom_id]
+                    atom.energy = atom_state.get('energy', 0.0)
+                    atom.access_count = atom_state.get('access_count', 0)
+                    atom.last_accessed = atom_state.get('last_accessed', time.time())
+                    atom.semantic_charge = atom_state.get('semantic_charge', 0.0)
+                    atom.charge_magnitude = atom_state.get('charge_magnitude', 0.5)
+                    atoms_restored += 1
+
+            # Restore learning stats
+            saved_stats = state.get('learning_stats', {})
+            for key, value in saved_stats.items():
+                self._learning_stats[key] = value
+
+            saved_content_stats = state.get('content_learning_stats', {})
+            for key, value in saved_content_stats.items():
+                self._content_learning_stats[key] = value
+
+            saved_at = state.get('saved_at', 0)
+            age_hours = (time.time() - saved_at) / 3600 if saved_at else 0
+
+            logger.info(f"📂 ASA state loaded: {concepts_restored} concepts, {atoms_restored} atom states (saved {age_hours:.1f}h ago)")
+
+            return {
+                'success': True,
+                'path': path,
+                'concepts_restored': concepts_restored,
+                'atoms_restored': atoms_restored,
+                'age_hours': age_hours,
+            }
+        except Exception as e:
+            logger.error(f"Failed to load ASA state: {e}")
+            return {'success': False, 'error': str(e)}
+
 
 # =============================================================================
 # SINGLETON INSTANCE
