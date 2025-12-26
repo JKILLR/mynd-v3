@@ -1761,15 +1761,71 @@ async def record_brain_feedback(
     """
     Record feedback for the brain's learning.
     Call this when the user accepts, rejects, or corrects something.
+
+    NOW ALSO TRAINS GT on accept/reject!
     """
+    ctx = context or {}
+    print(f"📥 /brain/feedback: {action} on {node_id} - {ctx.get('suggestionType', 'unknown')} ({ctx.get('parentLabel', '?')} → {ctx.get('acceptedLabel', '?')})")
+
     if unified_brain is None:
         raise HTTPException(status_code=503, detail="Unified brain not initialized")
 
-    unified_brain.record_feedback(node_id, action, context or {})
+    unified_brain.record_feedback(node_id, action, ctx)
+
+    # === GT TRAINING ON FEEDBACK ===
+    # Train Graph Transformer when user accepts or rejects suggestions
+    gt_result = None
+    asa_result = None
+
+    parent_label = ctx.get('parentLabel', '')
+    accepted_label = ctx.get('acceptedLabel', '')
+
+    if parent_label and accepted_label and unified_brain.ml_brain:
+        try:
+            brain = unified_brain.ml_brain
+            gt = brain.graph_transformer
+
+            # Get embeddings
+            parent_emb = brain.model.encode(parent_label, convert_to_tensor=True)
+            child_emb = brain.model.encode(accepted_label, convert_to_tensor=True)
+
+            # Train GT: accepted = should connect, rejected = should not
+            should_connect = action in ['accepted', 'accepted_batch', 'brainstorm_accepted']
+
+            loss = gt.train_connection_step(
+                source_embedding=parent_emb,
+                target_embedding=child_emb,
+                should_connect=should_connect,
+                weight=1.0  # Full weight for explicit user feedback
+            )
+
+            gt_result = {
+                "trained": True,
+                "should_connect": should_connect,
+                "loss": float(loss) if loss else None
+            }
+            print(f"🧠 GT trained from feedback: {parent_label} → {accepted_label} (should_connect={should_connect}, loss={loss:.4f if loss else 'N/A'})")
+
+        except Exception as e:
+            print(f"⚠️ GT training failed: {e}")
+            gt_result = {"trained": False, "error": str(e)}
+
+    # === ASA TRAINING ON FEEDBACK ===
+    if parent_label and accepted_label and _asa_available:
+        try:
+            asa = get_asa()
+            combined = f"{parent_label} connects to {accepted_label}"
+            asa.learn_from_text(combined, importance=0.8, category="feedback")
+            asa_result = {"trained": True}
+            print(f"🧬 ASA learned from feedback: {combined}")
+        except Exception as e:
+            asa_result = {"trained": False, "error": str(e)}
 
     return {
         "status": "recorded",
-        "growth_events_today": unified_brain.growth_events_today
+        "growth_events_today": unified_brain.growth_events_today,
+        "gt_training": gt_result,
+        "asa_training": asa_result
     }
 
 # ═══════════════════════════════════════════════════════════════════
