@@ -18133,8 +18133,8 @@ Return as JSON:
             console.log('🔄 Initializing AutonomousEvolution...');
 
             try {
-                // Load history from storage
-                const stored = this.loadFromStorage();
+                // Load history from storage (now async for IndexedDB)
+                const stored = await this.loadFromStorage();
                 if (stored) {
                     this.history = stored.history || this.history;
                     this.pendingChanges = stored.pendingChanges || [];
@@ -19241,39 +19241,67 @@ Respond with ONLY a JSON array:
         // STORAGE & UTILITIES
         // ═══════════════════════════════════════════════════════════════════
 
-        saveToStorage() {
+        async saveToStorage() {
             try {
+                // Limit history to prevent storage bloat
+                const limitedHistory = {
+                    ...this.history,
+                    sessions: this.history.sessions.slice(-10)  // Keep last 10 sessions
+                };
+
                 const data = {
                     version: this.VERSION,
-                    history: this.history,
-                    pendingChanges: this.pendingChanges,
-                    pendingQuestions: this.pendingQuestions,
-                    thinkingHistory: this.thinkingHistory.slice(-20),  // Keep last 20 sessions
+                    history: limitedHistory,
+                    pendingChanges: this.pendingChanges.slice(-50),  // Keep last 50 changes
+                    pendingQuestions: this.pendingQuestions.slice(-20),  // Keep last 20 questions
+                    thinkingHistory: this.thinkingHistory.slice(-10),  // Keep last 10 sessions
                     config: this.config,
                     timestamp: Date.now()
                 };
-                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+
+                // Use IndexedDB instead of localStorage to avoid quota errors
+                await NeuralDB.save(this.STORAGE_KEY, data);
+
+                // Clean up old localStorage data if it exists
+                try {
+                    if (localStorage.getItem(this.STORAGE_KEY)) {
+                        localStorage.removeItem(this.STORAGE_KEY);
+                        console.log('🔄 Migrated AutonomousEvolution from localStorage to IndexedDB');
+                    }
+                } catch (e) { /* ignore cleanup errors */ }
             } catch (error) {
                 console.warn('AutonomousEvolution save failed:', error);
             }
         },
 
-        loadFromStorage() {
+        async loadFromStorage() {
             try {
-                const data = localStorage.getItem(this.STORAGE_KEY);
+                // Try IndexedDB first (new storage)
+                let data = await NeuralDB.load(this.STORAGE_KEY);
+
+                // Fall back to localStorage for migration
+                if (!data) {
+                    const localData = localStorage.getItem(this.STORAGE_KEY);
+                    if (localData) {
+                        data = JSON.parse(localData);
+                        // Migrate to IndexedDB
+                        await this.saveToStorage();
+                    }
+                }
+
                 if (data) {
-                    const parsed = JSON.parse(data);
                     // Restore thinking data if present
-                    if (parsed.pendingQuestions) {
-                        this.pendingQuestions = parsed.pendingQuestions;
+                    if (data.pendingQuestions) {
+                        this.pendingQuestions = data.pendingQuestions;
                     }
-                    if (parsed.thinkingHistory) {
-                        this.thinkingHistory = parsed.thinkingHistory;
+                    if (data.thinkingHistory) {
+                        this.thinkingHistory = data.thinkingHistory;
                     }
-                    return parsed;
+                    return data;
                 }
                 return null;
             } catch (error) {
+                console.warn('AutonomousEvolution load failed:', error);
                 return null;
             }
         },
@@ -34841,55 +34869,87 @@ Respond with ONLY the JSON, no markdown or explanation.`;
         // ═══════════════════════════════════════════════════════════════════
 
         async checkPendingInsights() {
-            // Fetch unpresented insights from background cognition
+            // Fetch unpresented insights from both:
+            // 1. Evolution daemon (brain server - local file-based)
+            // 2. Supabase (cloud-based pending_insights table)
+            const allInsights = [];
+
+            // 1. Fetch from brain server's evolution daemon
             try {
-                if (typeof supabase === 'undefined' || !supabase) return [];
+                const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
+                const response = await fetch(`${brainUrl}/evolution/insights?limit=5`);
+                if (response.ok) {
+                    const data = await response.json();
+                    const serverInsights = (data.insights || []).map(i => ({
+                        id: i.id,
+                        insight_type: i.insight_type || i.type || 'insight',
+                        title: i.title,
+                        content: i.description,
+                        confidence: i.confidence || 0.7,
+                        source_nodes: i.source_nodes || [],
+                        source: 'evolution'
+                    }));
+                    allInsights.push(...serverInsights);
 
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user) return [];
-
-                const { data: insights, error } = await supabase
-                    .from('pending_insights')
-                    .select('id, insight_type, title, content, confidence, source_nodes, source_memories, created_at')
-                    .eq('user_id', user.id)
-                    .is('presented_at', null)
-                    .order('confidence', { ascending: false })
-                    .limit(3);
-
-                if (error) {
-                    // Table might not exist yet - fail silently
-                    if (error.code === '42P01') {
-                        console.log('📭 pending_insights table not yet created');
-                        return [];
+                    // Mark them as presented so Axel doesn't repeat them
+                    for (const insight of serverInsights) {
+                        try {
+                            await fetch(`${brainUrl}/evolution/insights/${insight.id}/review?action=presented`, {
+                                method: 'POST'
+                            });
+                        } catch (e) { /* ignore */ }
                     }
-                    console.warn('Failed to fetch pending insights:', error);
-                    return [];
                 }
-
-                if (!insights || insights.length === 0) return [];
-
-                // Mark these insights as presented
-                const insightIds = insights.map(i => i.id);
-                await supabase
-                    .from('pending_insights')
-                    .update({ presented_at: new Date().toISOString() })
-                    .eq('user_id', user.id)
-                    .in('id', insightIds);
-
-                console.log(`💡 Background cognition: ${insights.length} pending insights found`);
-                return insights;
             } catch (e) {
-                console.warn('Check pending insights error:', e);
-                return [];
+                console.log('📭 Brain server not available for evolution insights');
             }
+
+            // 2. Fetch from Supabase (cloud-based)
+            try {
+                if (typeof supabase !== 'undefined' && supabase) {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                        const { data: insights, error } = await supabase
+                            .from('pending_insights')
+                            .select('id, insight_type, title, content, confidence, source_nodes, source_memories, created_at')
+                            .eq('user_id', user.id)
+                            .is('presented_at', null)
+                            .order('confidence', { ascending: false })
+                            .limit(3);
+
+                        if (!error && insights && insights.length > 0) {
+                            // Mark these insights as presented
+                            const insightIds = insights.map(i => i.id);
+                            await supabase
+                                .from('pending_insights')
+                                .update({ presented_at: new Date().toISOString() })
+                                .eq('user_id', user.id)
+                                .in('id', insightIds);
+
+                            allInsights.push(...insights.map(i => ({ ...i, source: 'supabase' })));
+                        }
+                    }
+                }
+            } catch (e) {
+                console.log('📭 Supabase pending_insights not available');
+            }
+
+            if (allInsights.length > 0) {
+                console.log(`💡 Background cognition: ${allInsights.length} pending insights found`);
+            }
+
+            // Return top insights sorted by confidence
+            return allInsights
+                .sort((a, b) => (b.confidence || 0.5) - (a.confidence || 0.5))
+                .slice(0, 5);
         },
 
         formatInsightsForPrompt(insights) {
             // Format pending insights for the system prompt
             if (!insights || insights.length === 0) return '';
 
-            let output = '\n## Insights Discovered While Away\n';
-            output += 'Between sessions, I analyzed your map, memories, and conversations. Here\'s what I found:\n';
+            let output = '\n## Insights Discovered While You Were Away\n';
+            output += 'Between sessions, I analyzed your map, memories, and conversations. Here are discoveries to share:\n';
 
             for (const insight of insights) {
                 const typeEmoji = {
@@ -34904,15 +34964,26 @@ Respond with ONLY the JSON, no markdown or explanation.`;
                     'memory_cluster': '🧠',
                     'memory_enrichment': '✨',
                     'cross_branch': '🌉',
-                    'important_gap': '⚠️'
-                }[insight.insight_type] || '💡';
+                    'important_gap': '⚠️',
+                    'insight': '💡',
+                    'explore': '🧭'
+                }[insight.insight_type] || '🧬';
+
+                const content = insight.content || insight.description || '';
+                const confidence = insight.confidence || 0.7;
 
                 output += `\n### ${typeEmoji} ${insight.title}\n`;
-                output += `${insight.content}\n`;
-                output += `*Confidence: ${Math.round(insight.confidence * 100)}%*\n`;
+                output += `${content}\n`;
+                output += `*Confidence: ${Math.round(confidence * 100)}%*\n`;
+
+                // Include related nodes if available
+                if (insight.source_nodes && insight.source_nodes.length > 0) {
+                    output += `*Related: ${insight.source_nodes.slice(0, 3).join(', ')}*\n`;
+                }
             }
 
-            output += '\nFeel free to explore any of these, or continue with what you had in mind.\n';
+            output += '\n**Share these naturally** - "While you were away, I noticed something..." or "I\'ve been thinking about your map, and...".\n';
+            output += 'Let the user explore any that interest them.\n';
             return output;
         },
 
@@ -42622,11 +42693,13 @@ showKeyboardHints();
         },
 
         // Update Reflection Daemon UI status
-        updateReflectionStatus() {
-            if (typeof ReflectionDaemon === 'undefined') return;
-
+        async updateReflectionStatus() {
             try {
-                const status = ReflectionDaemon.getStatus();
+                // Get client-side status if available
+                let status = { enabled: false, stats: { totalReflections: 0 }, lastReflectionAgo: 'Never' };
+                if (typeof ReflectionDaemon !== 'undefined') {
+                    status = ReflectionDaemon.getStatus();
+                }
 
                 // Update mode status
                 const modeEl = document.getElementById('reflection-mode-status');
@@ -42641,27 +42714,39 @@ showKeyboardHints();
                     totalEl.textContent = status.stats.totalReflections;
                 }
 
+                // Fetch pending count from brain server (evolution insights)
+                let pendingCount = 0;
+                try {
+                    const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
+                    const response = await fetch(`${brainUrl}/evolution/stats`);
+                    if (response.ok) {
+                        const stats = await response.json();
+                        pendingCount = stats.pending_insights || 0;
+                    }
+                } catch (e) {
+                    // Fall back to client-side
+                    if (typeof ReflectionDaemon !== 'undefined') {
+                        pendingCount = await ReflectionDaemon.getPendingCount();
+                    }
+                }
+
                 // Update pending count and badge
-                ReflectionDaemon.getPendingCount().then(count => {
-                    const pendingEl = document.getElementById('reflection-pending-count');
-                    const badgeEl = document.getElementById('reflection-badge');
+                const pendingEl = document.getElementById('reflection-pending-count');
+                const badgeEl = document.getElementById('reflection-badge');
 
-                    if (pendingEl && pendingEl.childNodes && pendingEl.childNodes[0]) {
-                        // Update the text node, not the badge
-                        pendingEl.childNodes[0].textContent = count;
-                    }
+                if (pendingEl && pendingEl.childNodes && pendingEl.childNodes[0]) {
+                    // Update the text node, not the badge
+                    pendingEl.childNodes[0].textContent = pendingCount;
+                }
 
-                    if (badgeEl) {
-                        if (count > 0) {
-                            badgeEl.textContent = count > 99 ? '99+' : count;
-                            badgeEl.style.display = 'flex';
-                        } else {
-                            badgeEl.style.display = 'none';
-                        }
+                if (badgeEl) {
+                    if (pendingCount > 0) {
+                        badgeEl.textContent = pendingCount > 99 ? '99+' : pendingCount;
+                        badgeEl.style.display = 'flex';
+                    } else {
+                        badgeEl.style.display = 'none';
                     }
-                }).catch(error => {
-                    console.warn('Failed to update pending count:', error);
-                });
+                }
 
                 // Update last reflection time
                 const lastTimeEl = document.getElementById('reflection-last-time');

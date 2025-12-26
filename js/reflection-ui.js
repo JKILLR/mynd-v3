@@ -120,9 +120,23 @@ const ReflectionUI = {
     // ═══════════════════════════════════════════════════════════════════
 
     async updateBadge() {
-        if (typeof ReflectionDaemon === 'undefined') return;
+        let count = 0;
 
-        const count = await ReflectionDaemon.getPendingCount();
+        // First, try to get count from brain server (evolution insights)
+        try {
+            const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
+            const response = await fetch(`${brainUrl}/evolution/stats`);
+            if (response.ok) {
+                const stats = await response.json();
+                count = stats.pending_insights || 0;
+            }
+        } catch (e) {
+            // Fall back to client-side ReflectionDaemon
+            if (typeof ReflectionDaemon !== 'undefined') {
+                count = await ReflectionDaemon.getPendingCount();
+            }
+        }
+
         this.pendingCount = count;
 
         // Update badge on Neural panel icon
@@ -350,10 +364,25 @@ const ReflectionUI = {
             document.body.appendChild(panel);
         }
 
-        // Render content
-        panel.innerHTML = await this.renderQueueContent();
+        // Show loading state first
+        panel.innerHTML = `
+            <div class="queue-header">
+                <h2>🧬 Evolution Insights</h2>
+                <button class="queue-close-btn" id="queue-close">×</button>
+            </div>
+            <div class="queue-loading" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                <div style="animation: spin 1s linear infinite; display: inline-block;">🔄</div>
+                <p>Loading insights...</p>
+            </div>
+        `;
         panel.classList.add('visible');
         this.panelVisible = true;
+
+        // Attach close listener early
+        document.getElementById('queue-close')?.addEventListener('click', () => this.hideQueuePanel());
+
+        // Render content (fetches from brain server)
+        panel.innerHTML = await this.renderQueueContent();
 
         // Attach listeners
         this.attachQueueListeners();
@@ -368,12 +397,48 @@ const ReflectionUI = {
     },
 
     async renderQueueContent() {
-        const items = await ReflectionDaemon.getQueue({ status: 'pending' });
-        const log = ReflectionDaemon.getActivityLog().slice(0, 20);
+        // Fetch insights from brain server (evolution daemon)
+        let items = [];
+        let serverInsights = [];
+        let log = [];
+
+        try {
+            const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
+            const response = await fetch(`${brainUrl}/evolution/insights?limit=50`);
+            if (response.ok) {
+                const data = await response.json();
+                serverInsights = data.insights || [];
+                // Transform server insights to match expected format
+                items = serverInsights.map(insight => ({
+                    id: insight.id,
+                    type: insight.insight_type || insight.type || 'insight',
+                    title: insight.title,
+                    description: insight.description,
+                    confidence: insight.confidence,
+                    priority: insight.confidence > 0.8 ? 'high' : insight.confidence > 0.5 ? 'medium' : 'low',
+                    timestamp: new Date(insight.created_at).getTime(),
+                    relatedNodes: insight.source_nodes || [],
+                    source: 'evolution'  // Mark as from evolution daemon
+                }));
+            }
+        } catch (e) {
+            console.warn('Could not fetch evolution insights:', e);
+        }
+
+        // Also get client-side reflections if available
+        if (typeof ReflectionDaemon !== 'undefined') {
+            try {
+                const clientItems = await ReflectionDaemon.getQueue({ status: 'pending' });
+                items = [...items, ...clientItems.map(i => ({ ...i, source: 'reflection' }))];
+                log = ReflectionDaemon.getActivityLog().slice(0, 20);
+            } catch (e) { /* ignore */ }
+        }
+
+        this.pendingCount = items.length;
 
         return `
             <div class="queue-header">
-                <h2>🔮 Reflection Queue</h2>
+                <h2>🧬 Evolution Insights</h2>
                 <button class="queue-close-btn" id="queue-close">×</button>
             </div>
 
@@ -385,9 +450,9 @@ const ReflectionUI = {
             <div class="queue-content" id="queue-tab-pending">
                 ${items.length === 0 ? `
                     <div class="queue-empty">
-                        <div class="queue-empty-icon">🔮</div>
-                        <p>No pending reflections</p>
-                        <p class="queue-empty-hint">Reflections will appear here when the AI analyzes your map</p>
+                        <div class="queue-empty-icon">🧬</div>
+                        <p>No pending insights</p>
+                        <p class="queue-empty-hint">Insights will appear here when the AI analyzes your map between sessions</p>
                     </div>
                 ` : `
                     <div class="queue-items">
@@ -412,9 +477,8 @@ const ReflectionUI = {
             </div>
 
             <div class="queue-footer">
-                <button class="queue-btn secondary" id="queue-clear-processed">Clear Processed</button>
                 <button class="queue-btn secondary" id="queue-dismiss-all">Dismiss All</button>
-                <button class="queue-btn primary" id="queue-approve-all">Approve All</button>
+                <button class="queue-btn primary" id="queue-approve-all">Accept All</button>
             </div>
         `;
     },
@@ -426,8 +490,13 @@ const ReflectionUI = {
             'insight': '💡',
             'improvement': '⚡',
             'connection': '🔗',
-            'code_issue': '🐛'
-        }[item.type] || '📝';
+            'code_issue': '🐛',
+            'pattern': '🔄',
+            'growth': '🌱',
+            'emergence': '✨',
+            'question': '❓',
+            'explore': '🧭'
+        }[item.type] || '🧬';
 
         // Alignment indicator with visual cue
         const alignmentIcon = {
@@ -446,13 +515,17 @@ const ReflectionUI = {
         const safeVisionConnection = this.escapeHtml(item.vision_connection);
         const safeRelatedNodes = item.relatedNodes?.slice(0, 3).map(n => this.escapeHtml(n)).join(', ');
         const safeId = this.escapeHtml(item.id);
+        const safeSource = this.escapeHtml(item.source || 'evolution');
+
+        // Show confidence if available
+        const confidenceDisplay = item.confidence ? `${Math.round(item.confidence * 100)}%` : '';
 
         return `
             <div class="queue-item ${priorityClass} ${alignmentClass}" data-id="${safeId}">
                 <div class="queue-item-header">
                     <span class="queue-item-type">${typeIcon}</span>
                     <span class="queue-item-title">${safeTitle}</span>
-                    <span class="queue-item-alignment" title="Vision Alignment: ${safeAlignment}">${alignmentIcon}</span>
+                    ${confidenceDisplay ? `<span class="queue-item-confidence" title="Confidence">${confidenceDisplay}</span>` : ''}
                     <span class="queue-item-priority">${safePriority}</span>
                 </div>
                 <div class="queue-item-body">
@@ -471,12 +544,26 @@ const ReflectionUI = {
                 <div class="queue-item-footer">
                     <span class="queue-item-time">${timeAgo}</span>
                     <div class="queue-item-actions">
-                        <button class="queue-action-btn dismiss" data-action="dismiss" data-id="${safeId}">Dismiss</button>
-                        <button class="queue-action-btn approve" data-action="approve" data-id="${safeId}">Approve</button>
+                        <button class="queue-action-btn dismiss" data-action="dismiss" data-id="${safeId}" data-source="${safeSource}">Dismiss</button>
+                        <button class="queue-action-btn approve" data-action="approve" data-id="${safeId}" data-source="${safeSource}">Accept</button>
                     </div>
                 </div>
             </div>
         `;
+    },
+
+    // Helper to review evolution insight on server
+    async reviewEvolutionInsight(insightId, action) {
+        try {
+            const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
+            const response = await fetch(`${brainUrl}/evolution/insights/${insightId}/review?action=${action}`, {
+                method: 'POST'
+            });
+            return response.ok;
+        } catch (e) {
+            console.warn('Failed to review evolution insight:', e);
+            return false;
+        }
     },
 
     attachQueueListeners() {
@@ -509,56 +596,100 @@ const ReflectionUI = {
 
                 const action = btn.dataset.action;
                 const id = btn.dataset.id;
+                const source = btn.dataset.source;
 
                 btn.disabled = true;
+                btn.textContent = '...';
 
-                if (action === 'approve') {
-                    await ReflectionDaemon.approveItem(id);
-                } else if (action === 'dismiss') {
-                    await ReflectionDaemon.dismissItem(id);
+                try {
+                    if (source === 'evolution') {
+                        // Server-side evolution insight
+                        await this.reviewEvolutionInsight(id, action === 'approve' ? 'accepted' : 'dismissed');
+                    } else if (typeof ReflectionDaemon !== 'undefined') {
+                        // Client-side reflection
+                        if (action === 'approve') {
+                            await ReflectionDaemon.approveItem(id);
+                        } else if (action === 'dismiss') {
+                            await ReflectionDaemon.dismissItem(id);
+                        }
+                    }
+                    // Remove the item from UI
+                    btn.closest('.queue-item')?.remove();
+                    this.updateBadge();
+                } catch (error) {
+                    console.error('Action failed:', error);
+                    btn.disabled = false;
+                    btn.textContent = action === 'approve' ? 'Accept' : 'Dismiss';
                 }
             });
         }
 
-        // Footer buttons
-        const clearBtn = document.getElementById('queue-clear-processed');
-        if (clearBtn) {
-            clearBtn.addEventListener('click', async () => {
-                await ReflectionDaemon.clearProcessed();
-                this.refreshQueueView();
-            });
-        }
-
+        // Footer buttons - dismiss all
         const dismissAllBtn = document.getElementById('queue-dismiss-all');
         if (dismissAllBtn) {
             dismissAllBtn.addEventListener('click', async () => {
                 try {
                     dismissAllBtn.disabled = true;
-                    const items = await ReflectionDaemon.getQueue({ status: 'pending' });
-                    // Use Promise.all for parallel processing
-                    await Promise.all(items.map(item => ReflectionDaemon.dismissItem(item.id)));
+                    dismissAllBtn.textContent = 'Dismissing...';
+
+                    // Get all items currently displayed
+                    const itemEls = document.querySelectorAll('.queue-item');
+                    const promises = [];
+
+                    itemEls.forEach(el => {
+                        const id = el.dataset.id;
+                        const approveBtn = el.querySelector('.queue-action-btn.approve');
+                        const source = approveBtn?.dataset?.source || 'evolution';
+
+                        if (source === 'evolution') {
+                            promises.push(this.reviewEvolutionInsight(id, 'dismissed'));
+                        } else if (typeof ReflectionDaemon !== 'undefined') {
+                            promises.push(ReflectionDaemon.dismissItem(id));
+                        }
+                    });
+
+                    await Promise.all(promises);
                     this.refreshQueueView();
                 } catch (error) {
                     console.error('Failed to dismiss all items:', error);
                 } finally {
                     dismissAllBtn.disabled = false;
+                    dismissAllBtn.textContent = 'Dismiss All';
                 }
             });
         }
 
+        // Footer buttons - approve all
         const approveAllBtn = document.getElementById('queue-approve-all');
         if (approveAllBtn) {
             approveAllBtn.addEventListener('click', async () => {
                 try {
                     approveAllBtn.disabled = true;
-                    const items = await ReflectionDaemon.getQueue({ status: 'pending' });
-                    // Use Promise.all for parallel processing
-                    await Promise.all(items.map(item => ReflectionDaemon.approveItem(item.id)));
+                    approveAllBtn.textContent = 'Accepting...';
+
+                    // Get all items currently displayed
+                    const itemEls = document.querySelectorAll('.queue-item');
+                    const promises = [];
+
+                    itemEls.forEach(el => {
+                        const id = el.dataset.id;
+                        const approveBtn = el.querySelector('.queue-action-btn.approve');
+                        const source = approveBtn?.dataset?.source || 'evolution';
+
+                        if (source === 'evolution') {
+                            promises.push(this.reviewEvolutionInsight(id, 'accepted'));
+                        } else if (typeof ReflectionDaemon !== 'undefined') {
+                            promises.push(ReflectionDaemon.approveItem(id));
+                        }
+                    });
+
+                    await Promise.all(promises);
                     this.refreshQueueView();
                 } catch (error) {
                     console.error('Failed to approve all items:', error);
                 } finally {
                     approveAllBtn.disabled = false;
+                    approveAllBtn.textContent = 'Accept All';
                 }
             });
         }
@@ -590,7 +721,37 @@ const ReflectionUI = {
 
         const content = document.getElementById('queue-tab-pending');
         if (content) {
-            const items = await ReflectionDaemon.getQueue({ status: 'pending' });
+            // Fetch from both sources (same logic as renderQueueContent)
+            let items = [];
+
+            try {
+                const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
+                const response = await fetch(`${brainUrl}/evolution/insights?limit=50`);
+                if (response.ok) {
+                    const data = await response.json();
+                    const serverInsights = (data.insights || []).map(insight => ({
+                        id: insight.id,
+                        type: insight.insight_type || insight.type || 'insight',
+                        title: insight.title,
+                        description: insight.description,
+                        confidence: insight.confidence,
+                        priority: insight.confidence > 0.8 ? 'high' : insight.confidence > 0.5 ? 'medium' : 'low',
+                        timestamp: new Date(insight.created_at).getTime(),
+                        relatedNodes: insight.source_nodes || [],
+                        source: 'evolution'
+                    }));
+                    items.push(...serverInsights);
+                }
+            } catch (e) { /* ignore */ }
+
+            if (typeof ReflectionDaemon !== 'undefined') {
+                try {
+                    const clientItems = await ReflectionDaemon.getQueue({ status: 'pending' });
+                    items.push(...clientItems.map(i => ({ ...i, source: 'reflection' })));
+                } catch (e) { /* ignore */ }
+            }
+
+            this.pendingCount = items.length;
 
             // Update tab count
             const tab = document.querySelector('.queue-tab[data-tab="pending"]');
@@ -602,9 +763,9 @@ const ReflectionUI = {
             if (items.length === 0) {
                 content.innerHTML = `
                     <div class="queue-empty">
-                        <div class="queue-empty-icon">🔮</div>
-                        <p>No pending reflections</p>
-                        <p class="queue-empty-hint">Reflections will appear here when the AI analyzes your map</p>
+                        <div class="queue-empty-icon">🧬</div>
+                        <p>No pending insights</p>
+                        <p class="queue-empty-hint">Insights will appear here when the AI analyzes your map between sessions</p>
                     </div>
                 `;
             } else {
