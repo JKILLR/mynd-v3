@@ -4071,6 +4071,11 @@ async def sync_asa(map_data: MapData):
             asa.start_metabolism(tick_interval=5.0)
             _asa_initialized = True
 
+            # Connect ASA to UnifiedBrain for Context Lens
+            if unified_brain is not None:
+                unified_brain.set_asa(asa)
+                print("🔍 Context Lens: ASA connected to UnifiedBrain")
+
         return {
             "success": True,
             "atoms": len(asa.atoms),

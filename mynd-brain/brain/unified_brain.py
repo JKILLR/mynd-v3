@@ -14,8 +14,14 @@ from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Import ContextSynthesizer for unified context
-from .context_synthesizer import ContextSynthesizer, SynthesizedContext, count_tokens
+# Import ContextSynthesizer for unified context (now with Context Lens)
+from .context_synthesizer import (
+    ContextSynthesizer,
+    SynthesizedContext,
+    EnhancedSynthesizedContext,
+    ContextLens,
+    count_tokens
+)
 
 
 @dataclass
@@ -1554,7 +1560,16 @@ class UnifiedBrain:
         self._last_background_training = 0
         self._background_training_interval = 300  # 5 minutes
 
+        # ═══════════════════════════════════════════════════════════════════
+        # CONTEXT LENS STATE
+        # Tracks understanding quality over time
+        # ═══════════════════════════════════════════════════════════════════
+        self.asa = None  # ASA system reference (set via set_asa)
+        self._last_lens_quality = 0.0
+        self._last_focus = ""
+
         print("🧠 UnifiedBrain initialized with MetaLearner + SelfImprover + ContextSynthesizer")
+        print("🔍 Context Lens enabled for coherent understanding")
         print("🎓 Background training buffer enabled")
 
     def set_ml_brain(self, ml_brain):
@@ -1572,6 +1587,12 @@ class UnifiedBrain:
         self.supabase = supabase_client
         self.synthesizer.supabase = supabase_client
         print("🔗 Supabase connected to UnifiedBrain + ContextSynthesizer")
+
+    def set_asa(self, asa_system):
+        """Connect ASA system for Context Lens focus detection"""
+        self.asa = asa_system
+        self.synthesizer.asa = asa_system
+        print("🔗 ASA connected to ContextSynthesizer for Context Lens")
 
     def set_conversation_archive(self, archive):
         """Connect conversation archive to synthesizer"""
@@ -1652,13 +1673,14 @@ class UnifiedBrain:
                 context_parts.append(("neural_insights", insights))
                 token_breakdown['neural_insights'] = count_tokens(insights)
 
-        # 8. SYNTHESIZED CONTEXT - Unified search across all sources
-        # This is the "funnel" that combines map, memories, goals, and AI memories
+        # 8. SYNTHESIZED CONTEXT + CONTEXT LENS
+        # The "funnel" that combines all sources AND applies comprehension layer
         if include.get('synthesized_context', True) and request.user_message:
             # Update source weights from meta-learner before synthesizing
             self.update_synthesizer_weights()
 
-            synthesized = self.synthesizer.synthesize(
+            # Use enhanced synthesis with Context Lens
+            enhanced = self.synthesizer.synthesize_with_lens(
                 query=request.user_message,
                 user_id=request.user_id,
                 map_data=request.map_data,
@@ -1667,18 +1689,28 @@ class UnifiedBrain:
                 max_tokens=20000  # Expanded context window
             )
 
-            if synthesized.items:
-                synth_doc = self.synthesizer.format_for_prompt(synthesized)
+            if enhanced.items:
+                # Format with both lens understanding AND raw context
+                synth_doc = self.synthesizer.format_enhanced_for_prompt(enhanced)
                 context_parts.append(("synthesized_context", synth_doc))
-                token_breakdown['synthesized_context'] = synthesized.token_estimate
+
+                # Calculate token estimate (lens adds ~300-500 tokens)
+                lens_tokens = count_tokens(self.synthesizer.format_lens_for_prompt(enhanced.lens)) if enhanced.lens else 0
+                token_breakdown['synthesized_context'] = enhanced.token_estimate + lens_tokens
+                token_breakdown['context_lens'] = lens_tokens
 
                 # Store active goal for quick reference
-                if synthesized.active_goal:
+                if enhanced.active_goal:
                     context_parts.append(("active_goal",
-                        f"🎯 **Active Goal**: {synthesized.active_goal.get('title', 'Unknown')}\n"
+                        f"🎯 **Active Goal**: {enhanced.active_goal.get('title', 'Unknown')}\n"
                         f"This query relates to your goal. Keep it in mind."
                     ))
                     token_breakdown['active_goal'] = 50
+
+                # Store lens quality in brain state for monitoring
+                if enhanced.lens:
+                    self._last_lens_quality = enhanced.lens.understanding_quality
+                    self._last_focus = enhanced.lens.focus.primary_focus
 
         # Combine into single document
         context_document = self._combine_context(context_parts, request.request_type)
@@ -1832,7 +1864,13 @@ class UnifiedBrain:
             # Meta-learner stats
             'meta_epoch': self.meta_learner.epoch,
             'meta_improvement': self.meta_learner.get_improvement_trend(),
-            'attention_weights': self.meta_learner.attention_weights
+            'attention_weights': self.meta_learner.attention_weights,
+            # Context Lens stats
+            'context_lens': {
+                'last_understanding_quality': self._last_lens_quality,
+                'last_focus': self._last_focus,
+                'asa_connected': self.asa is not None
+            }
         }
 
         # Add ML brain stats if available
@@ -1842,6 +1880,18 @@ class UnifiedBrain:
             state['ml_uptime'] = health.get('uptime_seconds', 0)
             state['map_synced'] = self.ml_brain.map_state is not None
             state['map_nodes'] = len(self.ml_brain.map_state.nodes) if self.ml_brain.map_state else 0
+
+        # Add ASA stats if available
+        if self.asa:
+            try:
+                asa_stats = self.asa.get_stats()
+                state['asa'] = {
+                    'atom_count': asa_stats.get('atom_count', 0),
+                    'hot_atoms': asa_stats.get('hot_atoms', 0),
+                    'avg_energy': round(asa_stats.get('avg_energy', 0), 3)
+                }
+            except Exception:
+                state['asa'] = {'status': 'connected'}
 
         return state
 
