@@ -34219,10 +34219,10 @@ CURRENT REQUEST CONTEXT
             this.setupAutoSummaryTriggers();
 
             // Check for pending summary from previous session that didn't save
-            this.checkPendingSummary();
+            await this.checkPendingSummary();
 
-            // Recover last conversation for immediate context (critical for continuity)
-            this.recoverLastConversation();
+            // Recover last conversation from local brain (critical for continuity)
+            await this.recoverLastConversation();
 
             // Generate unique session token for caching (persists across page reloads in same session)
             this.currentSessionToken = sessionStorage.getItem('mynd-session-token');
@@ -34454,61 +34454,73 @@ CURRENT REQUEST CONTEXT
 
         saveConversationForRecovery() {
             // ALWAYS save conversation state on page close - critical for continuity
-            // This runs regardless of message count, ensuring Axel can pick up where we left off
+            // Saves to LOCAL BRAIN (not localStorage) with immediate GT/ASA training
             if (!this.conversation || this.conversation.length === 0) return;
 
             try {
-                // Save more context than the summary beacon (500 chars per message, last 15 messages)
-                const recoveryData = {
-                    timestamp: Date.now(),
-                    messageCount: this.conversation.length,
-                    topics: Array.from(this.sessionTopics || []),
-                    conversation: this.conversation.slice(-15).map(m => ({
+                const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
+
+                // Prepare data for local brain
+                const saveData = {
+                    messages: this.conversation.slice(-15).map(m => ({
                         role: m.role,
                         content: m.content?.substring(0, 500) || ''
                     })),
-                    // Mark this as a "last conversation" recovery, not a full summary
-                    recoveryType: 'conversation_state'
+                    topics: Array.from(this.sessionTopics || []),
+                    session_id: this.currentSessionToken || null
                 };
 
-                localStorage.setItem('mynd-last-conversation', JSON.stringify(recoveryData));
-                console.log(`📝 Conversation state saved (${this.conversation.length} messages)`);
+                // Use fetch with keepalive for beforeunload reliability
+                // This ensures the request completes even if the page closes
+                fetch(`${brainUrl}/brain/conversation/save`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(saveData),
+                    keepalive: true  // Critical: allows request to outlive the page
+                }).catch(() => {
+                    // Silent fail - brain might be down, but that's okay
+                });
+
+                console.log(`📝 Conversation saved to local brain (${this.conversation.length} messages, trains GT/ASA)`);
             } catch (e) {
                 console.warn('Failed to save conversation for recovery:', e);
             }
         },
 
-        recoverLastConversation() {
-            // Recover conversation state from previous session for immediate context
+        async recoverLastConversation() {
+            // Recover conversation state from LOCAL BRAIN (not localStorage)
             // This is critical for Axel to know "what we were just discussing"
             try {
-                const stored = localStorage.getItem('mynd-last-conversation');
-                if (!stored) return;
+                const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
+                const response = await fetch(`${brainUrl}/brain/conversation/last?max_age_hours=2`);
 
-                const data = JSON.parse(stored);
-
-                // Only recover if recent (within last 2 hours)
-                if (Date.now() - data.timestamp > 2 * 60 * 60 * 1000) {
-                    console.log('📝 Last conversation too old, skipping recovery');
-                    localStorage.removeItem('mynd-last-conversation');
+                if (!response.ok) {
+                    console.log('📝 No conversation to recover from brain');
                     return;
                 }
 
-                if (data.conversation && data.conversation.length > 0) {
-                    this.lastConversationRecovery = {
-                        timestamp: data.timestamp,
-                        messages: data.conversation,
-                        topics: data.topics || [],
-                        formatted: this.formatRecoveredConversation(data.conversation)
-                    };
-                    console.log(`📝 Recovered last conversation (${data.conversation.length} messages from ${Math.round((Date.now() - data.timestamp) / 60000)} min ago)`);
+                const result = await response.json();
+
+                if (!result.conversation) {
+                    console.log(`📝 No recent conversation (${result.reason || 'none found'})`);
+                    return;
                 }
 
-                // Clear after recovery (one-time use)
-                localStorage.removeItem('mynd-last-conversation');
+                const data = result.conversation;
+                if (data.messages && data.messages.length > 0) {
+                    this.lastConversationRecovery = {
+                        timestamp: new Date(data.timestamp).getTime(),
+                        messages: data.messages,
+                        topics: data.topics || [],
+                        formatted: this.formatRecoveredConversation(data.messages)
+                    };
+                    console.log(`📝 Recovered last conversation from brain (${data.messages.length} messages, ${Math.round(result.age_minutes)} min ago)`);
+
+                    // Clear from server after recovery (one-time use)
+                    fetch(`${brainUrl}/brain/conversation/clear-last`, { method: 'DELETE' }).catch(() => {});
+                }
             } catch (e) {
-                console.warn('Failed to recover last conversation:', e);
-                localStorage.removeItem('mynd-last-conversation');
+                console.warn('Failed to recover last conversation from brain:', e);
             }
         },
 
