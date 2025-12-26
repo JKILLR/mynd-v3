@@ -31729,6 +31729,16 @@ Just respond with the greeting message, nothing else.`;
                 console.warn('Session context error:', e);
             }
 
+            // 15a. CRITICAL: Last conversation recovery - what we were JUST discussing
+            // This takes priority over old session summaries for immediate continuity
+            let lastConversationContext = '';
+            if (this.lastConversationRecovery && this.lastConversationRecovery.formatted) {
+                lastConversationContext = this.lastConversationRecovery.formatted;
+                console.log(`📝 Including recovered conversation in context (${this.lastConversationRecovery.messages.length} messages)`);
+                // Clear after first use so we don't keep injecting old context
+                this.lastConversationRecovery = null;
+            }
+
             // 15b. Deep Synthesis Cache - Cross-referenced context from previous messages in this session
             let deepSynthesisContext = '';
             try {
@@ -32779,6 +32789,13 @@ CRITICAL: Respond with ONLY a valid JSON object. No markdown, no code blocks, no
 ═══════════════════════════════════════════════════════════════
 SESSION CONTEXT - Your understanding of this user's world
 ═══════════════════════════════════════════════════════════════
+${lastConversationContext ? `
+═══════════════════════════════════════════════════════════════
+⚡ IMMEDIATE CONTEXT - WHAT WE WERE JUST DISCUSSING ⚡
+═══════════════════════════════════════════════════════════════
+**HIGHEST PRIORITY**: This is what we were talking about RIGHT before the user refreshed.
+Pick up EXACTLY where we left off. The user expects continuity.
+${lastConversationContext}` : ''}
 ${sessionContext ? `
 ═══════════════════════════════════════════════════════════════
 OUR CONVERSATIONS (7-DAY RECALL) - PRIMARY CONTEXT SOURCE
@@ -34183,6 +34200,9 @@ CURRENT REQUEST CONTEXT
         autoSummaryTimer: null,
         autoSummaryInProgress: false,
         sessionSummarized: false,
+
+        // Last conversation recovery (for continuity after refresh)
+        lastConversationRecovery: null,
         AUTO_SUMMARY_INACTIVITY_MS: 10 * 60 * 1000,  // 10 minutes of inactivity triggers summary
         MIN_MESSAGES_FOR_SUMMARY: 4,  // Need at least 4 messages to summarize
 
@@ -34200,6 +34220,9 @@ CURRENT REQUEST CONTEXT
 
             // Check for pending summary from previous session that didn't save
             this.checkPendingSummary();
+
+            // Recover last conversation for immediate context (critical for continuity)
+            this.recoverLastConversation();
 
             // Generate unique session token for caching (persists across page reloads in same session)
             this.currentSessionToken = sessionStorage.getItem('mynd-session-token');
@@ -34335,10 +34358,14 @@ CURRENT REQUEST CONTEXT
                 }
             });
 
-            // 2. Before unload - try to save summary (may not complete)
+            // 2. Before unload - ALWAYS save conversation state for continuity
             window.addEventListener('beforeunload', () => {
+                // Save conversation preview for recovery - even for short sessions
+                // This is critical for Axel's continuity when user refreshes
+                this.saveConversationForRecovery();
+
+                // Also trigger full summary if eligible
                 if (this.shouldAutoSummarize()) {
-                    // Use sendBeacon for reliability on page close
                     this.triggerAutoSummaryBeacon();
                 }
             });
@@ -34423,6 +34450,81 @@ CURRENT REQUEST CONTEXT
             } catch (e) {
                 console.warn('Failed to save pending summary:', e);
             }
+        },
+
+        saveConversationForRecovery() {
+            // ALWAYS save conversation state on page close - critical for continuity
+            // This runs regardless of message count, ensuring Axel can pick up where we left off
+            if (!this.conversation || this.conversation.length === 0) return;
+
+            try {
+                // Save more context than the summary beacon (500 chars per message, last 15 messages)
+                const recoveryData = {
+                    timestamp: Date.now(),
+                    messageCount: this.conversation.length,
+                    topics: Array.from(this.sessionTopics || []),
+                    conversation: this.conversation.slice(-15).map(m => ({
+                        role: m.role,
+                        content: m.content?.substring(0, 500) || ''
+                    })),
+                    // Mark this as a "last conversation" recovery, not a full summary
+                    recoveryType: 'conversation_state'
+                };
+
+                localStorage.setItem('mynd-last-conversation', JSON.stringify(recoveryData));
+                console.log(`📝 Conversation state saved (${this.conversation.length} messages)`);
+            } catch (e) {
+                console.warn('Failed to save conversation for recovery:', e);
+            }
+        },
+
+        recoverLastConversation() {
+            // Recover conversation state from previous session for immediate context
+            // This is critical for Axel to know "what we were just discussing"
+            try {
+                const stored = localStorage.getItem('mynd-last-conversation');
+                if (!stored) return;
+
+                const data = JSON.parse(stored);
+
+                // Only recover if recent (within last 2 hours)
+                if (Date.now() - data.timestamp > 2 * 60 * 60 * 1000) {
+                    console.log('📝 Last conversation too old, skipping recovery');
+                    localStorage.removeItem('mynd-last-conversation');
+                    return;
+                }
+
+                if (data.conversation && data.conversation.length > 0) {
+                    this.lastConversationRecovery = {
+                        timestamp: data.timestamp,
+                        messages: data.conversation,
+                        topics: data.topics || [],
+                        formatted: this.formatRecoveredConversation(data.conversation)
+                    };
+                    console.log(`📝 Recovered last conversation (${data.conversation.length} messages from ${Math.round((Date.now() - data.timestamp) / 60000)} min ago)`);
+                }
+
+                // Clear after recovery (one-time use)
+                localStorage.removeItem('mynd-last-conversation');
+            } catch (e) {
+                console.warn('Failed to recover last conversation:', e);
+                localStorage.removeItem('mynd-last-conversation');
+            }
+        },
+
+        formatRecoveredConversation(messages) {
+            // Format recovered messages for injection into context
+            if (!messages || messages.length === 0) return '';
+
+            let output = '=== CONVERSATION FROM RIGHT BEFORE REFRESH ===\n';
+            output += '(This is what we were discussing moments ago - continue from here)\n\n';
+
+            for (const msg of messages) {
+                const speaker = msg.role === 'user' ? 'User' : 'Axel';
+                output += `${speaker}: ${msg.content}\n\n`;
+            }
+
+            return output;
         },
 
         async generateDetailedSummary() {
@@ -34556,16 +34658,41 @@ Respond with ONLY the JSON, no markdown or explanation.`;
                     // Only recover if it's recent (within last hour)
                     if (Date.now() - data.timestamp < 60 * 60 * 1000) {
                         console.log('📝 Found pending summary from previous session, recovering...');
-                        // Generate summary from saved data
+
+                        // Extract conversation context from preview
                         const topics = data.topics || [];
+                        let conversationContext = '';
+                        let keyDiscussion = '';
+
+                        if (data.conversationPreview && data.conversationPreview.length > 0) {
+                            // Build readable conversation excerpt
+                            conversationContext = data.conversationPreview
+                                .map(m => `${m.role === 'user' ? 'User' : 'Axel'}: ${m.content}`)
+                                .join('\n');
+
+                            // Extract the last substantive exchange as key discussion
+                            const lastUserMsg = data.conversationPreview.filter(m => m.role === 'user').pop();
+                            const lastAiMsg = data.conversationPreview.filter(m => m.role === 'assistant').pop();
+                            if (lastUserMsg || lastAiMsg) {
+                                keyDiscussion = `Last discussed: ${lastUserMsg?.content || ''} → ${lastAiMsg?.content || ''}`;
+                            }
+                        }
+
+                        // Create a rich summary that captures the actual conversation
+                        const richSummary = conversationContext
+                            ? `[Recovered from unexpected close]\n\nRecent conversation:\n${conversationContext}\n\n${keyDiscussion}`
+                            : `[Recovered] Session with ${data.messageCount} messages. Topics: ${topics.join(', ') || 'various'}`;
+
                         await this.writeSessionSummary({
-                            summary: `[Recovered] Session with ${data.messageCount} messages. Topics: ${topics.join(', ') || 'various'}`,
-                            key_outcomes: null,
-                            open_threads: 'Session ended unexpectedly - may have unfinished threads',
+                            summary: richSummary.substring(0, 2000), // Cap at 2000 chars
+                            key_outcomes: keyDiscussion || null,
+                            open_threads: 'Session ended unexpectedly - continue from where we left off',
                             session_type: 'casual',
                             tone: null,
                             topics_discussed: topics
                         });
+
+                        console.log('📝 Rich session summary recovered from conversation preview');
                     }
                     localStorage.removeItem('mynd-pending-summary');
                 }
