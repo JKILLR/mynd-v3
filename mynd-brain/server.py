@@ -4797,6 +4797,211 @@ async def get_memory_stats():
 
 
 # ═══════════════════════════════════════════════════════════════════
+# CONVERSATION PERSISTENCE - Local-first with immediate training
+# ═══════════════════════════════════════════════════════════════════
+# Conversations stored in ~/.mynd/conversations.jsonl
+# Training pairs extracted and fed to GT/ASA immediately
+
+CONVERSATIONS_PATH = MYND_DIR / "conversations.jsonl"
+LAST_CONVERSATION_PATH = MYND_DIR / "last_conversation.json"
+
+
+class ConversationSaveRequest(BaseModel):
+    """Request to save conversation state."""
+    messages: List[Dict[str, str]]  # [{role: "user"|"assistant", content: "..."}]
+    topics: List[str] = []
+    session_id: Optional[str] = None
+
+
+class ConversationMessage(BaseModel):
+    """Single conversation message."""
+    role: str
+    content: str
+
+
+@app.post("/brain/conversation/save")
+async def save_conversation(request: ConversationSaveRequest):
+    """
+    LOCAL-FIRST CONVERSATION PERSISTENCE
+
+    Called on page close/refresh to preserve conversation state.
+    1. Save to ~/.mynd/last_conversation.json (for immediate recovery)
+    2. Append to ~/.mynd/conversations.jsonl (for history)
+    3. Extract training pairs and train GT/ASA immediately
+
+    This replaces browser localStorage - everything goes to local brain.
+    """
+    import re
+
+    if not request.messages:
+        return {"success": False, "error": "No messages to save"}
+
+    # Ensure directory exists
+    MYND_DIR.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().isoformat()
+    conversation_id = str(uuid4())
+
+    # 1. Save as "last conversation" for immediate recovery
+    last_convo = {
+        "id": conversation_id,
+        "timestamp": timestamp,
+        "messages": request.messages,
+        "topics": request.topics,
+        "session_id": request.session_id
+    }
+
+    with open(LAST_CONVERSATION_PATH, 'w') as f:
+        json.dump(last_convo, f, indent=2)
+
+    # 2. Append to conversation history
+    with open(CONVERSATIONS_PATH, 'a') as f:
+        f.write(json.dumps(last_convo) + '\n')
+
+    # 3. Extract training pairs and train immediately
+    training_count = 0
+
+    # Extract pairs from conversation
+    messages = request.messages
+    for i in range(len(messages) - 1):
+        if messages[i]['role'] == 'user' and messages[i+1]['role'] == 'assistant':
+            user_msg = messages[i]['content'][:500]
+            ai_msg = messages[i+1]['content'][:500]
+
+            # Train GT on conversation flow
+            if unified_brain and unified_brain.ml_brain:
+                try:
+                    brain = unified_brain.ml_brain
+                    gt = brain.graph_transformer
+
+                    # Encode the exchange
+                    user_emb = brain.model.encode(user_msg, convert_to_tensor=True)
+                    ai_emb = brain.model.encode(ai_msg, convert_to_tensor=True)
+
+                    # Train: user message should connect to AI response
+                    gt.train_connection_step(
+                        source_embedding=user_emb,
+                        target_embedding=ai_emb,
+                        should_connect=True,
+                        weight=0.5  # Medium weight for conversation continuity
+                    )
+                    training_count += 1
+                except Exception as e:
+                    print(f"⚠️ GT training error: {e}")
+
+            # Train ASA on the exchange
+            if _asa_available:
+                try:
+                    asa = get_asa()
+                    combined = f"User: {user_msg}\nAxel: {ai_msg}"
+                    asa.learn_from_text(
+                        combined,
+                        importance=0.5,
+                        category="conversation"
+                    )
+                except Exception as e:
+                    print(f"⚠️ ASA training error: {e}")
+
+    # Also save training pairs for offline learning
+    TRAINING_PAIRS_PATH = MYND_DIR / "training_pairs.jsonl"
+    for i in range(len(messages) - 1):
+        if messages[i]['role'] == 'user' and messages[i+1]['role'] == 'assistant':
+            pair = {
+                "timestamp": timestamp,
+                "source": "conversation",
+                "user": messages[i]['content'][:500],
+                "assistant": messages[i+1]['content'][:500]
+            }
+            with open(TRAINING_PAIRS_PATH, 'a') as f:
+                f.write(json.dumps(pair) + '\n')
+
+    print(f"💬 Conversation saved: {len(messages)} messages, {training_count} GT training steps")
+
+    return {
+        "success": True,
+        "conversation_id": conversation_id,
+        "messages_saved": len(messages),
+        "training_steps": training_count,
+        "path": str(LAST_CONVERSATION_PATH)
+    }
+
+
+@app.get("/brain/conversation/last")
+async def get_last_conversation(max_age_hours: float = 2.0):
+    """
+    Get the last saved conversation for recovery.
+
+    Used by frontend on startup to restore conversation context.
+    Only returns conversations within max_age_hours (default 2 hours).
+    """
+    if not LAST_CONVERSATION_PATH.exists():
+        return {"conversation": None, "reason": "no_saved_conversation"}
+
+    try:
+        with open(LAST_CONVERSATION_PATH, 'r') as f:
+            conversation = json.load(f)
+
+        # Check age
+        saved_time = datetime.fromisoformat(conversation['timestamp'])
+        age_hours = (datetime.now() - saved_time).total_seconds() / 3600
+
+        if age_hours > max_age_hours:
+            return {
+                "conversation": None,
+                "reason": "too_old",
+                "age_hours": age_hours,
+                "max_age_hours": max_age_hours
+            }
+
+        return {
+            "conversation": conversation,
+            "age_hours": age_hours,
+            "age_minutes": age_hours * 60
+        }
+
+    except Exception as e:
+        return {"conversation": None, "reason": f"error: {str(e)}"}
+
+
+@app.get("/brain/conversation/history")
+async def get_conversation_history(limit: int = 20, offset: int = 0):
+    """Get paginated conversation history."""
+    if not CONVERSATIONS_PATH.exists():
+        return {"conversations": [], "total": 0}
+
+    conversations = []
+    with open(CONVERSATIONS_PATH, 'r') as f:
+        for line in f:
+            if line.strip():
+                try:
+                    conversations.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+
+    # Sort by timestamp (newest first)
+    conversations.sort(key=lambda c: c.get('timestamp', ''), reverse=True)
+
+    # Paginate
+    paginated = conversations[offset:offset + limit]
+
+    return {
+        "conversations": paginated,
+        "total": len(conversations),
+        "limit": limit,
+        "offset": offset
+    }
+
+
+@app.delete("/brain/conversation/clear-last")
+async def clear_last_conversation():
+    """Clear the last conversation after it's been recovered."""
+    if LAST_CONVERSATION_PATH.exists():
+        os.remove(LAST_CONVERSATION_PATH)
+        return {"success": True, "message": "Last conversation cleared"}
+    return {"success": True, "message": "No conversation to clear"}
+
+
+# ═══════════════════════════════════════════════════════════════════
 # SERVER-SIDE EVOLUTION DAEMON
 # ═══════════════════════════════════════════════════════════════════
 # Autonomous learning that runs without browser, trains GT/ASA automatically
