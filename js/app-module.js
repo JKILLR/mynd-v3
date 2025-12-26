@@ -46368,6 +46368,39 @@ Summary:`
                 ReflectionUI.init();
             }
             console.log('🔮 ReflectionDaemon initialized');
+
+            // === AUTO-PROMPT FOR PENDING EVOLUTION INSIGHTS ===
+            // Check for insights that accumulated while user was away
+            setTimeout(async () => {
+                try {
+                    const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
+                    const response = await fetch(`${brainUrl}/evolution/stats`);
+
+                    if (response.ok) {
+                        const stats = await response.json();
+                        const pending = stats.pending_insights || 0;
+
+                        if (pending > 0) {
+                            console.log(`🧬 ${pending} evolution insights waiting for review`);
+
+                            // Show notification to user
+                            if (typeof ReflectionUI !== 'undefined' && ReflectionUI.showQueuePanel) {
+                                // Show the queue panel with a subtle highlight
+                                const msg = `🧬 ${pending} insight${pending > 1 ? 's' : ''} discovered while you were away`;
+                                if (typeof window.showToast === 'function') {
+                                    window.showToast(msg, 'info', 5000);
+                                }
+                                // Optionally auto-open the panel
+                                if (pending >= 3) {
+                                    ReflectionUI.showQueuePanel();
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Could not check evolution insights:', e.message);
+                }
+            }, 5000); // Wait 5 seconds after init
         }
     });
 
