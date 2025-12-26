@@ -1784,6 +1784,11 @@ class ConnectionLearning(BaseModel):
     source_id: str
     target_id: str
     connection_type: str = "manual"
+    # Optional labels for on-the-fly embedding (when nodes don't exist yet)
+    source_label: Optional[str] = None
+    target_label: Optional[str] = None
+    should_connect: bool = True  # For feedback learning
+    feedback_type: Optional[str] = None  # 'node', 'category', 'connection', etc.
 
 @app.post("/brain/predictions")
 async def record_predictions(record: PredictionRecord):
@@ -1812,28 +1817,61 @@ async def learn_from_connection(learning: ConnectionLearning):
     This is the KEY self-learning endpoint:
     - If predicted: Reinforces the pattern (brain was right!)
     - If not predicted: Learns new pattern (brain missed this)
+
+    Also supports direct GT training with labels for feedback learning.
     """
-    print(f"📥 /brain/learn-connection called: {learning.source_id} → {learning.target_id} ({learning.connection_type})")
+    feedback_info = f" [{learning.feedback_type}]" if learning.feedback_type else ""
+    print(f"📥 /brain/learn-connection called: {learning.source_id} → {learning.target_id}{feedback_info}")
 
     if unified_brain is None:
         raise HTTPException(status_code=503, detail="Unified brain not initialized")
 
+    response = {
+        "status": "learned",
+        "was_predicted": False,
+        "prediction_score": 0,
+        "learning_signal": "feedback"
+    }
+
+    # === DIRECT GT TRAINING WITH LABELS ===
+    # When labels are provided, train GT directly (for feedback learning)
+    if learning.source_label and learning.target_label and unified_brain.ml_brain:
+        try:
+            brain = unified_brain.ml_brain
+
+            # Create embeddings from labels
+            source_emb = brain.model.encode(learning.source_label, convert_to_tensor=False)
+            target_emb = brain.model.encode(learning.target_label, convert_to_tensor=False)
+
+            # Train GT on this connection
+            gt_result = brain.graph_transformer.train_connection_step(
+                source_embedding=source_emb,
+                target_embedding=target_emb,
+                should_connect=learning.should_connect
+            )
+
+            if gt_result:
+                response['loss'] = gt_result.get('loss')
+                response['prediction'] = gt_result.get('prediction')
+                response['gt_trained'] = True
+                print(f"🧠 GT trained from feedback: {learning.source_label} → {learning.target_label}, loss={gt_result.get('loss', 0):.4f}")
+
+        except Exception as e:
+            print(f"⚠️ GT feedback training error: {e}")
+
+    # === EXISTING LOGIC: Learn from connection IDs ===
+    # This tracks prediction accuracy
     result = unified_brain.learn_from_connection(
         learning.source_id,
         learning.target_id,
         learning.connection_type
     )
-    print(f"📤 learn_from_connection result: {result}")
 
-    response = {
-        "status": "learned",
-        "was_predicted": result['was_predicted'],
-        "prediction_score": result['prediction_score'],
-        "learning_signal": result['learning_signal'],
-        "accuracy": unified_brain.predictions.get_accuracy()
-    }
+    response['was_predicted'] = result.get('was_predicted', False)
+    response['prediction_score'] = result.get('prediction_score', 0)
+    response['learning_signal'] = result.get('learning_signal', 'feedback')
 
-    # Include GT training result if available
+    # Include GT training result from existing logic if available
     if 'gt_training' in result:
         response['gt_training'] = result['gt_training']
 
@@ -4755,6 +4793,146 @@ async def get_memory_stats():
         "synced_count": synced_count,
         "unsynced_count": len(memories) - synced_count,
         "path": str(MEMORIES_PATH)
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# SERVER-SIDE EVOLUTION DAEMON
+# ═══════════════════════════════════════════════════════════════════
+# Autonomous learning that runs without browser, trains GT/ASA automatically
+
+from evolution_daemon import get_evolution_daemon, EvolutionDaemon
+
+# Background task for evolution
+_evolution_task: Optional[asyncio.Task] = None
+
+async def evolution_background_loop():
+    """Background loop that runs evolution periodically."""
+    print("🧬 Evolution background loop started")
+
+    while True:
+        try:
+            daemon = get_evolution_daemon(
+                ml_brain=unified_brain.ml_brain if unified_brain else None,
+                asa=get_asa() if _asa_available else None
+            )
+
+            if daemon.config['enabled']:
+                time_since_last = time.time() - daemon.last_evolution_time
+                interval = daemon.config['interval_seconds']
+
+                if time_since_last >= interval:
+                    # Get map context for evolution
+                    map_context = ""
+                    if unified_brain and unified_brain.ml_brain:
+                        brain = unified_brain.ml_brain
+                        if hasattr(brain, 'current_map_labels') and brain.current_map_labels:
+                            map_context = f"Map nodes: {', '.join(brain.current_map_labels[:100])}"
+
+                    # Run evolution
+                    insights = await daemon.run_evolution_session(map_context=map_context)
+
+                    if insights:
+                        print(f"🧬 Evolution generated {len(insights)} insights")
+
+            # Check every minute
+            await asyncio.sleep(60)
+
+        except Exception as e:
+            print(f"⚠️ Evolution loop error: {e}")
+            await asyncio.sleep(60)
+
+
+@app.on_event("startup")
+async def start_evolution_loop():
+    """Start the evolution background loop on server startup."""
+    global _evolution_task
+    _evolution_task = asyncio.create_task(evolution_background_loop())
+    print("🧬 Evolution daemon scheduled")
+
+
+@app.post("/evolution/run")
+async def run_evolution_now(map_context: str = "", topics: List[str] = None):
+    """
+    Trigger an evolution session manually.
+    Use this to run evolution on demand.
+    """
+    daemon = get_evolution_daemon(
+        ml_brain=unified_brain.ml_brain if unified_brain else None,
+        asa=get_asa() if _asa_available else None
+    )
+
+    insights = await daemon.run_evolution_session(
+        map_context=map_context,
+        recent_topics=topics or []
+    )
+
+    return {
+        "status": "completed",
+        "insights_generated": len(insights),
+        "insights": [{"id": i.id, "title": i.title, "type": i.insight_type} for i in insights]
+    }
+
+
+@app.get("/evolution/insights")
+async def get_pending_insights(limit: int = 20):
+    """
+    Get pending insights from evolution.
+    These are insights waiting for user review.
+    """
+    daemon = get_evolution_daemon()
+
+    return {
+        "insights": daemon.get_pending_insights(limit),
+        "total": len([i for i in daemon.pending_insights if not i.reviewed])
+    }
+
+
+@app.post("/evolution/insights/{insight_id}/review")
+async def review_insight(insight_id: str, action: str = "dismissed"):
+    """
+    Mark an insight as reviewed.
+    Actions: 'accepted', 'rejected', 'dismissed'
+    """
+    daemon = get_evolution_daemon()
+    daemon.mark_insight_reviewed(insight_id, action)
+
+    # If accepted, we could trigger additional actions here
+    # (like adding a node to the map)
+
+    return {"status": "reviewed", "insight_id": insight_id, "action": action}
+
+
+@app.get("/evolution/stats")
+async def get_evolution_stats():
+    """Get evolution daemon statistics."""
+    daemon = get_evolution_daemon()
+    return daemon.get_stats()
+
+
+@app.post("/evolution/config")
+async def update_evolution_config(
+    enabled: Optional[bool] = None,
+    interval_minutes: Optional[int] = None,
+    confidence_threshold: Optional[float] = None
+):
+    """Update evolution daemon configuration."""
+    daemon = get_evolution_daemon()
+
+    if enabled is not None:
+        daemon.config['enabled'] = enabled
+
+    if interval_minutes is not None:
+        daemon.config['interval_seconds'] = interval_minutes * 60
+
+    if confidence_threshold is not None:
+        daemon.config['confidence_threshold'] = confidence_threshold
+
+    daemon._save_state()
+
+    return {
+        "status": "updated",
+        "config": daemon.config
     }
 
 

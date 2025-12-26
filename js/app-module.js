@@ -20701,6 +20701,42 @@ Respond with ONLY a JSON array:
                     .catch(e => console.log('🚫 GT Rejection training failed:', e));
                 }
             }
+
+            // ═══════════════════════════════════════════════════════════════
+            // GT ACCEPTANCE TRAINING - Positive examples to reinforce good suggestions
+            // When user accepts a node/connection suggestion, train GT with should_connect=True
+            // ═══════════════════════════════════════════════════════════════
+            if (action === 'accepted' && ['node', 'connection', 'expansion', 'category'].includes(feedback.type)) {
+                const parentId = feedback.context?.parentId;
+                const nodeId = feedback.context?.nodeId;
+                const nodeLabel = feedback.content?.label || feedback.content?.predicted || feedback.context?.nodeLabel;
+
+                if (parentId && nodeLabel) {
+                    console.log(`✅ GT Acceptance Training: ${parentId} → "${nodeLabel}" (${feedback.type})`);
+
+                    // Send acceptance signal to server
+                    const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
+                    fetch(`${brainUrl}/brain/learn-connection`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            source_id: parentId,
+                            target_id: nodeId || `accepted-${Date.now()}`,
+                            source_label: feedback.context?.parentLabel,
+                            target_label: nodeLabel,
+                            should_connect: true,
+                            feedback_type: feedback.type
+                        })
+                    })
+                    .then(res => res.ok ? res.json() : Promise.reject(`Server ${res.status}`))
+                    .then(result => {
+                        if (result.loss !== undefined) {
+                            console.log(`🧠 GT learned from acceptance: loss=${result.loss?.toFixed(4) || 'N/A'}`);
+                        }
+                    })
+                    .catch(e => console.log('✅ GT Acceptance training failed:', e));
+                }
+            }
         },
 
         // Create a semantic memory from feedback
@@ -46332,6 +46368,39 @@ Summary:`
                 ReflectionUI.init();
             }
             console.log('🔮 ReflectionDaemon initialized');
+
+            // === AUTO-PROMPT FOR PENDING EVOLUTION INSIGHTS ===
+            // Check for insights that accumulated while user was away
+            setTimeout(async () => {
+                try {
+                    const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
+                    const response = await fetch(`${brainUrl}/evolution/stats`);
+
+                    if (response.ok) {
+                        const stats = await response.json();
+                        const pending = stats.pending_insights || 0;
+
+                        if (pending > 0) {
+                            console.log(`🧬 ${pending} evolution insights waiting for review`);
+
+                            // Show notification to user
+                            if (typeof ReflectionUI !== 'undefined' && ReflectionUI.showQueuePanel) {
+                                // Show the queue panel with a subtle highlight
+                                const msg = `🧬 ${pending} insight${pending > 1 ? 's' : ''} discovered while you were away`;
+                                if (typeof window.showToast === 'function') {
+                                    window.showToast(msg, 'info', 5000);
+                                }
+                                // Optionally auto-open the panel
+                                if (pending >= 3) {
+                                    ReflectionUI.showQueuePanel();
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Could not check evolution insights:', e.message);
+                }
+            }, 5000); // Wait 5 seconds after init
         }
     });
 

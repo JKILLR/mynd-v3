@@ -3110,35 +3110,85 @@ You have tools available to explore the codebase further. Use them to investigat
     },
 
     async getQueue(filter = {}) {
-        if (!this.db) return [];
+        let allItems = [];
 
-        return new Promise((resolve) => {
-            const transaction = this.db.transaction([this.STORE_NAME], 'readonly');
-            const store = transaction.objectStore(this.STORE_NAME);
-            const request = store.getAll();
+        // === FETCH FROM SERVER EVOLUTION DAEMON (primary source) ===
+        try {
+            const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
+            const response = await fetch(`${brainUrl}/evolution/insights?limit=50`);
 
-            request.onsuccess = () => {
-                let items = request.result || [];
+            if (response.ok) {
+                const serverInsights = await response.json();
 
-                // Apply filters
-                if (filter.status) {
-                    items = items.filter(i => i.status === filter.status);
-                }
-                if (filter.type) {
-                    items = items.filter(i => i.type === filter.type);
-                }
-                if (filter.priority) {
-                    items = items.filter(i => i.priority === filter.priority);
-                }
+                // Convert server insights to queue format
+                const serverItems = serverInsights.map(insight => ({
+                    id: insight.id,
+                    title: insight.title,
+                    description: insight.content,
+                    type: insight.insight_type, // connection, pattern, question, improvement
+                    priority: insight.confidence >= 0.85 ? 'high' :
+                              insight.confidence >= 0.7 ? 'medium' : 'low',
+                    manifestation_alignment: insight.confidence >= 0.85 ? 'high' : 'medium',
+                    vision_connection: insight.suggested_action || 'Evolution insight',
+                    relatedNodes: insight.source_nodes || [],
+                    timestamp: new Date(insight.created_at).getTime(),
+                    status: insight.reviewed ? 'reviewed' : 'pending',
+                    // Preserve server-side training info
+                    gt_trained: insight.gt_trained,
+                    asa_trained: insight.asa_trained,
+                    action_details: insight.action_details,
+                    source: 'evolution_daemon'
+                }));
 
-                // Sort by timestamp (newest first)
-                items.sort((a, b) => b.timestamp - a.timestamp);
+                allItems = allItems.concat(serverItems);
+                console.log(`🧬 Fetched ${serverItems.length} insights from evolution daemon`);
+            }
+        } catch (e) {
+            console.warn('Could not fetch from evolution daemon:', e.message);
+        }
 
-                resolve(items);
-            };
+        // === ALSO FETCH FROM LOCAL IndexedDB (for any browser-side items) ===
+        if (this.db) {
+            const localItems = await new Promise((resolve) => {
+                const transaction = this.db.transaction([this.STORE_NAME], 'readonly');
+                const store = transaction.objectStore(this.STORE_NAME);
+                const request = store.getAll();
 
-            request.onerror = () => resolve([]);
+                request.onsuccess = () => resolve(request.result || []);
+                request.onerror = () => resolve([]);
+            });
+
+            // Mark local items with source
+            localItems.forEach(item => {
+                if (!item.source) item.source = 'browser';
+            });
+
+            allItems = allItems.concat(localItems);
+        }
+
+        // === DEDUPE by ID ===
+        const seen = new Set();
+        allItems = allItems.filter(item => {
+            if (seen.has(item.id)) return false;
+            seen.add(item.id);
+            return true;
         });
+
+        // Apply filters
+        if (filter.status) {
+            allItems = allItems.filter(i => i.status === filter.status);
+        }
+        if (filter.type) {
+            allItems = allItems.filter(i => i.type === filter.type);
+        }
+        if (filter.priority) {
+            allItems = allItems.filter(i => i.priority === filter.priority);
+        }
+
+        // Sort by timestamp (newest first)
+        allItems.sort((a, b) => b.timestamp - a.timestamp);
+
+        return allItems;
     },
 
     async getPendingCount() {
@@ -3147,6 +3197,30 @@ You have tools available to explore the codebase further. Use them to investigat
     },
 
     async approveItem(itemId) {
+        // Check if this is a server-side evolution insight
+        if (itemId.startsWith('evo-')) {
+            try {
+                const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
+                const response = await fetch(`${brainUrl}/evolution/insights/${itemId}/review`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'approved' })
+                });
+
+                if (response.ok) {
+                    this.stats.approvedCount++;
+                    this.saveToStorage();
+                    this.log(`Approved evolution insight: ${itemId}`);
+                    this.emitEvent('itemApproved', { item: { id: itemId } });
+                    return true;
+                }
+            } catch (e) {
+                console.warn('Failed to approve evolution insight on server:', e);
+            }
+            return false;
+        }
+
+        // Local IndexedDB item
         if (!this.db) return false;
 
         // First, update the item status in IndexedDB
@@ -3191,6 +3265,30 @@ You have tools available to explore the codebase further. Use them to investigat
     },
 
     async dismissItem(itemId) {
+        // Check if this is a server-side evolution insight
+        if (itemId.startsWith('evo-')) {
+            try {
+                const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
+                const response = await fetch(`${brainUrl}/evolution/insights/${itemId}/review`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'dismissed' })
+                });
+
+                if (response.ok) {
+                    this.stats.dismissedCount++;
+                    this.saveToStorage();
+                    this.log(`Dismissed evolution insight: ${itemId}`);
+                    this.emitEvent('itemDismissed', { item: { id: itemId } });
+                    return true;
+                }
+            } catch (e) {
+                console.warn('Failed to dismiss evolution insight on server:', e);
+            }
+            return false;
+        }
+
+        // Local IndexedDB item
         if (!this.db) return false;
 
         const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
