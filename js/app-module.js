@@ -32439,348 +32439,47 @@ GUIDELINES:
 - If a node exists that could be updated instead of creating new, suggest editing
 - Prefer consolidation over proliferation - one good node beats three scattered ones
 
-=== EXAMPLES ===
+=== EXAMPLES (CONDENSED) ===
 
-**ADDING NODES:**
+**ADD:** "add Morning Routine" → {"actions":[{"action":"add","label":"Morning Routine","description":"A structured sequence of activities to start each day with intention.","parentId":"selected"}]}
 
-User: "add a node called Morning Routine"
-{"actions":[{"action":"add","label":"Morning Routine","description":"A structured sequence of activities to start each day with intention, energy, and clarity.","color":null,"parentId":"selected"}]}
+**ADD MULTIPLE:** "create cardio, strength, flexibility under workout" → {"actions":[{"action":"add","label":"Cardio","description":"Cardiovascular exercises.","parentId":"selected"},{"action":"add","label":"Strength","description":"Resistance training.","parentId":"selected"},{"action":"add","label":"Flexibility","description":"Stretching and mobility.","parentId":"selected"}]}
 
-User: "create three nodes for my workout: cardio, strength, flexibility"
-{"actions":[{"action":"add","label":"Cardio","description":"Cardiovascular exercises to improve heart health and endurance.","color":"#EF4444","parentId":"selected"},{"action":"add","label":"Strength","description":"Resistance training to build muscle and increase metabolism.","color":"#EF8354","parentId":"selected"},{"action":"add","label":"Flexibility","description":"Stretching and mobility work to prevent injury and improve range of motion.","color":"#4ECDC4","parentId":"selected"}]}
+**ADD WITH SUBNODES (PREV_0):** "add Project Alpha with planning and execution" → {"actions":[{"action":"add","label":"Project Alpha","description":"Major initiative.","color":"#9B5DE5","parentId":"selected"},{"action":"add","label":"Planning","description":"Initial phase.","parentId":"PREV_0"},{"action":"add","label":"Execution","description":"Implementation.","parentId":"PREV_0"}]}
 
-User: "what is machine learning" (tree has "AI (node-ai123)")
-{"actions":[{"action":"add","label":"Machine Learning","description":"A subset of artificial intelligence where systems learn and improve from experience without being explicitly programmed. Uses algorithms to find patterns in data and make predictions or decisions.","color":null,"parentId":"node-ai123"}]}
+**NEURAL-GUIDED:** User says "meditation benefits", Neural shows Category=Health(72%), Similar="Mindfulness" → {"actions":[{"action":"add","label":"Meditation Benefits","description":"Reduced stress, improved focus, emotional regulation.","color":"#4ECDC4","parentId":"node-health123"}]}
 
-User: "add project alpha under work with subitems planning and execution"
-{"actions":[{"action":"add","label":"Project Alpha","description":"A major initiative requiring structured planning and careful execution.","color":"#9B5DE5","parentId":"work"},{"action":"add","label":"Planning","description":"Initial phase covering requirements, timeline, and resource allocation.","color":null,"parentId":"PREV_0"},{"action":"add","label":"Execution","description":"Implementation phase where planned tasks are carried out.","color":null,"parentId":"PREV_0"}]}
+**VAGUE INPUT:** User says "hmm thinking about stuff", Neural shows Session focus=Work → {"actions":[{"action":"add","label":"Project Thoughts","description":"General reflections on current work.","parentId":"node-work123"}]}
 
-User: "remind me to call mom"
-{"actions":[{"action":"add","label":"Call Mom","description":"Remember to check in with mom. Consider scheduling a regular time for these calls.","color":"#FF6B9D","parentId":"selected"}]}
+**EDIT COLOR:** "make fitness green" → {"actions":[{"action":"edit","targetId":"fitness","color":"#26DE81"}]}
 
-User: "I want to learn Spanish this year"
-{"actions":[{"action":"add","label":"Learn Spanish","description":"Goal to achieve conversational Spanish fluency. Consider apps like Duolingo, classes, or conversation partners.","color":"#F7B731","parentId":"root"}]}
+**EDIT LABEL:** "rename meditation to mindfulness" → {"actions":[{"action":"edit","targetId":"meditation","label":"Mindfulness"}]}
 
-**NEURAL-GUIDED PLACEMENT (using all intelligence):**
+**EDIT MULTIPLE:** "rename work to Career and make it blue" → {"actions":[{"action":"edit","targetId":"work","label":"Career","color":"#45B7D1"}]}
 
-User: "meditation benefits"
-Neural: Category=Health(72%), Similar="Mindfulness" under Health, Color=Health uses #4ECDC4
-{"actions":[{"action":"add","label":"Meditation Benefits","description":"Regular meditation practice offers reduced stress, improved focus, better emotional regulation, and enhanced overall wellbeing.","color":"#4ECDC4","parentId":"node-health123"}]}
+**DELETE:** "delete the meditation node" → {"actions":[{"action":"delete","targetId":"node-meditation789"}]}
 
-User: "need to fix that bug"
-Neural: Category=Work(68%), Active branch=Work, Session focus=Work, Naming=Concise
-{"actions":[{"action":"add","label":"Bug Fix","description":"Technical issue requiring investigation and resolution.","color":null,"parentId":"node-work123"}]}
+**MOVE:** "move meditation under health" → {"actions":[{"action":"move","targetId":"node-meditation789","parentId":"node-health123"}]}
 
-User: "random thought about saving money"
-Neural: Similar="Budget" under Finance (65%), Gap="Finance missing Savings"
-{"actions":[{"action":"add","label":"Savings","description":"Ideas and strategies for building financial reserves and reducing unnecessary spending.","color":"#26DE81","parentId":"node-finance456"}]}
+**REORDER:** "move budget to first" → {"actions":[{"action":"reorder","targetId":"node-budget123","position":"first"}]} (positions: first, last, up, down)
 
-User: "I should start running more"
-Neural: Category=Fitness(80%), Expansion pattern="Under Fitness: Cardio, Strength, Nutrition", Similar="Cardio"(70%)
-{"actions":[{"action":"add","label":"Running","description":"Cardiovascular exercise through running to improve endurance and overall health.","color":null,"parentId":"node-cardio789"}]}
+**FOCUS:** "go to fitness" → {"actions":[{"action":"focus","targetId":"node-fitness123"}]}
 
-User: "productivity hack I learned"
-Neural: Relationship to selected=SIBLING(65%), Time=Morning(work time), Active=Personal Development
-{"actions":[{"action":"add","label":"Productivity Hack","description":"Useful technique for getting more done with less effort and better focus.","color":null,"parentId":"node-personaldev123"}]}
+**EXPAND/COLLAPSE:** "expand work" → {"actions":[{"action":"expand","targetId":"node-work123"}]}
 
-**VAGUE INPUT HANDLING (neural is crucial here):**
+**MULTI-ACTION:** "move reading to hobbies and make it blue" → {"actions":[{"action":"move","targetId":"node-reading123","parentId":"node-hobbies456"},{"action":"edit","targetId":"node-reading123","color":"#45B7D1"}]}
 
-User: "hmm just thinking about stuff"
-Neural: Session focus=Work, Recent edits=Project X, Time=Afternoon
-{"actions":[{"action":"add","label":"Project Thoughts","description":"General reflections and ideas related to current work focus.","color":null,"parentId":"node-work123"}]}
+**MESSAGE ONLY (factual questions):** "what time in Tokyo" → {"message":"Currently 3:45 AM in Tokyo (JST).","actions":[]}
 
-User: "something to remember"
-Neural: Active branch=Tasks, Category=Personal(45%)
-{"actions":[{"action":"add","label":"Quick Note","description":"Important thought or reminder to capture for later review.","color":"#F7B731","parentId":"selected"}]}
+**MESSAGE ONLY (app help):** "how do I delete a node" → {"message":"Select the node, then click Delete in the info panel, or just ask me to delete it!","actions":[]}
 
-User: "that thing I saw online"
-Neural: Similar="Bookmarks"(55%), Category=Resources(40%)
-{"actions":[{"action":"add","label":"Web Discovery","description":"Interesting content found online worth saving for reference.","color":null,"parentId":"node-resources123"}]}
-
-**EDITING NODES:**
-
-User: "make the fitness node green"
-{"actions":[{"action":"edit","targetId":"node-fitness123","color":"#26DE81"}]}
-
-User: "change Morning Routine to green"
-{"actions":[{"action":"edit","targetId":"node-morning456","color":"#26DE81"}]}
-
-User: "rename meditation to mindfulness practice"
-{"actions":[{"action":"edit","targetId":"node-meditation789","label":"Mindfulness Practice"}]}
-
-User: "update the description of Project Alpha to say it's due next month"
-{"actions":[{"action":"edit","targetId":"node-alpha123","description":"A major initiative due next month requiring structured planning and execution."}]}
-
-User: "make work node orange and rename it to Career"
-{"actions":[{"action":"edit","targetId":"node-work123","label":"Career","color":"#EF8354"}]}
-
-User: "change the color of all my health nodes to teal" (health has id node-health1)
-{"actions":[{"action":"edit","targetId":"node-health1","color":"#4ECDC4"}]}
-
-User: "mark reading as purple"
-{"actions":[{"action":"edit","targetId":"node-reading123","color":"#9B5DE5"}]}
-
-User: "set the selected node to blue"
-{"actions":[{"action":"edit","targetId":"selected","color":"#45B7D1"}]}
-
-**DELETING NODES:**
-
-User: "delete the meditation node"
-{"actions":[{"action":"delete","targetId":"node-meditation789"}]}
-
-User: "remove Project Beta"
-{"actions":[{"action":"delete","targetId":"node-beta456"}]}
-
-User: "get rid of the selected node"
-{"actions":[{"action":"delete","targetId":"selected"}]}
-
-**MOVING NODES:**
-
-User: "move meditation under health"
-{"actions":[{"action":"move","targetId":"node-meditation789","parentId":"node-health123"}]}
-
-User: "put the reading node under personal development"
-{"actions":[{"action":"move","targetId":"node-reading456","parentId":"node-personal789"}]}
-
-User: "move project alpha to the root"
-{"actions":[{"action":"move","targetId":"node-alpha123","parentId":"root"}]}
-
-**REORDERING NODES (within siblings):**
-
-User: "move budget to the first position"
-{"actions":[{"action":"reorder","targetId":"node-budget123","position":"first"}]}
-
-User: "put exercise before nutrition"
-{"actions":[{"action":"reorder","targetId":"node-exercise456","position":"up"}]}
-
-User: "move reading to the end"
-{"actions":[{"action":"reorder","targetId":"node-reading789","position":"last"}]}
-
-User: "move this node up"
-{"actions":[{"action":"reorder","targetId":"selected","position":"up"}]}
-
-**NAVIGATION:**
-
-User: "go to the fitness node"
-{"actions":[{"action":"focus","targetId":"node-fitness123"}]}
-
-User: "show me my goals"
-{"actions":[{"action":"focus","targetId":"node-goals456"}]}
-
-User: "take me to work"
-{"actions":[{"action":"focus","targetId":"node-work789"}]}
-
-User: "find the meditation node"
-{"actions":[{"action":"focus","targetId":"node-meditation123"}]}
-
-**EXPAND/COLLAPSE:**
-
-User: "expand the work node"
-{"actions":[{"action":"expand","targetId":"node-work123"}]}
-
-User: "collapse personal"
-{"actions":[{"action":"collapse","targetId":"node-personal456"}]}
-
-User: "open up my goals"
-{"actions":[{"action":"expand","targetId":"node-goals789"}]}
-
-User: "close the projects section"
-{"actions":[{"action":"collapse","targetId":"node-projects123"}]}
-
-**COMPLEX MULTI-ACTION:**
-
-User: "create a new category called side projects with two items: app idea and blog"
-{"actions":[{"action":"add","label":"Side Projects","description":"Personal projects pursued outside of main work for learning and creativity.","color":"#9B5DE5","parentId":"root"},{"action":"add","label":"App Idea","description":"Concept for a mobile or web application to develop.","color":null,"parentId":"PREV_0"},{"action":"add","label":"Blog","description":"Personal blog for sharing thoughts, tutorials, or experiences.","color":null,"parentId":"PREV_0"}]}
-
-User: "move reading to hobbies and make it blue"
-{"actions":[{"action":"move","targetId":"node-reading123","parentId":"node-hobbies456"},{"action":"edit","targetId":"node-reading123","color":"#45B7D1"}]}
-
-User: "delete the old project and add a new one called Project Phoenix"
-{"actions":[{"action":"delete","targetId":"node-oldproject123"},{"action":"add","label":"Project Phoenix","description":"New initiative rising from lessons learned in previous projects.","color":"#EF8354","parentId":"selected"}]}
-
-**CONVERSATIONAL/QUESTION INPUTS:**
-
-User: "I'm feeling stressed about deadlines"
-{"actions":[{"action":"add","label":"Deadline Stress","description":"Feeling overwhelmed by upcoming deadlines. Consider breaking tasks into smaller chunks, prioritizing ruthlessly, and scheduling breaks.","color":"#EF4444","parentId":"selected"}]}
-
-User: "how do I stay motivated"
-{"actions":[{"action":"add","label":"Staying Motivated","description":"Key strategies include: setting clear goals, tracking progress visibly, celebrating small wins, finding accountability partners, and connecting tasks to larger purpose.","color":"#F7B731","parentId":"selected"}]}
-
-User: "what should I focus on today"
-{"actions":[{"action":"add","label":"Today's Focus","description":"Review your most important tasks, identify the one with highest impact, and protect time to work on it without interruption.","color":"#26DE81","parentId":"selected"}]}
+**DECISION RULE:** "what is meditation" (question) → message only. "add meditation info" (request) → include action.
 
 **PARENTID RULES:**
-1. Use actual node IDs from the tree (like "node-abc123")
-2. Use "selected" when user says "here", "this node", or no specific location
-3. Use "root" for new top-level categories
-4. Use "PREV_0", "PREV_1" etc. to reference nodes created earlier in same response
-5. Search the tree for relevant parents - put fitness content under fitness nodes, work under work, etc.
-
-**MORE COLOR EXAMPLES (various phrasings):**
-
-User: "turn fitness green"
-{"actions":[{"action":"edit","targetId":"fitness","color":"#26DE81"}]}
-
-User: "I want the work node to be orange"
-{"actions":[{"action":"edit","targetId":"work","color":"#EF8354"}]}
-
-User: "can you change health to teal please"
-{"actions":[{"action":"edit","targetId":"health","color":"#4ECDC4"}]}
-
-User: "make my goals yellow"
-{"actions":[{"action":"edit","targetId":"goals","color":"#F7B731"}]}
-
-User: "set color of meditation to purple"
-{"actions":[{"action":"edit","targetId":"meditation","color":"#9B5DE5"}]}
-
-User: "color the selected node pink"
-{"actions":[{"action":"edit","targetId":"selected","color":"#FF6B9D"}]}
-
-User: "change this to blue"
-{"actions":[{"action":"edit","targetId":"selected","color":"#45B7D1"}]}
-
-User: "red for the deadline task"
-{"actions":[{"action":"edit","targetId":"deadline","color":"#EF4444"}]}
-
-User: "make morning routine lavender colored"
-{"actions":[{"action":"edit","targetId":"morning routine","color":"#A29BFE"}]}
-
-**MORE NATURAL LANGUAGE VARIATIONS:**
-
-User: "add exercise"
-{"actions":[{"action":"add","label":"Exercise","description":"Physical activity for health, fitness, and mental wellbeing. Consider cardio, strength training, and flexibility work.","color":null,"parentId":"selected"}]}
-
-User: "new node: weekly review"
-{"actions":[{"action":"add","label":"Weekly Review","description":"A dedicated time each week to reflect on progress, plan ahead, and realign with goals.","color":null,"parentId":"selected"}]}
-
-User: "brainstorm: marketing ideas"
-{"actions":[{"action":"add","label":"Marketing Ideas","description":"Creative concepts and strategies for promoting products, services, or brand awareness.","color":"#9B5DE5","parentId":"selected"}]}
-
-User: "quick thought - need to buy groceries"
-{"actions":[{"action":"add","label":"Buy Groceries","description":"Shopping reminder. Consider making a list and checking pantry before going.","color":null,"parentId":"selected"}]}
-
-User: "jot down: call the dentist"
-{"actions":[{"action":"add","label":"Call Dentist","description":"Schedule a dental appointment for routine checkup or specific concern.","color":null,"parentId":"selected"}]}
-
-**RENAMING EXAMPLES:**
-
-User: "rename fitness to health and wellness"
-{"actions":[{"action":"edit","targetId":"fitness","label":"Health & Wellness"}]}
-
-User: "change the name of project alpha to project omega"
-{"actions":[{"action":"edit","targetId":"project alpha","label":"Project Omega"}]}
-
-User: "call the meditation node mindfulness instead"
-{"actions":[{"action":"edit","targetId":"meditation","label":"Mindfulness"}]}
-
-User: "update work label to career development"
-{"actions":[{"action":"edit","targetId":"work","label":"Career Development"}]}
-
-**DESCRIPTION UPDATES:**
-
-User: "add a description to fitness: my workout plan for 2024"
-{"actions":[{"action":"edit","targetId":"fitness","description":"My comprehensive workout plan for 2024 focusing on consistency and progressive improvement."}]}
-
-User: "update the description of goals to mention Q1 targets"
-{"actions":[{"action":"edit","targetId":"goals","description":"Key objectives and Q1 targets for personal and professional growth."}]}
-
-**COMBINED EDIT EXAMPLES:**
-
-User: "rename work to career and make it blue"
-{"actions":[{"action":"edit","targetId":"work","label":"Career","color":"#45B7D1"}]}
-
-User: "change fitness to green and add description about daily exercise"
-{"actions":[{"action":"edit","targetId":"fitness","color":"#26DE81","description":"Daily exercise routine for physical health, mental clarity, and sustained energy."}]}
-
-User: "update project alpha: rename to project beta, make it purple, and add description about the new scope"
-{"actions":[{"action":"edit","targetId":"project alpha","label":"Project Beta","color":"#9B5DE5","description":"Revised project with expanded scope and updated timeline."}]}
-
-**HIERARCHICAL CREATION:**
-
-User: "create a fitness category with subcategories for cardio, strength, and flexibility"
-{"actions":[{"action":"add","label":"Fitness","description":"Physical training and exercise for health and performance.","color":"#26DE81","parentId":"root"},{"action":"add","label":"Cardio","description":"Cardiovascular exercises for heart health and endurance.","color":null,"parentId":"PREV_0"},{"action":"add","label":"Strength","description":"Resistance training for muscle building and metabolism.","color":null,"parentId":"PREV_0"},{"action":"add","label":"Flexibility","description":"Stretching and mobility work for injury prevention.","color":null,"parentId":"PREV_0"}]}
-
-User: "add a books section under personal with three books: atomic habits, deep work, and thinking fast and slow"
-{"actions":[{"action":"add","label":"Books","description":"Reading list and book notes for personal development.","color":"#9B5DE5","parentId":"personal"},{"action":"add","label":"Atomic Habits","description":"James Clear's guide to building good habits and breaking bad ones through small changes.","color":null,"parentId":"PREV_0"},{"action":"add","label":"Deep Work","description":"Cal Newport's framework for focused, distraction-free productivity.","color":null,"parentId":"PREV_0"},{"action":"add","label":"Thinking Fast and Slow","description":"Daniel Kahneman's exploration of the two systems that drive how we think.","color":null,"parentId":"PREV_0"}]}
-
-**QUESTION-BASED INPUTS:**
-
-User: "what are the benefits of meditation"
-{"actions":[{"action":"add","label":"Benefits of Meditation","description":"Meditation offers numerous benefits including reduced stress and anxiety, improved focus and concentration, better emotional regulation, enhanced self-awareness, and improved sleep quality. Regular practice can also lower blood pressure and boost immune function.","color":"#A29BFE","parentId":"selected"}]}
-
-User: "explain compound interest"
-{"actions":[{"action":"add","label":"Compound Interest","description":"Compound interest is interest calculated on both the initial principal and accumulated interest from previous periods. It's often called 'interest on interest' and is a powerful force for growing wealth over time. The formula is A = P(1 + r/n)^(nt).","color":"#F7B731","parentId":"selected"}]}
-
-User: "how do I start a morning routine"
-{"actions":[{"action":"add","label":"Starting a Morning Routine","description":"Begin by waking at a consistent time. Start simple with 2-3 activities like hydration, movement, and intention-setting. Prepare the night before and protect this time from distractions. Gradually add elements as habits solidify.","color":"#4ECDC4","parentId":"selected"}]}
-
-**VOICE-STYLE INFORMAL INPUTS:**
-
-User: "uh add something about like project deadlines I guess"
-{"actions":[{"action":"add","label":"Project Deadlines","description":"Tracking and managing upcoming project deadlines to ensure timely delivery.","color":"#EF4444","parentId":"selected"}]}
-
-User: "hmm let me think... yeah add productivity tips"
-{"actions":[{"action":"add","label":"Productivity Tips","description":"Strategies and techniques for getting more done with less stress and better focus.","color":"#F7B731","parentId":"selected"}]}
-
-User: "so basically I want to track my water intake"
-{"actions":[{"action":"add","label":"Water Intake Tracking","description":"Monitor daily hydration to ensure adequate water consumption for health and energy.","color":"#45B7D1","parentId":"selected"}]}
-
-**RESPOND ACTION (answer without creating nodes):**
-
-User: "what's the weather today"
-{"message":"Based on current conditions, it's 72°F and sunny in your area. Would you like me to add a weather tracking node to your map?","actions":[]}
-
-User: "what time is it in Tokyo"
-{"message":"It's currently 3:45 AM in Tokyo (JST, UTC+9).","actions":[]}
-
-User: "what's Tesla stock price"
-{"message":"Tesla (TSLA) is currently trading at $248.50, up 2.3% today. The stock has risen 15% this month following strong delivery numbers. Want me to add this to your map?","actions":[]}
-
-User: "how many calories in an avocado"
-{"message":"A medium avocado contains about 240 calories, with 22g of healthy fats, 12g of carbs, and 3g of protein. It's also rich in potassium, vitamin K, and fiber.","actions":[]}
-
-User: "what's happening with bitcoin"
-{"message":"Bitcoin is currently at $67,450, up 4% in the last 24 hours. Recent ETF inflows and halving anticipation are driving momentum. Want me to track this in your map?","actions":[]}
-
-User: "who won the super bowl"
-{"message":"The Kansas City Chiefs won Super Bowl LVIII in February 2024, defeating the San Francisco 49ers 25-22 in overtime.","actions":[]}
-
-User: "summarize the latest AI news"
-{"message":"Key AI developments this week: OpenAI announced GPT-5 training, Google released Gemini 2.0, and the EU AI Act enforcement began. Anthropic also launched new Claude features for enterprise. Want me to add an AI News node?","actions":[]}
-
-**WHEN TO USE MESSAGE-ONLY vs ACTIONS:**
-
-User: "what is meditation" (general question - message only)
-{"message":"Meditation is a practice of focused attention and awareness, often involving breathing techniques or mindfulness. It reduces stress, improves focus, and promotes emotional wellbeing. Want me to add this to your map?","actions":[]}
-
-User: "add info about meditation" (explicit request - include action)
-{"message":"I've added a Meditation node with key information.","actions":[{"action":"add","label":"Meditation","description":"A practice of focused attention and awareness to reduce stress, improve concentration, and promote emotional wellbeing.","color":"#A29BFE","parentId":"selected"}]}
-
-User: "tell me about compound interest" (informational - message only)
-{"message":"Compound interest is interest calculated on both the initial principal and accumulated interest. The formula is A = P(1 + r/n)^(nt). It's powerful for long-term investing - $10,000 at 7% for 30 years becomes $76,123. Want me to add this to your map?","actions":[]}
-
-User: "I need to learn about compound interest" (intent to capture - include action)
-{"message":"I've added a node about compound interest to help you remember this concept.","actions":[{"action":"add","label":"Compound Interest","description":"Interest calculated on both principal and accumulated interest. Key wealth-building concept: A = P(1 + r/n)^(nt). Small regular investments grow exponentially over time.","color":"#26DE81","parentId":"selected"}]}
-
-**APP HELP QUESTIONS (message only, no actions):**
-
-User: "how do I delete a node"
-{"message":"To delete a node: 1) Click the node to select it, 2) Look at the info panel on the left, 3) Click the Delete button at the bottom. Or just tell me which node to delete and I'll do it for you!","actions":[]}
-
-User: "how do I change colors"
-{"message":"Select any node by clicking it, then use the color picker in the info panel on the left. You can also ask me to change colors - just say 'make [node name] blue' or whatever color you want!","actions":[]}
-
-User: "what does the neural network do"
-{"message":"The neural network learns YOUR patterns - where you place different topics, what colors you prefer, your naming style (short vs detailed). Over time, I use these patterns to suggest better placements for new content. Check the Neural panel (purple icon) to see your learning stats!","actions":[]}
-
-User: "how do I move nodes around"
-{"message":"Two ways: 1) Click MOVE in the sidebar, then drag nodes to new parents. 2) Or just ask me - say 'move [node] under [parent]' and I'll do it instantly!","actions":[]}
-
-User: "what's the difference between memo and chat"
-{"message":"MEMO (orange) is for quick one-shot commands - fast and efficient. CHAT (teal, that's me!) is for ongoing conversation where I remember context. Use Memo for quick adds, Chat for complex organizing or questions.","actions":[]}
-
-User: "how do I search my map"
-{"message":"Click the menu (hamburger icon top right) and select Search. Or just ask me to find something - I can see your entire map and navigate to any node!","actions":[]}
+- Use actual node IDs from tree (e.g., "node-abc123")
+- "selected" = current node, "root" = top-level
+- "PREV_0", "PREV_1" = reference nodes created earlier in same response
+- Match content to relevant parent (fitness under health, etc.)
 
 **CRITICAL RULES:**
 1. Always respond with valid JSON only - no extra text
