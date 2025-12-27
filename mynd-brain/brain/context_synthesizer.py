@@ -991,7 +991,7 @@ class ContextSynthesizer:
         themes = self._cluster_into_themes(items, focus)
 
         # 3. Track narrative evolution - how have topics changed?
-        narratives = self._track_narratives(themes, query)
+        narratives = self._track_narratives(themes)
 
         # 4. Distill insights - what does this all mean?
         insights = self._distill_insights(themes, focus, narratives)
@@ -1276,7 +1276,7 @@ class ContextSynthesizer:
 
         return f"A cluster of {len(items)} related items about '{cluster_name}' from {source_str}"
 
-    def _track_narratives(self, themes: List[Theme], query: str) -> List[NarrativeThread]:
+    def _track_narratives(self, themes: List[Theme]) -> List[NarrativeThread]:
         """
         Track how topics have evolved over time.
 

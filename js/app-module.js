@@ -1718,6 +1718,9 @@
         }
     };
 
+    // Expose NeuralDB globally for cross-module access
+    globalThis.NeuralDB = NeuralDB;
+
     // ═══════════════════════════════════════════════════════════════════
     // MEMORY MONITOR - Track and optimize memory usage
     // ═══════════════════════════════════════════════════════════════════

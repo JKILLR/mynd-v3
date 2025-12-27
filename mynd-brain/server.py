@@ -1847,15 +1847,15 @@ async def record_brain_feedback(
 
     # === INTERCONNECTION: Record reflection outcome ===
     suggestion_type = ctx.get('suggestionType', 'unknown')
-    if suggestion_type != 'unknown':
+    if suggestion_type != 'unknown' and unified_brain:
         unified_brain.record_reflection_outcome(suggestion_type, should_connect)
         print(f"🔗 Reflection outcome recorded: {suggestion_type} → {'accepted' if should_connect else 'rejected'}")
 
     # === INTERCONNECTION: Train ASA from Context Lens on positive feedback ===
     lens_trained = False
-    if should_connect and unified_brain._last_context_lens:
+    if should_connect and unified_brain and hasattr(unified_brain, '_last_context_lens') and unified_brain._last_context_lens:
         # Only train from lens if it's fresh (within 5 minutes)
-        if time.time() - unified_brain._last_lens_timestamp < 300:
+        if hasattr(unified_brain, '_last_lens_timestamp') and time.time() - unified_brain._last_lens_timestamp < 300:
             unified_brain.train_asa_from_context_lens(
                 unified_brain._last_context_lens,
                 was_helpful=True

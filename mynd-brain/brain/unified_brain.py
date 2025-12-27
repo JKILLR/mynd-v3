@@ -1822,7 +1822,7 @@ class UnifiedBrain:
             for theme in (lens.themes or [])[:5]:
                 importance = 0.8 if was_helpful else 0.3
                 # Learn the theme name and description
-                self.asa.learn_from_text(
+                self.asa.learn_content(
                     f"{theme.name}: {theme.description}",
                     source="context_lens",
                     importance=importance
@@ -1831,7 +1831,7 @@ class UnifiedBrain:
             # Learn from insights that were active
             for insight in (lens.insights or [])[:3]:
                 importance = insight.confidence if was_helpful else 0.2
-                self.asa.learn_from_text(
+                self.asa.learn_content(
                     insight.insight,
                     source="context_lens",
                     importance=importance

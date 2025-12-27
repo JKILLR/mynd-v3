@@ -787,9 +787,10 @@ class MYNDGraphTransformer(nn.Module):
                 self._context_training_stats['avg_context_boost'] * 0.9 + context_boost * 0.1
             )
 
-            # Track themes that led to connections
+            # Track themes that led to connections (limit to 100 to prevent unbounded growth)
             for theme in reasoning_context.get('themes', []):
-                self._context_training_stats['themes_seen'].add(theme)
+                if len(self._context_training_stats['themes_seen']) < 100:
+                    self._context_training_stats['themes_seen'].add(theme)
 
         # Delegate to standard training with enhanced weight
         result = self.train_connection_step(
