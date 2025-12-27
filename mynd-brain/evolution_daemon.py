@@ -51,10 +51,14 @@ class EvolutionDaemon:
     def __init__(self,
                  claude_api_key: Optional[str] = None,
                  ml_brain=None,
-                 asa=None):
+                 asa=None,
+                 unified_brain=None):
         self.api_key = claude_api_key or os.environ.get('ANTHROPIC_API_KEY')
         self.ml_brain = ml_brain
         self.asa = asa
+
+        # INTERCONNECTION: Reference to UnifiedBrain for bidirectional communication
+        self.unified_brain = unified_brain
 
         # State
         self.running = False
@@ -78,6 +82,40 @@ class EvolutionDaemon:
         self._load_pending_insights()
 
         print(f"🧬 EvolutionDaemon initialized: {len(self.pending_insights)} pending insights")
+
+    def set_unified_brain(self, unified_brain):
+        """
+        INTERCONNECTION: Set unified brain reference for bidirectional communication.
+
+        Called after initialization when unified_brain becomes available.
+        """
+        self.unified_brain = unified_brain
+        print("🔗 EvolutionDaemon connected to UnifiedBrain")
+
+    def _notify_brain_of_insight(self, insight: EvolutionInsight):
+        """
+        INTERCONNECTION: Notify UnifiedBrain of new insight.
+
+        This creates the bidirectional link:
+        - Evolution generates insight
+        - Brain immediately updates meta-learner and ASA
+        - Insight becomes available for Axel to present
+        """
+        if self.unified_brain and hasattr(self.unified_brain, 'on_evolution_insight'):
+            try:
+                self.unified_brain.on_evolution_insight({
+                    'id': insight.id,
+                    'insight_type': insight.insight_type,
+                    'title': insight.title,
+                    'content': insight.content,
+                    'confidence': insight.confidence,
+                    'source_nodes': insight.source_nodes,
+                    'suggested_action': insight.suggested_action,
+                    'action_details': insight.action_details
+                })
+                print(f"🔗 Evolution→Brain: notified of insight '{insight.title[:30]}...'")
+            except Exception as e:
+                print(f"⚠️ Failed to notify brain: {e}")
 
     def _load_state(self):
         """Load evolution state from disk."""
@@ -294,6 +332,9 @@ Output format:
                     self.pending_insights.append(insight)
                     insights.append(insight)
 
+                    # INTERCONNECTION: Notify brain immediately
+                    self._notify_brain_of_insight(insight)
+
                     print(f"💡 Evolution insight: {insight.title} (confidence: {insight.confidence:.0%})")
 
         except json.JSONDecodeError as e:
@@ -374,13 +415,18 @@ Respond with 1-5 high-confidence insights as JSON."""
 _evolution_daemon: Optional[EvolutionDaemon] = None
 
 
-def get_evolution_daemon(ml_brain=None, asa=None) -> EvolutionDaemon:
+def get_evolution_daemon(ml_brain=None, asa=None, unified_brain=None) -> EvolutionDaemon:
     """Get or create the evolution daemon singleton."""
     global _evolution_daemon
     if _evolution_daemon is None:
-        _evolution_daemon = EvolutionDaemon(ml_brain=ml_brain, asa=asa)
-    elif ml_brain and _evolution_daemon.ml_brain is None:
-        _evolution_daemon.ml_brain = ml_brain
-    elif asa and _evolution_daemon.asa is None:
-        _evolution_daemon.asa = asa
+        _evolution_daemon = EvolutionDaemon(ml_brain=ml_brain, asa=asa, unified_brain=unified_brain)
+    else:
+        # Update references if provided
+        if ml_brain and _evolution_daemon.ml_brain is None:
+            _evolution_daemon.ml_brain = ml_brain
+        if asa and _evolution_daemon.asa is None:
+            _evolution_daemon.asa = asa
+        # INTERCONNECTION: Connect to unified brain
+        if unified_brain and _evolution_daemon.unified_brain is None:
+            _evolution_daemon.set_unified_brain(unified_brain)
     return _evolution_daemon

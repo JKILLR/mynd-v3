@@ -1762,7 +1762,10 @@ async def record_brain_feedback(
     Record feedback for the brain's learning.
     Call this when the user accepts, rejects, or corrects something.
 
-    NOW ALSO TRAINS GT on accept/reject!
+    NOW WITH INTERCONNECTIONS:
+    - GT trains with reasoning context from Context Lens
+    - Reflection outcomes feed into MetaLearner
+    - ASA learns from context themes
     """
     ctx = context or {}
     print(f"📥 /brain/feedback: {action} on {node_id} - {ctx.get('suggestionType', 'unknown')} ({ctx.get('parentLabel', '?')} → {ctx.get('acceptedLabel', '?')})")
@@ -1772,13 +1775,18 @@ async def record_brain_feedback(
 
     unified_brain.record_feedback(node_id, action, ctx)
 
-    # === GT TRAINING ON FEEDBACK ===
-    # Train Graph Transformer when user accepts or rejects suggestions
+    # === INTERCONNECTION: Get cached reasoning context ===
+    reasoning_context = unified_brain.get_suggestion_context(node_id)
+    if reasoning_context:
+        print(f"🔗 Found cached context: focus='{reasoning_context.get('focus', '')[:30]}...', themes={reasoning_context.get('themes', [])[:3]}")
+
+    # === GT TRAINING WITH REASONING CONTEXT ===
     gt_result = None
     asa_result = None
 
     parent_label = ctx.get('parentLabel', '')
     accepted_label = ctx.get('acceptedLabel', '')
+    should_connect = action in ['accepted', 'accepted_batch', 'brainstorm_accepted']
 
     if parent_label and accepted_label and unified_brain.ml_brain:
         try:
@@ -1789,22 +1797,38 @@ async def record_brain_feedback(
             parent_emb = brain.model.encode(parent_label, convert_to_tensor=True)
             child_emb = brain.model.encode(accepted_label, convert_to_tensor=True)
 
-            # Train GT: accepted = should connect, rejected = should not
-            should_connect = action in ['accepted', 'accepted_batch', 'brainstorm_accepted']
-
-            loss = gt.train_connection_step(
-                source_embedding=parent_emb,
-                target_embedding=child_emb,
-                should_connect=should_connect,
-                weight=1.0  # Full weight for explicit user feedback
-            )
-
-            gt_result = {
-                "trained": True,
-                "should_connect": should_connect,
-                "loss": float(loss) if loss else None
-            }
-            print(f"🧠 GT trained from feedback: {parent_label} → {accepted_label} (should_connect={should_connect}, loss={loss:.4f if loss else 'N/A'})")
+            # INTERCONNECTION: Use context-aware training if we have reasoning context
+            if reasoning_context and hasattr(gt, 'train_with_reasoning_context'):
+                result = gt.train_with_reasoning_context(
+                    source_embedding=parent_emb,
+                    target_embedding=child_emb,
+                    should_connect=should_connect,
+                    reasoning_context=reasoning_context,
+                    weight=1.0
+                )
+                gt_result = {
+                    "trained": True,
+                    "should_connect": should_connect,
+                    "loss": float(result.get('loss', 0)),
+                    "context_informed": True,
+                    "context_boost": result.get('context_boost', 0)
+                }
+                print(f"🧠 GT trained with context: {parent_label} → {accepted_label} (boost={result.get('context_boost', 0):.2f})")
+            else:
+                # Fallback to standard training
+                loss = gt.train_connection_step(
+                    source_embedding=parent_emb,
+                    target_embedding=child_emb,
+                    should_connect=should_connect,
+                    weight=1.0
+                )
+                gt_result = {
+                    "trained": True,
+                    "should_connect": should_connect,
+                    "loss": float(loss.get('loss', 0)) if isinstance(loss, dict) else float(loss) if loss else None,
+                    "context_informed": False
+                }
+                print(f"🧠 GT trained from feedback: {parent_label} → {accepted_label}")
 
         except Exception as e:
             print(f"⚠️ GT training failed: {e}")
@@ -1821,11 +1845,30 @@ async def record_brain_feedback(
         except Exception as e:
             asa_result = {"trained": False, "error": str(e)}
 
+    # === INTERCONNECTION: Record reflection outcome ===
+    suggestion_type = ctx.get('suggestionType', 'unknown')
+    if suggestion_type != 'unknown':
+        unified_brain.record_reflection_outcome(suggestion_type, should_connect)
+        print(f"🔗 Reflection outcome recorded: {suggestion_type} → {'accepted' if should_connect else 'rejected'}")
+
+    # === INTERCONNECTION: Train ASA from Context Lens on positive feedback ===
+    lens_trained = False
+    if should_connect and unified_brain._last_context_lens:
+        # Only train from lens if it's fresh (within 5 minutes)
+        if time.time() - unified_brain._last_lens_timestamp < 300:
+            unified_brain.train_asa_from_context_lens(
+                unified_brain._last_context_lens,
+                was_helpful=True
+            )
+            lens_trained = True
+
     return {
         "status": "recorded",
         "growth_events_today": unified_brain.growth_events_today,
         "gt_training": gt_result,
-        "asa_training": asa_result
+        "asa_training": asa_result,
+        "context_informed": reasoning_context is not None,
+        "lens_trained": lens_trained
     }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -3466,6 +3509,11 @@ async def predict_connections(request: PredictConnectionsRequest):
     )
     elapsed = (time.time() - start) * 1000
 
+    # INTERCONNECTION: Cache Context Lens for this prediction
+    # When feedback comes in, GT will train with this context
+    if unified_brain:
+        unified_brain.cache_recent_lens_for_node(request.node_id)
+
     return PredictResponse(
         connections=[ConnectionPrediction(**c) for c in result["connections"]],
         attention_weights=result["attention_weights"],
@@ -5080,7 +5128,8 @@ async def evolution_background_loop():
         try:
             daemon = get_evolution_daemon(
                 ml_brain=unified_brain.ml_brain if unified_brain else None,
-                asa=get_asa() if _asa_available else None
+                asa=get_asa() if _asa_available else None,
+                unified_brain=unified_brain  # INTERCONNECTION: bidirectional link
             )
 
             if daemon.config['enabled']:
@@ -5125,7 +5174,8 @@ async def run_evolution_now(map_context: str = "", topics: List[str] = None):
     """
     daemon = get_evolution_daemon(
         ml_brain=unified_brain.ml_brain if unified_brain else None,
-        asa=get_asa() if _asa_available else None
+        asa=get_asa() if _asa_available else None,
+        unified_brain=unified_brain  # INTERCONNECTION: bidirectional link
     )
 
     insights = await daemon.run_evolution_session(
