@@ -731,6 +731,94 @@ class MYNDGraphTransformer(nn.Module):
             # Return empty result instead of crashing
             return {'loss': 0.0, 'prediction': 0.5, 'label': float(should_connect), 'error': str(e)}
 
+    def train_with_reasoning_context(
+        self,
+        source_embedding: np.ndarray,
+        target_embedding: np.ndarray,
+        should_connect: bool,
+        reasoning_context: Optional[Dict] = None,
+        weight: float = 1.0
+    ) -> Dict[str, float]:
+        """
+        Train connection with reasoning context from Context Lens.
+
+        INTERCONNECTION: GT now learns not just "A→B = good" but
+        "given this focus/theme context, A→B = good".
+
+        This enables GT to make better predictions when similar contexts arise.
+
+        Args:
+            source_embedding: Embedding of source node
+            target_embedding: Embedding of target node
+            should_connect: True if accepted, False if rejected
+            reasoning_context: Optional dict with:
+                - focus: What user was focused on (str)
+                - themes: Active themes when suggestion was made (List[str])
+                - confidence: Context Lens confidence (float)
+                - understanding_quality: How coherent the context was (float)
+            weight: Base training weight
+
+        Returns:
+            Dict with training results including context influence
+        """
+        # Compute context-aware weight
+        context_weight = weight
+        context_boost = 0.0
+
+        if reasoning_context:
+            # Higher understanding quality = more confident training signal
+            understanding = reasoning_context.get('understanding_quality', 0.5)
+            focus_confidence = reasoning_context.get('confidence', 0.5)
+
+            # Boost weight when context is clear and coherent
+            context_boost = (understanding * 0.3) + (focus_confidence * 0.2)
+            context_weight = min(1.0, weight + context_boost)
+
+            # Track that this was context-informed training
+            if not hasattr(self, '_context_training_stats'):
+                self._context_training_stats = {
+                    'context_informed_steps': 0,
+                    'avg_context_boost': 0.0,
+                    'themes_seen': set()
+                }
+
+            self._context_training_stats['context_informed_steps'] += 1
+            self._context_training_stats['avg_context_boost'] = (
+                self._context_training_stats['avg_context_boost'] * 0.9 + context_boost * 0.1
+            )
+
+            # Track themes that led to connections (limit to 100 to prevent unbounded growth)
+            for theme in reasoning_context.get('themes', []):
+                if len(self._context_training_stats['themes_seen']) < 100:
+                    self._context_training_stats['themes_seen'].add(theme)
+
+        # Delegate to standard training with enhanced weight
+        result = self.train_connection_step(
+            source_embedding=source_embedding,
+            target_embedding=target_embedding,
+            should_connect=should_connect,
+            weight=context_weight
+        )
+
+        # Enrich result with context info
+        result['context_informed'] = reasoning_context is not None
+        result['context_boost'] = context_boost
+        result['effective_weight'] = context_weight
+
+        if reasoning_context:
+            print(f"🔗 GT trained with context: boost={context_boost:.2f}, themes={reasoning_context.get('themes', [])[:3]}")
+
+        return result
+
+    def get_context_training_stats(self) -> Dict:
+        """Get statistics about context-informed training."""
+        if not hasattr(self, '_context_training_stats'):
+            return {'context_informed_steps': 0, 'avg_context_boost': 0.0, 'themes_seen': []}
+
+        stats = self._context_training_stats.copy()
+        stats['themes_seen'] = list(stats['themes_seen'])[:20]  # Convert set to list
+        return stats
+
     def train_batch(
         self,
         examples: List[Dict],

@@ -14,8 +14,14 @@ from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Import ContextSynthesizer for unified context
-from .context_synthesizer import ContextSynthesizer, SynthesizedContext, count_tokens
+# Import ContextSynthesizer for unified context (now with Context Lens)
+from .context_synthesizer import (
+    ContextSynthesizer,
+    SynthesizedContext,
+    EnhancedSynthesizedContext,
+    ContextLens,
+    count_tokens
+)
 
 
 @dataclass
@@ -1554,7 +1560,39 @@ class UnifiedBrain:
         self._last_background_training = 0
         self._background_training_interval = 300  # 5 minutes
 
+        # ═══════════════════════════════════════════════════════════════════
+        # CONTEXT LENS STATE
+        # Tracks understanding quality over time
+        # ═══════════════════════════════════════════════════════════════════
+        self.asa = None  # ASA system reference (set via set_asa)
+        self._last_lens_quality = 0.0
+        self._last_focus = ""
+        self._last_context_lens = None  # INTERCONNECTION: Full lens for later use
+        self._last_lens_timestamp = 0.0
+
+        # ═══════════════════════════════════════════════════════════════════
+        # INTERCONNECTION: Suggestion Context Cache
+        # Stores Context Lens state when suggestions are made
+        # Retrieved when feedback comes in for context-aware GT training
+        # ═══════════════════════════════════════════════════════════════════
+        self._suggestion_contexts = {}  # node_id -> ContextLens snapshot
+        self._suggestion_context_ttl = 3600  # 1 hour TTL
+
+        # ═══════════════════════════════════════════════════════════════════
+        # INTERCONNECTION: Evolution Daemon Callbacks
+        # Bidirectional link: Evolution insights → immediate training
+        # ═══════════════════════════════════════════════════════════════════
+        self._evolution_callbacks = []
+        self._pending_evolution_insights = []
+
+        # ═══════════════════════════════════════════════════════════════════
+        # INTERCONNECTION: Reflection Quality Tracking
+        # Feeds into MetaLearner to track reflection effectiveness
+        # ═══════════════════════════════════════════════════════════════════
+        self._reflection_outcomes = []  # List of (reflection_type, accepted, timestamp)
+
         print("🧠 UnifiedBrain initialized with MetaLearner + SelfImprover + ContextSynthesizer")
+        print("🔍 Context Lens enabled for coherent understanding")
         print("🎓 Background training buffer enabled")
 
     def set_ml_brain(self, ml_brain):
@@ -1572,6 +1610,12 @@ class UnifiedBrain:
         self.supabase = supabase_client
         self.synthesizer.supabase = supabase_client
         print("🔗 Supabase connected to UnifiedBrain + ContextSynthesizer")
+
+    def set_asa(self, asa_system):
+        """Connect ASA system for Context Lens focus detection"""
+        self.asa = asa_system
+        self.synthesizer.asa = asa_system
+        print("🔗 ASA connected to ContextSynthesizer for Context Lens")
 
     def set_conversation_archive(self, archive):
         """Connect conversation archive to synthesizer"""
@@ -1596,6 +1640,208 @@ class UnifiedBrain:
             if source in source_mapping:
                 weights[source_mapping[source]] = weight
         self.synthesizer.set_source_weights(weights)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # INTERCONNECTION METHODS
+    # These create bidirectional links between brain subsystems
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    def cache_suggestion_context(self, node_id: str, context_lens: 'ContextLens'):
+        """
+        INTERCONNECTION: Cache Context Lens state when a suggestion is made.
+
+        When Axel suggests a connection, we capture the reasoning context.
+        Later when the user accepts/rejects, GT trains with this context.
+
+        Args:
+            node_id: The node the suggestion is for
+            context_lens: The Context Lens state at suggestion time
+        """
+        # Clean expired entries
+        now = time.time()
+        expired = [k for k, v in self._suggestion_contexts.items()
+                   if now - v.get('cached_at', 0) > self._suggestion_context_ttl]
+        for k in expired:
+            del self._suggestion_contexts[k]
+
+        # Cache new context
+        self._suggestion_contexts[node_id] = {
+            'cached_at': now,
+            'focus': context_lens.focus.primary_focus if context_lens.focus else '',
+            'confidence': context_lens.focus.focus_confidence if context_lens.focus else 0.5,
+            'themes': [t.name for t in context_lens.themes[:5]] if context_lens.themes else [],
+            'understanding_quality': context_lens.understanding_quality,
+            'detected_intent': context_lens.focus.detected_intent if context_lens.focus else 'exploring'
+        }
+
+    def get_suggestion_context(self, node_id: str) -> Optional[Dict]:
+        """
+        INTERCONNECTION: Retrieve cached context for a suggestion.
+
+        Used when feedback comes in to provide context-aware GT training.
+        """
+        ctx = self._suggestion_contexts.get(node_id)
+        if ctx and time.time() - ctx.get('cached_at', 0) < self._suggestion_context_ttl:
+            return ctx
+        return None
+
+    def get_recent_context_lens(self, max_age_seconds: float = 300.0) -> Optional['ContextLens']:
+        """
+        INTERCONNECTION: Get the most recent Context Lens if it's fresh enough.
+
+        Used when making predictions to associate with the current understanding state.
+        """
+        if self._last_context_lens and time.time() - self._last_lens_timestamp < max_age_seconds:
+            return self._last_context_lens
+        return None
+
+    def cache_recent_lens_for_node(self, node_id: str):
+        """
+        INTERCONNECTION: Cache the recent Context Lens for a node.
+
+        Called when predictions are made to associate with the current context.
+        """
+        lens = self.get_recent_context_lens()
+        if lens:
+            self.cache_suggestion_context(node_id, lens)
+
+    def register_evolution_callback(self, callback):
+        """
+        INTERCONNECTION: Register callback for evolution insights.
+
+        Evolution Daemon calls this to notify UnifiedBrain of new insights.
+        Brain can then immediately update meta-learner and trigger training.
+        """
+        self._evolution_callbacks.append(callback)
+
+    def on_evolution_insight(self, insight: Dict):
+        """
+        INTERCONNECTION: Handle new insight from Evolution Daemon.
+
+        - Updates meta-learner with insight source effectiveness
+        - Adds to pending insights for Axel to present
+        - Triggers immediate ASA learning if available
+
+        Args:
+            insight: Dict with insight_type, title, content, confidence
+        """
+        self._pending_evolution_insights.append(insight)
+
+        # Update meta-learner: evolution is producing insights
+        self.meta_learner.record_source_usage('patterns', success=True)
+
+        # Train ASA on insight content immediately
+        if self.asa and insight.get('content'):
+            try:
+                self.asa.learn_content(
+                    f"{insight.get('title', '')}: {insight.get('content', '')}",
+                    source="evolution",
+                    importance=insight.get('confidence', 0.7)
+                )
+                print(f"🔗 Evolution→ASA: learned from insight '{insight.get('title', '')[:30]}...'")
+            except Exception as e:
+                print(f"⚠️ Evolution→ASA error: {e}")
+
+        # Notify any registered callbacks
+        for callback in self._evolution_callbacks:
+            try:
+                callback(insight)
+            except Exception as e:
+                print(f"⚠️ Evolution callback error: {e}")
+
+    def get_pending_evolution_insights(self, max_count: int = 3) -> List[Dict]:
+        """Get and clear pending evolution insights for Axel to present."""
+        insights = self._pending_evolution_insights[:max_count]
+        self._pending_evolution_insights = self._pending_evolution_insights[max_count:]
+        return insights
+
+    def record_reflection_outcome(self, reflection_type: str, was_accepted: bool):
+        """
+        INTERCONNECTION: Record whether a reflection-generated suggestion was accepted.
+
+        Feeds into MetaLearner to track which reflection types are effective.
+
+        Args:
+            reflection_type: Type of reflection (e.g., 'connection', 'pattern', 'question')
+            was_accepted: Whether the user accepted the suggestion
+        """
+        self._reflection_outcomes.append({
+            'type': reflection_type,
+            'accepted': was_accepted,
+            'timestamp': time.time()
+        })
+
+        # Keep last 100 outcomes
+        if len(self._reflection_outcomes) > 100:
+            self._reflection_outcomes = self._reflection_outcomes[-100:]
+
+        # Update meta-learner with reflection effectiveness
+        self.meta_learner.record_source_usage('patterns', success=was_accepted)
+
+        # If enough samples, adjust insight learning rate
+        type_outcomes = [o for o in self._reflection_outcomes if o['type'] == reflection_type]
+        if len(type_outcomes) >= 5:
+            acceptance_rate = sum(1 for o in type_outcomes if o['accepted']) / len(type_outcomes)
+            # Adjust learning rate based on how effective this reflection type is
+            rate_delta = 0.01 if acceptance_rate > 0.6 else -0.01 if acceptance_rate < 0.3 else 0
+            self.meta_learner.adjust_learning_rate('insights', rate_delta)
+
+    def get_reflection_effectiveness(self) -> Dict:
+        """Get effectiveness stats for each reflection type."""
+        stats = {}
+        for outcome in self._reflection_outcomes:
+            rtype = outcome['type']
+            if rtype not in stats:
+                stats[rtype] = {'total': 0, 'accepted': 0}
+            stats[rtype]['total'] += 1
+            if outcome['accepted']:
+                stats[rtype]['accepted'] += 1
+
+        # Calculate acceptance rates
+        for rtype, data in stats.items():
+            data['acceptance_rate'] = data['accepted'] / data['total'] if data['total'] > 0 else 0
+
+        return stats
+
+    def train_asa_from_context_lens(self, lens: 'ContextLens', was_helpful: bool):
+        """
+        INTERCONNECTION: ASA learns from Context Lens activations.
+
+        When a Context Lens state leads to a good interaction (helpful response,
+        accepted suggestion), strengthen the ASA atoms that were active.
+
+        Args:
+            lens: The Context Lens state
+            was_helpful: Whether this context led to a good outcome
+        """
+        if not self.asa:
+            return
+
+        try:
+            # Learn from themes that were active
+            for theme in (lens.themes or [])[:5]:
+                importance = 0.8 if was_helpful else 0.3
+                # Learn the theme name and description
+                self.asa.learn_content(
+                    f"{theme.name}: {theme.description}",
+                    source="context_lens",
+                    importance=importance
+                )
+
+            # Learn from insights that were active
+            for insight in (lens.insights or [])[:3]:
+                importance = insight.confidence if was_helpful else 0.2
+                self.asa.learn_content(
+                    insight.insight,
+                    source="context_lens",
+                    importance=importance
+                )
+
+            if was_helpful and lens.themes:
+                print(f"🔗 ContextLens→ASA: reinforced {len(lens.themes)} themes")
+
+        except Exception as e:
+            print(f"⚠️ ContextLens→ASA error: {e}")
 
     def get_context(self, request: ContextRequest) -> ContextResponse:
         """
@@ -1652,13 +1898,14 @@ class UnifiedBrain:
                 context_parts.append(("neural_insights", insights))
                 token_breakdown['neural_insights'] = count_tokens(insights)
 
-        # 8. SYNTHESIZED CONTEXT - Unified search across all sources
-        # This is the "funnel" that combines map, memories, goals, and AI memories
+        # 8. SYNTHESIZED CONTEXT + CONTEXT LENS
+        # The "funnel" that combines all sources AND applies comprehension layer
         if include.get('synthesized_context', True) and request.user_message:
             # Update source weights from meta-learner before synthesizing
             self.update_synthesizer_weights()
 
-            synthesized = self.synthesizer.synthesize(
+            # Use enhanced synthesis with Context Lens
+            enhanced = self.synthesizer.synthesize_with_lens(
                 query=request.user_message,
                 user_id=request.user_id,
                 map_data=request.map_data,
@@ -1667,18 +1914,31 @@ class UnifiedBrain:
                 max_tokens=20000  # Expanded context window
             )
 
-            if synthesized.items:
-                synth_doc = self.synthesizer.format_for_prompt(synthesized)
+            if enhanced.items:
+                # Format with both lens understanding AND raw context
+                synth_doc = self.synthesizer.format_enhanced_for_prompt(enhanced)
                 context_parts.append(("synthesized_context", synth_doc))
-                token_breakdown['synthesized_context'] = synthesized.token_estimate
+
+                # Calculate token estimate (lens adds ~300-500 tokens)
+                lens_tokens = count_tokens(self.synthesizer.format_lens_for_prompt(enhanced.lens)) if enhanced.lens else 0
+                token_breakdown['synthesized_context'] = enhanced.token_estimate + lens_tokens
+                token_breakdown['context_lens'] = lens_tokens
 
                 # Store active goal for quick reference
-                if synthesized.active_goal:
+                if enhanced.active_goal:
                     context_parts.append(("active_goal",
-                        f"🎯 **Active Goal**: {synthesized.active_goal.get('title', 'Unknown')}\n"
+                        f"🎯 **Active Goal**: {enhanced.active_goal.get('title', 'Unknown')}\n"
                         f"This query relates to your goal. Keep it in mind."
                     ))
                     token_breakdown['active_goal'] = 50
+
+                # Store lens quality in brain state for monitoring
+                if enhanced.lens:
+                    self._last_lens_quality = enhanced.lens.understanding_quality
+                    self._last_focus = enhanced.lens.focus.primary_focus
+                    # INTERCONNECTION: Store full lens for later use
+                    self._last_context_lens = enhanced.lens
+                    self._last_lens_timestamp = time.time()
 
         # Combine into single document
         context_document = self._combine_context(context_parts, request.request_type)
@@ -1832,7 +2092,13 @@ class UnifiedBrain:
             # Meta-learner stats
             'meta_epoch': self.meta_learner.epoch,
             'meta_improvement': self.meta_learner.get_improvement_trend(),
-            'attention_weights': self.meta_learner.attention_weights
+            'attention_weights': self.meta_learner.attention_weights,
+            # Context Lens stats
+            'context_lens': {
+                'last_understanding_quality': self._last_lens_quality,
+                'last_focus': self._last_focus,
+                'asa_connected': self.asa is not None
+            }
         }
 
         # Add ML brain stats if available
@@ -1842,6 +2108,18 @@ class UnifiedBrain:
             state['ml_uptime'] = health.get('uptime_seconds', 0)
             state['map_synced'] = self.ml_brain.map_state is not None
             state['map_nodes'] = len(self.ml_brain.map_state.nodes) if self.ml_brain.map_state else 0
+
+        # Add ASA stats if available
+        if self.asa:
+            try:
+                asa_stats = self.asa.get_stats()
+                state['asa'] = {
+                    'atom_count': asa_stats.get('atom_count', 0),
+                    'hot_atoms': asa_stats.get('hot_atoms', 0),
+                    'avg_energy': round(asa_stats.get('avg_energy', 0), 3)
+                }
+            except Exception:
+                state['asa'] = {'status': 'connected'}
 
         return state
 
