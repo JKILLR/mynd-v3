@@ -29,6 +29,54 @@ const ReflectionUI = {
     },
 
     // ═══════════════════════════════════════════════════════════════════
+    // SHARED HELPERS
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Fetches insights from both evolution server and client-side ReflectionDaemon.
+     * @param {number} limit - Maximum number of insights to fetch from server
+     * @returns {Promise<Array>} Combined array of insights from all sources
+     */
+    async fetchAllInsights(limit = 50) {
+        const items = [];
+        const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
+
+        // Fetch from evolution server
+        try {
+            const response = await fetch(`${brainUrl}/evolution/insights?limit=${limit}`);
+            if (response.ok) {
+                const data = await response.json();
+                const serverInsights = (data.insights || []).map(insight => ({
+                    id: insight.id,
+                    type: insight.insight_type || insight.type || 'insight',
+                    title: insight.title,
+                    description: insight.description,
+                    confidence: insight.confidence,
+                    priority: insight.confidence > 0.8 ? 'high' : insight.confidence > 0.5 ? 'medium' : 'low',
+                    timestamp: new Date(insight.created_at).getTime(),
+                    relatedNodes: insight.source_nodes || [],
+                    source: 'evolution'
+                }));
+                items.push(...serverInsights);
+            }
+        } catch (e) {
+            console.debug('Could not fetch evolution insights:', e.message);
+        }
+
+        // Also get client-side reflections if available
+        if (typeof ReflectionDaemon !== 'undefined') {
+            try {
+                const clientItems = await ReflectionDaemon.getQueue({ status: 'pending' });
+                items.push(...clientItems.map(i => ({ ...i, source: 'reflection' })));
+            } catch (e) {
+                console.debug('Could not fetch ReflectionDaemon queue:', e.message);
+            }
+        }
+
+        return items;
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
     // INITIALIZATION
     // ═══════════════════════════════════════════════════════════════════
 
@@ -132,6 +180,7 @@ const ReflectionUI = {
             }
         } catch (e) {
             // Fall back to client-side ReflectionDaemon
+            console.debug('Evolution stats unavailable, falling back to ReflectionDaemon:', e.message);
             if (typeof ReflectionDaemon !== 'undefined') {
                 count = await ReflectionDaemon.getPendingCount();
             }
@@ -397,39 +446,13 @@ const ReflectionUI = {
     },
 
     async renderQueueContent() {
-        // Fetch insights from brain server (evolution daemon)
-        let items = [];
-        let serverInsights = [];
+        // Fetch insights from both sources using shared helper
+        const items = await this.fetchAllInsights(50);
         let log = [];
 
-        try {
-            const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
-            const response = await fetch(`${brainUrl}/evolution/insights?limit=50`);
-            if (response.ok) {
-                const data = await response.json();
-                serverInsights = data.insights || [];
-                // Transform server insights to match expected format
-                items = serverInsights.map(insight => ({
-                    id: insight.id,
-                    type: insight.insight_type || insight.type || 'insight',
-                    title: insight.title,
-                    description: insight.description,
-                    confidence: insight.confidence,
-                    priority: insight.confidence > 0.8 ? 'high' : insight.confidence > 0.5 ? 'medium' : 'low',
-                    timestamp: new Date(insight.created_at).getTime(),
-                    relatedNodes: insight.source_nodes || [],
-                    source: 'evolution'  // Mark as from evolution daemon
-                }));
-            }
-        } catch (e) {
-            console.warn('Could not fetch evolution insights:', e);
-        }
-
-        // Also get client-side reflections if available
+        // Get activity log separately (only available from ReflectionDaemon)
         if (typeof ReflectionDaemon !== 'undefined') {
             try {
-                const clientItems = await ReflectionDaemon.getQueue({ status: 'pending' });
-                items = [...items, ...clientItems.map(i => ({ ...i, source: 'reflection' }))];
                 log = ReflectionDaemon.getActivityLog().slice(0, 20);
             } catch (e) { /* ignore */ }
         }
@@ -721,36 +744,8 @@ const ReflectionUI = {
 
         const content = document.getElementById('queue-tab-pending');
         if (content) {
-            // Fetch from both sources (same logic as renderQueueContent)
-            let items = [];
-
-            try {
-                const brainUrl = window.MYND_BRAIN_URL || 'http://localhost:8420';
-                const response = await fetch(`${brainUrl}/evolution/insights?limit=50`);
-                if (response.ok) {
-                    const data = await response.json();
-                    const serverInsights = (data.insights || []).map(insight => ({
-                        id: insight.id,
-                        type: insight.insight_type || insight.type || 'insight',
-                        title: insight.title,
-                        description: insight.description,
-                        confidence: insight.confidence,
-                        priority: insight.confidence > 0.8 ? 'high' : insight.confidence > 0.5 ? 'medium' : 'low',
-                        timestamp: new Date(insight.created_at).getTime(),
-                        relatedNodes: insight.source_nodes || [],
-                        source: 'evolution'
-                    }));
-                    items.push(...serverInsights);
-                }
-            } catch (e) { /* ignore */ }
-
-            if (typeof ReflectionDaemon !== 'undefined') {
-                try {
-                    const clientItems = await ReflectionDaemon.getQueue({ status: 'pending' });
-                    items.push(...clientItems.map(i => ({ ...i, source: 'reflection' })));
-                } catch (e) { /* ignore */ }
-            }
-
+            // Fetch from both sources using shared helper
+            const items = await this.fetchAllInsights(50);
             this.pendingCount = items.length;
 
             // Update tab count

@@ -1572,7 +1572,7 @@ class ContextSynthesizer:
         lines = ["## Current Understanding (Context Lens)"]
 
         # Focus section
-        lines.append(f"\n### Your Focus")
+        lines.append("\n### Your Focus")
         lines.append(f"**Primary**: {lens.focus.primary_focus}")
         lines.append(f"**Intent**: {lens.focus.detected_intent.title()}")
         lines.append(f"**Clarity**: {lens.focus.focus_confidence:.0%}")
@@ -1582,14 +1582,14 @@ class ContextSynthesizer:
 
         # Themes section
         if lens.themes:
-            lines.append(f"\n### Key Themes")
+            lines.append("\n### Key Themes")
             for theme in lens.themes[:3]:
                 relevance_icon = "★" if theme.relevance_to_focus > 0.6 else "◆" if theme.relevance_to_focus > 0.3 else "○"
                 lines.append(f"{relevance_icon} **{theme.name}** ({len(theme.items)} items from {', '.join(theme.sources)})")
 
         # Insights section
         if lens.insights:
-            lines.append(f"\n### Key Insights")
+            lines.append("\n### Key Insights")
             for insight in lens.insights[:3]:
                 conf_icon = "✓" if insight.confidence > 0.7 else "~"
                 lines.append(f"{conf_icon} {insight.insight}")
@@ -1598,7 +1598,7 @@ class ContextSynthesizer:
 
         # Working memory section (from ASA)
         if lens.focus.energy_sources:
-            lines.append(f"\n### Active in Mind")
+            lines.append("\n### Active in Mind")
             for src in lens.focus.energy_sources[:3]:
                 energy = src.get('energy', 0)
                 bar = "█" * int(energy * 5) + "░" * (5 - int(energy * 5))
@@ -1607,18 +1607,18 @@ class ContextSynthesizer:
         # Narrative threads
         growing = [n for n in lens.narratives if n.trajectory == 'growing']
         if growing:
-            lines.append(f"\n### Emerging Topics")
+            lines.append("\n### Emerging Topics")
             for n in growing[:2]:
                 lines.append(f"↗ {n.topic} (gaining momentum)")
 
         # Gaps and suggestions
         if lens.gaps_detected:
-            lines.append(f"\n### Potential Gaps")
+            lines.append("\n### Potential Gaps")
             for gap in lens.gaps_detected[:2]:
                 lines.append(f"⚠ {gap}")
 
         if lens.suggested_explorations:
-            lines.append(f"\n### To Deepen Understanding")
+            lines.append("\n### To Deepen Understanding")
             for suggestion in lens.suggested_explorations[:2]:
                 lines.append(f"→ {suggestion}")
 

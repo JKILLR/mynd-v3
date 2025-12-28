@@ -69,6 +69,9 @@ class Config:
     CLIP_MODEL = "ViT-B-32"
     CLIP_PRETRAINED = "laion2b_s34b_b79k"
 
+    # Context Lens settings
+    CONTEXT_LENS_FRESHNESS_SECONDS = 300  # 5 minutes - max age for lens training
+
     # Device selection
     @staticmethod
     def get_device():
@@ -1854,8 +1857,8 @@ async def record_brain_feedback(
     # === INTERCONNECTION: Train ASA from Context Lens on positive feedback ===
     lens_trained = False
     if should_connect and unified_brain and hasattr(unified_brain, '_last_context_lens') and unified_brain._last_context_lens:
-        # Only train from lens if it's fresh (within 5 minutes)
-        if hasattr(unified_brain, '_last_lens_timestamp') and time.time() - unified_brain._last_lens_timestamp < 300:
+        # Only train from lens if it's fresh
+        if hasattr(unified_brain, '_last_lens_timestamp') and time.time() - unified_brain._last_lens_timestamp < Config.CONTEXT_LENS_FRESHNESS_SECONDS:
             unified_brain.train_asa_from_context_lens(
                 unified_brain._last_context_lens,
                 was_helpful=True
