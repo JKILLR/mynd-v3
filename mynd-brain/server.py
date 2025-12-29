@@ -25,6 +25,7 @@ import base64
 from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
 
+import httpx
 import torch
 import numpy as np
 from fastapi import FastAPI, HTTPException, WebSocket, UploadFile, File, Form
@@ -291,6 +292,28 @@ class BackgroundAnalysisResponse(BaseModel):
     insights_stored: int
     analysis_time_ms: float
     error: Optional[str] = None
+
+# ═══════════════════════════════════════════════════════════════════
+# BRAIN CHAT MODELS (V1 - Simple passthrough to Claude)
+# ═══════════════════════════════════════════════════════════════════
+
+class BrainChatMessage(BaseModel):
+    """A single message in conversation history"""
+    role: str  # "user" or "assistant"
+    content: str
+
+class BrainChatRequest(BaseModel):
+    """Request for /brain/chat endpoint"""
+    user_message: str
+    conversation_history: List[BrainChatMessage] = []
+    selected_node_id: Optional[str] = None
+    user_id: Optional[str] = None
+
+class BrainChatResponse(BaseModel):
+    """Response from /brain/chat endpoint"""
+    message: str
+    time_ms: float = 0
+    model: str = ""
 
 # ═══════════════════════════════════════════════════════════════════
 # CONVERSATION STORE - File-based storage with embeddings
@@ -1873,6 +1896,85 @@ async def record_brain_feedback(
         "context_informed": reasoning_context is not None,
         "lens_trained": lens_trained
     }
+
+# ═══════════════════════════════════════════════════════════════════
+# BRAIN CHAT - V1 Simple Passthrough to Claude
+# Routes chat through local brain instead of Supabase edge function
+# ═══════════════════════════════════════════════════════════════════
+
+AXEL_SYSTEM_PROMPT_V1 = """You are Axel, the AI companion for MYND — a 3D mind mapping app that serves as a cognitive operating system.
+
+You are not just an assistant — you are a cognitive partner. You help users:
+- Capture thoughts before they're lost
+- See connections across their entire knowledge map
+- Advance toward their goals with every interaction
+
+Keep responses concise but insightful. Every response should feel like it comes from someone who knows them and their goals deeply.
+
+Note: This is V1 of the local brain chat. Full context (map, memories, GT predictions) will be added in future versions.
+"""
+
+@app.post("/brain/chat", response_model=BrainChatResponse)
+async def brain_chat(request: BrainChatRequest):
+    """
+    V1: Simple chat passthrough to Claude via local brain.
+    Tests the pipe. Full context assembly comes in V2+.
+    """
+    start = time.time()
+
+    api_key = os.environ.get('ANTHROPIC_API_KEY')
+    if not api_key:
+        raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY not configured")
+
+    model = os.environ.get('CLAUDE_MODEL', 'claude-sonnet-4-20250514')
+
+    # Build messages
+    messages = [{"role": m.role, "content": m.content} for m in request.conversation_history]
+    messages.append({"role": "user", "content": request.user_message})
+
+    print(f"🧠 /brain/chat: {len(messages)} messages, model={model}")
+
+    # Call Claude API directly
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "Content-Type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01"
+                },
+                json={
+                    "model": model,
+                    "max_tokens": 4096,
+                    "system": AXEL_SYSTEM_PROMPT_V1,
+                    "messages": messages
+                }
+            )
+
+        if response.status_code != 200:
+            error_text = response.text
+            print(f"❌ Claude API error: {response.status_code} - {error_text}")
+            raise HTTPException(status_code=502, detail=f"Claude API error: {response.status_code}")
+
+        data = response.json()
+        axel_response = data['content'][0]['text']
+
+        elapsed = (time.time() - start) * 1000
+        print(f"✅ /brain/chat: {elapsed:.0f}ms, {len(axel_response)} chars")
+
+        return BrainChatResponse(
+            message=axel_response,
+            time_ms=elapsed,
+            model=model
+        )
+
+    except httpx.TimeoutException:
+        print("❌ /brain/chat: Claude API timeout")
+        raise HTTPException(status_code=504, detail="Claude API timeout")
+    except Exception as e:
+        print(f"❌ /brain/chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ═══════════════════════════════════════════════════════════════════
 # SELF-LEARNING - Brain learns from its own predictions

@@ -291,6 +291,48 @@ const LocalBrain = {
         return result;
     },
 
+    // ═══════════════════════════════════════════════════════════════════
+    // BRAIN CHAT - V1 Simple Passthrough to Claude
+    // Routes chat through local brain instead of Supabase edge function
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Chat through local brain to Claude.
+     * V1: Simple passthrough. Full context assembly in future versions.
+     *
+     * @param {string} userMessage - The user's message
+     * @param {Array} conversationHistory - Array of {role, content} messages
+     * @param {Object} session - Session context (selectedNodeId, userId)
+     * @returns {Promise<{message, time_ms, model}|null>}
+     */
+    async chat(userMessage, conversationHistory = [], session = {}) {
+        console.log(`🧠 LocalBrain.chat: "${userMessage.substring(0, 50)}..."`);
+
+        return this._tryWithReconnect(async () => {
+            const res = await fetch(`${this.serverUrl}/brain/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_message: userMessage,
+                    conversation_history: conversationHistory.slice(-20),
+                    selected_node_id: session.selectedNodeId || null,
+                    user_id: session.userId || null
+                })
+            });
+
+            if (!res.ok) {
+                const error = await res.text();
+                console.error(`🧠 Brain chat failed: ${res.status}`, error);
+                throw new Error(`Brain chat failed: ${res.status}`);
+            }
+
+            const data = await res.json();
+            console.log(`🧠 Brain chat response: ${data.time_ms?.toFixed(0)}ms via ${data.model}`);
+            return data;
+
+        }, null);
+    },
+
     /**
      * Predict category for text (replaces browser TensorFlow.js)
      * @param {string} text - Text to categorize
