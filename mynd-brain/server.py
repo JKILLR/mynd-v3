@@ -4708,7 +4708,7 @@ async def get_training_pairs(limit: int = 100):
 
 import json
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # Paths for local storage
@@ -5213,6 +5213,336 @@ async def clear_last_conversation():
         os.remove(LAST_CONVERSATION_PATH)
         return {"success": True, "message": "Last conversation cleared"}
     return {"success": True, "message": "No conversation to clear"}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# BRAIN-PRIMARY STORAGE ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════
+# Server-primary, browser-backup architecture for all user data
+
+# Paths for brain-primary storage
+CHAT_MESSAGES_PATH = MYND_DIR / "chat_messages.jsonl"
+SESSION_SUMMARIES_PATH = MYND_DIR / "session_summaries.jsonl"
+PREFERENCES_PATH = MYND_DIR / "preferences.json"
+
+
+class ChatMessageSync(BaseModel):
+    """Single chat message for real-time sync."""
+    role: str
+    content: str
+    timestamp: Optional[str] = None
+    images: Optional[List[dict]] = None  # Metadata only, not base64
+    actions: Optional[List[dict]] = None
+    suggestions: Optional[List[str]] = None
+    session_id: Optional[str] = None
+
+
+class SessionSummaryData(BaseModel):
+    """Session summary data."""
+    summary: str
+    key_outcomes: Optional[str] = None
+    open_threads: Optional[str] = None
+    session_type: str = "casual"
+    tone: Optional[str] = None
+    topics_discussed: List[str] = []
+    nodes_touched: List[str] = []
+    session_started: Optional[str] = None
+    session_ended: Optional[str] = None
+    message_count: int = 0
+
+
+class PreferencesData(BaseModel):
+    """User preferences for brain-primary storage."""
+    tts_enabled: Optional[bool] = None
+    theme: Optional[str] = None
+    voice_settings: Optional[dict] = None
+    custom_settings: Optional[dict] = None
+
+
+@app.post("/brain/chat/message")
+async def sync_chat_message(message: ChatMessageSync):
+    """
+    REAL-TIME CHAT MESSAGE SYNC (Brain-Primary)
+
+    Called after each message to sync to brain server.
+    - Appends to persistent chat log
+    - Extracts training data immediately
+    - Returns confirmation for browser to update localStorage backup
+    """
+    MYND_DIR.mkdir(parents=True, exist_ok=True)
+
+    timestamp = message.timestamp or datetime.now().isoformat()
+
+    # Build message record
+    record = {
+        "id": str(uuid4()),
+        "role": message.role,
+        "content": message.content,
+        "timestamp": timestamp,
+        "session_id": message.session_id,
+        "images_meta": message.images,  # Metadata only
+        "actions": message.actions,
+        "suggestions": message.suggestions
+    }
+
+    # Append to persistent log
+    with open(CHAT_MESSAGES_PATH, 'a') as f:
+        f.write(json.dumps(record) + '\n')
+
+    # Train on assistant responses immediately
+    training_performed = False
+    if message.role == "assistant" and message.content:
+        # Try to get previous user message for training pair
+        try:
+            messages = []
+            with open(CHAT_MESSAGES_PATH, 'r') as f:
+                for line in f:
+                    if line.strip():
+                        messages.append(json.loads(line))
+
+            # Find last user message before this one
+            for i in range(len(messages) - 2, -1, -1):
+                if messages[i]['role'] == 'user':
+                    user_msg = messages[i]['content'][:500]
+                    ai_msg = message.content[:500]
+
+                    # Train GT on conversation flow
+                    if unified_brain and unified_brain.ml_brain:
+                        brain = unified_brain.ml_brain
+                        gt = brain.graph_transformer
+
+                        user_emb = brain.model.encode(user_msg, convert_to_tensor=True)
+                        ai_emb = brain.model.encode(ai_msg, convert_to_tensor=True)
+
+                        gt.train_connection_step(
+                            source_embedding=user_emb,
+                            target_embedding=ai_emb,
+                            should_connect=True,
+                            weight=0.5
+                        )
+                        training_performed = True
+
+                    # Train ASA
+                    if _asa_available:
+                        asa = get_asa()
+                        combined = f"User: {user_msg}\nAxel: {ai_msg}"
+                        asa.learn_from_text(combined, importance=0.5, category="chat")
+
+                    # Save training pair
+                    TRAINING_PAIRS_PATH = MYND_DIR / "training_pairs.jsonl"
+                    pair = {
+                        "timestamp": timestamp,
+                        "source": "realtime_chat",
+                        "user": user_msg,
+                        "assistant": ai_msg
+                    }
+                    with open(TRAINING_PAIRS_PATH, 'a') as f:
+                        f.write(json.dumps(pair) + '\n')
+
+                    break
+        except Exception as e:
+            print(f"⚠️ Training from chat message error: {e}")
+
+    print(f"💬 Chat message synced: {message.role} ({len(message.content)} chars){' + GT trained' if training_performed else ''}")
+
+    return {
+        "success": True,
+        "message_id": record["id"],
+        "trained": training_performed
+    }
+
+
+@app.get("/brain/chat/messages")
+async def get_chat_messages(limit: int = 200, session_id: Optional[str] = None):
+    """
+    Get chat messages from brain storage.
+    Primary source for conversation history.
+    """
+    if not CHAT_MESSAGES_PATH.exists():
+        return {"messages": [], "total": 0}
+
+    messages = []
+    with open(CHAT_MESSAGES_PATH, 'r') as f:
+        for line in f:
+            if line.strip():
+                try:
+                    msg = json.loads(line)
+                    if session_id is None or msg.get('session_id') == session_id:
+                        messages.append(msg)
+                except json.JSONDecodeError:
+                    continue
+
+    # Sort by timestamp, newest last
+    messages.sort(key=lambda m: m.get('timestamp', ''))
+
+    # Return last N messages
+    return {
+        "messages": messages[-limit:],
+        "total": len(messages)
+    }
+
+
+@app.post("/brain/session/summary")
+async def save_session_summary(summary: SessionSummaryData):
+    """
+    BRAIN-PRIMARY SESSION SUMMARY STORAGE
+
+    Called when session ends to save summary to brain.
+    Trains on session patterns for continuity learning.
+    """
+    MYND_DIR.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().isoformat()
+    summary_id = str(uuid4())
+
+    # Build summary record
+    record = {
+        "id": summary_id,
+        "timestamp": timestamp,
+        "session_started": summary.session_started,
+        "session_ended": summary.session_ended or timestamp,
+        "summary": summary.summary,
+        "key_outcomes": summary.key_outcomes,
+        "open_threads": summary.open_threads,
+        "session_type": summary.session_type,
+        "tone": summary.tone,
+        "topics_discussed": summary.topics_discussed[:20],  # Cap at 20
+        "nodes_touched": summary.nodes_touched[:50],  # Cap at 50
+        "message_count": summary.message_count
+    }
+
+    # Append to summaries log
+    with open(SESSION_SUMMARIES_PATH, 'a') as f:
+        f.write(json.dumps(record) + '\n')
+
+    # Train on session summary for continuity
+    if _asa_available and summary.summary:
+        try:
+            asa = get_asa()
+            # Create rich context from summary
+            topics_text = ", ".join(summary.topics_discussed) if summary.topics_discussed else "general"
+            summary_context = f"Session ({summary.session_type}): {summary.summary}"
+            if summary.key_outcomes:
+                summary_context += f"\nOutcomes: {summary.key_outcomes}"
+            if summary.open_threads:
+                summary_context += f"\nOpen threads: {summary.open_threads}"
+
+            asa.learn_from_text(
+                summary_context,
+                importance=0.7,  # Higher weight for session insights
+                category="session_summary"
+            )
+        except Exception as e:
+            print(f"⚠️ ASA session training error: {e}")
+
+    print(f"📝 Session summary saved: {summary_id} ({summary.session_type}, {summary.message_count} messages)")
+
+    return {
+        "success": True,
+        "summary_id": summary_id,
+        "timestamp": timestamp
+    }
+
+
+@app.get("/brain/session/summaries")
+async def get_session_summaries(limit: int = 20, days_back: int = 7):
+    """
+    Get session summaries from brain storage.
+    Primary source for session history.
+    """
+    if not SESSION_SUMMARIES_PATH.exists():
+        return {"summaries": [], "total": 0}
+
+    cutoff = datetime.now() - timedelta(days=days_back)
+    summaries = []
+
+    with open(SESSION_SUMMARIES_PATH, 'r') as f:
+        for line in f:
+            if line.strip():
+                try:
+                    summary = json.loads(line)
+                    # Filter by date if timestamp exists
+                    if 'timestamp' in summary:
+                        try:
+                            ts = datetime.fromisoformat(summary['timestamp'].replace('Z', '+00:00'))
+                            if ts.replace(tzinfo=None) < cutoff:
+                                continue
+                        except:
+                            pass
+                    summaries.append(summary)
+                except json.JSONDecodeError:
+                    continue
+
+    # Sort by timestamp, newest first
+    summaries.sort(key=lambda s: s.get('timestamp', ''), reverse=True)
+
+    return {
+        "summaries": summaries[:limit],
+        "total": len(summaries)
+    }
+
+
+@app.post("/brain/preferences")
+async def save_preferences(prefs: PreferencesData):
+    """
+    BRAIN-PRIMARY PREFERENCES STORAGE
+
+    Saves user preferences to brain server.
+    Browser localStorage becomes backup only.
+    """
+    MYND_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Load existing preferences
+    existing = {}
+    if PREFERENCES_PATH.exists():
+        try:
+            with open(PREFERENCES_PATH, 'r') as f:
+                existing = json.load(f)
+        except:
+            pass
+
+    # Update with new preferences (only non-None values)
+    if prefs.tts_enabled is not None:
+        existing['tts_enabled'] = prefs.tts_enabled
+    if prefs.theme is not None:
+        existing['theme'] = prefs.theme
+    if prefs.voice_settings is not None:
+        existing['voice_settings'] = prefs.voice_settings
+    if prefs.custom_settings is not None:
+        existing['custom_settings'] = {
+            **existing.get('custom_settings', {}),
+            **prefs.custom_settings
+        }
+
+    existing['last_updated'] = datetime.now().isoformat()
+
+    # Save
+    with open(PREFERENCES_PATH, 'w') as f:
+        json.dump(existing, f, indent=2)
+
+    print(f"⚙️ Preferences saved to brain")
+
+    return {
+        "success": True,
+        "preferences": existing
+    }
+
+
+@app.get("/brain/preferences")
+async def get_preferences():
+    """
+    Get user preferences from brain storage.
+    Primary source - browser localStorage is backup.
+    """
+    if not PREFERENCES_PATH.exists():
+        return {"preferences": {}, "exists": False}
+
+    try:
+        with open(PREFERENCES_PATH, 'r') as f:
+            prefs = json.load(f)
+        return {"preferences": prefs, "exists": True}
+    except Exception as e:
+        return {"preferences": {}, "exists": False, "error": str(e)}
 
 
 # ═══════════════════════════════════════════════════════════════════

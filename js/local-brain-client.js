@@ -333,6 +333,177 @@ const LocalBrain = {
         }, null);
     },
 
+    // ═══════════════════════════════════════════════════════════════════
+    // BRAIN-PRIMARY STORAGE - Server-first, localStorage-backup
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Sync a single chat message to brain (real-time, not just on page close).
+     * Brain is primary storage; localStorage is backup.
+     *
+     * @param {Object} message - {role, content, timestamp, images, actions, suggestions}
+     * @param {string} sessionId - Current session token
+     * @returns {Promise<{success, message_id, trained}|null>}
+     */
+    async syncChatMessage(message, sessionId = null) {
+        if (!this.isAvailable) return null;
+
+        return this._tryWithReconnect(async () => {
+            const res = await fetch(`${this.serverUrl}/brain/chat/message`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    role: message.role,
+                    content: message.content,
+                    timestamp: message.timestamp || new Date().toISOString(),
+                    images: message.images?.map(img => ({ hadImage: true })),  // Metadata only
+                    actions: message.actions,
+                    suggestions: message.suggestions,
+                    session_id: sessionId
+                })
+            });
+
+            if (!res.ok) return null;
+            const data = await res.json();
+            if (data.trained) {
+                console.log(`🧠 Chat message synced + GT trained`);
+            }
+            return data;
+        }, null);
+    },
+
+    /**
+     * Load chat history from brain (primary source).
+     *
+     * @param {number} limit - Max messages to load
+     * @returns {Promise<Array|null>} - Messages array or null if unavailable
+     */
+    async loadChatHistory(limit = 200) {
+        if (!this.isAvailable) return null;
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/chat/messages?limit=${limit}`, {
+                signal: AbortSignal.timeout(5000)
+            });
+
+            if (!res.ok) return null;
+            const data = await res.json();
+            console.log(`🧠 Loaded ${data.messages.length} messages from brain`);
+            return data.messages;
+        } catch (e) {
+            console.warn('Failed to load chat history from brain:', e);
+            return null;
+        }
+    },
+
+    /**
+     * Save session summary to brain (primary storage).
+     *
+     * @param {Object} summary - Session summary data
+     * @returns {Promise<{success, summary_id}|null>}
+     */
+    async saveSessionSummary(summary) {
+        if (!this.isAvailable) return null;
+
+        return this._tryWithReconnect(async () => {
+            const res = await fetch(`${this.serverUrl}/brain/session/summary`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    summary: summary.summary,
+                    key_outcomes: summary.key_outcomes,
+                    open_threads: summary.open_threads,
+                    session_type: summary.session_type || 'casual',
+                    tone: summary.tone,
+                    topics_discussed: summary.topics_discussed || [],
+                    nodes_touched: summary.nodes_touched || [],
+                    session_started: summary.session_started,
+                    session_ended: summary.session_ended,
+                    message_count: summary.message_count || 0
+                })
+            });
+
+            if (!res.ok) return null;
+            const data = await res.json();
+            console.log(`🧠 Session summary saved to brain: ${data.summary_id}`);
+            return data;
+        }, null);
+    },
+
+    /**
+     * Load session summaries from brain (primary source).
+     *
+     * @param {number} limit - Max summaries to load
+     * @param {number} daysBack - How many days back to look
+     * @returns {Promise<Array|null>}
+     */
+    async loadSessionSummaries(limit = 20, daysBack = 7) {
+        if (!this.isAvailable) return null;
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/session/summaries?limit=${limit}&days_back=${daysBack}`, {
+                signal: AbortSignal.timeout(5000)
+            });
+
+            if (!res.ok) return null;
+            const data = await res.json();
+            console.log(`🧠 Loaded ${data.summaries.length} session summaries from brain`);
+            return data.summaries;
+        } catch (e) {
+            console.warn('Failed to load session summaries from brain:', e);
+            return null;
+        }
+    },
+
+    /**
+     * Save user preferences to brain (primary storage).
+     *
+     * @param {Object} prefs - Preferences to save
+     * @returns {Promise<{success, preferences}|null>}
+     */
+    async savePreferences(prefs) {
+        if (!this.isAvailable) return null;
+
+        return this._tryWithReconnect(async () => {
+            const res = await fetch(`${this.serverUrl}/brain/preferences`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(prefs)
+            });
+
+            if (!res.ok) return null;
+            const data = await res.json();
+            console.log(`🧠 Preferences saved to brain`);
+            return data;
+        }, null);
+    },
+
+    /**
+     * Load user preferences from brain (primary source).
+     *
+     * @returns {Promise<Object|null>}
+     */
+    async loadPreferences() {
+        if (!this.isAvailable) return null;
+
+        try {
+            const res = await fetch(`${this.serverUrl}/brain/preferences`, {
+                signal: AbortSignal.timeout(5000)
+            });
+
+            if (!res.ok) return null;
+            const data = await res.json();
+            if (data.exists) {
+                console.log(`🧠 Loaded preferences from brain`);
+                return data.preferences;
+            }
+            return null;
+        } catch (e) {
+            console.warn('Failed to load preferences from brain:', e);
+            return null;
+        }
+    },
+
     /**
      * Predict category for text (replaces browser TensorFlow.js)
      * @param {string} text - Text to categorize
