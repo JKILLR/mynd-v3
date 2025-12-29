@@ -1926,7 +1926,7 @@ async def brain_chat(request: BrainChatRequest):
     if not api_key:
         raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY not configured")
 
-    model = os.environ.get('CLAUDE_MODEL', 'claude-sonnet-4-20250514')
+    model = os.environ.get('CLAUDE_MODEL', 'claude-opus-4-5-20251101')
 
     # Build messages
     messages = [{"role": m.role, "content": m.content} for m in request.conversation_history]
