@@ -346,16 +346,23 @@ const LocalBrain = {
      * @returns {Promise<{success, message_id, trained}|null>}
      */
     async syncChatMessage(message, sessionId = null) {
-        if (!this.isAvailable) return null;
-
+        // Allow _tryWithReconnect to handle availability and reconnection
         return this._tryWithReconnect(async () => {
+            // Normalize timestamp to ISO string (handles numeric Date.now() or existing ISO strings)
+            let timestamp = message.timestamp;
+            if (typeof timestamp === 'number') {
+                timestamp = new Date(timestamp).toISOString();
+            } else if (!timestamp) {
+                timestamp = new Date().toISOString();
+            }
+
             const res = await fetch(`${this.serverUrl}/brain/chat/message`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     role: message.role,
                     content: message.content,
-                    timestamp: message.timestamp || new Date().toISOString(),
+                    timestamp: timestamp,
                     images: message.images?.map(img => ({ hadImage: true })),  // Metadata only
                     actions: message.actions,
                     suggestions: message.suggestions,
@@ -379,9 +386,8 @@ const LocalBrain = {
      * @returns {Promise<Array|null>} - Messages array or null if unavailable
      */
     async loadChatHistory(limit = 200) {
-        if (!this.isAvailable) return null;
-
-        try {
+        // Use _tryWithReconnect for auto-recovery from server restarts
+        return this._tryWithReconnect(async () => {
             const res = await fetch(`${this.serverUrl}/brain/chat/messages?limit=${limit}`, {
                 signal: AbortSignal.timeout(5000)
             });
@@ -390,10 +396,7 @@ const LocalBrain = {
             const data = await res.json();
             console.log(`🧠 Loaded ${data.messages.length} messages from brain`);
             return data.messages;
-        } catch (e) {
-            console.warn('Failed to load chat history from brain:', e);
-            return null;
-        }
+        }, null);
     },
 
     /**
@@ -438,9 +441,8 @@ const LocalBrain = {
      * @returns {Promise<Array|null>}
      */
     async loadSessionSummaries(limit = 20, daysBack = 7) {
-        if (!this.isAvailable) return null;
-
-        try {
+        // Use _tryWithReconnect for auto-recovery from server restarts
+        return this._tryWithReconnect(async () => {
             const res = await fetch(`${this.serverUrl}/brain/session/summaries?limit=${limit}&days_back=${daysBack}`, {
                 signal: AbortSignal.timeout(5000)
             });
@@ -449,10 +451,7 @@ const LocalBrain = {
             const data = await res.json();
             console.log(`🧠 Loaded ${data.summaries.length} session summaries from brain`);
             return data.summaries;
-        } catch (e) {
-            console.warn('Failed to load session summaries from brain:', e);
-            return null;
-        }
+        }, null);
     },
 
     /**
@@ -462,8 +461,7 @@ const LocalBrain = {
      * @returns {Promise<{success, preferences}|null>}
      */
     async savePreferences(prefs) {
-        if (!this.isAvailable) return null;
-
+        // Allow _tryWithReconnect to handle availability and reconnection
         return this._tryWithReconnect(async () => {
             const res = await fetch(`${this.serverUrl}/brain/preferences`, {
                 method: 'POST',
@@ -484,9 +482,8 @@ const LocalBrain = {
      * @returns {Promise<Object|null>}
      */
     async loadPreferences() {
-        if (!this.isAvailable) return null;
-
-        try {
+        // Use _tryWithReconnect for auto-recovery from server restarts
+        return this._tryWithReconnect(async () => {
             const res = await fetch(`${this.serverUrl}/brain/preferences`, {
                 signal: AbortSignal.timeout(5000)
             });
@@ -498,10 +495,7 @@ const LocalBrain = {
                 return data.preferences;
             }
             return null;
-        } catch (e) {
-            console.warn('Failed to load preferences from brain:', e);
-            return null;
-        }
+        }, null);
     },
 
     /**

@@ -34487,23 +34487,29 @@ Respond with ONLY the JSON, no markdown or explanation.`;
                         if (!error && data && data.length > 0) {
                             console.log(`📚 Found ${data.length} sessions in Supabase - migrating to brain`);
 
-                            // Migrate to brain in background
+                            // Migrate to brain with batching to avoid overwhelming server
                             if (window.LocalBrain?.isAvailable) {
-                                for (const session of data) {
-                                    LocalBrain.saveSessionSummary({
-                                        summary: session.summary,
-                                        key_outcomes: session.key_outcomes,
-                                        open_threads: session.open_threads,
-                                        session_type: session.session_type,
-                                        tone: session.tone,
-                                        topics_discussed: session.topics_discussed || [],
-                                        nodes_touched: session.nodes_touched || [],
-                                        session_started: session.session_started,
-                                        session_ended: session.session_ended,
-                                        message_count: session.message_count || 0
-                                    }).catch(() => {});
+                                const batchSize = 5;
+                                let successCount = 0;
+                                for (let i = 0; i < data.length; i += batchSize) {
+                                    const batch = data.slice(i, i + batchSize);
+                                    const results = await Promise.allSettled(
+                                        batch.map(session => LocalBrain.saveSessionSummary({
+                                            summary: session.summary,
+                                            key_outcomes: session.key_outcomes,
+                                            open_threads: session.open_threads,
+                                            session_type: session.session_type,
+                                            tone: session.tone,
+                                            topics_discussed: session.topics_discussed || [],
+                                            nodes_touched: session.nodes_touched || [],
+                                            session_started: session.session_started,
+                                            session_ended: session.session_ended,
+                                            message_count: session.message_count || 0
+                                        }))
+                                    );
+                                    successCount += results.filter(r => r.status === 'fulfilled' && r.value?.success).length;
                                 }
-                                console.log(`🧠 Migration of ${data.length} sessions to brain complete`);
+                                console.log(`🧠 Migration complete: ${successCount}/${data.length} sessions synced`);
                             }
 
                             return data;
@@ -35336,13 +35342,21 @@ Respond with ONLY the JSON, no markdown or explanation.`;
                 if (migrationData && migrationData.length > 0) {
                     this.conversation = migrationData;
 
-                    // Migrate each message to brain (in background)
+                    // Migrate messages to brain with batching to avoid overwhelming server
                     if (window.LocalBrain?.isAvailable) {
                         console.log(`🧠 Migrating ${migrationData.length} messages to brain...`);
-                        for (const msg of migrationData) {
-                            LocalBrain.syncChatMessage(msg, this.currentSessionToken).catch(() => {});
+
+                        // Batch migration: process in chunks of 10
+                        const batchSize = 10;
+                        let successCount = 0;
+                        for (let i = 0; i < migrationData.length; i += batchSize) {
+                            const batch = migrationData.slice(i, i + batchSize);
+                            const results = await Promise.allSettled(
+                                batch.map(msg => LocalBrain.syncChatMessage(msg, this.currentSessionToken))
+                            );
+                            successCount += results.filter(r => r.status === 'fulfilled' && r.value?.success).length;
                         }
-                        console.log(`🧠 Migration to brain complete`);
+                        console.log(`🧠 Migration complete: ${successCount}/${migrationData.length} messages synced`);
                     }
 
                     // Update localStorage backup
@@ -35656,7 +35670,9 @@ Respond with ONLY the JSON, no markdown or explanation.`;
         },
 
         init() {
-            // BRAIN-PRIMARY: Load preferences from brain first
+            // BRAIN-PRIMARY: Load preferences from brain asynchronously
+            // Note: ttsEnabled already has localStorage default from object init
+            // Brain fetch updates it when complete - safe since TTS isn't used until user action
             this.loadPreferencesFromBrain();
 
             // Check if LocalBrain Whisper is available (better transcription)

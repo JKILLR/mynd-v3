@@ -5291,19 +5291,26 @@ async def sync_chat_message(message: ChatMessageSync):
 
     # Train on assistant responses immediately
     training_performed = False
-    if message.role == "assistant" and message.content:
+    if message.role == "assistant" and message.content and message.session_id:
         # Try to get previous user message for training pair
+        # Only look at messages from the same session to avoid cross-session pairing
         try:
-            messages = []
+            # Read recent messages, filtering by session_id
+            session_messages = []
             with open(CHAT_MESSAGES_PATH, 'r') as f:
                 for line in f:
                     if line.strip():
-                        messages.append(json.loads(line))
+                        try:
+                            msg = json.loads(line)
+                            if msg.get('session_id') == message.session_id:
+                                session_messages.append(msg)
+                        except json.JSONDecodeError:
+                            continue
 
-            # Find last user message before this one
-            for i in range(len(messages) - 2, -1, -1):
-                if messages[i]['role'] == 'user':
-                    user_msg = messages[i]['content'][:500]
+            # Find last user message in this session (before current message)
+            for i in range(len(session_messages) - 2, -1, -1):
+                if session_messages[i]['role'] == 'user':
+                    user_msg = session_messages[i]['content'][:500]
                     ai_msg = message.content[:500]
 
                     # Train GT on conversation flow
@@ -5333,6 +5340,7 @@ async def sync_chat_message(message: ChatMessageSync):
                     pair = {
                         "timestamp": timestamp,
                         "source": "realtime_chat",
+                        "session_id": message.session_id,
                         "user": user_msg,
                         "assistant": ai_msg
                     }
@@ -5419,9 +5427,9 @@ async def save_session_summary(summary: SessionSummaryData):
     if _asa_available and summary.summary:
         try:
             asa = get_asa()
-            # Create rich context from summary
+            # Create rich context from summary including topics
             topics_text = ", ".join(summary.topics_discussed) if summary.topics_discussed else "general"
-            summary_context = f"Session ({summary.session_type}): {summary.summary}"
+            summary_context = f"Session ({summary.session_type}) on {topics_text}: {summary.summary}"
             if summary.key_outcomes:
                 summary_context += f"\nOutcomes: {summary.key_outcomes}"
             if summary.open_threads:
@@ -5467,8 +5475,9 @@ async def get_session_summaries(limit: int = 20, days_back: int = 7):
                             ts = datetime.fromisoformat(summary['timestamp'].replace('Z', '+00:00'))
                             if ts.replace(tzinfo=None) < cutoff:
                                 continue
-                        except:
-                            pass
+                        except ValueError:
+                            # Malformed timestamp - include the summary but log warning
+                            print(f"⚠️ Malformed timestamp in session summary: {summary.get('timestamp')}")
                     summaries.append(summary)
                 except json.JSONDecodeError:
                     continue
@@ -5498,8 +5507,8 @@ async def save_preferences(prefs: PreferencesData):
         try:
             with open(PREFERENCES_PATH, 'r') as f:
                 existing = json.load(f)
-        except:
-            pass
+        except (OSError, json.JSONDecodeError) as e:
+            print(f"⚠️ Could not load existing preferences: {e}")
 
     # Update with new preferences (only non-None values)
     if prefs.tts_enabled is not None:
@@ -5541,7 +5550,8 @@ async def get_preferences():
         with open(PREFERENCES_PATH, 'r') as f:
             prefs = json.load(f)
         return {"preferences": prefs, "exists": True}
-    except Exception as e:
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"⚠️ Could not read preferences file: {e}")
         return {"preferences": {}, "exists": False, "error": str(e)}
 
 
