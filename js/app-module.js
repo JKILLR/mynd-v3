@@ -34012,63 +34012,76 @@ CURRENT REQUEST CONTEXT
             topics_discussed = [],
             nodes_touched = []
         }) {
-            // Write a session summary to Supabase
+            // Merge tracked topics/nodes with provided ones
+            const allTopics = [...new Set([
+                ...topics_discussed,
+                ...Array.from(this.sessionTopics || [])
+            ])];
+            const allNodes = [...new Set([
+                ...nodes_touched,
+                ...Array.from(this.sessionNodesAccessed || [])
+            ])];
+
+            const summaryData = {
+                summary: summary,
+                key_outcomes: key_outcomes || null,
+                open_threads: open_threads || null,
+                session_type: session_type || 'casual',
+                tone: tone || null,
+                topics_discussed: allTopics.slice(0, 20),
+                nodes_touched: allNodes.slice(0, 50),
+                session_started: this.sessionStartTime?.toISOString() || new Date().toISOString(),
+                session_ended: new Date().toISOString(),
+                message_count: this.sessionMessageCount || 0
+            };
+
+            let brainResult = null;
+            let supabaseResult = null;
+
+            // 1. BRAIN-PRIMARY: Save to local brain first
             try {
-                if (typeof supabase === 'undefined' || !supabase) {
-                    console.warn('Cannot write session summary: Supabase not available');
-                    return null;
+                if (window.LocalBrain?.isAvailable) {
+                    brainResult = await LocalBrain.saveSessionSummary(summaryData);
+                    if (brainResult?.success) {
+                        console.log(`🧠 Session summary saved to brain: ${brainResult.summary_id}`);
+                        this.sessionSummarized = true;
+                    }
                 }
-
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user) {
-                    console.warn('Cannot write session summary: Not signed in');
-                    return null;
-                }
-
-                // Merge tracked topics/nodes with provided ones
-                const allTopics = [...new Set([
-                    ...topics_discussed,
-                    ...Array.from(this.sessionTopics)
-                ])];
-                const allNodes = [...new Set([
-                    ...nodes_touched,
-                    ...Array.from(this.sessionNodesAccessed)
-                ])];
-
-                const sessionData = {
-                    user_id: user.id,
-                    session_started: this.sessionStartTime?.toISOString() || new Date().toISOString(),
-                    session_ended: new Date().toISOString(),
-                    previous_session_id: this.lastSessionId || null,
-                    topics_discussed: allTopics.slice(0, 20), // Limit to 20
-                    nodes_touched: allNodes.slice(0, 50), // Limit to 50
-                    key_outcomes: key_outcomes || null,
-                    open_threads: open_threads || null,
-                    session_type: session_type || 'casual',
-                    summary: summary,
-                    tone: tone || null,
-                    message_count: this.sessionMessageCount
-                };
-
-                const { data, error } = await supabase
-                    .from('session_summaries')
-                    .insert(sessionData)
-                    .select()
-                    .single();
-
-                if (error) {
-                    console.error('Failed to write session summary:', error);
-                    return null;
-                }
-
-                console.log(`📝 Session summary saved: ${data.id}`);
-                this.currentSessionId = data.id;
-                this.sessionSummarized = true;
-                return data;
             } catch (e) {
-                console.error('Session summary error:', e);
-                return null;
+                console.warn('Failed to save session summary to brain:', e);
             }
+
+            // 2. BACKUP: Also save to Supabase if signed in
+            try {
+                if (typeof supabase !== 'undefined' && supabase) {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                        const { data, error } = await supabase
+                            .from('session_summaries')
+                            .insert({
+                                user_id: user.id,
+                                previous_session_id: this.lastSessionId || null,
+                                ...summaryData
+                            })
+                            .select()
+                            .single();
+
+                        if (!error && data) {
+                            supabaseResult = data;
+                            this.currentSessionId = data.id;
+                            console.log(`📝 Session summary backed up to Supabase: ${data.id}`);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Supabase session summary backup failed:', e);
+            }
+
+            // Return brain result if available, otherwise Supabase result
+            if (brainResult?.success) {
+                return { id: brainResult.summary_id, ...summaryData };
+            }
+            return supabaseResult;
         },
 
         // ═══════════════════════════════════════════════════════════════════
@@ -34445,33 +34458,66 @@ Respond with ONLY the JSON, no markdown or explanation.`;
         },
 
         async getRecentSessions(limit = 20, daysBack = 7) {
-            // Get session summaries from the last N days for wake-up synthesis
-            // Now time-based (7 days default) with a count cap to avoid token explosion
+            // Get session summaries - BRAIN-PRIMARY, Supabase backup
             try {
-                if (typeof supabase === 'undefined' || !supabase) return [];
-
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user) return [];
-
-                // Calculate date threshold (7 days ago by default)
-                const cutoffDate = new Date();
-                cutoffDate.setDate(cutoffDate.getDate() - daysBack);
-
-                const { data, error } = await supabase
-                    .from('session_summaries')
-                    .select('*')
-                    .eq('user_id', user.id)
-                    .gte('session_ended', cutoffDate.toISOString())
-                    .order('session_ended', { ascending: false })
-                    .limit(limit);
-
-                if (error) {
-                    console.warn('Failed to fetch recent sessions:', error);
-                    return [];
+                // 1. BRAIN-PRIMARY: Try local brain first
+                if (window.LocalBrain?.isAvailable) {
+                    const brainSessions = await LocalBrain.loadSessionSummaries(limit, daysBack);
+                    if (brainSessions && brainSessions.length > 0) {
+                        console.log(`🧠 Loaded ${brainSessions.length} sessions from brain (PRIMARY)`);
+                        return brainSessions;
+                    }
                 }
 
-                console.log(`📚 Loaded ${data?.length || 0} sessions from last ${daysBack} days`);
-                return data || [];
+                // 2. FALLBACK: Try Supabase (and migrate to brain)
+                if (typeof supabase !== 'undefined' && supabase) {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                        const cutoffDate = new Date();
+                        cutoffDate.setDate(cutoffDate.getDate() - daysBack);
+
+                        const { data, error } = await supabase
+                            .from('session_summaries')
+                            .select('*')
+                            .eq('user_id', user.id)
+                            .gte('session_ended', cutoffDate.toISOString())
+                            .order('session_ended', { ascending: false })
+                            .limit(limit);
+
+                        if (!error && data && data.length > 0) {
+                            console.log(`📚 Found ${data.length} sessions in Supabase - migrating to brain`);
+
+                            // Migrate to brain with batching to avoid overwhelming server
+                            if (window.LocalBrain?.isAvailable) {
+                                const batchSize = 5;
+                                let successCount = 0;
+                                for (let i = 0; i < data.length; i += batchSize) {
+                                    const batch = data.slice(i, i + batchSize);
+                                    const results = await Promise.allSettled(
+                                        batch.map(session => LocalBrain.saveSessionSummary({
+                                            summary: session.summary,
+                                            key_outcomes: session.key_outcomes,
+                                            open_threads: session.open_threads,
+                                            session_type: session.session_type,
+                                            tone: session.tone,
+                                            topics_discussed: session.topics_discussed || [],
+                                            nodes_touched: session.nodes_touched || [],
+                                            session_started: session.session_started,
+                                            session_ended: session.session_ended,
+                                            message_count: session.message_count || 0
+                                        }))
+                                    );
+                                    successCount += results.filter(r => r.status === 'fulfilled' && r.value?.success).length;
+                                }
+                                console.log(`🧠 Migration complete: ${successCount}/${data.length} sessions synced`);
+                            }
+
+                            return data;
+                        }
+                    }
+                }
+
+                return [];
             } catch (e) {
                 console.warn('Get recent sessions error:', e);
                 return [];
@@ -35178,15 +35224,27 @@ Respond with ONLY the JSON, no markdown or explanation.`;
             }
         },
 
-        // Save a single message to Supabase (called after each message)
+        // Save message to brain (PRIMARY) and Supabase (backup)
         async saveMessageToServer(message) {
+            // 1. BRAIN-PRIMARY: Sync to local brain first (real-time training)
+            try {
+                if (window.LocalBrain?.isAvailable) {
+                    const result = await LocalBrain.syncChatMessage(message, this.currentSessionToken);
+                    if (result?.success) {
+                        console.log(`🧠 Message synced to brain${result.trained ? ' + GT trained' : ''}`);
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to sync message to brain:', e);
+            }
+
+            // 2. BACKUP: Also sync to Supabase if signed in (redundancy)
             try {
                 if (!window.supabase) return;
 
                 const { data: { user } } = await supabase.auth.getUser();
-                if (!user) return; // Not signed in, localStorage only
+                if (!user) return;
 
-                // Don't save full images to Supabase (too large) - just note that images were attached
                 const imageMeta = message.images?.map(img => ({
                     hadImage: true,
                     timestamp: Date.now()
@@ -35198,25 +35256,51 @@ Respond with ONLY the JSON, no markdown or explanation.`;
                         user_id: user.id,
                         role: message.role,
                         content: message.content,
-                        images: imageMeta,  // Store metadata, not full base64
+                        images: imageMeta,
                         actions: message.actions || [],
                         suggestions: message.suggestions || [],
                         message_timestamp: message.timestamp
                     });
 
                 if (error) {
-                    console.warn('Failed to save message to server:', error);
-                } else {
-                    console.log('💾 Message synced to server');
+                    console.warn('Supabase backup failed:', error);
                 }
             } catch (e) {
-                console.warn('Failed to sync message:', e);
+                console.warn('Failed to backup to Supabase:', e);
             }
         },
 
         async loadConversation() {
             try {
-                // Try to load from server first (if signed in)
+                // 1. BRAIN-PRIMARY: Try local brain first
+                if (window.LocalBrain?.isAvailable) {
+                    const brainMessages = await LocalBrain.loadChatHistory(200);
+                    if (brainMessages && brainMessages.length > 0) {
+                        console.log(`🧠 Loaded ${brainMessages.length} messages from brain (PRIMARY)`);
+                        this.conversation = brainMessages.map(m => ({
+                            role: m.role,
+                            content: m.content,
+                            images: m.images_meta || [],
+                            actions: m.actions || [],
+                            suggestions: m.suggestions || [],
+                            timestamp: m.timestamp
+                        }));
+
+                        // Update localStorage as backup
+                        try {
+                            localStorage.setItem('mynd-chat-history', JSON.stringify(this.conversation));
+                        } catch (e) {
+                            console.warn('localStorage backup failed:', e);
+                        }
+
+                        // Render messages
+                        this._renderConversationMessages();
+                        return;
+                    }
+                }
+
+                // 2. MIGRATION: Brain empty - check Supabase for existing data to migrate
+                let migrationData = null;
                 if (window.supabase) {
                     const { data: { user } } = await supabase.auth.getUser();
                     if (user) {
@@ -35225,11 +35309,11 @@ Respond with ONLY the JSON, no markdown or explanation.`;
                             .select('*')
                             .eq('user_id', user.id)
                             .order('message_timestamp', { ascending: true })
-                            .limit(200);  // Load more conversation history
+                            .limit(200);
 
                         if (!error && data && data.length > 0) {
-                            console.log(`📥 Loaded ${data.length} messages from server`);
-                            this.conversation = data.map(m => ({
+                            console.log(`📥 Found ${data.length} messages in Supabase - migrating to brain`);
+                            migrationData = data.map(m => ({
                                 role: m.role,
                                 content: m.content,
                                 images: m.images || [],
@@ -35237,40 +35321,72 @@ Respond with ONLY the JSON, no markdown or explanation.`;
                                 suggestions: m.suggestions || [],
                                 timestamp: m.message_timestamp
                             }));
-
-                            // Update localStorage with server data
-                            localStorage.setItem('mynd-chat-history', JSON.stringify(this.conversation));
-
-                            // Render messages
-                            const welcome = this.messagesContainer.querySelector('.chat-welcome');
-                            if (this.conversation.length > 0 && welcome) {
-                                welcome.style.display = 'none';
-                            }
-                            this.conversation.forEach(m => this.renderMessage(m));
-                            this.scrollToBottom();
-                            return;
                         }
                     }
                 }
 
-                // Fall back to localStorage
-                const saved = localStorage.getItem('mynd-chat-history');
-                if (saved) {
-                    this.conversation = JSON.parse(saved);
-                    // Render existing messages
-                    const welcome = this.messagesContainer.querySelector('.chat-welcome');
-                    if (this.conversation.length > 0 && welcome) {
-                        welcome.style.display = 'none';
+                // 3. MIGRATION: Also check localStorage for data to migrate
+                if (!migrationData || migrationData.length === 0) {
+                    const saved = localStorage.getItem('mynd-chat-history');
+                    if (saved) {
+                        try {
+                            migrationData = JSON.parse(saved);
+                            console.log(`📥 Found ${migrationData.length} messages in localStorage - migrating to brain`);
+                        } catch (e) {
+                            console.warn('Failed to parse localStorage chat history:', e);
+                        }
                     }
-                    this.conversation.forEach(m => this.renderMessage(m));
-                    this.scrollToBottom();
-
-                    // If user is signed in, sync localStorage to server
-                    this.syncLocalStorageToServer();
                 }
+
+                // 4. MIGRATE to brain if we have existing data
+                if (migrationData && migrationData.length > 0) {
+                    this.conversation = migrationData;
+
+                    // Migrate messages to brain with batching to avoid overwhelming server
+                    if (window.LocalBrain?.isAvailable) {
+                        console.log(`🧠 Migrating ${migrationData.length} messages to brain...`);
+
+                        // Batch migration: process in chunks of 10
+                        const batchSize = 10;
+                        let successCount = 0;
+                        for (let i = 0; i < migrationData.length; i += batchSize) {
+                            const batch = migrationData.slice(i, i + batchSize);
+                            const results = await Promise.allSettled(
+                                batch.map(msg => LocalBrain.syncChatMessage(msg, this.currentSessionToken))
+                            );
+                            successCount += results.filter(r => r.status === 'fulfilled' && r.value?.success).length;
+                        }
+                        console.log(`🧠 Migration complete: ${successCount}/${migrationData.length} messages synced`);
+                    }
+
+                    // Update localStorage backup
+                    try {
+                        localStorage.setItem('mynd-chat-history', JSON.stringify(this.conversation));
+                    } catch (e) {
+                        console.warn('localStorage backup failed:', e);
+                    }
+
+                    // Render messages
+                    this._renderConversationMessages();
+                    return;
+                }
+
+                // 5. No data anywhere - start fresh
+                console.log('📝 No existing chat history found - starting fresh');
+
             } catch (e) {
                 console.warn('Failed to load chat history:', e);
             }
+        },
+
+        // Helper to render conversation messages
+        _renderConversationMessages() {
+            const welcome = this.messagesContainer?.querySelector('.chat-welcome');
+            if (this.conversation.length > 0 && welcome) {
+                welcome.style.display = 'none';
+            }
+            this.conversation.forEach(m => this.renderMessage(m));
+            this.scrollToBottom();
         },
 
         // Sync localStorage conversations to server (called when user signs in)
@@ -35523,12 +35639,42 @@ Respond with ONLY the JSON, no markdown or explanation.`;
         
         toggleTTS() {
             this.ttsEnabled = !this.ttsEnabled;
+            // BRAIN-PRIMARY: Sync to brain first
+            if (window.LocalBrain?.isAvailable) {
+                LocalBrain.savePreferences({ tts_enabled: this.ttsEnabled }).catch(() => {});
+            }
+            // BACKUP: Also save to localStorage
             localStorage.setItem('mynd-tts-enabled', this.ttsEnabled);
             showToast(this.ttsEnabled ? 'Voice responses enabled' : 'Voice responses disabled', 'info');
             return this.ttsEnabled;
         },
-        
+
+        // Load preferences from brain (PRIMARY) with localStorage fallback
+        async loadPreferencesFromBrain() {
+            try {
+                if (window.LocalBrain?.isAvailable) {
+                    const prefs = await LocalBrain.loadPreferences();
+                    if (prefs && prefs.tts_enabled !== undefined) {
+                        this.ttsEnabled = prefs.tts_enabled;
+                        console.log(`🧠 Loaded TTS preference from brain: ${this.ttsEnabled}`);
+                        // Update localStorage as backup
+                        localStorage.setItem('mynd-tts-enabled', this.ttsEnabled);
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to load preferences from brain:', e);
+            }
+            // Fallback to localStorage
+            this.ttsEnabled = localStorage.getItem('mynd-tts-enabled') !== 'false';
+        },
+
         init() {
+            // BRAIN-PRIMARY: Load preferences from brain asynchronously
+            // Note: ttsEnabled already has localStorage default from object init
+            // Brain fetch updates it when complete - safe since TTS isn't used until user action
+            this.loadPreferencesFromBrain();
+
             // Check if LocalBrain Whisper is available (better transcription)
             if (typeof LocalBrain !== 'undefined' && LocalBrain.isVoiceAvailable()) {
                 this.useWhisper = true;
