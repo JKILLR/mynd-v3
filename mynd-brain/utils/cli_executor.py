@@ -187,7 +187,7 @@ async def call_claude_cli_with_conversation(
     # If there's only one user message, send it directly
     if len(messages) == 1 and messages[0].get("role") == "user":
         return await call_claude_cli(
-            prompt=messages[0]["content"],
+            prompt=messages[0].get("content", ""),
             system_prompt=system_prompt,
             timeout=timeout
         )
@@ -207,7 +207,7 @@ async def call_claude_cli_with_conversation(
     if last_msg.get("role") != "user":
         raise ValueError("Last message must be from user")
 
-    formatted_parts.append(f"User: {last_msg['content']}")
+    formatted_parts.append(f"User: {last_msg.get('content', '')}")
 
     # Add instruction for continuation
     conversation_prompt = "\n\n".join(formatted_parts)
