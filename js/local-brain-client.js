@@ -2425,9 +2425,8 @@ const LocalBrain = {
     }
 };
 
-// Auto-initialize when script loads (optional)
-// Uncomment if you want automatic initialization:
-// document.addEventListener('DOMContentLoaded', () => LocalBrain.init());
+// Auto-initialize when script loads
+document.addEventListener('DOMContentLoaded', () => LocalBrain.init());
 
 // Export for module systems
 if (typeof module !== 'undefined' && module.exports) {
