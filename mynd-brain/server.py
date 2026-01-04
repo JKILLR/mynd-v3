@@ -1977,6 +1977,10 @@ async def brain_chat(request: BrainChatRequest):
     except asyncio.TimeoutError:
         print("❌ /brain/chat: Claude CLI timeout")
         raise HTTPException(status_code=504, detail="Claude CLI timeout")
+    except ValueError as e:
+        # Client error - e.g., last message not from user, empty messages
+        print(f"❌ /brain/chat invalid request: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
         print(f"❌ /brain/chat CLI error: {e}")
         raise HTTPException(status_code=502, detail=str(e))
