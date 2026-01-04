@@ -79,9 +79,12 @@ const LocalBrain = {
         try {
             const start = performance.now();
             console.log(`🧠 LocalBrain: Checking ${this.serverUrl}/health...`);
+            // Use POST instead of GET - some browser/network configs block GET to localhost
             const res = await fetch(`${this.serverUrl}/health`, {
-                method: 'GET',
-                signal: AbortSignal.timeout(2000) // 2 second timeout
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}',
+                signal: AbortSignal.timeout(5000)
             });
 
             if (res.ok) {
