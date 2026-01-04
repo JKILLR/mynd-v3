@@ -45,6 +45,7 @@ from brain import UnifiedBrain, ContextRequest, ContextResponse
 from models.map_vector_db import MapVectorDB, UnifiedNode, SourceRef
 from models.conversation_archive import ConversationArchive, ArchivedConversation
 from models.knowledge_extractor import KnowledgeExtractor
+from utils.cli_executor import call_claude_cli_with_conversation
 
 # ═══════════════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -1292,10 +1293,9 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             print(f"⚠️ ASA auto-sync failed: {e}")
 
-    # Initialize knowledge extractor (API key optional - uses rule-based fallback)
-    api_key = os.environ.get('ANTHROPIC_API_KEY')
-    knowledge_extractor = KnowledgeExtractor(map_vector_db, api_key=api_key)
-    print(f"🧠 Knowledge Extractor initialized (AI: {'enabled' if api_key else 'disabled - using rule-based'})")
+    # Initialize knowledge extractor (uses Claude CLI - Max subscription)
+    knowledge_extractor = KnowledgeExtractor(map_db=map_vector_db)
+    print("🧠 Knowledge Extractor initialized (using Claude CLI)")
 
     # ═══════════════════════════════════════════════════════════════════
     # BACKGROUND TRAINING TASK
@@ -1917,48 +1917,28 @@ Note: This is V1 of the local brain chat. Full context (map, memories, GT predic
 @app.post("/brain/chat", response_model=BrainChatResponse)
 async def brain_chat(request: BrainChatRequest):
     """
-    V1: Simple chat passthrough to Claude via local brain.
+    V1: Simple chat passthrough to Claude via Claude CLI.
+    Uses Max subscription instead of per-token API billing.
     Tests the pipe. Full context assembly comes in V2+.
     """
     start = time.time()
 
-    api_key = os.environ.get('ANTHROPIC_API_KEY')
-    if not api_key:
-        raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY not configured")
-
-    model = os.environ.get('CLAUDE_MODEL', 'claude-opus-4-5-20251101')
+    # Note: CLI uses Max subscription, no API key needed
+    model = "claude-cli"  # CLI handles model selection
 
     # Build messages
     messages = [{"role": m.role, "content": m.content} for m in request.conversation_history]
     messages.append({"role": "user", "content": request.user_message})
 
-    print(f"🧠 /brain/chat: {len(messages)} messages, model={model}")
+    print(f"🧠 /brain/chat: {len(messages)} messages, using Claude CLI")
 
-    # Call Claude API directly
+    # Call Claude via CLI
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01"
-                },
-                json={
-                    "model": model,
-                    "max_tokens": 4096,
-                    "system": AXEL_SYSTEM_PROMPT_V1,
-                    "messages": messages
-                }
-            )
-
-        if response.status_code != 200:
-            error_text = response.text
-            print(f"❌ Claude API error: {response.status_code} - {error_text}")
-            raise HTTPException(status_code=502, detail=f"Claude API error: {response.status_code}")
-
-        data = response.json()
-        axel_response = data['content'][0]['text']
+        axel_response = await call_claude_cli_with_conversation(
+            messages=messages,
+            system_prompt=AXEL_SYSTEM_PROMPT_V1,
+            timeout=120.0
+        )
 
         elapsed = (time.time() - start) * 1000
         print(f"✅ /brain/chat: {elapsed:.0f}ms, {len(axel_response)} chars")
@@ -1969,9 +1949,12 @@ async def brain_chat(request: BrainChatRequest):
             model=model
         )
 
-    except httpx.TimeoutException:
-        print("❌ /brain/chat: Claude API timeout")
-        raise HTTPException(status_code=504, detail="Claude API timeout")
+    except asyncio.TimeoutError:
+        print("❌ /brain/chat: Claude CLI timeout")
+        raise HTTPException(status_code=504, detail="Claude CLI timeout")
+    except RuntimeError as e:
+        print(f"❌ /brain/chat CLI error: {e}")
+        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         print(f"❌ /brain/chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

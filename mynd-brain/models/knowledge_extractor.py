@@ -9,6 +9,7 @@ Only extracts MEANINGFUL, REUSABLE knowledge.
 Skips small talk, debugging back-and-forth, etc.
 """
 
+import asyncio
 import json
 import re
 from typing import Optional, List, Dict, Any
@@ -17,6 +18,7 @@ from datetime import datetime
 
 from .map_vector_db import MapVectorDB, UnifiedNode, SourceRef
 from .conversation_archive import ArchivedConversation
+from utils.cli_executor import call_claude_cli
 
 
 @dataclass
@@ -64,25 +66,20 @@ JSON array:"""
 class KnowledgeExtractor:
     """
     Extracts knowledge from conversations and integrates into the map.
+    Uses Claude CLI (Max subscription) instead of API.
     """
 
     def __init__(
         self,
-        map_db: MapVectorDB,
-        api_key: Optional[str] = None,
-        model: str = 'claude-opus-4-5-20251101'
+        map_db: MapVectorDB
     ):
         """
         Initialize the knowledge extractor.
 
         Args:
             map_db: The unified map vector database
-            api_key: Anthropic API key (optional, uses rule-based if not provided)
-            model: Claude model to use for extraction
         """
         self.map_db = map_db
-        self.api_key = api_key
-        self.model = model
 
         # Stats
         self.total_extracted = 0
@@ -103,7 +100,7 @@ class KnowledgeExtractor:
         Returns:
             List of extracted concepts
         """
-        if use_ai and self.api_key:
+        if use_ai:
             return await self._extract_with_ai(conversation)
         else:
             return self._extract_rule_based(conversation)
@@ -112,10 +109,8 @@ class KnowledgeExtractor:
         self,
         conversation: ArchivedConversation
     ) -> List[ExtractedConcept]:
-        """Extract concepts using Claude API."""
+        """Extract concepts using Claude CLI (Max subscription)."""
         try:
-            import httpx
-
             # Truncate conversation if too long
             text = conversation.text
             if len(text) > 30000:
@@ -124,34 +119,22 @@ class KnowledgeExtractor:
 
             prompt = EXTRACTION_PROMPT.format(conversation=text)
 
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    'https://api.anthropic.com/v1/messages',
-                    headers={
-                        'x-api-key': self.api_key,
-                        'anthropic-version': '2023-06-01',
-                        'content-type': 'application/json'
-                    },
-                    json={
-                        'model': self.model,
-                        'max_tokens': 2000,
-                        'messages': [{'role': 'user', 'content': prompt}]
-                    },
-                    timeout=60.0
-                )
+            content = await call_claude_cli(
+                prompt=prompt,
+                timeout=120.0
+            )
 
-                if response.status_code != 200:
-                    print(f"⚠️ AI extraction failed: {response.status_code}")
-                    return self._extract_rule_based(conversation)
+            # Parse JSON response
+            concepts = self._parse_concepts_json(content)
+            print(f"🧠 AI extracted {len(concepts)} concepts")
+            return concepts
 
-                data = response.json()
-                content = data['content'][0]['text']
-
-                # Parse JSON response
-                concepts = self._parse_concepts_json(content)
-                print(f"🧠 AI extracted {len(concepts)} concepts")
-                return concepts
-
+        except asyncio.TimeoutError:
+            print("⚠️ AI extraction timeout")
+            return self._extract_rule_based(conversation)
+        except RuntimeError as e:
+            print(f"⚠️ Claude CLI error: {e}")
+            return self._extract_rule_based(conversation)
         except Exception as e:
             print(f"⚠️ AI extraction error: {e}")
             return self._extract_rule_based(conversation)
