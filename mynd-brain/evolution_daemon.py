@@ -13,11 +13,12 @@ import asyncio
 import json
 import time
 import os
-import httpx
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field, asdict
+
+from utils.cli_executor import call_claude_cli
 
 # Paths
 MYND_DIR = Path.home() / ".mynd"
@@ -49,11 +50,10 @@ class EvolutionDaemon:
     """
 
     def __init__(self,
-                 claude_api_key: Optional[str] = None,
                  ml_brain=None,
                  asa=None,
                  unified_brain=None):
-        self.api_key = claude_api_key or os.environ.get('ANTHROPIC_API_KEY')
+        # CLI uses Max subscription, no API key needed
         self.ml_brain = ml_brain
         self.asa = asa
 
@@ -168,43 +168,23 @@ class EvolutionDaemon:
             print(f"⚠️ Could not save insight: {e}")
 
     async def _call_claude(self, prompt: str, system: str = None) -> Optional[str]:
-        """Call Claude API directly."""
-        if not self.api_key:
-            print("⚠️ No Claude API key configured for evolution")
-            return None
-
+        """Call Claude via CLI (uses Max subscription instead of API)."""
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                messages = [{"role": "user", "content": prompt}]
+            response = await call_claude_cli(
+                prompt=prompt,
+                system_prompt=system,
+                timeout=120.0
+            )
+            return response
 
-                body = {
-                    "model": self.config['claude_model'],
-                    "max_tokens": self.config['max_tokens'],
-                    "messages": messages
-                }
-
-                if system:
-                    body["system"] = system
-
-                response = await client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "Content-Type": "application/json",
-                        "x-api-key": self.api_key,
-                        "anthropic-version": "2023-06-01"
-                    },
-                    json=body
-                )
-
-                if response.status_code == 200:
-                    data = response.json()
-                    return data['content'][0]['text']
-                else:
-                    print(f"⚠️ Claude API error: {response.status_code}")
-                    return None
-
+        except asyncio.TimeoutError:
+            print("⚠️ Claude CLI timeout during evolution")
+            return None
+        except RuntimeError as e:
+            print(f"⚠️ Claude CLI error: {e}")
+            return None
         except Exception as e:
-            print(f"⚠️ Claude API call failed: {e}")
+            print(f"⚠️ Claude call failed: {e}")
             return None
 
     def _train_from_insight(self, insight: EvolutionInsight) -> Dict[str, Any]:
@@ -407,7 +387,7 @@ Respond with 1-5 high-confidence insights as JSON."""
             'pending_insights': len([i for i in self.pending_insights if not i.reviewed]),
             'total_insights': len(self.pending_insights),
             'interval_seconds': self.config['interval_seconds'],
-            'has_api_key': bool(self.api_key)
+            'uses_cli': True  # Uses Claude CLI (Max subscription)
         }
 
 
