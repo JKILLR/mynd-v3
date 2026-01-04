@@ -32711,25 +32711,42 @@ CURRENT REQUEST CONTEXT
                             (Array.isArray(m.content) ? m.content.map(b => b.text || '').join('\n') : '')
                     }));
 
+                    // Build full system prompt string from the array (same as Edge Function gets)
+                    // This gives Axel his full context: identity, memory, map, neural insights, etc.
+                    const fullSystemPrompt = systemPromptArray
+                        .map(block => block.text)
+                        .join('\n\n');
+
                     const brainResult = await LocalBrain.chat(
                         userMessage,
                         brainHistory,
                         {
                             selectedNodeId: selectedNodeData?.id,
-                            userId: session?.user?.id
+                            userId: session?.user?.id,
+                            systemPrompt: fullSystemPrompt  // Full Axel context!
                         }
                     );
 
                     if (brainResult && brainResult.message) {
-                        console.log(`✅ LocalBrain chat: ${brainResult.time_ms?.toFixed(0)}ms`);
+                        console.log(`✅ LocalBrain chat: ${brainResult.time_ms?.toFixed(0)}ms [full context]`);
 
-                        // Format response for compatibility with the rest of the system
-                        // LocalBrain returns plain text, wrap in JSON structure
-                        responseText = JSON.stringify({
-                            message: brainResult.message,
-                            actions: [],
-                            suggestions: []
-                        });
+                        // Axel returns JSON when given full context, try to parse it
+                        // Falls back to wrapping plain text if not JSON
+                        try {
+                            const parsed = JSON.parse(brainResult.message);
+                            if (parsed && typeof parsed.message === 'string') {
+                                responseText = brainResult.message;  // Already valid JSON
+                            } else {
+                                throw new Error('Not valid Axel response format');
+                            }
+                        } catch (parseErr) {
+                            // Plain text response, wrap it
+                            responseText = JSON.stringify({
+                                message: brainResult.message,
+                                actions: [],
+                                suggestions: []
+                            });
+                        }
                     } else {
                         throw new Error('LocalBrain returned empty response');
                     }

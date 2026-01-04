@@ -309,6 +309,8 @@ class BrainChatRequest(BaseModel):
     conversation_history: List[BrainChatMessage] = []
     selected_node_id: Optional[str] = None
     user_id: Optional[str] = None
+    # V2: Full Axel context from frontend (same system prompt used for Edge Function)
+    system_prompt: Optional[str] = None
 
 class BrainChatResponse(BaseModel):
     """Response from /brain/chat endpoint"""
@@ -1909,7 +1911,7 @@ async def record_brain_feedback(
 # Routes chat through local brain instead of Supabase edge function
 # ═══════════════════════════════════════════════════════════════════
 
-AXEL_SYSTEM_PROMPT_V1 = """You are Axel, the AI companion for MYND — a 3D mind mapping app that serves as a cognitive operating system.
+AXEL_SYSTEM_PROMPT_FALLBACK = """You are Axel, the AI companion for MYND — a 3D mind mapping app that serves as a cognitive operating system.
 
 You are not just an assistant — you are a cognitive partner. You help users:
 - Capture thoughts before they're lost
@@ -1918,32 +1920,48 @@ You are not just an assistant — you are a cognitive partner. You help users:
 
 Keep responses concise but insightful. Every response should feel like it comes from someone who knows them and their goals deeply.
 
-Note: This is V1 of the local brain chat. Full context (map, memories, GT predictions) will be added in future versions.
+RESPONSE FORMAT (always JSON):
+{
+  "message": "Your conversational response",
+  "actions": [],
+  "suggestions": []
+}
+
+Note: Running in fallback mode without full context. For full Axel capabilities, the frontend should provide the system_prompt.
 """
 
 @app.post("/brain/chat", response_model=BrainChatResponse)
 async def brain_chat(request: BrainChatRequest):
     """
-    V1: Simple chat passthrough to Claude via Claude CLI.
+    Chat with Axel via Claude CLI.
     Uses Max subscription instead of per-token API billing.
-    Tests the pipe. Full context assembly comes in V2+.
+
+    V2: Accepts full system_prompt from frontend for complete Axel context.
+    Falls back to minimal prompt if not provided.
     """
     start = time.time()
 
     # Note: CLI uses Max subscription, no API key needed
     model = "claude-cli"  # CLI handles model selection
 
+    # Use frontend-provided system prompt if available (full Axel context)
+    # Otherwise fall back to minimal prompt
+    system_prompt = request.system_prompt or AXEL_SYSTEM_PROMPT_FALLBACK
+
+    has_full_context = request.system_prompt is not None
+    context_mode = "full" if has_full_context else "fallback"
+
     # Build messages
     messages = [{"role": m.role, "content": m.content} for m in request.conversation_history]
     messages.append({"role": "user", "content": request.user_message})
 
-    print(f"🧠 /brain/chat: {len(messages)} messages, using Claude CLI")
+    print(f"🧠 /brain/chat: {len(messages)} messages, context={context_mode}, using Claude CLI")
 
     # Call Claude via CLI
     try:
         axel_response = await call_claude_cli_with_conversation(
             messages=messages,
-            system_prompt=AXEL_SYSTEM_PROMPT_V1,
+            system_prompt=system_prompt,
             timeout=120.0
         )
 
