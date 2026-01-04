@@ -40,6 +40,11 @@ const LocalBrain = {
      * Initialize and check server availability
      */
     async init() {
+        // Use custom URL if set (for cloud/tunnel deployment)
+        if (window.MYND_BRAIN_URL) {
+            this.serverUrl = window.MYND_BRAIN_URL;
+            console.log(`🧠 LocalBrain: Using custom URL: ${this.serverUrl}`);
+        }
         console.log('🧠 LocalBrain: Initializing...');
         await this.checkAvailability();
 
