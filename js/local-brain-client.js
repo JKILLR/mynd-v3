@@ -331,14 +331,17 @@ const LocalBrain = {
      * @returns {Promise<{message, time_ms, model}|null>}
      */
     async chat(userMessage, conversationHistory = [], session = {}) {
-        console.log(`🧠 LocalBrain.chat: "${userMessage.substring(0, 50)}..."`);
+        // Safety check for empty/null message
+        const safeMessage = userMessage || '';
+        console.log(`🧠 LocalBrain.chat: "${safeMessage.substring(0, 50)}..."`);
 
         return this._tryWithReconnect(async () => {
             const res = await fetch(`${this.serverUrl}/brain/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                signal: AbortSignal.timeout(150000), // 2.5 minute timeout (CLI has 2 min internal timeout)
                 body: JSON.stringify({
-                    user_message: userMessage,
+                    user_message: safeMessage,
                     conversation_history: conversationHistory.slice(-20),
                     selected_node_id: session.selectedNodeId || null,
                     user_id: session.userId || null
