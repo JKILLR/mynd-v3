@@ -47,6 +47,7 @@ async def call_claude_cli(
         "claude",
         "-p",  # Print mode (non-interactive)
         "--output-format", "stream-json",
+        "--verbose",  # Required when using stream-json with -p
         "--max-turns", "1",  # Single response
     ]
 
