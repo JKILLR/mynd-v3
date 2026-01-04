@@ -302,8 +302,11 @@ Output format:
                         action_details=item.get('action_details')
                     )
 
-                    # Train from insight
-                    train_result = self._train_from_insight(insight)
+                    # Train from insight (run in executor to avoid blocking event loop)
+                    loop = asyncio.get_event_loop()
+                    train_result = await loop.run_in_executor(
+                        None, self._train_from_insight, insight
+                    )
                     insight.gt_trained = train_result.get('gt_trained', False)
                     insight.asa_trained = train_result.get('asa_trained', False)
 

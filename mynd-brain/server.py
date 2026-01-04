@@ -5596,10 +5596,9 @@ async def evolution_background_loop():
 @app.on_event("startup")
 async def start_evolution_loop():
     """Start the evolution background loop on server startup."""
-    # DISABLED: Evolution daemon may be causing server freezes by calling CLI
-    # global _evolution_task
-    # _evolution_task = asyncio.create_task(evolution_background_loop())
-    print("🧬 Evolution daemon DISABLED (debugging server freeze)")
+    global _evolution_task
+    _evolution_task = asyncio.create_task(evolution_background_loop())
+    print("🧬 Evolution daemon started (ML training runs in executor to prevent blocking)")
 
 
 @app.post("/evolution/run")

@@ -60,6 +60,7 @@ async def call_claude_cli(
     env = os.environ.copy()
     env.pop("ANTHROPIC_API_KEY", None)
 
+    process = None
     try:
         process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -78,7 +79,11 @@ async def call_claude_cli(
             raise RuntimeError(f"Claude CLI failed with code {process.returncode}: {stderr_text}")
 
         # Parse streaming JSON output
-        result_text = _parse_stream_json(stdout.decode())
+        try:
+            result_text = _parse_stream_json(stdout.decode())
+        except UnicodeDecodeError:
+            # Handle invalid UTF-8 in output
+            result_text = _parse_stream_json(stdout.decode('utf-8', errors='replace'))
 
         if not result_text:
             raise RuntimeError("No response received from Claude CLI")
@@ -86,7 +91,24 @@ async def call_claude_cli(
         return result_text
 
     except asyncio.TimeoutError:
+        # Kill the subprocess on timeout to prevent zombie processes
+        if process is not None:
+            try:
+                process.kill()
+                await process.wait()
+            except ProcessLookupError:
+                pass  # Process already terminated
         raise asyncio.TimeoutError(f"Claude CLI timed out after {timeout}s")
+
+    except Exception:
+        # Ensure subprocess is cleaned up on any exception
+        if process is not None and process.returncode is None:
+            try:
+                process.kill()
+                await process.wait()
+            except ProcessLookupError:
+                pass  # Process already terminated
+        raise
 
 
 def _parse_stream_json(output: str) -> str:
