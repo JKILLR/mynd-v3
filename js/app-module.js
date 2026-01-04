@@ -32698,9 +32698,10 @@ CURRENT REQUEST CONTEXT
 
             // ═══════════════════════════════════════════════════════════════
             // PRIMARY: Use LocalBrain (Claude CLI - Max subscription, no API cost)
-            // Falls back to Edge Function or Direct API if LocalBrain unavailable
+            // Always try LocalBrain first - don't depend on isAvailable (health checks can be slow)
+            // Falls back to Edge Function or Direct API if LocalBrain fails
             // ═══════════════════════════════════════════════════════════════
-            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+            if (typeof LocalBrain !== 'undefined') {
                 try {
                     console.log('🧠 Using LocalBrain (Claude CLI) for chat...');
 
