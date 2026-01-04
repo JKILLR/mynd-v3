@@ -1357,13 +1357,16 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS - allow browser to connect
+# CORS - allow browser to connect from any origin
+# Explicitly configure for cross-origin requests through tunnels/proxies
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict to your domain
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
 
 # Static file serving for frontend (parent directory)
