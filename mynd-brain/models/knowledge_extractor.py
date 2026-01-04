@@ -155,12 +155,25 @@ class KnowledgeExtractor:
                 if not isinstance(item, dict):
                     continue
 
+                # Safely extract values with None handling
+                label = item.get('label') or ''
+                description = item.get('description') or ''
+                concept_type = item.get('type') or 'insight'
+                context = item.get('context') or ''
+
+                # Safely parse confidence (could be string, None, or number)
+                try:
+                    confidence = float(item.get('confidence') or 0.5)
+                    confidence = max(0.0, min(1.0, confidence))  # Clamp to valid range
+                except (ValueError, TypeError):
+                    confidence = 0.5
+
                 concepts.append(ExtractedConcept(
-                    label=item.get('label', '')[:100],
-                    description=item.get('description', '')[:500],
-                    concept_type=item.get('type', 'insight'),
-                    context=item.get('context', '')[:500],
-                    confidence=float(item.get('confidence', 0.5))
+                    label=label[:100],
+                    description=description[:500],
+                    concept_type=concept_type,
+                    context=context[:500],
+                    confidence=confidence
                 ))
 
         except json.JSONDecodeError as e:

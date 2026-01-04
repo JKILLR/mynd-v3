@@ -290,14 +290,20 @@ Output format:
             data = json.loads(json_match)
 
             for i, item in enumerate(data.get('insights', [])):
-                if item.get('confidence', 0) >= self.config['confidence_threshold']:
+                # Safely parse confidence (could be None, string, or number)
+                try:
+                    confidence = float(item.get('confidence') or 0)
+                except (ValueError, TypeError):
+                    confidence = 0
+
+                if confidence >= self.config['confidence_threshold']:
                     insight = EvolutionInsight(
                         id=f"evo-{int(time.time())}-{i}",
-                        insight_type=item.get('type', 'pattern'),
-                        title=item.get('title', 'Untitled'),
-                        content=item.get('content', ''),
-                        confidence=item.get('confidence', 0.7),
-                        source_nodes=item.get('source_nodes', []),
+                        insight_type=item.get('type') or 'pattern',
+                        title=item.get('title') or 'Untitled',
+                        content=item.get('content') or '',
+                        confidence=confidence,
+                        source_nodes=item.get('source_nodes') or [],
                         suggested_action=item.get('suggested_action'),
                         action_details=item.get('action_details')
                     )
