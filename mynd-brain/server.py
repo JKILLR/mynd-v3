@@ -1388,6 +1388,13 @@ async def health_check():
         raise HTTPException(status_code=503, detail="Brain not initialized")
     return brain.get_health()
 
+@app.post("/health", response_model=HealthResponse)
+async def health_check_post():
+    """Check if the brain is running and healthy (POST version for browsers with GET issues)."""
+    if brain is None:
+        raise HTTPException(status_code=503, detail="Brain not initialized")
+    return brain.get_health()
+
 @app.get("/")
 async def root():
     """Root endpoint with info."""
