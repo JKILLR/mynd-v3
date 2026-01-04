@@ -323,17 +323,18 @@ const LocalBrain = {
 
     /**
      * Chat through local brain to Claude.
-     * V1: Simple passthrough. Full context assembly in future versions.
+     * V2: Accepts full system_prompt for complete Axel context.
      *
      * @param {string} userMessage - The user's message
      * @param {Array} conversationHistory - Array of {role, content} messages
-     * @param {Object} session - Session context (selectedNodeId, userId)
+     * @param {Object} session - Session context (selectedNodeId, userId, systemPrompt)
      * @returns {Promise<{message, time_ms, model}|null>}
      */
     async chat(userMessage, conversationHistory = [], session = {}) {
         // Safety check for empty/null message
         const safeMessage = userMessage || '';
-        console.log(`🧠 LocalBrain.chat: "${safeMessage.substring(0, 50)}..."`);
+        const hasContext = session.systemPrompt ? 'full' : 'fallback';
+        console.log(`🧠 LocalBrain.chat: "${safeMessage.substring(0, 50)}..." [context=${hasContext}]`);
 
         return this._tryWithReconnect(async () => {
             const res = await fetch(`${this.serverUrl}/brain/chat`, {
@@ -344,7 +345,9 @@ const LocalBrain = {
                     user_message: safeMessage,
                     conversation_history: conversationHistory.slice(-20),
                     selected_node_id: session.selectedNodeId || null,
-                    user_id: session.userId || null
+                    user_id: session.userId || null,
+                    // V2: Full Axel system prompt from frontend
+                    system_prompt: session.systemPrompt || null
                 })
             });
 

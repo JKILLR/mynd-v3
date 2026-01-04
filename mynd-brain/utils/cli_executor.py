@@ -49,12 +49,20 @@ async def call_claude_cli(
         "--output-format", "stream-json",
         "--verbose",  # Required when using stream-json with -p
         "--max-turns", "1",  # Single response
+        "-",  # Read from stdin
     ]
 
+    # Combine system prompt with user prompt via stdin
+    # This avoids ARG_MAX limits (--append-system-prompt uses command line args)
+    # Full Axel context can be 40KB+ which exceeds typical ARG_MAX
     if system_prompt:
-        cmd.extend(["--append-system-prompt", system_prompt])
+        full_prompt = f"""<system_context>
+{system_prompt}
+</system_context>
 
-    cmd.append(prompt)
+{prompt}"""
+    else:
+        full_prompt = prompt
 
     # Force CLI auth by removing API key from environment
     env = os.environ.copy()
@@ -64,13 +72,14 @@ async def call_claude_cli(
     try:
         process = await asyncio.create_subprocess_exec(
             *cmd,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env
         )
 
         stdout, stderr = await asyncio.wait_for(
-            process.communicate(),
+            process.communicate(input=full_prompt.encode('utf-8')),
             timeout=timeout
         )
 
