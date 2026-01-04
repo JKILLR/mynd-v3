@@ -341,7 +341,9 @@ const LocalBrain = {
         const hasContext = session.systemPrompt ? 'full' : 'fallback';
         console.log(`🧠 LocalBrain.chat: "${safeMessage.substring(0, 50)}..." [context=${hasContext}]`);
 
-        return this._tryWithReconnect(async () => {
+        // Always attempt chat directly - don't depend on health check state
+        // Chat is critical path and should always try, even if health checks are slow
+        try {
             const res = await fetch(`${this.serverUrl}/brain/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -366,7 +368,10 @@ const LocalBrain = {
             console.log(`🧠 Brain chat response: ${data.time_ms?.toFixed(0)}ms via ${data.model}`);
             return data;
 
-        }, null);
+        } catch (e) {
+            console.error(`🧠 LocalBrain.chat error:`, e.message);
+            return null;
+        }
     },
 
     // ═══════════════════════════════════════════════════════════════════
