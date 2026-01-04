@@ -32691,7 +32691,52 @@ CURRENT REQUEST CONTEXT
 
             let responseText = '';
 
-            if (session?.access_token) {
+            // ═══════════════════════════════════════════════════════════════
+            // PRIMARY: Use LocalBrain (Claude CLI - Max subscription, no API cost)
+            // Falls back to Edge Function or Direct API if LocalBrain unavailable
+            // ═══════════════════════════════════════════════════════════════
+            if (typeof LocalBrain !== 'undefined' && LocalBrain.isAvailable) {
+                try {
+                    console.log('🧠 Using LocalBrain (Claude CLI) for chat...');
+
+                    // Build conversation history for LocalBrain
+                    const brainHistory = historyForClaude.map(m => ({
+                        role: m.role,
+                        content: typeof m.content === 'string' ? m.content :
+                            (Array.isArray(m.content) ? m.content.map(b => b.text || '').join('\n') : '')
+                    }));
+
+                    const brainResult = await LocalBrain.chat(
+                        userMessage,
+                        brainHistory,
+                        {
+                            selectedNodeId: selectedNodeData?.id,
+                            userId: session?.user?.id
+                        }
+                    );
+
+                    if (brainResult && brainResult.message) {
+                        console.log(`✅ LocalBrain chat: ${brainResult.time_ms?.toFixed(0)}ms`);
+
+                        // Format response for compatibility with the rest of the system
+                        // LocalBrain returns plain text, wrap in JSON structure
+                        responseText = JSON.stringify({
+                            message: brainResult.message,
+                            actions: [],
+                            suggestions: []
+                        });
+                    } else {
+                        throw new Error('LocalBrain returned empty response');
+                    }
+                } catch (brainError) {
+                    console.warn('⚠️ LocalBrain chat failed, falling back:', brainError.message);
+                    // Fall through to Edge Function or Direct API
+                    responseText = '';
+                }
+            }
+
+            // Fall through to Edge Function or Direct API if LocalBrain didn't work
+            if (!responseText && session?.access_token) {
                 // Use Edge Function with tools - client handles the agentic loop
 
                 const hasGithubTools = typeof ReflectionDaemon !== 'undefined' &&
@@ -32814,8 +32859,8 @@ CURRENT REQUEST CONTEXT
                         responseText = '{"message": "I was working on your request but hit the tool iteration limit. Please try a simpler request.", "actions": [], "suggestions": []}';
                     }
                 }
-            } else {
-                // Direct API call
+            } else if (!responseText) {
+                // Direct API call (fallback when not signed in and LocalBrain unavailable)
                 const apiKey = localStorage.getItem(CONFIG.API_KEY);
                 if (!apiKey) {
                     throw new Error('Please sign in or add an API key in Settings');
