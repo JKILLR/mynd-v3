@@ -5596,9 +5596,10 @@ async def evolution_background_loop():
 @app.on_event("startup")
 async def start_evolution_loop():
     """Start the evolution background loop on server startup."""
-    global _evolution_task
-    _evolution_task = asyncio.create_task(evolution_background_loop())
-    print("🧬 Evolution daemon scheduled")
+    # DISABLED: Evolution daemon may be causing server freezes by calling CLI
+    # global _evolution_task
+    # _evolution_task = asyncio.create_task(evolution_background_loop())
+    print("🧬 Evolution daemon DISABLED (debugging server freeze)")
 
 
 @app.post("/evolution/run")
