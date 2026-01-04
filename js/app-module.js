@@ -31032,6 +31032,11 @@ Just respond with the greeting message, nothing else.`;
         },
 
         async callAI(userMessage, images = []) {
+            // Safety check for undefined/null message
+            if (!userMessage || typeof userMessage !== 'string') {
+                throw new Error('Message cannot be empty');
+            }
+
             // Build context
             const allNodes = store.getAllNodes();
             const selectedNodeData = selectedNode ? store.findNode(selectedNode.userData.id) : null;
@@ -33007,6 +33012,11 @@ CURRENT REQUEST CONTEXT
             // Parse JSON response - handle markdown code blocks and text before JSON
             let parsedResult = null;
             try {
+                // Safety check - ensure responseText is a valid string
+                if (!responseText || typeof responseText !== 'string') {
+                    throw new Error('No response received from AI');
+                }
+
                 // Remove markdown code block markers if present
                 let cleanedResponse = responseText
                     .replace(/```json\s*/gi, '')
@@ -33632,9 +33642,9 @@ CURRENT REQUEST CONTEXT
                             if (targetId) {
                                 todo = OpenThreadsPanel.todos.find(t => t.id === targetId);
                             } else if (targetText) {
-                                // Find by text match (partial match)
+                                // Find by text match (partial match) - safety check for undefined text
                                 todo = OpenThreadsPanel.todos.find(t =>
-                                    t.text.toLowerCase().includes(targetText.toLowerCase()) && !t.completed
+                                    t.text && targetText && t.text.toLowerCase().includes(targetText.toLowerCase()) && !t.completed
                                 );
                             }
 
@@ -33661,8 +33671,9 @@ CURRENT REQUEST CONTEXT
                             if (targetId) {
                                 todo = OpenThreadsPanel.todos.find(t => t.id === targetId);
                             } else if (targetText) {
+                                // Safety check for undefined text
                                 todo = OpenThreadsPanel.todos.find(t =>
-                                    t.text.toLowerCase().includes(targetText.toLowerCase())
+                                    t.text && targetText && t.text.toLowerCase().includes(targetText.toLowerCase())
                                 );
                             }
 

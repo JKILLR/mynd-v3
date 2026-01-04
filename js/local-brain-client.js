@@ -56,11 +56,29 @@ const LocalBrain = {
     },
 
     /**
+     * Force reconnect - call this from console if auto-connect fails
+     * Usage: LocalBrain.reconnect()
+     */
+    async reconnect() {
+        console.log('🧠 LocalBrain: Forcing reconnect...');
+        this.isAvailable = false;
+        this._initialSyncDone = false;
+        const result = await this.checkAvailability();
+        if (result) {
+            console.log('✅ LocalBrain: Reconnected successfully!');
+        } else {
+            console.log('❌ LocalBrain: Reconnect failed. Is the server running on ' + this.serverUrl + '?');
+        }
+        return result;
+    },
+
+    /**
      * Check if local server is running
      */
     async checkAvailability() {
         try {
             const start = performance.now();
+            console.log(`🧠 LocalBrain: Checking ${this.serverUrl}/health...`);
             const res = await fetch(`${this.serverUrl}/health`, {
                 method: 'GET',
                 signal: AbortSignal.timeout(2000) // 2 second timeout
@@ -77,6 +95,7 @@ const LocalBrain = {
                 this.status.voiceAvailable = !!health.voice_model;
                 this.status.visionAvailable = !!health.vision_model;
                 this.lastCheck = Date.now();
+                console.log(`✅ LocalBrain: Connected (${this.status.device}, ${this.status.lastLatency.toFixed(0)}ms)`);
 
                 // Initial map sync when first connected
                 if (!wasConnected && !this._initialSyncDone) {
@@ -87,9 +106,12 @@ const LocalBrain = {
                     });
                 }
                 return true;
+            } else {
+                console.warn(`⚠️ LocalBrain: Health check returned ${res.status}`);
             }
         } catch (e) {
-            // Server not running - this is fine, we'll use fallback
+            // Server not running - log for debugging
+            console.log(`🧠 LocalBrain: Server not available - ${e.message || 'connection failed'}`);
         }
 
         this.isAvailable = false;
