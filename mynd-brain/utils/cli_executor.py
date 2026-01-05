@@ -55,10 +55,9 @@ async def call_claude_cli(
     if enable_tools:
         # Enable all tools: WebSearch, WebFetch, Read, Write, Edit, Bash, Glob, Grep, Task
         cmd.extend(["--tools", "default"])
-        # Use acceptEdits mode - auto-accepts without root restrictions
-        # (bypassPermissions is also blocked when running as root)
-        cmd.extend(["--permission-mode", "acceptEdits"])
-        # Allow access to parent directories and workspace
+        # Full permission bypass for complete tool access
+        cmd.append("--dangerously-skip-permissions")
+        # Allow access to workspace
         cmd.extend(["--add-dir", "/workspace", "/tmp"])
     else:
         # No tools, single turn response
