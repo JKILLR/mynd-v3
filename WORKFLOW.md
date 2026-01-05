@@ -25,12 +25,23 @@ claude login
 ```
 Follow prompts to authenticate with Max subscription.
 
-### 4. Create "axel" user (required for CLI to run as non-root)
+### 4. Install claude-code-root-runner (required for CLI to run as root)
 ```bash
-useradd -m -s /bin/bash axel
-chown -R axel:axel /home/axel
+# Install the claude+ wrapper
+curl -sSL https://raw.githubusercontent.com/gagarinyury/claude-code-root-runner/main/install.sh | bash
+
+# Set up sudoers for the temporary user
+mkdir -p /etc/sudoers.d
+echo "claude-temp ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/claude-temp
+chmod 440 /etc/sudoers.d/claude-temp
+
+# Create claude-temp user and copy credentials
+useradd -m -s /bin/bash claude-temp 2>/dev/null || true
+cp -r /root/.claude /home/claude-temp/.claude 2>/dev/null || mkdir -p /home/claude-temp/.claude
+cp -r /root/.config /home/claude-temp/.config 2>/dev/null || mkdir -p /home/claude-temp/.config
+chown -R claude-temp:claude-temp /home/claude-temp
 ```
-The brain server runs Claude CLI as this user because `--dangerously-skip-permissions` requires non-root.
+This allows the brain server to run Claude CLI with `--dangerously-skip-permissions` from root.
 
 ### 5. Install unzip (for data uploads)
 ```bash
