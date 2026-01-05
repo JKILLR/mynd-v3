@@ -20725,7 +20725,8 @@ Respond with ONLY a JSON array:
                     console.log(`🚫 GT Rejection Training: ${parentId} → "${suggestedLabel}" (${feedback.type})`);
 
                     // Send rejection signal to server
-                    fetch('http://localhost:8420/brain/reject-connection', {
+                    const brainUrl = window.MYND_BRAIN_URL || CONFIG?.BRAIN_SERVER_URL || 'http://localhost:8420';
+                    fetch(`${brainUrl}/brain/reject-connection`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -27976,7 +27977,8 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
-        fetch('http://localhost:8420/brain/learn-connection', {
+        const brainUrl = window.MYND_BRAIN_URL || CONFIG?.BRAIN_SERVER_URL || 'http://localhost:8420';
+        fetch(`${brainUrl}/brain/learn-connection`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

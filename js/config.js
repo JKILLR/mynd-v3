@@ -208,6 +208,18 @@ const CONFIG = {
     }
 };
 
+// Propagate URL param to window global so all scripts can access it
+if (CONFIG.BRAIN_SERVER_URL && CONFIG.BRAIN_SERVER_URL !== 'http://localhost:8420') {
+    window.MYND_BRAIN_URL = CONFIG.BRAIN_SERVER_URL;
+}
+
+// Debug logging for brain server URL
+console.log(`🔧 CONFIG.BRAIN_SERVER_URL set to: ${CONFIG.BRAIN_SERVER_URL}`);
+console.log(`🔧 URL params: ${window.location.search}`);
+if (window.MYND_BRAIN_URL) {
+    console.log(`🔧 window.MYND_BRAIN_URL set to: ${window.MYND_BRAIN_URL}`);
+}
+
 // Mobile detection and performance adjustments
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
 const isLowPowerDevice = navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4;
