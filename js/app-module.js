@@ -3600,7 +3600,8 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
                     break;
             }
 
-            // Track session
+            // Track session - ensure sessionsTouched array exists (may be missing in old records)
+            if (!heat.sessionsTouched) heat.sessionsTouched = [];
             heat.currentSessionAccesses++;
             if (!heat.sessionsTouched.includes(this.currentSessionId)) {
                 heat.sessionsTouched.push(this.currentSessionId);
