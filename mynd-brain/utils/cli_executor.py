@@ -55,8 +55,9 @@ async def call_claude_cli(
     if enable_tools:
         # Enable all tools: WebSearch, WebFetch, Read, Write, Edit, Bash, Glob, Grep, Task
         cmd.extend(["--tools", "default"])
-        # Skip permission prompts for non-interactive use
-        cmd.append("--dangerously-skip-permissions")
+        # Use permission-mode instead of --dangerously-skip-permissions
+        # (the latter is blocked when running as root on RunPod)
+        cmd.extend(["--permission-mode", "bypassPermissions"])
     else:
         # No tools, single turn response
         cmd.extend(["--max-turns", "1"])
