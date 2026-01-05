@@ -187,6 +187,113 @@ async def call_claude_cli(
                 pass
 
 
+def _extract_json_response(text: str) -> str:
+    """
+    Extract JSON from text that may contain prose before/after the JSON.
+
+    When Claude uses tools and then responds with JSON, the response might be:
+    "Let me add those nodes:\n\n{\"message\": \"...\", \"actions\": [...]}"
+
+    This function extracts just the JSON part.
+    """
+    import re
+
+    # Try to find JSON starting with {"message" (MYND chat format)
+    # Search from the END of the text backwards since the JSON response
+    # typically comes after any tool usage prose
+    json_start = text.rfind('{"message"')
+    if json_start != -1:
+        # Find matching closing brace
+        json_part = text[json_start:]
+        brace_count = 0
+        end_index = -1
+        in_string = False
+        escape_next = False
+        for i, char in enumerate(json_part):
+            if escape_next:
+                escape_next = False
+                continue
+            if char == '\\':
+                escape_next = True
+                continue
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    end_index = i + 1
+                    break
+
+        if end_index > 0:
+            candidate = json_part[:end_index]
+            try:
+                # Validate it's actual JSON
+                parsed = json.loads(candidate)
+                if isinstance(parsed, dict) and 'message' in parsed:
+                    return candidate
+            except json.JSONDecodeError:
+                pass
+
+    # Fallback: try to find the LAST JSON object that looks like MYND format
+    # Use a more targeted approach - find all potential JSON starts
+    potential_starts = [m.start() for m in re.finditer(r'\{[\s]*"message"', text)]
+    for start_pos in reversed(potential_starts):  # Try from end backwards
+        json_part = text[start_pos:]
+        brace_count = 0
+        end_index = -1
+        in_string = False
+        escape_next = False
+        for i, char in enumerate(json_part):
+            if escape_next:
+                escape_next = False
+                continue
+            if char == '\\':
+                escape_next = True
+                continue
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    end_index = i + 1
+                    break
+
+        if end_index > 0:
+            candidate = json_part[:end_index]
+            try:
+                parsed = json.loads(candidate)
+                if isinstance(parsed, dict) and 'message' in parsed:
+                    return candidate
+            except json.JSONDecodeError:
+                continue
+
+    # Last resort: wrap non-JSON response in MYND format
+    # This ensures the frontend always gets valid JSON
+    if text and not text.strip().startswith('{'):
+        # Clean up the text - remove tool call artifacts
+        clean_text = text.strip()
+        # If it looks like raw prose, wrap it
+        wrapped = json.dumps({
+            "message": clean_text,
+            "actions": [],
+            "suggestions": []
+        })
+        return wrapped
+
+    # No JSON found, return original text
+    return text
+
+
 def _parse_stream_json(output: str) -> str:
     """
     Parse the streaming JSON output from Claude CLI.
@@ -198,6 +305,7 @@ def _parse_stream_json(output: str) -> str:
     - {"type": "tool_result", ...} - tool execution results
 
     Returns the combined text content (final response after any tool use).
+    For MYND chat responses, extracts clean JSON from any surrounding prose.
     """
     result_text = ""
     tool_uses = []
@@ -216,7 +324,8 @@ def _parse_stream_json(output: str) -> str:
                 # Final result - use this preferentially
                 result = event.get("result", "")
                 if result:
-                    return result
+                    # Extract JSON if present (for MYND chat format)
+                    return _extract_json_response(result)
 
             elif event_type == "assistant":
                 # Extract from message content blocks
@@ -258,7 +367,8 @@ def _parse_stream_json(output: str) -> str:
     if tool_uses:
         print(f"🔧 Tools used in this response: {', '.join(tool_uses)}")
 
-    return result_text
+    # Extract JSON from final result (for MYND chat format)
+    return _extract_json_response(result_text)
 
 
 async def call_claude_cli_with_conversation(
