@@ -88,14 +88,21 @@ async def call_claude_cli(
             raise RuntimeError(f"Claude CLI failed with code {process.returncode}: {stderr_text}")
 
         # Parse streaming JSON output
+        stdout_text = ""
         try:
-            result_text = _parse_stream_json(stdout.decode())
+            stdout_text = stdout.decode()
+            result_text = _parse_stream_json(stdout_text)
         except UnicodeDecodeError:
             # Handle invalid UTF-8 in output
-            result_text = _parse_stream_json(stdout.decode('utf-8', errors='replace'))
+            stdout_text = stdout.decode('utf-8', errors='replace')
+            result_text = _parse_stream_json(stdout_text)
 
         if not result_text:
-            raise RuntimeError("No response received from Claude CLI")
+            # Debug: log what we actually received
+            stderr_text = stderr.decode() if stderr else ""
+            print(f"⚠️ CLI returned empty result. stdout length: {len(stdout_text)}, stderr: {stderr_text[:500]}")
+            print(f"⚠️ Raw stdout (first 1000 chars): {stdout_text[:1000]}")
+            raise RuntimeError(f"No response received from Claude CLI. stdout_len={len(stdout_text)}, stderr={stderr_text[:200]}")
 
         return result_text
 
