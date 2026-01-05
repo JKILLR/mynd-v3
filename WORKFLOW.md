@@ -25,18 +25,25 @@ claude login
 ```
 Follow prompts to authenticate with Max subscription.
 
-### 4. Install unzip (for data uploads)
+### 4. Create "axel" user (required for CLI to run as non-root)
+```bash
+useradd -m -s /bin/bash axel
+chown -R axel:axel /home/axel
+```
+The brain server runs Claude CLI as this user because `--dangerously-skip-permissions` requires non-root.
+
+### 5. Install unzip (for data uploads)
 ```bash
 apt-get update && apt-get install -y unzip
 ```
 
-### 5. Clone repo (if not already done)
+### 6. Clone repo (if not already done)
 ```bash
 cd /workspace
 git clone https://github.com/JKILLR/mynd-v3.git
 ```
 
-### 6. Install Python dependencies
+### 7. Install Python dependencies
 ```bash
 cd /workspace/mynd-v3/mynd-brain
 pip install -r requirements.txt
