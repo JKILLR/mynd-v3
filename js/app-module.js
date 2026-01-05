@@ -8251,13 +8251,19 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
 
         // Boost patterns related to a topic/context (for positive feedback)
         boostPatternByContext(topic, delta = 0.1) {
+            // Safety check for undefined topic
+            if (!topic || typeof topic !== 'string') return 0;
+
             const normalizedTopic = this.normalizeLabel(topic);
+            if (!normalizedTopic) return 0;
+
             let boosted = 0;
 
             // Find patterns containing this topic
             for (const [patternKey, weight] of this.patternWeights) {
+                if (!patternKey) continue;
                 const keyLower = patternKey.toLowerCase();
-                if (keyLower.includes(normalizedTopic) || normalizedTopic.includes(keyLower.split('→')[0])) {
+                if (keyLower.includes(normalizedTopic) || normalizedTopic.includes(keyLower.split('→')[0] || '')) {
                     weight.weight = Math.min(1.0, weight.weight + delta);
                     weight.conversationBoosts = (weight.conversationBoosts || 0) + 1;
                     weight.lastBoostTime = Date.now();
@@ -8267,7 +8273,7 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
 
             // Also boost expansion patterns
             for (const [parent, children] of this.expansionPatterns) {
-                if (parent.includes(normalizedTopic)) {
+                if (parent && parent.includes(normalizedTopic)) {
                     // Mark this expansion as recently validated
                     if (!this.validatedExpansions) this.validatedExpansions = new Map();
                     this.validatedExpansions.set(parent, {
@@ -8288,13 +8294,19 @@ Respond ONLY with a JSON array of objects, each with "label" (short, 2-5 words) 
 
         // Decay patterns related to a topic/context (for negative feedback)
         decayPatternByContext(topic, delta = 0.1) {
+            // Safety check for undefined topic
+            if (!topic || typeof topic !== 'string') return 0;
+
             const normalizedTopic = this.normalizeLabel(topic);
+            if (!normalizedTopic) return 0;
+
             let decayed = 0;
 
             // Find patterns containing this topic
             for (const [patternKey, weight] of this.patternWeights) {
+                if (!patternKey) continue;
                 const keyLower = patternKey.toLowerCase();
-                if (keyLower.includes(normalizedTopic) || normalizedTopic.includes(keyLower.split('→')[0])) {
+                if (keyLower.includes(normalizedTopic) || normalizedTopic.includes(keyLower.split('→')[0] || '')) {
                     weight.weight = Math.max(0.1, weight.weight - delta);
                     weight.conversationDecays = (weight.conversationDecays || 0) + 1;
                     weight.lastDecayTime = Date.now();
@@ -29039,7 +29051,8 @@ Example: ["Daily Habits", "Weekly Reviews", "Long-term Vision"]`
                 });
             }
 
-            return [...new Set(topics)].slice(0, 5);
+            // Filter out any undefined/null/empty values and return unique topics
+            return [...new Set(topics)].filter(t => t && typeof t === 'string' && t.length > 0).slice(0, 5);
         },
 
         // Get real-time learning context for next AI response
@@ -30276,6 +30289,8 @@ Just respond with the greeting message, nothing else.`;
                     }
                 }
             } catch (error) {
+                console.error('🔴 sendMessage error:', error.message);
+                console.error('🔴 Stack trace:', error.stack);
                 this.hideTyping();
                 this.addMessage('assistant', `Sorry, I encountered an error: ${error.message}. Please try again.`);
             } finally {
@@ -30802,11 +30817,13 @@ Just respond with the greeting message, nothing else.`;
 
             // 3. Keyword matching fallback (if semantic search found few results)
             if (relevantNodeIds.size < 10) {
-                const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+                const safeQuery = (query || '').toLowerCase();
+                const queryWords = safeQuery.split(/\s+/).filter(w => w && w.length > 2);
                 for (const node of allNodes) {
+                    if (!node) continue;
                     if (relevantNodeIds.size >= maxNodes) break;
-                    const text = `${node.label} ${node.description || ''}`.toLowerCase();
-                    if (queryWords.some(w => text.includes(w))) {
+                    const text = `${node.label || ''} ${node.description || ''}`.toLowerCase();
+                    if (queryWords.length > 0 && queryWords.some(w => text && text.includes(w))) {
                         if (!relevantNodeIds.has(node.id)) {
                             relevantNodeIds.add(node.id);
                             relevantNodes.push({ id: node.id, similarity: 0.5, source: 'keyword' });
@@ -31032,19 +31049,28 @@ Just respond with the greeting message, nothing else.`;
         },
 
         async callAI(userMessage, images = []) {
+            console.log('🔍 callAI: Starting...', { messageLength: userMessage?.length, imageCount: images?.length });
+
             // Safety check for undefined/null message
             if (!userMessage || typeof userMessage !== 'string') {
                 throw new Error('Message cannot be empty');
             }
 
-            // Build context
-            const allNodes = store.getAllNodes();
-            const selectedNodeData = selectedNode ? store.findNode(selectedNode.userData.id) : null;
-            const totalNodes = allNodes.length;
+            // Build context - wrap in try-catch for debugging
+            let allNodes, selectedNodeData, totalNodes, messageLower, wantsFullMap;
+            try {
+                allNodes = store.getAllNodes() || [];
+                selectedNodeData = selectedNode ? store.findNode(selectedNode.userData.id) : null;
+                totalNodes = allNodes.length;
 
-            // Check if user wants full map context
-            const messageLower = userMessage.toLowerCase();
-            const wantsFullMap = ['entire map', 'full map', 'all nodes', 'whole map', 'complete map', 'everything in my map', 'show me all'].some(kw => messageLower.includes(kw));
+                // Check if user wants full map context - defensive null check
+                messageLower = (userMessage || '').toLowerCase();
+                wantsFullMap = ['entire map', 'full map', 'all nodes', 'whole map', 'complete map', 'everything in my map', 'show me all'].some(kw => messageLower && messageLower.includes(kw));
+                console.log('🔍 callAI: Context built successfully', { totalNodes, wantsFullMap });
+            } catch (contextError) {
+                console.error('🔍 callAI: Context building failed:', contextError);
+                throw new Error(`Context building failed: ${contextError.message}`);
+            }
 
             // Use optimized map context - semantic search for relevant nodes only
             // Reduces token usage from ~25K to ~3-5K for large maps
