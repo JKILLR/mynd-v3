@@ -58,6 +58,8 @@ async def call_claude_cli(
         # Use acceptEdits mode - auto-accepts without root restrictions
         # (bypassPermissions is also blocked when running as root)
         cmd.extend(["--permission-mode", "acceptEdits"])
+        # Allow access to parent directories and workspace
+        cmd.extend(["--add-dir", "/workspace", "/tmp"])
     else:
         # No tools, single turn response
         cmd.extend(["--max-turns", "1"])
