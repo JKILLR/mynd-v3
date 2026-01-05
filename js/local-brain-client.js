@@ -17,8 +17,10 @@
  */
 
 const LocalBrain = {
-    // Server configuration
-    serverUrl: 'http://localhost:8420',
+    // Server configuration (uses CONFIG.BRAIN_SERVER_URL if available)
+    serverUrl: (typeof CONFIG !== 'undefined' && CONFIG.BRAIN_SERVER_URL)
+        ? CONFIG.BRAIN_SERVER_URL
+        : 'http://localhost:8420',
     isAvailable: false,
     lastCheck: 0,
     checkInterval: 30000, // Re-check every 30 seconds
@@ -40,12 +42,13 @@ const LocalBrain = {
      * Initialize and check server availability
      */
     async init() {
-        // Use custom URL if set (for cloud/tunnel deployment)
+        // Priority: 1) window.MYND_BRAIN_URL, 2) CONFIG.BRAIN_SERVER_URL, 3) default
         if (window.MYND_BRAIN_URL) {
             this.serverUrl = window.MYND_BRAIN_URL;
-            console.log(`🧠 LocalBrain: Using custom URL: ${this.serverUrl}`);
+        } else if (typeof CONFIG !== 'undefined' && CONFIG.BRAIN_SERVER_URL) {
+            this.serverUrl = CONFIG.BRAIN_SERVER_URL;
         }
-        console.log('🧠 LocalBrain: Initializing...');
+        console.log(`🧠 LocalBrain: Initializing with server: ${this.serverUrl}`);
         await this.checkAvailability();
 
         // Periodic health check

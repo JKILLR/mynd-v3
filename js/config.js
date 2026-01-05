@@ -14,7 +14,20 @@ const CONFIG = {
     CLAUDE_MODEL: 'claude-opus-4-5-20251101',
 
     // Brain Server (Python ML backend)
-    BRAIN_SERVER_URL: 'http://localhost:8000',
+    // Set via URL param ?brain=https://your-runpod-url.com or env var
+    BRAIN_SERVER_URL: (() => {
+        // Check URL parameter first (for testing/debugging)
+        const urlParams = new URLSearchParams(window.location.search);
+        const brainParam = urlParams.get('brain');
+        if (brainParam) return brainParam;
+
+        // Check for Runpod/cloud deployment environment
+        // These would be set by the hosting platform
+        if (window.MYND_BRAIN_URL) return window.MYND_BRAIN_URL;
+
+        // Default to local server
+        return 'http://localhost:8420';
+    })(),
 
     // Supabase Configuration
     SUPABASE_URL: 'https://diqjasswlujwtdgsreab.supabase.co',
