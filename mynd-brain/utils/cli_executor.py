@@ -17,7 +17,12 @@ Usage:
 import asyncio
 import json
 import os
+import tempfile
 from typing import Optional
+
+
+# Non-root user for running Claude CLI (--dangerously-skip-permissions requires non-root)
+CLAUDE_USER = "axel"
 
 
 async def call_claude_cli(
@@ -45,7 +50,8 @@ async def call_claude_cli(
         RuntimeError: If CLI execution fails
         asyncio.TimeoutError: If execution times out
     """
-    cmd = [
+    # Build the claude command
+    claude_args = [
         "claude",
         "-p",  # Print mode (non-interactive)
         "--output-format", "stream-json",
@@ -54,22 +60,17 @@ async def call_claude_cli(
 
     if enable_tools:
         # Enable all tools: WebSearch, WebFetch, Read, Write, Edit, Bash, Glob, Grep, Task
-        cmd.extend(["--tools", "default"])
+        claude_args.extend(["--tools", "default"])
         # Full permission bypass for complete tool access
-        cmd.append("--dangerously-skip-permissions")
-        # Allow access to additional directories (separate flags to avoid arg parsing issues)
-        cmd.extend(["--add-dir", "/workspace"])
-        cmd.extend(["--add-dir", "/tmp"])
+        claude_args.append("--dangerously-skip-permissions")
+        # Allow access to additional directories
+        claude_args.extend(["--add-dir", "/workspace"])
+        claude_args.extend(["--add-dir", "/tmp"])
     else:
         # No tools, single turn response
-        cmd.extend(["--max-turns", "1"])
+        claude_args.extend(["--max-turns", "1"])
 
-    # Read prompt from stdin
-    cmd.append("-")
-
-    # Combine system prompt with user prompt via stdin
-    # This avoids ARG_MAX limits (--append-system-prompt uses command line args)
-    # Full Axel context can be 40KB+ which exceeds typical ARG_MAX
+    # Combine system prompt with user prompt
     if system_prompt:
         full_prompt = f"""<system_context>
 {system_prompt}
@@ -83,18 +84,39 @@ async def call_claude_cli(
     env = os.environ.copy()
     env.pop("ANTHROPIC_API_KEY", None)
 
+    # Check if running as root - if so, run claude as non-root user
+    is_root = os.geteuid() == 0
+
+    if is_root:
+        # Write prompt to temp file (readable by axel user)
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            f.write(full_prompt)
+            prompt_file = f.name
+        os.chmod(prompt_file, 0o644)  # Make readable by axel
+
+        # Build command to run as axel user with prompt from file
+        claude_cmd_str = " ".join(claude_args) + f" < {prompt_file}"
+        cmd = ["runuser", "-u", CLAUDE_USER, "--", "bash", "-c", claude_cmd_str]
+        stdin_input = None
+    else:
+        # Running as non-root, can use stdin directly
+        claude_args.append("-")  # Read from stdin
+        cmd = claude_args
+        stdin_input = full_prompt.encode('utf-8')
+        prompt_file = None
+
     process = None
     try:
         process = await asyncio.create_subprocess_exec(
             *cmd,
-            stdin=asyncio.subprocess.PIPE,
+            stdin=asyncio.subprocess.PIPE if stdin_input else None,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env
         )
 
         stdout, stderr = await asyncio.wait_for(
-            process.communicate(input=full_prompt.encode('utf-8')),
+            process.communicate(input=stdin_input),
             timeout=timeout
         )
 
@@ -140,6 +162,14 @@ async def call_claude_cli(
             except ProcessLookupError:
                 pass  # Process already terminated
         raise
+
+    finally:
+        # Clean up temp file if we created one
+        if prompt_file and os.path.exists(prompt_file):
+            try:
+                os.unlink(prompt_file)
+            except OSError:
+                pass
 
 
 def _parse_stream_json(output: str) -> str:
