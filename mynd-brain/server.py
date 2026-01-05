@@ -48,35 +48,39 @@ from models.knowledge_extractor import KnowledgeExtractor
 from utils.cli_executor import call_claude_cli_with_conversation
 
 # ═══════════════════════════════════════════════════════════════════
-# CONFIGURATION
+# CONFIGURATION (supports environment variable overrides)
 # ═══════════════════════════════════════════════════════════════════
 
 class Config:
-    PORT = 8420
-    HOST = "0.0.0.0"  # Listen on all interfaces for network access
+    # Server settings (override via env vars for Runpod/cloud deployment)
+    PORT = int(os.getenv("MYND_BRAIN_PORT", "8420"))
+    HOST = os.getenv("MYND_BRAIN_HOST", "0.0.0.0")  # Listen on all interfaces
 
     # Model settings
-    EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"  # Fast, best retrieval quality
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
     EMBEDDING_DIM = 384
 
     # Graph Transformer v2 settings
-    HIDDEN_DIM = 512   # Upgraded from 256
-    NUM_HEADS = 8      # Upgraded from 4
-    NUM_LAYERS = 3     # Upgraded from 2
+    HIDDEN_DIM = int(os.getenv("GRAPH_HIDDEN_DIM", "512"))
+    NUM_HEADS = int(os.getenv("GRAPH_NUM_HEADS", "8"))
+    NUM_LAYERS = int(os.getenv("GRAPH_NUM_LAYERS", "3"))
 
-    # Voice settings (Whisper)
-    WHISPER_MODEL = "base"  # tiny, base, small, medium, large
+    # Voice settings (Whisper) - larger models on GPU
+    WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")  # tiny, base, small, medium, large
 
     # Vision settings (CLIP)
-    CLIP_MODEL = "ViT-B-32"
-    CLIP_PRETRAINED = "laion2b_s34b_b79k"
+    CLIP_MODEL = os.getenv("CLIP_MODEL", "ViT-B-32")
+    CLIP_PRETRAINED = os.getenv("CLIP_PRETRAINED", "laion2b_s34b_b79k")
 
     # Context Lens settings
-    CONTEXT_LENS_FRESHNESS_SECONDS = 300  # 5 minutes - max age for lens training
+    CONTEXT_LENS_FRESHNESS_SECONDS = int(os.getenv("CONTEXT_LENS_FRESHNESS", "300"))
 
-    # Device selection
+    # Device selection (auto-detect or override via TORCH_DEVICE env var)
     @staticmethod
     def get_device():
+        device_override = os.getenv("TORCH_DEVICE")
+        if device_override:
+            return torch.device(device_override)
         if torch.backends.mps.is_available():
             return torch.device("mps")  # Apple Silicon
         elif torch.cuda.is_available():

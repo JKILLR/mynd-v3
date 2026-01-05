@@ -1,0 +1,46 @@
+# MYND Brain - Docker Compose
+# ============================
+# For local testing with GPU support
+#
+# Usage:
+#   docker-compose up --build
+#
+# For GPU support, ensure nvidia-container-toolkit is installed
+
+version: '3.8'
+
+services:
+  mynd-brain:
+    build: .
+    container_name: mynd-brain
+    ports:
+      - "8420:8420"
+    environment:
+      - MYND_BRAIN_PORT=8420
+      - MYND_BRAIN_HOST=0.0.0.0
+      - WHISPER_MODEL=base
+      - TORCH_DEVICE=cuda
+    volumes:
+      # Persist data and model cache
+      - mynd-data:/app/data
+      - model-cache:/app/models_cache
+      # Mount Claude CLI config from host (for authentication)
+      - ~/.claude:/home/axel/.claude:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8420/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  mynd-data:
+  model-cache:
