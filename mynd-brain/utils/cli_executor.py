@@ -57,8 +57,9 @@ async def call_claude_cli(
         cmd.extend(["--tools", "default"])
         # Full permission bypass for complete tool access
         cmd.append("--dangerously-skip-permissions")
-        # Allow access to workspace
-        cmd.extend(["--add-dir", "/workspace", "/tmp"])
+        # Allow access to additional directories (separate flags to avoid arg parsing issues)
+        cmd.extend(["--add-dir", "/workspace"])
+        cmd.extend(["--add-dir", "/tmp"])
     else:
         # No tools, single turn response
         cmd.extend(["--max-turns", "1"])
