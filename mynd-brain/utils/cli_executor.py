@@ -24,7 +24,8 @@ async def call_claude_cli(
     prompt: str,
     system_prompt: Optional[str] = None,
     max_tokens: int = 4096,
-    timeout: float = 120.0
+    timeout: float = 300.0,  # 5 minutes for tool-heavy tasks
+    enable_tools: bool = True
 ) -> str:
     """
     Call Claude via CLI instead of API.
@@ -35,6 +36,7 @@ async def call_claude_cli(
         max_tokens: Maximum tokens in response (not directly supported by CLI,
                     but kept for API compatibility)
         timeout: Timeout in seconds
+        enable_tools: Whether to enable full tool access (web search, file ops, bash, etc.)
 
     Returns:
         The text response from Claude
@@ -48,9 +50,19 @@ async def call_claude_cli(
         "-p",  # Print mode (non-interactive)
         "--output-format", "stream-json",
         "--verbose",  # Required when using stream-json with -p
-        "--max-turns", "1",  # Single response
-        "-",  # Read from stdin
     ]
+
+    if enable_tools:
+        # Enable all tools: WebSearch, WebFetch, Read, Write, Edit, Bash, Glob, Grep, Task
+        cmd.extend(["--tools", "default"])
+        # Skip permission prompts for non-interactive use
+        cmd.append("--dangerously-skip-permissions")
+    else:
+        # No tools, single turn response
+        cmd.extend(["--max-turns", "1"])
+
+    # Read prompt from stdin
+    cmd.append("-")
 
     # Combine system prompt with user prompt via stdin
     # This avoids ARG_MAX limits (--append-system-prompt uses command line args)
@@ -134,10 +146,14 @@ def _parse_stream_json(output: str) -> str:
     The CLI outputs newline-delimited JSON events like:
     - {"type": "assistant", "message": {"content": [{"type": "text", "text": "..."}]}}
     - {"type": "result", "result": "..."}
+    - {"type": "tool_use", ...} - when Claude uses tools
+    - {"type": "tool_result", ...} - tool execution results
 
-    Returns the combined text content.
+    Returns the combined text content (final response after any tool use).
     """
     result_text = ""
+    tool_uses = []
+    last_assistant_text = ""
 
     for line in output.split('\n'):
         line = line.strip()
@@ -158,9 +174,16 @@ def _parse_stream_json(output: str) -> str:
                 # Extract from message content blocks
                 message = event.get("message", {})
                 content_blocks = message.get("content", [])
+                current_text = ""
                 for block in content_blocks:
                     if block.get("type") == "text":
-                        result_text += block.get("text", "")
+                        current_text += block.get("text", "")
+                    elif block.get("type") == "tool_use":
+                        # Track tool usage for context
+                        tool_uses.append(block.get("name", "unknown"))
+                if current_text:
+                    last_assistant_text = current_text
+                    result_text = current_text  # Keep updating with latest
 
             elif event_type == "content_block_delta":
                 # Streaming delta
@@ -168,10 +191,24 @@ def _parse_stream_json(output: str) -> str:
                 if delta.get("type") == "text_delta":
                     result_text += delta.get("text", "")
 
+            elif event_type == "tool_use":
+                # Tool being invoked
+                tool_name = event.get("name", "unknown")
+                tool_uses.append(tool_name)
+                print(f"🔧 Axel using tool: {tool_name}")
+
+            elif event_type == "tool_result":
+                # Tool completed - log but don't add to response
+                pass
+
         except json.JSONDecodeError:
             # If line isn't JSON, it might be direct text output
             # This handles edge cases with non-standard output
             continue
+
+    # If we tracked tool uses, log summary
+    if tool_uses:
+        print(f"🔧 Tools used in this response: {', '.join(tool_uses)}")
 
     return result_text
 
@@ -179,7 +216,8 @@ def _parse_stream_json(output: str) -> str:
 async def call_claude_cli_with_conversation(
     messages: list,
     system_prompt: Optional[str] = None,
-    timeout: float = 120.0
+    timeout: float = 300.0,  # 5 minutes for tool-heavy tasks
+    enable_tools: bool = True
 ) -> str:
     """
     Call Claude CLI with a conversation history.
@@ -191,6 +229,7 @@ async def call_claude_cli_with_conversation(
         messages: List of {"role": "user"|"assistant", "content": str}
         system_prompt: Optional system prompt
         timeout: Timeout in seconds
+        enable_tools: Whether to enable full tool access
 
     Returns:
         The text response from Claude
@@ -205,7 +244,8 @@ async def call_claude_cli_with_conversation(
         return await call_claude_cli(
             prompt=messages[0].get("content", ""),
             system_prompt=system_prompt,
-            timeout=timeout
+            timeout=timeout,
+            enable_tools=enable_tools
         )
 
     # Format multi-turn as a single prompt with clear delimiters
@@ -235,5 +275,6 @@ async def call_claude_cli_with_conversation(
     return await call_claude_cli(
         prompt=full_prompt,
         system_prompt=system_prompt,
-        timeout=timeout
+        timeout=timeout,
+        enable_tools=enable_tools
     )

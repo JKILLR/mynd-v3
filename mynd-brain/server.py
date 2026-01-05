@@ -1960,12 +1960,13 @@ async def brain_chat(request: BrainChatRequest):
 
     print(f"🧠 /brain/chat: {len(messages)} messages, context={context_mode}, using Claude CLI")
 
-    # Call Claude via CLI
+    # Call Claude via CLI (with full tool access: web search, file ops, bash, etc.)
     try:
         axel_response = await call_claude_cli_with_conversation(
             messages=messages,
             system_prompt=system_prompt,
-            timeout=120.0
+            timeout=300.0,  # 5 minutes for tool-heavy tasks
+            enable_tools=True
         )
 
         elapsed = (time.time() - start) * 1000
