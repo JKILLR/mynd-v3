@@ -17,12 +17,13 @@ Usage:
 import asyncio
 import json
 import os
+import shutil
 import tempfile
 from typing import Optional
 
 
-# Non-root user for running Claude CLI (--dangerously-skip-permissions requires non-root)
-CLAUDE_USER = "axel"
+# Check if claude+ is available (handles root user restrictions)
+CLAUDE_PLUS_AVAILABLE = shutil.which("claude+") is not None
 
 
 async def call_claude_cli(
@@ -84,19 +85,33 @@ async def call_claude_cli(
     env = os.environ.copy()
     env.pop("ANTHROPIC_API_KEY", None)
 
-    # Check if running as root - if so, run claude as non-root user
+    # Check if running as root - if so, use claude+ wrapper
     is_root = os.geteuid() == 0
 
-    if is_root:
-        # Write prompt to temp file (readable by axel user)
+    if is_root and CLAUDE_PLUS_AVAILABLE:
+        # Use claude+ which handles root restrictions via temporary user
+        # Replace 'claude' with 'claude+' in the command
+        claude_args[0] = "claude+"
+
+        # Write prompt to temp file for claude+
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
             f.write(full_prompt)
             prompt_file = f.name
-        os.chmod(prompt_file, 0o644)  # Make readable by axel
+        os.chmod(prompt_file, 0o644)
 
-        # Build command to run as axel user with prompt from file
+        # claude+ needs the prompt via stdin redirection in a shell
         claude_cmd_str = " ".join(claude_args) + f" < {prompt_file}"
-        cmd = ["runuser", "-u", CLAUDE_USER, "--", "bash", "-c", claude_cmd_str]
+        cmd = ["bash", "-c", claude_cmd_str]
+        stdin_input = None
+    elif is_root:
+        # Fallback: try runuser if claude+ not available
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            f.write(full_prompt)
+            prompt_file = f.name
+        os.chmod(prompt_file, 0o644)
+
+        claude_cmd_str = " ".join(claude_args) + f" < {prompt_file}"
+        cmd = ["runuser", "-u", "claude-temp", "--", "bash", "-c", claude_cmd_str]
         stdin_input = None
     else:
         # Running as non-root, can use stdin directly
