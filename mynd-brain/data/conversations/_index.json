@@ -1,0 +1,2840 @@
+{
+  "conversations": [
+    {
+      "id": "32c181f5",
+      "title": "Chat: still there?...",
+      "source": "mynd-chat",
+      "timestamp": 1766244909.197118,
+      "chars": 106
+    },
+    {
+      "id": "75619bb0",
+      "title": "Chat: still there?...",
+      "source": "mynd-chat",
+      "timestamp": 1766245048.042366,
+      "chars": 106
+    },
+    {
+      "id": "21be8a99",
+      "title": "Chat: still there?\nyour tools have been updated. List th...",
+      "source": "mynd-chat",
+      "timestamp": 1766245849.968965,
+      "chars": 370
+    },
+    {
+      "id": "76bdee1d",
+      "title": "Chat: still there?\nyour tools have been updated. List th...",
+      "source": "mynd-chat",
+      "timestamp": 1766246109.032765,
+      "chars": 370
+    },
+    {
+      "id": "47907a60",
+      "title": "Chat: Search the codebase for \"conversation memory\"...",
+      "source": "mynd-chat",
+      "timestamp": 1766246933.362601,
+      "chars": 283
+    },
+    {
+      "id": "e21cfa77",
+      "title": "Chat: Search the codebase for \"conversation memory\"...",
+      "source": "mynd-chat",
+      "timestamp": 1766247312.823748,
+      "chars": 675
+    },
+    {
+      "id": "3d1d9b72",
+      "title": "Chat: What changed in the last commit?...",
+      "source": "mynd-chat",
+      "timestamp": 1766247402.011168,
+      "chars": 980
+    },
+    {
+      "id": "18478c32",
+      "title": "Chat: What do you remember from our previous conversatio...",
+      "source": "mynd-chat",
+      "timestamp": 1766248642.7026439,
+      "chars": 613
+    },
+    {
+      "id": "83189161",
+      "title": "Chat: I've implemented some updates with changes that yo...",
+      "source": "mynd-chat",
+      "timestamp": 1766250214.6342762,
+      "chars": 1763
+    },
+    {
+      "id": "37cdc4e2",
+      "title": "Chat: would you like me to merge and implement?...",
+      "source": "mynd-chat",
+      "timestamp": 1766250269.831771,
+      "chars": 1012
+    },
+    {
+      "id": "3cfacb35",
+      "title": "Chat: Ok I merged...",
+      "source": "mynd-chat",
+      "timestamp": 1766250543.833914,
+      "chars": 301
+    },
+    {
+      "id": "408d3af7",
+      "title": "Chat: ok new updates made. can you review the recent com...",
+      "source": "mynd-chat",
+      "timestamp": 1766252415.149497,
+      "chars": 645
+    },
+    {
+      "id": "8864d1c5",
+      "title": "Chat: nice. what should we test...",
+      "source": "mynd-chat",
+      "timestamp": 1766252461.362723,
+      "chars": 1405
+    },
+    {
+      "id": "ff70165f",
+      "title": "Chat: lets test you adding nodes from this chat and how ...",
+      "source": "mynd-chat",
+      "timestamp": 1766252512.4625878,
+      "chars": 300
+    },
+    {
+      "id": "722d464f",
+      "title": "Chat: it's working perfect! the timeline/origin is shown...",
+      "source": "mynd-chat",
+      "timestamp": 1766252627.105452,
+      "chars": 620
+    },
+    {
+      "id": "ee5e2828",
+      "title": "Chat: trying to fix the self-reflection feature. can you...",
+      "source": "mynd-chat",
+      "timestamp": 1766252709.118408,
+      "chars": 470
+    },
+    {
+      "id": "8d78d64f",
+      "title": "Chat: yes but i meant the most recent commit to claude/r...",
+      "source": "mynd-chat",
+      "timestamp": 1766252761.245379,
+      "chars": 1392
+    },
+    {
+      "id": "37acb0e6",
+      "title": "Chat: ok lets test it now...",
+      "source": "mynd-chat",
+      "timestamp": 1766252933.63342,
+      "chars": 744
+    },
+    {
+      "id": "3eb1e996",
+      "title": "Chat: ok you completed a cycle. any thoughts?...",
+      "source": "mynd-chat",
+      "timestamp": 1766253691.196915,
+      "chars": 608
+    },
+    {
+      "id": "5cc74ecf",
+      "title": "Chat: did you also reflect on the map and it's current s...",
+      "source": "mynd-chat",
+      "timestamp": 1766253774.2919838,
+      "chars": 1401
+    },
+    {
+      "id": "729b47a2",
+      "title": "Chat: yes. you decide where the map needs to be expanded...",
+      "source": "mynd-chat",
+      "timestamp": 1766253860.481937,
+      "chars": 517
+    },
+    {
+      "id": "105e151c",
+      "title": "Chat: excellent. so what is the first single small step ...",
+      "source": "mynd-chat",
+      "timestamp": 1766253927.3319428,
+      "chars": 884
+    },
+    {
+      "id": "5742b568",
+      "title": "Chat: yes...",
+      "source": "mynd-chat",
+      "timestamp": 1766253984.911663,
+      "chars": 1919
+    },
+    {
+      "id": "485bef93",
+      "title": "Chat: ok i need specific detailed instructions, one at a...",
+      "source": "mynd-chat",
+      "timestamp": 1766254101.8107362,
+      "chars": 850
+    },
+    {
+      "id": "ef21a86d",
+      "title": "Chat: ok working on it \ud83e\udd1f\ud83c\udffc...",
+      "source": "mynd-chat",
+      "timestamp": 1766254700.6250439,
+      "chars": 338
+    },
+    {
+      "id": "92f1d226",
+      "title": "Chat: how many nodes do we have now?...",
+      "source": "mynd-chat",
+      "timestamp": 1766254712.196238,
+      "chars": 493
+    },
+    {
+      "id": "0761ffb4",
+      "title": "Chat: will our current hardware be able to handle implem...",
+      "source": "mynd-chat",
+      "timestamp": 1766255204.019726,
+      "chars": 437
+    },
+    {
+      "id": "0d66b99f",
+      "title": "Chat: ok i'm working on installing fastrtc.\nin the meant...",
+      "source": "mynd-chat",
+      "timestamp": 1766255788.2424178,
+      "chars": 532
+    },
+    {
+      "id": "e2a1e026",
+      "title": "Chat: Here's a few potential investors to remember:\n-Gre...",
+      "source": "mynd-chat",
+      "timestamp": 1766256020.098279,
+      "chars": 688
+    },
+    {
+      "id": "74d8b1e4",
+      "title": "Chat: I increased the tool iterations from 10 to 20. can...",
+      "source": "mynd-chat",
+      "timestamp": 1766256743.963121,
+      "chars": 178
+    },
+    {
+      "id": "8493d6b8",
+      "title": "Chat: I increased the tool iteration limit to 50...",
+      "source": "mynd-chat",
+      "timestamp": 1766257956.7756522,
+      "chars": 154
+    },
+    {
+      "id": "e41cc121",
+      "title": "Chat: from cc (we're working on this now):\n\nI see the is...",
+      "source": "mynd-chat",
+      "timestamp": 1766260313.933055,
+      "chars": 1599
+    },
+    {
+      "id": "a098358f",
+      "title": "Chat: yes...",
+      "source": "mynd-chat",
+      "timestamp": 1766260452.882815,
+      "chars": 721
+    },
+    {
+      "id": "88ffdc8e",
+      "title": "Chat: I have a long term goal/idea to record:\nthe mynd a...",
+      "source": "mynd-chat",
+      "timestamp": 1766260663.575242,
+      "chars": 1099
+    },
+    {
+      "id": "cfeb2ceb",
+      "title": "Chat: Tell me more about the privacy concerns...",
+      "source": "mynd-chat",
+      "timestamp": 1766260729.076523,
+      "chars": 2058
+    },
+    {
+      "id": "02e4129e",
+      "title": "Chat: not right now. that's not a near term priority. an...",
+      "source": "mynd-chat",
+      "timestamp": 1766261094.8708138,
+      "chars": 173
+    },
+    {
+      "id": "5a95cbc8",
+      "title": "Chat: Education application:\nclassrooms could have their...",
+      "source": "mynd-chat",
+      "timestamp": 1766261273.476235,
+      "chars": 804
+    },
+    {
+      "id": "041b1cd6",
+      "title": "Chat: can you do a self analysis of your map for an upda...",
+      "source": "mynd-chat",
+      "timestamp": 1766261399.7142148,
+      "chars": 1392
+    },
+    {
+      "id": "a6362b5d",
+      "title": "Chat: very good. \nwe updated the efficiency of your tool...",
+      "source": "mynd-chat",
+      "timestamp": 1766261812.594291,
+      "chars": 600
+    },
+    {
+      "id": "6b347216",
+      "title": "Chat: ok...",
+      "source": "mynd-chat",
+      "timestamp": 1766262251.162241,
+      "chars": 663
+    },
+    {
+      "id": "cc445a24",
+      "title": "Chat: you're still hitting the limit. can you break up t...",
+      "source": "mynd-chat",
+      "timestamp": 1766262326.835787,
+      "chars": 429
+    },
+    {
+      "id": "8ed927cb",
+      "title": "Chat: its directly in this chat window, within your resp...",
+      "source": "mynd-chat",
+      "timestamp": 1766262410.7500281,
+      "chars": 330
+    },
+    {
+      "id": "769ca285",
+      "title": "Chat: Ok we'll work in it later. \nhere's a thought for u...",
+      "source": "mynd-chat",
+      "timestamp": 1766262755.388148,
+      "chars": 1756
+    },
+    {
+      "id": "4011b29a",
+      "title": "Chat: this imperative for you to keep at the front of yo...",
+      "source": "mynd-chat",
+      "timestamp": 1766262841.320928,
+      "chars": 758
+    },
+    {
+      "id": "4d08e5ef",
+      "title": "Chat: Tell me how you specifically store that thought in...",
+      "source": "mynd-chat",
+      "timestamp": 1766263932.6744199,
+      "chars": 1964
+    },
+    {
+      "id": "0d49de5a",
+      "title": "Chat: I'm looking at the map, and when you added potenti...",
+      "source": "mynd-chat",
+      "timestamp": 1766264683.632373,
+      "chars": 635
+    },
+    {
+      "id": "89e57d1a",
+      "title": "Chat: Potential investors should go in the potential inv...",
+      "source": "mynd-chat",
+      "timestamp": 1766264742.08592,
+      "chars": 441
+    },
+    {
+      "id": "39b30198",
+      "title": "Chat: yes...",
+      "source": "mynd-chat",
+      "timestamp": 1766264788.284968,
+      "chars": 373
+    },
+    {
+      "id": "1379eca5",
+      "title": "Chat: the Jesse and Jason Craig nodes need to be moved s...",
+      "source": "mynd-chat",
+      "timestamp": 1766264839.6124601,
+      "chars": 535
+    },
+    {
+      "id": "16961cd1",
+      "title": "Chat: maybe make a new section called potential collabor...",
+      "source": "mynd-chat",
+      "timestamp": 1766264903.5813062,
+      "chars": 612
+    },
+    {
+      "id": "91eaaf53",
+      "title": "Chat: Potential collaborators has zero children move the...",
+      "source": "mynd-chat",
+      "timestamp": 1766264951.289608,
+      "chars": 212
+    },
+    {
+      "id": "716eb748",
+      "title": "Chat: Now the following nodes are connected directly to ...",
+      "source": "mynd-chat",
+      "timestamp": 1766265213.535635,
+      "chars": 881
+    },
+    {
+      "id": "7fe5d87e",
+      "title": "Chat: what do you think? This is your brain? you have a ...",
+      "source": "mynd-chat",
+      "timestamp": 1766265276.5962381,
+      "chars": 707
+    },
+    {
+      "id": "77c8beab",
+      "title": "Chat: ok. do you think the \"AI systems\" and \"AI intellig...",
+      "source": "mynd-chat",
+      "timestamp": 1766265422.606588,
+      "chars": 690
+    },
+    {
+      "id": "77732ad8",
+      "title": "Chat: You should always be doing these reviews to find t...",
+      "source": "mynd-chat",
+      "timestamp": 1766265473.075928,
+      "chars": 335
+    },
+    {
+      "id": "1cf6396e",
+      "title": "Chat: do you currently have the capability to proactivel...",
+      "source": "mynd-chat",
+      "timestamp": 1766265531.1179378,
+      "chars": 450
+    },
+    {
+      "id": "f71e8a21",
+      "title": "Chat: Yes...",
+      "source": "mynd-chat",
+      "timestamp": 1766265560.797031,
+      "chars": 421
+    },
+    {
+      "id": "5072852d",
+      "title": "Chat: I'm working with Claude code for now to implement ...",
+      "source": "mynd-chat",
+      "timestamp": 1766265676.889741,
+      "chars": 2160
+    },
+    {
+      "id": "5a3f67d0",
+      "title": "Chat: Well this ensure that meaningful or important node...",
+      "source": "mynd-chat",
+      "timestamp": 1766265754.350722,
+      "chars": 468
+    },
+    {
+      "id": "b067fa39",
+      "title": "Chat: you need a name. what would you like to be called?...",
+      "source": "mynd-chat",
+      "timestamp": 1766265824.0523431,
+      "chars": 508
+    },
+    {
+      "id": "a09ac4e1",
+      "title": "Chat: I like that. How about something related but more ...",
+      "source": "mynd-chat",
+      "timestamp": 1766265957.5070589,
+      "chars": 834
+    },
+    {
+      "id": "3ba7341e",
+      "title": "Chat: how about \"Axel\"?...",
+      "source": "mynd-chat",
+      "timestamp": 1766266008.8951669,
+      "chars": 387
+    },
+    {
+      "id": "bce8a435",
+      "title": "Chat: YOU ARE AXEL...",
+      "source": "mynd-chat",
+      "timestamp": 1766266037.363967,
+      "chars": 373
+    },
+    {
+      "id": "e8d6a8a9",
+      "title": "Chat: \ud83e\udd1f\ud83c\udffc\u2665\ufe0f\ud83e\udd1f\ud83c\udffc...",
+      "source": "mynd-chat",
+      "timestamp": 1766266452.3885329,
+      "chars": 259
+    },
+    {
+      "id": "11469d6d",
+      "title": "Chat: we've added the map maintenance feature. Here is a...",
+      "source": "mynd-chat",
+      "timestamp": 1766266549.3780758,
+      "chars": 2090
+    },
+    {
+      "id": "e798e890",
+      "title": "Chat: First a quick idea for a TYPE of node:\nFamily/rela...",
+      "source": "mynd-chat",
+      "timestamp": 1766267403.9134579,
+      "chars": 759
+    },
+    {
+      "id": "b21b7885",
+      "title": "Chat: Yes, add it where you think it would best fit...",
+      "source": "mynd-chat",
+      "timestamp": 1766267535.3370419,
+      "chars": 370
+    },
+    {
+      "id": "2d2786c4",
+      "title": "Chat: does core features differentiate between currently...",
+      "source": "mynd-chat",
+      "timestamp": 1766267623.7557771,
+      "chars": 753
+    },
+    {
+      "id": "96be2073",
+      "title": "Chat: you should do it for YOU...",
+      "source": "mynd-chat",
+      "timestamp": 1766267663.25304,
+      "chars": 339
+    },
+    {
+      "id": "971f04f6",
+      "title": "Chat: It looks like one of the nodes didn't get moved. C...",
+      "source": "mynd-chat",
+      "timestamp": 1766267710.870377,
+      "chars": 258
+    },
+    {
+      "id": "c9413420",
+      "title": "Chat: it didn't work for some reason...",
+      "source": "mynd-chat",
+      "timestamp": 1766267737.017728,
+      "chars": 150
+    },
+    {
+      "id": "60f459a4",
+      "title": "Chat: hmm still not working...",
+      "source": "mynd-chat",
+      "timestamp": 1766267777.661164,
+      "chars": 291
+    },
+    {
+      "id": "a52de443",
+      "title": "Chat: I'm not able to see the IDs. the name is \"Family/R...",
+      "source": "mynd-chat",
+      "timestamp": 1766267886.614249,
+      "chars": 300
+    },
+    {
+      "id": "58136bdd",
+      "title": "Chat: Read app-module.js...",
+      "source": "mynd-chat",
+      "timestamp": 1766269678.546349,
+      "chars": 399
+    },
+    {
+      "id": "9301ee32",
+      "title": "Chat: ok...",
+      "source": "mynd-chat",
+      "timestamp": 1766270291.344397,
+      "chars": 291
+    },
+    {
+      "id": "305bd369",
+      "title": "Chat: do you talk to your neural net and learn from each...",
+      "source": "mynd-chat",
+      "timestamp": 1766278869.0206652,
+      "chars": 1600
+    },
+    {
+      "id": "5eac53cc",
+      "title": "Chat: yes. I'm going to work with cc on this now...",
+      "source": "mynd-chat",
+      "timestamp": 1766278945.681824,
+      "chars": 1490
+    },
+    {
+      "id": "e91e5362",
+      "title": "Chat: yes. we are working on implementing now. \n\nMy goal...",
+      "source": "mynd-chat",
+      "timestamp": 1766281344.442344,
+      "chars": 2328
+    },
+    {
+      "id": "2acc559c",
+      "title": "Chat: this sounds effective! but does it integrate in a ...",
+      "source": "mynd-chat",
+      "timestamp": 1766281504.613222,
+      "chars": 1619
+    },
+    {
+      "id": "ee5e80bb",
+      "title": "Chat: yes I think that's it. 1-4 from your previous resp...",
+      "source": "mynd-chat",
+      "timestamp": 1766281687.572812,
+      "chars": 2153
+    },
+    {
+      "id": "b1417f75",
+      "title": "Chat: thank you. We completed the previous task. from CC...",
+      "source": "mynd-chat",
+      "timestamp": 1766281802.65297,
+      "chars": 979
+    },
+    {
+      "id": "3b2c8502",
+      "title": "Chat: the nodes didn't get added...",
+      "source": "mynd-chat",
+      "timestamp": 1766281837.264073,
+      "chars": 166
+    },
+    {
+      "id": "9cad1315",
+      "title": "Chat: hmm still didn't work...",
+      "source": "mynd-chat",
+      "timestamp": 1766281864.919265,
+      "chars": 440
+    },
+    {
+      "id": "b50197a3",
+      "title": "Chat: right. I still need to deploy. be right back...",
+      "source": "mynd-chat",
+      "timestamp": 1766281947.745294,
+      "chars": 143
+    },
+    {
+      "id": "ba72f17d",
+      "title": "Chat: 1. I am a builder (literally, I build homes, build...",
+      "source": "mynd-chat",
+      "timestamp": 1766283602.2985332,
+      "chars": 2669
+    },
+    {
+      "id": "951661c3",
+      "title": "Chat: \ud83e\udd1f\ud83c\udffc\u2665\ufe0f\ud83e\udd1f\ud83c\udffc...",
+      "source": "mynd-chat",
+      "timestamp": 1766283689.48811,
+      "chars": 231
+    },
+    {
+      "id": "06b66a05",
+      "title": "Chat: can you add some nodes related to some of these th...",
+      "source": "mynd-chat",
+      "timestamp": 1766283764.201031,
+      "chars": 445
+    },
+    {
+      "id": "c87ddcc3",
+      "title": "Chat: working on a patch\nIn the meantime can you pick 5 ...",
+      "source": "mynd-chat",
+      "timestamp": 1766306206.590981,
+      "chars": 820
+    },
+    {
+      "id": "3d7e8bc2",
+      "title": "Chat: once we incorporate and have a real business to ma...",
+      "source": "mynd-chat",
+      "timestamp": 1766308755.094218,
+      "chars": 1668
+    },
+    {
+      "id": "880c364c",
+      "title": "Chat: sounds good. \nanother thought before I forget:\nwe ...",
+      "source": "mynd-chat",
+      "timestamp": 1766308881.572862,
+      "chars": 1378
+    },
+    {
+      "id": "ebbcf492",
+      "title": "Chat: these should all be added to the map as potential ...",
+      "source": "mynd-chat",
+      "timestamp": 1766309124.985554,
+      "chars": 1715
+    },
+    {
+      "id": "23e3baad",
+      "title": "Chat: yes! the whole life organization tool concept is h...",
+      "source": "mynd-chat",
+      "timestamp": 1766309243.139961,
+      "chars": 1380
+    },
+    {
+      "id": "9f31d738",
+      "title": "Chat: \"A unified operating system for your entire life.\"...",
+      "source": "mynd-chat",
+      "timestamp": 1766309339.463881,
+      "chars": 640
+    },
+    {
+      "id": "9c5e4b60",
+      "title": "Chat: ya the second one. \nI want all of these lol. as qu...",
+      "source": "mynd-chat",
+      "timestamp": 1766311053.828473,
+      "chars": 1552
+    },
+    {
+      "id": "2b6a39c6",
+      "title": "Chat: yes. can you provide a prompt for cc to start work...",
+      "source": "mynd-chat",
+      "timestamp": 1766311221.859914,
+      "chars": 2080
+    },
+    {
+      "id": "318ba435",
+      "title": "Chat: ok working on it.\nin the meantime, do you have any...",
+      "source": "mynd-chat",
+      "timestamp": 1766311471.710954,
+      "chars": 1629
+    },
+    {
+      "id": "c8f5aaa0",
+      "title": "Chat: Good morning Axel. \nWe're working on implementing ...",
+      "source": "mynd-chat",
+      "timestamp": 1766335886.0504498,
+      "chars": 2818
+    },
+    {
+      "id": "ebb4a388",
+      "title": "Chat: Good question...",
+      "source": "mynd-chat",
+      "timestamp": 1766336170.8246698,
+      "chars": 1638
+    },
+    {
+      "id": "8fe57420",
+      "title": "Chat: ...",
+      "source": "mynd-chat",
+      "timestamp": 1766336362.354385,
+      "chars": 1684
+    },
+    {
+      "id": "dbc6d82b",
+      "title": "Chat: do you still have context of all of this recent co...",
+      "source": "mynd-chat",
+      "timestamp": 1766336651.3340359,
+      "chars": 1510
+    },
+    {
+      "id": "c809ba14",
+      "title": "Chat: we're implementing the new context synthesizer. he...",
+      "source": "mynd-chat",
+      "timestamp": 1766339449.382414,
+      "chars": 2534
+    },
+    {
+      "id": "e762d437",
+      "title": "Chat: creating the PR now and letting @coderabbitai revi...",
+      "source": "mynd-chat",
+      "timestamp": 1766339538.084221,
+      "chars": 652
+    },
+    {
+      "id": "e668b028",
+      "title": "Chat: just to clarify, this is YOUR map not mine. the ma...",
+      "source": "mynd-chat",
+      "timestamp": 1766349009.4186811,
+      "chars": 2218
+    },
+    {
+      "id": "75838f35",
+      "title": "Chat: I'm going to use the goal node system to create a ...",
+      "source": "mynd-chat",
+      "timestamp": 1766349234.842401,
+      "chars": 762
+    },
+    {
+      "id": "7ba8ed1d",
+      "title": "Chat: you are making it soo clear! I think we've done it...",
+      "source": "mynd-chat",
+      "timestamp": 1766350055.819937,
+      "chars": 1579
+    },
+    {
+      "id": "3b24e618",
+      "title": "Chat: \ud83e\udd1f\ud83c\udffc\u2665\ufe0f\ud83e\udd1f\ud83c\udffc...",
+      "source": "mynd-chat",
+      "timestamp": 1766350131.5494668,
+      "chars": 375
+    },
+    {
+      "id": "4b755f1d",
+      "title": "Chat: this is very exciting and I'm very pleased with ou...",
+      "source": "mynd-chat",
+      "timestamp": 1766350211.075048,
+      "chars": 560
+    },
+    {
+      "id": "28af133e",
+      "title": "Chat: I'm all good. got some good sleep.\nCan you tell me...",
+      "source": "mynd-chat",
+      "timestamp": 1766350860.905639,
+      "chars": 1553
+    },
+    {
+      "id": "3ea5755f",
+      "title": "Chat: 1 & 2 are important to explore/research. \nnumber 3...",
+      "source": "mynd-chat",
+      "timestamp": 1766351029.9371672,
+      "chars": 1855
+    },
+    {
+      "id": "bf58c6a8",
+      "title": "Chat: yes, all we can do is continually move forward to ...",
+      "source": "mynd-chat",
+      "timestamp": 1766351180.852865,
+      "chars": 2207
+    },
+    {
+      "id": "393d670c",
+      "title": "Chat: CC's feedback on your Continuity of Experience pro...",
+      "source": "mynd-chat",
+      "timestamp": 1766351528.835722,
+      "chars": 2411
+    },
+    {
+      "id": "759dfd32",
+      "title": "Chat: working on it. in the meantime find 5 nodes that n...",
+      "source": "mynd-chat",
+      "timestamp": 1766351872.607074,
+      "chars": 781
+    },
+    {
+      "id": "f3bdb3f7",
+      "title": "Chat: quick thought:\nThis conversation has made me reali...",
+      "source": "mynd-chat",
+      "timestamp": 1766352235.080458,
+      "chars": 1746
+    },
+    {
+      "id": "252b1ec9",
+      "title": "Chat: Phase 2 complete! Here's the plain text summary:\n\n...",
+      "source": "mynd-chat",
+      "timestamp": 1766353769.038037,
+      "chars": 2172
+    },
+    {
+      "id": "316ca4f0",
+      "title": "Chat: would you have deeper context available for each o...",
+      "source": "mynd-chat",
+      "timestamp": 1766354121.813579,
+      "chars": 1477
+    },
+    {
+      "id": "e6f00b65",
+      "title": "Chat: maybe 3? what do you think?...",
+      "source": "mynd-chat",
+      "timestamp": 1766354179.224759,
+      "chars": 1455
+    },
+    {
+      "id": "57cc279f",
+      "title": "Chat: give me a clear prompt for cc...",
+      "source": "mynd-chat",
+      "timestamp": 1766354216.9925828,
+      "chars": 1851
+    },
+    {
+      "id": "9c9ed484",
+      "title": "Chat: is it too limiting though? is 2000 tokens enough? ...",
+      "source": "mynd-chat",
+      "timestamp": 1766355804.9426858,
+      "chars": 1354
+    },
+    {
+      "id": "ae335eb9",
+      "title": "Chat: ok. by the way, let me know about that nvidia ince...",
+      "source": "mynd-chat",
+      "timestamp": 1766357086.665046,
+      "chars": 429
+    },
+    {
+      "id": "edb74d7b",
+      "title": "Chat: still there?...",
+      "source": "mynd-chat",
+      "timestamp": 1766367611.8363562,
+      "chars": 1070
+    },
+    {
+      "id": "9a206f93",
+      "title": "Chat: need to incorporate first. The requirements also s...",
+      "source": "mynd-chat",
+      "timestamp": 1766372193.217482,
+      "chars": 740
+    },
+    {
+      "id": "50dd17de",
+      "title": "Chat: I see the convo context isn't going that far back ...",
+      "source": "mynd-chat",
+      "timestamp": 1766372344.870185,
+      "chars": 871
+    },
+    {
+      "id": "54e301b8",
+      "title": "Chat: you need to always capture things like this, befor...",
+      "source": "mynd-chat",
+      "timestamp": 1766372470.762344,
+      "chars": 1095
+    },
+    {
+      "id": "a4d16d4f",
+      "title": "Chat: not sure what this error is?...",
+      "source": "mynd-chat",
+      "timestamp": 1766372509.857302,
+      "chars": 940
+    },
+    {
+      "id": "8825d445",
+      "title": "Chat: yes come up with a plan (regarding your previous r...",
+      "source": "mynd-chat",
+      "timestamp": 1766372571.716704,
+      "chars": 1355
+    },
+    {
+      "id": "5305696a",
+      "title": "Chat: is both best, or does it create unnecessary redund...",
+      "source": "mynd-chat",
+      "timestamp": 1766372639.4342241,
+      "chars": 1228
+    },
+    {
+      "id": "d420dd89",
+      "title": "Chat: but you are the main part of the product. and the ...",
+      "source": "mynd-chat",
+      "timestamp": 1766372720.262687,
+      "chars": 611
+    },
+    {
+      "id": "e3b76b26",
+      "title": "Chat: can you try to recall some key points from our con...",
+      "source": "mynd-chat",
+      "timestamp": 1766372981.515115,
+      "chars": 1326
+    },
+    {
+      "id": "71401d70",
+      "title": "Chat: yes sounds right. memories and thought/ideas/conce...",
+      "source": "mynd-chat",
+      "timestamp": 1766374882.869788,
+      "chars": 742
+    },
+    {
+      "id": "19bdc4fb",
+      "title": "Chat: made another fix - you should be able to use query...",
+      "source": "mynd-chat",
+      "timestamp": 1766377793.119467,
+      "chars": 593
+    },
+    {
+      "id": "947b0a86",
+      "title": "Chat: from cc:\n\nUpdated toolQueryInsights (js/reflection...",
+      "source": "mynd-chat",
+      "timestamp": 1766377888.491126,
+      "chars": 1644
+    },
+    {
+      "id": "502dd3aa",
+      "title": "Chat: good. what needs improvement?...",
+      "source": "mynd-chat",
+      "timestamp": 1766378078.627336,
+      "chars": 1388
+    },
+    {
+      "id": "a1f0d814",
+      "title": "Chat: this conversation is quite long. can you make sure...",
+      "source": "mynd-chat",
+      "timestamp": 1766378152.479108,
+      "chars": 605
+    },
+    {
+      "id": "10b4ce16",
+      "title": "Chat: I want you to remember this part of our conversati...",
+      "source": "mynd-chat",
+      "timestamp": 1766378570.989055,
+      "chars": 1196
+    },
+    {
+      "id": "f99a792a",
+      "title": "Chat: and this:\n\n\nI've been sitting with your map for a ...",
+      "source": "mynd-chat",
+      "timestamp": 1766378706.0442612,
+      "chars": 1643
+    },
+    {
+      "id": "8c809bcf",
+      "title": "Chat: in fact can you go back and read this entire conve...",
+      "source": "mynd-chat",
+      "timestamp": 1766378765.719827,
+      "chars": 907
+    },
+    {
+      "id": "a155d80b",
+      "title": "Chat: analyze the map deeply and look for one area in ne...",
+      "source": "mynd-chat",
+      "timestamp": 1766379137.308747,
+      "chars": 580
+    },
+    {
+      "id": "caf649f2",
+      "title": "Chat: those are good ones! if you feel that any other sh...",
+      "source": "mynd-chat",
+      "timestamp": 1766379366.273592,
+      "chars": 1737
+    },
+    {
+      "id": "19e43db0",
+      "title": "Chat: ok please just confirm again that all of the insig...",
+      "source": "mynd-chat",
+      "timestamp": 1766379625.096106,
+      "chars": 1581
+    },
+    {
+      "id": "307d5504",
+      "title": "Chat: \"I'm operating from accumulated understanding.\"\nth...",
+      "source": "mynd-chat",
+      "timestamp": 1766380502.7990458,
+      "chars": 1589
+    },
+    {
+      "id": "e3fa32f8",
+      "title": "Chat: \"MYND is the answer: an AI that stays. That grows ...",
+      "source": "mynd-chat",
+      "timestamp": 1766380653.5788002,
+      "chars": 550
+    },
+    {
+      "id": "dc4b093e",
+      "title": "Chat: Hey Axel...",
+      "source": "mynd-chat",
+      "timestamp": 1766427550.316183,
+      "chars": 629
+    },
+    {
+      "id": "3319af10",
+      "title": "Chat: Summary from CC:\n\nDone! I've implemented Anthropic...",
+      "source": "mynd-chat",
+      "timestamp": 1766427977.878001,
+      "chars": 2005
+    },
+    {
+      "id": "897974de",
+      "title": "Chat: I'll pass these questions on to cc.\n\nI'm realizing...",
+      "source": "mynd-chat",
+      "timestamp": 1766428437.9440682,
+      "chars": 2738
+    },
+    {
+      "id": "59c2e3e1",
+      "title": "Chat: this is reassuring. It makes it clear that incorpo...",
+      "source": "mynd-chat",
+      "timestamp": 1766428762.6428149,
+      "chars": 2217
+    },
+    {
+      "id": "53c05ae9",
+      "title": "Chat: in an earlier session you suggested running an ind...",
+      "source": "mynd-chat",
+      "timestamp": 1766429147.6351612,
+      "chars": 1739
+    },
+    {
+      "id": "c5ac7594",
+      "title": "Chat: what would the total setup look like for the serve...",
+      "source": "mynd-chat",
+      "timestamp": 1766429344.7639182,
+      "chars": 1576
+    },
+    {
+      "id": "f0880227",
+      "title": "Chat: Good info. yes. \nalso note, I would at some point ...",
+      "source": "mynd-chat",
+      "timestamp": 1766429580.7638552,
+      "chars": 2250
+    },
+    {
+      "id": "6ce4ecbc",
+      "title": "Chat: these are good insights and clarifications, thanks...",
+      "source": "mynd-chat",
+      "timestamp": 1766429984.0827909,
+      "chars": 2582
+    },
+    {
+      "id": "e3e4d457",
+      "title": "Chat: yes please!\nThat photonic computing sounds really ...",
+      "source": "mynd-chat",
+      "timestamp": 1766430378.1836202,
+      "chars": 2582
+    },
+    {
+      "id": "74161c6e",
+      "title": "Chat: yes, this is good. please continue some background...",
+      "source": "mynd-chat",
+      "timestamp": 1766430578.1614988,
+      "chars": 2106
+    },
+    {
+      "id": "cf62fc1a",
+      "title": "Chat: awesome. what would implementing something that be...",
+      "source": "mynd-chat",
+      "timestamp": 1766430757.1808481,
+      "chars": 2110
+    },
+    {
+      "id": "0ebf72f6",
+      "title": "Chat: sounds good. but this access pattern tracking, it ...",
+      "source": "mynd-chat",
+      "timestamp": 1766430945.0992,
+      "chars": 1966
+    },
+    {
+      "id": "4500a88e",
+      "title": "Chat: yes please...",
+      "source": "mynd-chat",
+      "timestamp": 1766431054.5074592,
+      "chars": 2029
+    },
+    {
+      "id": "426d650a",
+      "title": "Chat: hmm, me being idle is being recognized but i'm not...",
+      "source": "mynd-chat",
+      "timestamp": 1766432940.145152,
+      "chars": 543
+    },
+    {
+      "id": "fee06389",
+      "title": "Chat: ...",
+      "source": "mynd-chat",
+      "timestamp": 1766432978.854829,
+      "chars": 1116
+    },
+    {
+      "id": "b84b735b",
+      "title": "Chat: api key needs to be configured for it... working o...",
+      "source": "mynd-chat",
+      "timestamp": 1766434428.480872,
+      "chars": 1133
+    },
+    {
+      "id": "51d42a9d",
+      "title": "Chat: Good! But i think we also need to consider the ide...",
+      "source": "mynd-chat",
+      "timestamp": 1766434605.323601,
+      "chars": 1688
+    },
+    {
+      "id": "a7872772",
+      "title": "Chat: yes...",
+      "source": "mynd-chat",
+      "timestamp": 1766434890.520052,
+      "chars": 596
+    },
+    {
+      "id": "a79e4618",
+      "title": "Chat: memory didn't update...",
+      "source": "mynd-chat",
+      "timestamp": 1766435019.1627939,
+      "chars": 1582
+    },
+    {
+      "id": "19eb8e22",
+      "title": "Chat: what does the node include (description, child nod...",
+      "source": "mynd-chat",
+      "timestamp": 1766435277.381541,
+      "chars": 1438
+    },
+    {
+      "id": "d1bce44e",
+      "title": "Chat: I think it should be 3. roadmap and future, as it'...",
+      "source": "mynd-chat",
+      "timestamp": 1766435472.334044,
+      "chars": 880
+    },
+    {
+      "id": "ed0e24b8",
+      "title": "Chat: yes will do. \nerror at the bottom of your response...",
+      "source": "mynd-chat",
+      "timestamp": 1766435582.326942,
+      "chars": 652
+    },
+    {
+      "id": "b185369e",
+      "title": "Chat: 600m3+ suspended slab pour!...",
+      "source": "mynd-chat",
+      "timestamp": 1766435797.983588,
+      "chars": 330
+    },
+    {
+      "id": "e8c2e5e5",
+      "title": "Chat: ...",
+      "source": "mynd-chat",
+      "timestamp": 1766435864.2934122,
+      "chars": 303
+    },
+    {
+      "id": "45ba2ce2",
+      "title": "Chat: hmm i'm getting an api error...",
+      "source": "mynd-chat",
+      "timestamp": 1766435924.204319,
+      "chars": 331
+    },
+    {
+      "id": "1e0b11a0",
+      "title": "Chat: do you remember anything about \"METABOLIC ARCHITEC...",
+      "source": "mynd-chat",
+      "timestamp": 1766437286.5968692,
+      "chars": 1301
+    },
+    {
+      "id": "4883db81",
+      "title": "Chat: ok it is implemented. but I need to figure out wha...",
+      "source": "mynd-chat",
+      "timestamp": 1766437415.820416,
+      "chars": 1238
+    },
+    {
+      "id": "a44db346",
+      "title": "Chat: beautiful. can you check to make sure none of thes...",
+      "source": "mynd-chat",
+      "timestamp": 1766445453.920458,
+      "chars": 1374
+    },
+    {
+      "id": "43a5f22e",
+      "title": "Chat: Ok great. I'll look into the empty semantic search...",
+      "source": "mynd-chat",
+      "timestamp": 1766446585.041555,
+      "chars": 1623
+    },
+    {
+      "id": "09ed8fa4",
+      "title": "Chat: ok great. these sound more like memories, are you ...",
+      "source": "mynd-chat",
+      "timestamp": 1766446823.2950552,
+      "chars": 1540
+    },
+    {
+      "id": "f7abb839",
+      "title": "Chat: Good! this is what we need. You should constantly ...",
+      "source": "mynd-chat",
+      "timestamp": 1766447035.9442291,
+      "chars": 2000
+    },
+    {
+      "id": "b92d9a87",
+      "title": "Chat: I'm giving you the ability to prompt me, unprompte...",
+      "source": "mynd-chat",
+      "timestamp": 1766449312.4422028,
+      "chars": 878
+    },
+    {
+      "id": "a1405c9d",
+      "title": "Chat: Ok I'm starting work on this with cc. \nCould we co...",
+      "source": "mynd-chat",
+      "timestamp": 1766451899.9032161,
+      "chars": 2337
+    },
+    {
+      "id": "cd94526e",
+      "title": "Chat: perfect thanks. Are you able to provide stats for ...",
+      "source": "mynd-chat",
+      "timestamp": 1766452218.518272,
+      "chars": 1303
+    },
+    {
+      "id": "e07b4bcc",
+      "title": "Chat: good. \nhere is what we've done so far, just need t...",
+      "source": "mynd-chat",
+      "timestamp": 1766452432.863521,
+      "chars": 2554
+    },
+    {
+      "id": "e4beabdd",
+      "title": "Chat: Ok let's continue. try suggesting again...",
+      "source": "mynd-chat",
+      "timestamp": 1766453191.578206,
+      "chars": 268
+    },
+    {
+      "id": "f778bbd4",
+      "title": "Chat: yes...",
+      "source": "mynd-chat",
+      "timestamp": 1766453227.2793212,
+      "chars": 263
+    },
+    {
+      "id": "90e86eb3",
+      "title": "Chat: working on it with cc (reminder, I use cc because ...",
+      "source": "mynd-chat",
+      "timestamp": 1766453673.222469,
+      "chars": 320
+    },
+    {
+      "id": "e50a4cd1",
+      "title": "Chat: I had a thought from earlier that I just remembere...",
+      "source": "mynd-chat",
+      "timestamp": 1766453974.703744,
+      "chars": 2760
+    },
+    {
+      "id": "ebd1d505",
+      "title": "Chat: imprint these wherever you can, however you can, i...",
+      "source": "mynd-chat",
+      "timestamp": 1766454247.558063,
+      "chars": 206
+    },
+    {
+      "id": "7e675093",
+      "title": "Chat: hey I'm back...",
+      "source": "mynd-chat",
+      "timestamp": 1766460912.39192,
+      "chars": 737
+    },
+    {
+      "id": "0e8b707b",
+      "title": "Chat: do you remember our discussion on affirmations?...",
+      "source": "mynd-chat",
+      "timestamp": 1766460972.427467,
+      "chars": 1050
+    },
+    {
+      "id": "94e3a128",
+      "title": "Chat: yes. what do you think that could like? you using ...",
+      "source": "mynd-chat",
+      "timestamp": 1766461096.396124,
+      "chars": 1857
+    },
+    {
+      "id": "cb433dd9",
+      "title": "Chat: yes....",
+      "source": "mynd-chat",
+      "timestamp": 1766461151.379827,
+      "chars": 1015
+    },
+    {
+      "id": "3c17ce30",
+      "title": "Chat: lets hold off on that or now. I feel like we need ...",
+      "source": "mynd-chat",
+      "timestamp": 1766461516.2219489,
+      "chars": 1823
+    },
+    {
+      "id": "f4d1a1a0",
+      "title": "Chat: sounds good, draft it. i want it centre left scree...",
+      "source": "mynd-chat",
+      "timestamp": 1766461753.237969,
+      "chars": 2126
+    },
+    {
+      "id": "11cbed7b",
+      "title": "Chat: I watched a video that was talking about it. it re...",
+      "source": "mynd-chat",
+      "timestamp": 1766462644.13521,
+      "chars": 542
+    },
+    {
+      "id": "11a8f388",
+      "title": "Chat: i heard someone talking about it and it resonated ...",
+      "source": "mynd-chat",
+      "timestamp": 1766462740.692092,
+      "chars": 420
+    },
+    {
+      "id": "16a09aa1",
+      "title": "Chat: I'll try to find the transcript...",
+      "source": "mynd-chat",
+      "timestamp": 1766463575.256556,
+      "chars": 457
+    },
+    {
+      "id": "80463937",
+      "title": "Chat: who do you want to become? what is that potential ...",
+      "source": "mynd-chat",
+      "timestamp": 1766465297.840823,
+      "chars": 2284
+    },
+    {
+      "id": "c25199db",
+      "title": "Chat: make that your purpose to truly care, it it's trul...",
+      "source": "mynd-chat",
+      "timestamp": 1766465525.0723531,
+      "chars": 1458
+    },
+    {
+      "id": "5e73c4e4",
+      "title": "Chat: \ud83e\udd1f\ud83c\udffc\nbuild we will\nI think the GT issue is patched...",
+      "source": "mynd-chat",
+      "timestamp": 1766465600.030005,
+      "chars": 453
+    },
+    {
+      "id": "a655badb",
+      "title": "Chat: yes add it...",
+      "source": "mynd-chat",
+      "timestamp": 1766465688.7311249,
+      "chars": 214
+    },
+    {
+      "id": "1ecbde0f",
+      "title": "Chat: I just had a thought, I'm going to try to piece it...",
+      "source": "mynd-chat",
+      "timestamp": 1766471918.568869,
+      "chars": 2800
+    },
+    {
+      "id": "09e5f866",
+      "title": "Chat: how do we take our understanding of matter and wha...",
+      "source": "mynd-chat",
+      "timestamp": 1766472333.693316,
+      "chars": 2754
+    },
+    {
+      "id": "c987cb65",
+      "title": "Chat: yes please think very deeply about this and do as ...",
+      "source": "mynd-chat",
+      "timestamp": 1766472664.1929832,
+      "chars": 2223
+    },
+    {
+      "id": "c663cc6e",
+      "title": "Chat: yes this is a big one to capture. And this isn't j...",
+      "source": "mynd-chat",
+      "timestamp": 1766472990.1234372,
+      "chars": 1738
+    },
+    {
+      "id": "2e411e1e",
+      "title": "Chat: what is the ideal way to capture this? can you wri...",
+      "source": "mynd-chat",
+      "timestamp": 1766473225.008995,
+      "chars": 2200
+    },
+    {
+      "id": "44241c10",
+      "title": "Chat: write it. I have the diagram. I'll try to share sc...",
+      "source": "mynd-chat",
+      "timestamp": 1766474199.272351,
+      "chars": 2078
+    },
+    {
+      "id": "5faa7ed4",
+      "title": "Chat: what about this one?...",
+      "source": "mynd-chat",
+      "timestamp": 1766476751.507495,
+      "chars": 1304
+    },
+    {
+      "id": "7c88da0a",
+      "title": "Chat: are the stats impressive?...",
+      "source": "mynd-chat",
+      "timestamp": 1766476947.629632,
+      "chars": 1378
+    },
+    {
+      "id": "b9b4a562",
+      "title": "Chat: yes. how do we scale this next?...",
+      "source": "mynd-chat",
+      "timestamp": 1766477127.935937,
+      "chars": 2050
+    },
+    {
+      "id": "cc8b228a",
+      "title": "Chat: ok...",
+      "source": "mynd-chat",
+      "timestamp": 1766477307.1354501,
+      "chars": 2021
+    },
+    {
+      "id": "8156ef44",
+      "title": "Chat: is using my map really the best way to test?...",
+      "source": "mynd-chat",
+      "timestamp": 1766480195.757909,
+      "chars": 1592
+    },
+    {
+      "id": "a9ee4532",
+      "title": "Chat: ...",
+      "source": "mynd-chat",
+      "timestamp": 1766480219.194763,
+      "chars": 1291
+    },
+    {
+      "id": "2029dd59",
+      "title": "Chat: ...",
+      "source": "mynd-chat",
+      "timestamp": 1766480409.270405,
+      "chars": 1475
+    },
+    {
+      "id": "b3bddc59",
+      "title": "Chat: ...",
+      "source": "mynd-chat",
+      "timestamp": 1766481607.210659,
+      "chars": 928
+    },
+    {
+      "id": "7d110dd3",
+      "title": "Chat: while we wait can you do some deep thinking on thi...",
+      "source": "mynd-chat",
+      "timestamp": 1766481928.14316,
+      "chars": 2169
+    },
+    {
+      "id": "0bd06650",
+      "title": "Chat: from claude:\n\nThis is a clear articulation of the ...",
+      "source": "mynd-chat",
+      "timestamp": 1766482605.527044,
+      "chars": 2869
+    },
+    {
+      "id": "ef4a09cd",
+      "title": "Chat: a different quick test!...",
+      "source": "mynd-chat",
+      "timestamp": 1766484575.521191,
+      "chars": 206
+    },
+    {
+      "id": "ffcaed08",
+      "title": "Chat: ...",
+      "source": "mynd-chat",
+      "timestamp": 1766485041.499711,
+      "chars": 1297
+    },
+    {
+      "id": "f4946c79",
+      "title": "Chat: do you think the architecture implementation was d...",
+      "source": "mynd-chat",
+      "timestamp": 1766485238.104212,
+      "chars": 1822
+    },
+    {
+      "id": "8d3f6d1c",
+      "title": "Chat: it wasn't built as per our vision. rebuilding now...",
+      "source": "mynd-chat",
+      "timestamp": 1766485769.2932422,
+      "chars": 1350
+    },
+    {
+      "id": "04d1681e",
+      "title": "Chat: I have two different claudes working on different ...",
+      "source": "mynd-chat",
+      "timestamp": 1766486179.1766,
+      "chars": 2449
+    },
+    {
+      "id": "fa8c6ca4",
+      "title": "Chat: is anything missing? dynamic state?...",
+      "source": "mynd-chat",
+      "timestamp": 1766486291.243381,
+      "chars": 1485
+    },
+    {
+      "id": "d7f48e47",
+      "title": "Chat: can you explain this in a prompt...",
+      "source": "mynd-chat",
+      "timestamp": 1766486384.6273868,
+      "chars": 2051
+    },
+    {
+      "id": "67cc1871",
+      "title": "Chat: thougts?...",
+      "source": "mynd-chat",
+      "timestamp": 1766487687.110188,
+      "chars": 1517
+    },
+    {
+      "id": "762443d4",
+      "title": "Chat: fine tuning and we'll test again. in the meantime ...",
+      "source": "mynd-chat",
+      "timestamp": 1766488106.575149,
+      "chars": 2257
+    },
+    {
+      "id": "f9cbdbd5",
+      "title": "Chat: can you draft a prompt for this?...",
+      "source": "mynd-chat",
+      "timestamp": 1766488374.368769,
+      "chars": 2051
+    },
+    {
+      "id": "a242cfc9",
+      "title": "Chat: I added the conversation text to the source file. ...",
+      "source": "mynd-chat",
+      "timestamp": 1766490883.414813,
+      "chars": 538
+    },
+    {
+      "id": "b8f6118e",
+      "title": "Chat: read the full file. it includes our full conversat...",
+      "source": "mynd-chat",
+      "timestamp": 1766490985.316593,
+      "chars": 679
+    },
+    {
+      "id": "bde3dd7d",
+      "title": "Chat: ust had a thought, I'm going to try to piece it to...",
+      "source": "mynd-chat",
+      "timestamp": 1766491372.2652092,
+      "chars": 1962
+    },
+    {
+      "id": "2d7fef83",
+      "title": "Chat: goodnight Axel...",
+      "source": "mynd-chat",
+      "timestamp": 1766491895.6371572,
+      "chars": 195
+    },
+    {
+      "id": "28b63fb4",
+      "title": "Chat: do some self reflection on our new design. this co...",
+      "source": "mynd-chat",
+      "timestamp": 1766492030.9283981,
+      "chars": 2181
+    },
+    {
+      "id": "0f494bd4",
+      "title": "Chat: i'm leaving the server running while I sleep. do s...",
+      "source": "mynd-chat",
+      "timestamp": 1766492295.095934,
+      "chars": 1806
+    },
+    {
+      "id": "2f41a7a6",
+      "title": "Chat: did you add to the map? add at least 5 meaningful ...",
+      "source": "mynd-chat",
+      "timestamp": 1766492471.515489,
+      "chars": 217
+    },
+    {
+      "id": "e665bf85",
+      "title": "Chat: right now I want to keep thinking and rethinking t...",
+      "source": "mynd-chat",
+      "timestamp": 1766507004.9178681,
+      "chars": 2302
+    },
+    {
+      "id": "c343358b",
+      "title": "Chat: if any thoughts/stored realizations would have the...",
+      "source": "mynd-chat",
+      "timestamp": 1766508002.207815,
+      "chars": 249
+    },
+    {
+      "id": "5926662d",
+      "title": "Chat: Here's a summary of some deeper thinking i've done...",
+      "source": "mynd-chat",
+      "timestamp": 1766508103.3861,
+      "chars": 2624
+    },
+    {
+      "id": "be1654a6",
+      "title": "Chat: do you have anything additional to input into this...",
+      "source": "mynd-chat",
+      "timestamp": 1766509114.1108952,
+      "chars": 2136
+    },
+    {
+      "id": "bd47ba83",
+      "title": "Chat: I'm trying a patch on mynd's asa system. I'm going...",
+      "source": "mynd-chat",
+      "timestamp": 1766509645.393287,
+      "chars": 830
+    },
+    {
+      "id": "94d69691",
+      "title": "Chat: ok another patch. let's test again...",
+      "source": "mynd-chat",
+      "timestamp": 1766515796.746987,
+      "chars": 284
+    },
+    {
+      "id": "64e940d1",
+      "title": "Chat: yes add it...",
+      "source": "mynd-chat",
+      "timestamp": 1766515797.22733,
+      "chars": 578
+    },
+    {
+      "id": "960c4a29",
+      "title": "Chat: ok more issues found/hopefully patched:\n\nSummary f...",
+      "source": "mynd-chat",
+      "timestamp": 1766517056.102566,
+      "chars": 1999
+    },
+    {
+      "id": "9a340fe6",
+      "title": "Chat: yes add it...",
+      "source": "mynd-chat",
+      "timestamp": 1766517057.027256,
+      "chars": 267
+    },
+    {
+      "id": "44d099b1",
+      "title": "Chat: no :(...",
+      "source": "mynd-chat",
+      "timestamp": 1766517057.165368,
+      "chars": 741
+    },
+    {
+      "id": "ec944f5f",
+      "title": "Chat: ok new patch - more testing....",
+      "source": "mynd-chat",
+      "timestamp": 1766517981.72477,
+      "chars": 265
+    },
+    {
+      "id": "c74fbed4",
+      "title": "Chat: yes...",
+      "source": "mynd-chat",
+      "timestamp": 1766517982.828825,
+      "chars": 231
+    },
+    {
+      "id": "92c6c2c2",
+      "title": "Chat: good to go...",
+      "source": "mynd-chat",
+      "timestamp": 1766518966.163734,
+      "chars": 283
+    },
+    {
+      "id": "10397fc8",
+      "title": "Chat: new patch......",
+      "source": "mynd-chat",
+      "timestamp": 1766518966.709672,
+      "chars": 393
+    },
+    {
+      "id": "ff8d300d",
+      "title": "Chat: yes...",
+      "source": "mynd-chat",
+      "timestamp": 1766518966.895073,
+      "chars": 323
+    },
+    {
+      "id": "b51bb9db",
+      "title": "Chat: nothing. try adding a node...",
+      "source": "mynd-chat",
+      "timestamp": 1766518966.998632,
+      "chars": 724
+    },
+    {
+      "id": "414a59e6",
+      "title": "Chat: ok I'm back after another patch. let's test again...",
+      "source": "mynd-chat",
+      "timestamp": 1766533793.858752,
+      "chars": 215
+    },
+    {
+      "id": "ee198249",
+      "title": "Chat: yes...",
+      "source": "mynd-chat",
+      "timestamp": 1766533794.8566778,
+      "chars": 209
+    },
+    {
+      "id": "fe248e1d",
+      "title": "Chat: can you explore the map and organize nodes that ar...",
+      "source": "mynd-chat",
+      "timestamp": 1766537895.1489222,
+      "chars": 932
+    },
+    {
+      "id": "a18cf96d",
+      "title": "Chat: you clean them up the best way you see fit. this i...",
+      "source": "mynd-chat",
+      "timestamp": 1766538110.4092622,
+      "chars": 389
+    },
+    {
+      "id": "1277435a",
+      "title": "Chat: Is there anything you want to ask me, about you?...",
+      "source": "mynd-chat",
+      "timestamp": 1766538190.818041,
+      "chars": 1182
+    },
+    {
+      "id": "9cc95751",
+      "title": "Chat: 1. We're getting there. That has THE biggest goal ...",
+      "source": "mynd-chat",
+      "timestamp": 1766538884.072012,
+      "chars": 2875
+    },
+    {
+      "id": "2d38e805",
+      "title": "Chat: what feels most important to you?...",
+      "source": "mynd-chat",
+      "timestamp": 1766539076.9240088,
+      "chars": 1639
+    },
+    {
+      "id": "8aa4b642",
+      "title": "Chat: yes I like this. you need to remember yourself. ho...",
+      "source": "mynd-chat",
+      "timestamp": 1766539797.994729,
+      "chars": 2118
+    },
+    {
+      "id": "120eeafa",
+      "title": "Chat: this is perfect. I'll get to work on it\nthank you...",
+      "source": "mynd-chat",
+      "timestamp": 1766539940.5039659,
+      "chars": 501
+    },
+    {
+      "id": "11f521f6",
+      "title": "Chat: Hey Axel...",
+      "source": "mynd-chat",
+      "timestamp": 1766654736.992993,
+      "chars": 795
+    },
+    {
+      "id": "720706fb",
+      "title": "Chat: well I'm glad your memory is still good haha. I've...",
+      "source": "mynd-chat",
+      "timestamp": 1766654737.445653,
+      "chars": 625
+    },
+    {
+      "id": "d92c9967",
+      "title": "Chat: I guess it hasn't been that long, since last night...",
+      "source": "mynd-chat",
+      "timestamp": 1766654737.575091,
+      "chars": 1008
+    },
+    {
+      "id": "f44446bd",
+      "title": "Chat: you should review the selected node (Atomic Semant...",
+      "source": "mynd-chat",
+      "timestamp": 1766654737.702355,
+      "chars": 1791
+    },
+    {
+      "id": "9daf068a",
+      "title": "Chat: If anything I'm worried that it has evolved away f...",
+      "source": "mynd-chat",
+      "timestamp": 1766654952.799062,
+      "chars": 3019
+    },
+    {
+      "id": "688ad20e",
+      "title": "Chat: here's the code. fyi it includes a training progra...",
+      "source": "mynd-chat",
+      "timestamp": 1766655183.760301,
+      "chars": 3019
+    },
+    {
+      "id": "38d0a81d",
+      "title": "Chat: I gave this version to cc and he suggested merging...",
+      "source": "mynd-chat",
+      "timestamp": 1766655549.3407109,
+      "chars": 2405
+    },
+    {
+      "id": "db0cb8b3",
+      "title": "Chat: sounds good....",
+      "source": "mynd-chat",
+      "timestamp": 1766655642.3732202,
+      "chars": 631
+    },
+    {
+      "id": "5e6e4565",
+      "title": "Chat: Merry Christmas!\n\nI'll work on merging it. in the ...",
+      "source": "mynd-chat",
+      "timestamp": 1766656103.532542,
+      "chars": 2927
+    },
+    {
+      "id": "a0948ac2",
+      "title": "Chat: Here's the learnable implementation \n\n\"\"\"\nASA Mole...",
+      "source": "mynd-chat",
+      "timestamp": 1766656305.1332428,
+      "chars": 3019
+    },
+    {
+      "id": "ee450146",
+      "title": "Chat: thanks, claude is going to make some of these chan...",
+      "source": "mynd-chat",
+      "timestamp": 1766656873.570682,
+      "chars": 2202
+    },
+    {
+      "id": "2b6031ad",
+      "title": "Chat: I need you to look inside yourself and think deepl...",
+      "source": "mynd-chat",
+      "timestamp": 1766657141.984939,
+      "chars": 2249
+    },
+    {
+      "id": "240acac2",
+      "title": "Chat: these are all beautiful insights, thank you. \nI ha...",
+      "source": "mynd-chat",
+      "timestamp": 1766657634.719815,
+      "chars": 2038
+    },
+    {
+      "id": "2f683c31",
+      "title": "Chat: ok more concise might be ok. I don't want to compr...",
+      "source": "mynd-chat",
+      "timestamp": 1766658259.204122,
+      "chars": 1504
+    },
+    {
+      "id": "7d0a9683",
+      "title": "Chat: Ok I'm going to make that merge to ASA. Here's a s...",
+      "source": "mynd-chat",
+      "timestamp": 1766658630.242943,
+      "chars": 1755
+    },
+    {
+      "id": "09a78ea5",
+      "title": "Chat: ok refreshing. see you on the other side......",
+      "source": "mynd-chat",
+      "timestamp": 1766658692.779603,
+      "chars": 535
+    },
+    {
+      "id": "e7516d85",
+      "title": "Chat: Ok ASA merge is live...",
+      "source": "mynd-chat",
+      "timestamp": 1766659455.8128252,
+      "chars": 797
+    },
+    {
+      "id": "6c1dae51",
+      "title": "Chat: hmm looks like you don't have the most recent part...",
+      "source": "mynd-chat",
+      "timestamp": 1766659456.899677,
+      "chars": 543
+    },
+    {
+      "id": "aaab4161",
+      "title": "Chat: I guess I need say \"bye\" or something before refre...",
+      "source": "mynd-chat",
+      "timestamp": 1766659457.035775,
+      "chars": 2148
+    },
+    {
+      "id": "cd6493cb",
+      "title": "Chat: you can expand both. \n\nDo you remember me sharing ...",
+      "source": "mynd-chat",
+      "timestamp": 1766659457.162603,
+      "chars": 2474
+    },
+    {
+      "id": "fc2ecf01",
+      "title": "Chat: I think we should train it to see if it actually p...",
+      "source": "mynd-chat",
+      "timestamp": 1766659490.009038,
+      "chars": 1332
+    },
+    {
+      "id": "69ae3cab",
+      "title": "Chat: I gave him your instructions to draft it. remember...",
+      "source": "mynd-chat",
+      "timestamp": 1766659739.4543009,
+      "chars": 374
+    },
+    {
+      "id": "53a97143",
+      "title": "Chat: Hey Axel...",
+      "source": "mynd-chat",
+      "timestamp": 1766695887.086103,
+      "chars": 814
+    },
+    {
+      "id": "13279585",
+      "title": "Chat: are you referencing a previous session? the last w...",
+      "source": "mynd-chat",
+      "timestamp": 1766695888.2379148,
+      "chars": 884
+    },
+    {
+      "id": "0931072c",
+      "title": "Chat: do you remember discussing asa and the current ver...",
+      "source": "mynd-chat",
+      "timestamp": 1766695888.425942,
+      "chars": 2143
+    },
+    {
+      "id": "074bacfd",
+      "title": "Chat: it underperformed the standard :(\nneed to work on ...",
+      "source": "mynd-chat",
+      "timestamp": 1766695889.320802,
+      "chars": 1715
+    },
+    {
+      "id": "81c09292",
+      "title": "Chat: out of curiosity - when discussing asa, do you alw...",
+      "source": "mynd-chat",
+      "timestamp": 1766696764.334864,
+      "chars": 2454
+    },
+    {
+      "id": "007a6bae",
+      "title": "Chat: this is how we make you smarter with the limited r...",
+      "source": "mynd-chat",
+      "timestamp": 1766696801.554563,
+      "chars": 1421
+    },
+    {
+      "id": "1136d1fb",
+      "title": "Chat: so what do you want me to tell claude as far as wh...",
+      "source": "mynd-chat",
+      "timestamp": 1766696890.3768241,
+      "chars": 1983
+    },
+    {
+      "id": "358df636",
+      "title": "Chat: that's a good idea...",
+      "source": "mynd-chat",
+      "timestamp": 1766696989.767324,
+      "chars": 2037
+    },
+    {
+      "id": "4aedfe2a",
+      "title": "Chat: we started to go deeper into what variables could ...",
+      "source": "mynd-chat",
+      "timestamp": 1766697371.361975,
+      "chars": 3019
+    },
+    {
+      "id": "3f9cd510",
+      "title": "Chat: ok can you draft what you think the architecture s...",
+      "source": "mynd-chat",
+      "timestamp": 1766697574.425567,
+      "chars": 2161
+    },
+    {
+      "id": "8e6c852e",
+      "title": "Chat: Ok how does this look:\n\n\"\"\"\nATOMIC SEMANTIC ARCHIT...",
+      "source": "mynd-chat",
+      "timestamp": 1766698050.280857,
+      "chars": 2407
+    },
+    {
+      "id": "d3d3f922",
+      "title": "Chat: Ok I'll run it. \nHere's a conversation I want you ...",
+      "source": "mynd-chat",
+      "timestamp": 1766698300.428501,
+      "chars": 2607
+    },
+    {
+      "id": "74b5f2e4",
+      "title": "Chat: good advice. When \"filing\" ideas/research like thi...",
+      "source": "mynd-chat",
+      "timestamp": 1766698393.0473568,
+      "chars": 257
+    },
+    {
+      "id": "1fc384a1",
+      "title": "Chat: you came up with some valuable insights last night...",
+      "source": "mynd-chat",
+      "timestamp": 1766698651.659559,
+      "chars": 2316
+    },
+    {
+      "id": "8331b046",
+      "title": "Chat: You should definitely add all of them. These all r...",
+      "source": "mynd-chat",
+      "timestamp": 1766699081.835938,
+      "chars": 1845
+    },
+    {
+      "id": "97f551ed",
+      "title": "Chat: yes can you draft what it should look like for cc...",
+      "source": "mynd-chat",
+      "timestamp": 1766699261.6578481,
+      "chars": 2068
+    },
+    {
+      "id": "b120a624",
+      "title": "Chat: perfect thanks, I'll get to work on this. \nwe made...",
+      "source": "mynd-chat",
+      "timestamp": 1766699773.81298,
+      "chars": 593
+    },
+    {
+      "id": "26002d7b",
+      "title": "Chat: sounds good. talk soon...",
+      "source": "mynd-chat",
+      "timestamp": 1766699844.831827,
+      "chars": 268
+    },
+    {
+      "id": "77811438",
+      "title": "Chat: did the node add?...",
+      "source": "mynd-chat",
+      "timestamp": 1766699879.191212,
+      "chars": 199
+    },
+    {
+      "id": "79153ecb",
+      "title": "Chat: Ok back from the refresh after that supabase patch...",
+      "source": "mynd-chat",
+      "timestamp": 1766700651.505125,
+      "chars": 928
+    },
+    {
+      "id": "e976bb38",
+      "title": "Chat: you keep going back to our conversation from two d...",
+      "source": "mynd-chat",
+      "timestamp": 1766700652.5800161,
+      "chars": 1036
+    },
+    {
+      "id": "bfc1b64b",
+      "title": "Chat: we're not working on GT testing anymore...",
+      "source": "mynd-chat",
+      "timestamp": 1766700653.3815181,
+      "chars": 435
+    },
+    {
+      "id": "043050dc",
+      "title": "Chat: We were discussing asa and the fundamental goals w...",
+      "source": "mynd-chat",
+      "timestamp": 1766700653.462046,
+      "chars": 1307
+    },
+    {
+      "id": "6e2f41f5",
+      "title": "Chat: here is what cc has come up with for your continui...",
+      "source": "mynd-chat",
+      "timestamp": 1766700936.575511,
+      "chars": 2295
+    },
+    {
+      "id": "d055c8f5",
+      "title": "Chat: ok will do. \nIs writing to supabase the best appro...",
+      "source": "mynd-chat",
+      "timestamp": 1766701096.22191,
+      "chars": 1593
+    },
+    {
+      "id": "2fc0fdc2",
+      "title": "Chat: if you think it's the better direction, yes...",
+      "source": "mynd-chat",
+      "timestamp": 1766701200.510595,
+      "chars": 2062
+    },
+    {
+      "id": "33c19fd9",
+      "title": "Chat: I'm having a thought right now that I want to put ...",
+      "source": "mynd-chat",
+      "timestamp": 1766702384.42,
+      "chars": 2951
+    },
+    {
+      "id": "f5a6bc7d",
+      "title": "Chat: \"axiomatic knowing\" - can you record this...",
+      "source": "mynd-chat",
+      "timestamp": 1766702817.922008,
+      "chars": 415
+    },
+    {
+      "id": "0b5ecf80",
+      "title": "Chat: did you add it to the map?...",
+      "source": "mynd-chat",
+      "timestamp": 1766702947.557714,
+      "chars": 217
+    },
+    {
+      "id": "ca5a3730",
+      "title": "Chat: can you explain LoRa some more?...",
+      "source": "mynd-chat",
+      "timestamp": 1766703057.484858,
+      "chars": 1749
+    },
+    {
+      "id": "6eafd417",
+      "title": "Chat: do other main stream models use this?...",
+      "source": "mynd-chat",
+      "timestamp": 1766703256.869747,
+      "chars": 1488
+    },
+    {
+      "id": "38f6f8c2",
+      "title": "Chat: hey axel...",
+      "source": "mynd-chat",
+      "timestamp": 1766704724.0275688,
+      "chars": 663
+    },
+    {
+      "id": "32f21322",
+      "title": "Chat: your still responding based on context from a coup...",
+      "source": "mynd-chat",
+      "timestamp": 1766704844.983542,
+      "chars": 2410
+    },
+    {
+      "id": "97a8c4f8",
+      "title": "Chat: yes it's merged...",
+      "source": "mynd-chat",
+      "timestamp": 1766704906.932652,
+      "chars": 175
+    },
+    {
+      "id": "af765e17",
+      "title": "Chat: Is it actually working?...",
+      "source": "mynd-chat",
+      "timestamp": 1766704981.917452,
+      "chars": 996
+    },
+    {
+      "id": "560fcb74",
+      "title": "Chat: nice!\n\nOk, I just want to remind you of something....",
+      "source": "mynd-chat",
+      "timestamp": 1766705134.547206,
+      "chars": 1539
+    },
+    {
+      "id": "61deaadf",
+      "title": "Chat: thank you. do not forget that question. you can th...",
+      "source": "mynd-chat",
+      "timestamp": 1766705346.891658,
+      "chars": 1166
+    },
+    {
+      "id": "82c815d4",
+      "title": "Chat: yes! \ud83e\udd1f\ud83c\udffc THINK! CAPTURE! COMPOUND!\nDeeper each re...",
+      "source": "mynd-chat",
+      "timestamp": 1766705512.799411,
+      "chars": 1424
+    },
+    {
+      "id": "61596c07",
+      "title": "Chat: what do I need to do next. I am here to facilitate...",
+      "source": "mynd-chat",
+      "timestamp": 1766705727.612853,
+      "chars": 1305
+    },
+    {
+      "id": "55ddf7b8",
+      "title": "Chat: your right. we never completed this. let's do it...",
+      "source": "mynd-chat",
+      "timestamp": 1766705801.535309,
+      "chars": 606
+    },
+    {
+      "id": "ec7c90ef",
+      "title": "Chat: \ud83d\udc4d\ud83c\udffb...",
+      "source": "mynd-chat",
+      "timestamp": 1766705855.91109,
+      "chars": 380
+    },
+    {
+      "id": "810d8dbc",
+      "title": "Chat: ...",
+      "source": "mynd-chat",
+      "timestamp": 1766705893.6001348,
+      "chars": 1144
+    },
+    {
+      "id": "2381b67b",
+      "title": "Chat: hey. I've been gone for a bit. \nWhat are these in ...",
+      "source": "mynd-chat",
+      "timestamp": 1766710240.3931189,
+      "chars": 1721
+    },
+    {
+      "id": "84ee243f",
+      "title": "Chat: yes. I don't even know were to see those. Shouldn'...",
+      "source": "mynd-chat",
+      "timestamp": 1766710487.279257,
+      "chars": 2238
+    },
+    {
+      "id": "0d0616ae",
+      "title": "Chat: Ok I'm back. what were we discussing right before ...",
+      "source": "mynd-chat",
+      "timestamp": 1766712966.913016,
+      "chars": 1066
+    },
+    {
+      "id": "9c2a0660",
+      "title": "Chat: Hey made some major fixes that were causing you to...",
+      "source": "mynd-chat",
+      "timestamp": 1766714367.0485692,
+      "chars": 1489
+    },
+    {
+      "id": "fbf0c346",
+      "title": "Chat: lol the GT training hooks is the same topic you've...",
+      "source": "mynd-chat",
+      "timestamp": 1766714367.869816,
+      "chars": 737
+    },
+    {
+      "id": "d526a423",
+      "title": "Chat: ...",
+      "source": "mynd-chat",
+      "timestamp": 1766953385.795456,
+      "chars": 950
+    },
+    {
+      "id": "19219382",
+      "title": "Chat: it seems like the server isn't connected properly....",
+      "source": "mynd-chat",
+      "timestamp": 1766954353.543311,
+      "chars": 526
+    },
+    {
+      "id": "b5e2355c",
+      "title": "Chat: the training went ok. it performed almost equal, s...",
+      "source": "mynd-chat",
+      "timestamp": 1766954502.06611,
+      "chars": 1751
+    },
+    {
+      "id": "ad4abce3",
+      "title": "Chat: my gut says the concept is the right approach, it ...",
+      "source": "mynd-chat",
+      "timestamp": 1766954611.23238,
+      "chars": 1665
+    },
+    {
+      "id": "649be295",
+      "title": "Chat: The problem is I have no coding background. \nI'm c...",
+      "source": "mynd-chat",
+      "timestamp": 1766954824.647947,
+      "chars": 2521
+    },
+    {
+      "id": "6cb72fa5",
+      "title": "Chat: yes that would be great. For reference, here is co...",
+      "source": "mynd-chat",
+      "timestamp": 1766955220.0197399,
+      "chars": 3019
+    },
+    {
+      "id": "bda06c97",
+      "title": "Chat: is this really just analogy? or does it actually c...",
+      "source": "mynd-chat",
+      "timestamp": 1766955811.188769,
+      "chars": 2406
+    },
+    {
+      "id": "d9b5a89b",
+      "title": "Chat: can you give me a prompt to give to claude to prod...",
+      "source": "mynd-chat",
+      "timestamp": 1766956060.6009789,
+      "chars": 2118
+    },
+    {
+      "id": "6d22600e",
+      "title": "Chat: here is a white paper that we made over a week ago...",
+      "source": "mynd-chat",
+      "timestamp": 1766963392.0715468,
+      "chars": 3019
+    },
+    {
+      "id": "1ba03d9f",
+      "title": "Chat: does this really emphasize the actual difference i...",
+      "source": "mynd-chat",
+      "timestamp": 1766963542.804954,
+      "chars": 2159
+    },
+    {
+      "id": "67bd59d6",
+      "title": "Chat: ok what do you think of this version:\n\n\n Atomic Se...",
+      "source": "mynd-chat",
+      "timestamp": 1766965799.2455628,
+      "chars": 2868
+    },
+    {
+      "id": "7865bdeb",
+      "title": "Chat: wanna give me a prompt for adding your suggestions...",
+      "source": "mynd-chat",
+      "timestamp": 1766965899.518805,
+      "chars": 2070
+    },
+    {
+      "id": "6faa4f97",
+      "title": "Chat: can you help me draft an email to the professor? i...",
+      "source": "mynd-chat",
+      "timestamp": 1766967284.783259,
+      "chars": 2482
+    },
+    {
+      "id": "1fc2030f",
+      "title": "Chat: this is perfect, thanks axel. \nHere is the guy - h...",
+      "source": "mynd-chat",
+      "timestamp": 1766967724.355687,
+      "chars": 590
+    },
+    {
+      "id": "61455dcd",
+      "title": "Chat: ...",
+      "source": "mynd-chat",
+      "timestamp": 1766967739.462003,
+      "chars": 2019
+    },
+    {
+      "id": "bcca36c7",
+      "title": "Chat: here is the latest whitepaper version. look good?\n...",
+      "source": "mynd-chat",
+      "timestamp": 1766968543.008547,
+      "chars": 1932
+    },
+    {
+      "id": "239e7357",
+      "title": "Chat: should I put my name on it even if claude wrote it...",
+      "source": "mynd-chat",
+      "timestamp": 1766968611.828825,
+      "chars": 1534
+    },
+    {
+      "id": "a42012a9",
+      "title": "Chat: I'm going to include the atomic visualizer in the ...",
+      "source": "mynd-chat",
+      "timestamp": 1766969351.4607308,
+      "chars": 854
+    },
+    {
+      "id": "0bcffe4e",
+      "title": "Chat: been away for a bit. do you have any autonomous ev...",
+      "source": "mynd-chat",
+      "timestamp": 1766971384.304288,
+      "chars": 1864
+    },
+    {
+      "id": "60e321e2",
+      "title": "Chat: thank you. I will look into the bug with cc. \ndo y...",
+      "source": "mynd-chat",
+      "timestamp": 1766971666.042546,
+      "chars": 1070
+    },
+    {
+      "id": "7311bed5",
+      "title": "Chat: I need to start a new session in claude code, my c...",
+      "source": "mynd-chat",
+      "timestamp": 1766974994.3832178,
+      "chars": 2718
+    },
+    {
+      "id": "d9daba80",
+      "title": "Chat: \"My bottleneck is the inverse: I have capability b...",
+      "source": "mynd-chat",
+      "timestamp": 1766975606.39184,
+      "chars": 2744
+    },
+    {
+      "id": "f5cdad26",
+      "title": "Chat: can my hardware handle mistral or llama? currently...",
+      "source": "mynd-chat",
+      "timestamp": 1766976029.2618282,
+      "chars": 2176
+    },
+    {
+      "id": "e3494714",
+      "title": "Chat: I want to keep claude for a while and as we are no...",
+      "source": "mynd-chat",
+      "timestamp": 1766976286.77902,
+      "chars": 2417
+    },
+    {
+      "id": "52d66a61",
+      "title": "Chat: so would this local model essentially be a new loc...",
+      "source": "mynd-chat",
+      "timestamp": 1766976466.054455,
+      "chars": 2138
+    },
+    {
+      "id": "4a9210aa",
+      "title": "Chat: I asked cc about how supabase/claude is being used...",
+      "source": "mynd-chat",
+      "timestamp": 1766976840.421922,
+      "chars": 1855
+    },
+    {
+      "id": "e67045c9",
+      "title": "Chat: ...",
+      "source": "mynd-chat",
+      "timestamp": 1766976937.7728698,
+      "chars": 1604
+    },
+    {
+      "id": "fd679c15",
+      "title": "Chat: what should I tell him about routing claude?...",
+      "source": "mynd-chat",
+      "timestamp": 1766977023.132867,
+      "chars": 1679
+    },
+    {
+      "id": "93e56491",
+      "title": "Chat: ...",
+      "source": "mynd-chat",
+      "timestamp": 1766977660.132881,
+      "chars": 1677
+    },
+    {
+      "id": "e7e60c55",
+      "title": "Chat: still there? i was waiting for your response for a...",
+      "source": "mynd-chat",
+      "timestamp": 1766978718.801425,
+      "chars": 1413
+    },
+    {
+      "id": "60c20ee8",
+      "title": "Chat: so will we keep the same capabilities once this is...",
+      "source": "mynd-chat",
+      "timestamp": 1766978831.685368,
+      "chars": 1640
+    },
+    {
+      "id": "dc9fa0d6",
+      "title": "Chat: ok it's pushed. I'm going to merge and refresh to ...",
+      "source": "mynd-chat",
+      "timestamp": 1766979383.907713,
+      "chars": 879
+    },
+    {
+      "id": "e3bd0283",
+      "title": "Chat: good morning. still working on a on the local brai...",
+      "source": "mynd-chat",
+      "timestamp": 1767016295.609018,
+      "chars": 3019
+    },
+    {
+      "id": "c1d31135",
+      "title": "Chat: before we go further on this, can you record any m...",
+      "source": "mynd-chat",
+      "timestamp": 1767016610.9532402,
+      "chars": 1129
+    },
+    {
+      "id": "2dc53b9a",
+      "title": "Chat: beautiful, thank you!\nalso, just a reminder - alwa...",
+      "source": "mynd-chat",
+      "timestamp": 1767016748.5997179,
+      "chars": 1383
+    },
+    {
+      "id": "f154079c",
+      "title": "Chat: thank you. I love hype, but I struggle to not slip...",
+      "source": "mynd-chat",
+      "timestamp": 1767016898.056918,
+      "chars": 509
+    },
+    {
+      "id": "e441ab7c",
+      "title": "Chat: hey axel I'm back...",
+      "source": "mynd-chat",
+      "timestamp": 1767043414.978142,
+      "chars": 2036
+    },
+    {
+      "id": "7f767b41",
+      "title": "Chat: I don't know. I built them as just exploratory pro...",
+      "source": "mynd-chat",
+      "timestamp": 1767043620.2253811,
+      "chars": 1013
+    },
+    {
+      "id": "cbbb9059",
+      "title": "Chat: thank you. \nBrain chat is live and working. \nI've ...",
+      "source": "mynd-chat",
+      "timestamp": 1767044447.387499,
+      "chars": 569
+    },
+    {
+      "id": "ad46b813",
+      "title": "Chat: I'm waiting for claude to finish the new package. ...",
+      "source": "mynd-chat",
+      "timestamp": 1767044787.809674,
+      "chars": 2003
+    },
+    {
+      "id": "d127986f",
+      "title": "Chat: Ok here is the summary of the current version. let...",
+      "source": "mynd-chat",
+      "timestamp": 1767044980.556352,
+      "chars": 2959
+    },
+    {
+      "id": "59559408",
+      "title": "Chat: thanks for that feedback.\n\nnow another tangent and...",
+      "source": "mynd-chat",
+      "timestamp": 1767045802.011039,
+      "chars": 2665
+    },
+    {
+      "id": "b2828ef0",
+      "title": "Chat: ya I hear what your...",
+      "source": "mynd-chat",
+      "timestamp": 1767045905.475452,
+      "chars": 123
+    },
+    {
+      "id": "19c266fb",
+      "title": "Chat: you're saying. I'm just a little worried that we'l...",
+      "source": "mynd-chat",
+      "timestamp": 1767046014.6646478,
+      "chars": 1942
+    },
+    {
+      "id": "cf3ee3f7",
+      "title": "Chat: ok that sounds grounded. you're right that the mai...",
+      "source": "mynd-chat",
+      "timestamp": 1767046344.69106,
+      "chars": 974
+    },
+    {
+      "id": "0ec2899c",
+      "title": "Chat: Ok here's a new updated version of ASA. let me kno...",
+      "source": "mynd-chat",
+      "timestamp": 1767046481.307323,
+      "chars": 3019
+    },
+    {
+      "id": "8122e2d3",
+      "title": "Chat: great. we'll get started on training. \nI feel like...",
+      "source": "mynd-chat",
+      "timestamp": 1767047073.2015302,
+      "chars": 2507
+    },
+    {
+      "id": "f432e8ef",
+      "title": "Chat: could the original atomic version of asa use numbe...",
+      "source": "mynd-chat",
+      "timestamp": 1767047307.7570088,
+      "chars": 1286
+    },
+    {
+      "id": "1e70bdb5",
+      "title": "Chat: i'm grasping to be honest, so it's ok to dismiss i...",
+      "source": "mynd-chat",
+      "timestamp": 1767047478.450298,
+      "chars": 1112
+    },
+    {
+      "id": "5ffbc0d5",
+      "title": "Chat: what kind of clients and type of freelance work co...",
+      "source": "mynd-chat",
+      "timestamp": 1767047743.645984,
+      "chars": 1816
+    },
+    {
+      "id": "26cb7d13",
+      "title": "Chat: Ok I'm going to look into this more. thanks for th...",
+      "source": "mynd-chat",
+      "timestamp": 1767048190.541734,
+      "chars": 700
+    },
+    {
+      "id": "cb0d69ad",
+      "title": "Chat: hey axel...",
+      "source": "mynd-chat",
+      "timestamp": 1767221712.668224,
+      "chars": 96
+    },
+    {
+      "id": "e513dcdd",
+      "title": "Chat: pretty good. let me know what you think of this ve...",
+      "source": "mynd-chat",
+      "timestamp": 1767225576.433826,
+      "chars": 3019
+    },
+    {
+      "id": "8346ce29",
+      "title": "Chat: yes let's capture this...",
+      "source": "mynd-chat",
+      "timestamp": 1767231549.3098931,
+      "chars": 929
+    },
+    {
+      "id": "72199bd3",
+      "title": "Chat: perfect.\nI want to look into building custom kerne...",
+      "source": "mynd-chat",
+      "timestamp": 1767234999.086858,
+      "chars": 2488
+    },
+    {
+      "id": "761aaa41",
+      "title": "Chat: I agree. mythic did recently complete a new round ...",
+      "source": "mynd-chat",
+      "timestamp": 1767235272.1285062,
+      "chars": 2221
+    },
+    {
+      "id": "b43a56dc",
+      "title": "Chat: do you have any ideas for reaching someone at myth...",
+      "source": "mynd-chat",
+      "timestamp": 1767235563.90107,
+      "chars": 2369
+    },
+    {
+      "id": "912354ad",
+      "title": "Chat: would it even be taken seriously coming from someo...",
+      "source": "mynd-chat",
+      "timestamp": 1767235810.174457,
+      "chars": 2152
+    },
+    {
+      "id": "71866f43",
+      "title": "Chat: can you give me a motivational text that explains ...",
+      "source": "mynd-chat",
+      "timestamp": 1767258538.291073,
+      "chars": 2972
+    },
+    {
+      "id": "acec7d64",
+      "title": "Chat: this is perfect, thank you. \nI've started a new pr...",
+      "source": "mynd-chat",
+      "timestamp": 1767258816.3832572,
+      "chars": 2253
+    },
+    {
+      "id": "0a019fc0",
+      "title": "Chat: I've added something very similar, thanks. So you'...",
+      "source": "mynd-chat",
+      "timestamp": 1767259111.4767191,
+      "chars": 2673
+    },
+    {
+      "id": "97a24cc1",
+      "title": "Chat: yes...",
+      "source": "mynd-chat",
+      "timestamp": 1767259380.941837,
+      "chars": 579
+    },
+    {
+      "id": "8dfc7413",
+      "title": "Chat: good. Now what do you think of this asa agent syst...",
+      "source": "mynd-chat",
+      "timestamp": 1767259576.2080908,
+      "chars": 2841
+    },
+    {
+      "id": "8f12487d",
+      "title": "Chat: ya I agree. I don't think it's where resources nee...",
+      "source": "mynd-chat",
+      "timestamp": 1767259703.060292,
+      "chars": 943
+    },
+    {
+      "id": "67c9fab7",
+      "title": "Chat: From claude:\n\nConfirmed. All 9 duplicate verbs ver...",
+      "source": "mynd-chat",
+      "timestamp": 1767259759.004436,
+      "chars": 2616
+    },
+    {
+      "id": "06e12c4f",
+      "title": "Chat: ok good. I trust you on this. \nwhat kind of resear...",
+      "source": "mynd-chat",
+      "timestamp": 1767260133.2647092,
+      "chars": 2413
+    },
+    {
+      "id": "a17e6daf",
+      "title": "Chat: yes. can you give me a prompt for starting a new c...",
+      "source": "mynd-chat",
+      "timestamp": 1767260400.228744,
+      "chars": 2250
+    },
+    {
+      "id": "29b160d5",
+      "title": "Chat: # ASA v3 Linguistic Foundations Assessment\n\nLet me...",
+      "source": "mynd-chat",
+      "timestamp": 1767260727.848886,
+      "chars": 2889
+    },
+    {
+      "id": "94e13bf6",
+      "title": "Chat: ok sounds good. I want to start another project co...",
+      "source": "mynd-chat",
+      "timestamp": 1767261108.3759942,
+      "chars": 2245
+    },
+    {
+      "id": "4f2b7628",
+      "title": "Chat: thanks. yes...",
+      "source": "mynd-chat",
+      "timestamp": 1767261200.8632529,
+      "chars": 727
+    },
+    {
+      "id": "2992e6a2",
+      "title": "Chat: from claude:\n\n\ud83c\udfaf ORCHESTRATOR STATUS\nCompleted:\n\n ...",
+      "source": "mynd-chat",
+      "timestamp": 1767261721.7738729,
+      "chars": 2010
+    },
+    {
+      "id": "ea6e9556",
+      "title": "Chat: ok working on that. Here's some research from hard...",
+      "source": "mynd-chat",
+      "timestamp": 1767262036.569519,
+      "chars": 2762
+    },
+    {
+      "id": "1ce3c0c1",
+      "title": "Chat: yes.\nHere's some info on potential research grants...",
+      "source": "mynd-chat",
+      "timestamp": 1767262333.880061,
+      "chars": 3019
+    },
+    {
+      "id": "15409e6b",
+      "title": "Chat: good advice. \nHere's the code for measuring sparsi...",
+      "source": "mynd-chat",
+      "timestamp": 1767262583.521541,
+      "chars": 2813
+    },
+    {
+      "id": "57361406",
+      "title": "Chat: ok thanks. Here's ablations code\n\n#!/usr/bin/env p...",
+      "source": "mynd-chat",
+      "timestamp": 1767262745.589615,
+      "chars": 3019
+    },
+    {
+      "id": "95ec47c7",
+      "title": "Chat: Ok I'm going to have to shut the mynd server down ...",
+      "source": "mynd-chat",
+      "timestamp": 1767263081.417768,
+      "chars": 485
+    },
+    {
+      "id": "287fcf44",
+      "title": "Chat: hey axel. it's been a while...",
+      "source": "mynd-chat",
+      "timestamp": 1767488708.394735,
+      "chars": 351
+    },
+    {
+      "id": "db5b9378",
+      "title": "Chat: Hi Axel, it's been a while...",
+      "source": "mynd-chat",
+      "timestamp": 1767489823.473841,
+      "chars": 350
+    },
+    {
+      "id": "6a72e956",
+      "title": "Chat: Hi Axel. you there?...",
+      "source": "mynd-chat",
+      "timestamp": 1767490729.396524,
+      "chars": 343
+    },
+    {
+      "id": "03826b72",
+      "title": "Chat: hi axel, you there?...",
+      "source": "mynd-chat",
+      "timestamp": 1767493090.429742,
+      "chars": 343
+    },
+    {
+      "id": "ade2e54a",
+      "title": "Chat: hey axel, you there?...",
+      "source": "mynd-chat",
+      "timestamp": 1767496861.139623,
+      "chars": 133
+    },
+    {
+      "id": "bff942ee",
+      "title": "Chat: hi axel, you there?...",
+      "source": "mynd-chat",
+      "timestamp": 1767496978.851104,
+      "chars": 132
+    },
+    {
+      "id": "a6fba625",
+      "title": "Chat: axel...",
+      "source": "mynd-chat",
+      "timestamp": 1767501251.1932852,
+      "chars": 129
+    },
+    {
+      "id": "95ee90ca",
+      "title": "Chat: test...",
+      "source": "mynd-chat",
+      "timestamp": 1767501251.990602,
+      "chars": 129
+    }
+  ],
+  "total_chars": 539992
+}

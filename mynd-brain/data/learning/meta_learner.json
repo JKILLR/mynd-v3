@@ -1,0 +1,848 @@
+{
+  "source_stats": {
+    "predictions": {
+      "uses": 65,
+      "successes": 0,
+      "failures": 65
+    },
+    "distilled_knowledge": {
+      "uses": 189,
+      "successes": 87,
+      "failures": 102
+    },
+    "patterns": {
+      "uses": 0,
+      "successes": 0,
+      "failures": 0
+    },
+    "corrections": {
+      "uses": 0,
+      "successes": 0,
+      "failures": 0
+    },
+    "memories": {
+      "uses": 0,
+      "successes": 0,
+      "failures": 0
+    }
+  },
+  "confidence_buckets": {
+    "high": {
+      "predicted": 0,
+      "correct": 0
+    },
+    "medium": {
+      "predicted": 0,
+      "correct": 0
+    },
+    "low": {
+      "predicted": 0,
+      "correct": 0
+    }
+  },
+  "learning_rates": {
+    "connections": 0.1,
+    "patterns": 0.05,
+    "corrections": 0.2,
+    "insights": 0.1
+  },
+  "strategies": {
+    "reinforce_correct": {
+      "uses": 0,
+      "outcomes": []
+    },
+    "learn_from_miss": {
+      "uses": 65,
+      "outcomes": [
+        {
+          "value": 0.7,
+          "timestamp": 1766464340.6192021
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766467267.841835
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766467853.038157
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766467853.047154
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766467874.4937751
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766467950.4180548
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766467985.963629
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766469213.666372
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766472988.486287
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766472988.505944
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766472988.5184588
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766472988.5296352
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766472988.622514
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766472988.638488
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766472988.651983
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766492466.966079
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766492466.978733
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766492467.0056908
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766492467.061433
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766492467.063655
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766508001.018591
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766508001.035382
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766508001.04679
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766508001.0716622
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766508001.088534
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766508001.1096709
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766508001.130486
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766508102.2224839
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766508102.2331991
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766508102.241887
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766508102.2532659
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766508102.262112
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766508102.279936
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766508102.302908
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766658256.786475
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766658257.560926
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766658257.6400151
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766658257.640416
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766658257.678453
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766658257.727524
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766696988.801346
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766698392.1633122
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766699080.478657
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766699081.149896
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766699081.207832
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766699081.2723498
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766699081.2726731
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766699772.9535391
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766971660.296449
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766971660.3002691
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766971665.787114
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766971665.887297
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766971665.8885171
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766971665.991211
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766971665.992542
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1766971666.166868
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1767233545.385607
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1767233549.326263
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1767233549.328393
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1767233549.4595048
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1767233549.459727
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1767259374.1113029
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1767259377.656009
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1767260397.319104
+        },
+        {
+          "value": 0.7,
+          "timestamp": 1767261194.7016408
+        }
+      ]
+    },
+    "pattern_matching": {
+      "uses": 0,
+      "outcomes": []
+    },
+    "semantic_similarity": {
+      "uses": 0,
+      "outcomes": []
+    }
+  },
+  "meta_history": [
+    {
+      "epoch": 1,
+      "timestamp": 1766472664.061685,
+      "source_effectiveness": {
+        "predictions": 0.0,
+        "distilled_knowledge": 0.08333333333333333,
+        "patterns": 0,
+        "corrections": 0,
+        "memories": 0
+      },
+      "calibration": {},
+      "best_strategy": {
+        "strategy": "learn_from_miss",
+        "uses": 8,
+        "avg_outcome": 0.7000000000000001
+      },
+      "attention_weights": {
+        "predictions": 0.7657205000000002,
+        "distilled_knowledge": 0.5240701450514975,
+        "patterns": 1.0,
+        "corrections": 1.0,
+        "memories": 1.0
+      },
+      "learning_rates": {
+        "connections": 0.1,
+        "patterns": 0.05,
+        "corrections": 0.2,
+        "insights": 0.1
+      }
+    },
+    {
+      "epoch": 2,
+      "timestamp": 1766474199.150265,
+      "source_effectiveness": {
+        "predictions": 0.0,
+        "distilled_knowledge": 0.15384615384615385,
+        "patterns": 0,
+        "corrections": 0,
+        "memories": 0
+      },
+      "calibration": {},
+      "best_strategy": {
+        "strategy": "learn_from_miss",
+        "uses": 15,
+        "avg_outcome": 0.6999999999999998
+      },
+      "attention_weights": {
+        "predictions": 0.5926510094425926,
+        "distilled_knowledge": 0.5854920623475808,
+        "patterns": 1.0,
+        "corrections": 1.0,
+        "memories": 1.0
+      },
+      "learning_rates": {
+        "connections": 0.1,
+        "patterns": 0.05,
+        "corrections": 0.2,
+        "insights": 0.1
+      }
+    },
+    {
+      "epoch": 3,
+      "timestamp": 1766480195.752532,
+      "source_effectiveness": {
+        "predictions": 0.0,
+        "distilled_knowledge": 0.18181818181818182,
+        "patterns": 0,
+        "corrections": 0,
+        "memories": 0
+      },
+      "calibration": {},
+      "best_strategy": {
+        "strategy": "learn_from_miss",
+        "uses": 15,
+        "avg_outcome": 0.6999999999999998
+      },
+      "attention_weights": {
+        "predictions": 0.5547094945657567,
+        "distilled_knowledge": 0.6191030303315537,
+        "patterns": 1.0,
+        "corrections": 1.0,
+        "memories": 1.0
+      },
+      "learning_rates": {
+        "connections": 0.1,
+        "patterns": 0.05,
+        "corrections": 0.2,
+        "insights": 0.1
+      }
+    },
+    {
+      "epoch": 4,
+      "timestamp": 1766482605.513679,
+      "source_effectiveness": {
+        "predictions": 0.0,
+        "distilled_knowledge": 0.2653061224489796,
+        "patterns": 0,
+        "corrections": 0,
+        "memories": 0
+      },
+      "calibration": {},
+      "best_strategy": {
+        "strategy": "learn_from_miss",
+        "uses": 15,
+        "avg_outcome": 0.6999999999999998
+      },
+      "attention_weights": {
+        "predictions": 0.5323054094461338,
+        "distilled_knowledge": 0.6672870335208444,
+        "patterns": 1.0,
+        "corrections": 1.0,
+        "memories": 1.0
+      },
+      "learning_rates": {
+        "connections": 0.1,
+        "patterns": 0.05,
+        "corrections": 0.2,
+        "insights": 0.1
+      }
+    },
+    {
+      "epoch": 5,
+      "timestamp": 1766486291.226646,
+      "source_effectiveness": {
+        "predictions": 0.0,
+        "distilled_knowledge": 0.3333333333333333,
+        "patterns": 0,
+        "corrections": 0,
+        "memories": 0
+      },
+      "calibration": {},
+      "best_strategy": {
+        "strategy": "learn_from_miss",
+        "uses": 15,
+        "avg_outcome": 0.6999999999999998
+      },
+      "attention_weights": {
+        "predictions": 0.5190760212238477,
+        "distilled_knowledge": 0.725717631679024,
+        "patterns": 1.0,
+        "corrections": 1.0,
+        "memories": 1.0
+      },
+      "learning_rates": {
+        "connections": 0.1,
+        "patterns": 0.05,
+        "corrections": 0.2,
+        "insights": 0.1
+      }
+    },
+    {
+      "epoch": 6,
+      "timestamp": 1766654952.602973,
+      "source_effectiveness": {
+        "predictions": 0.0,
+        "distilled_knowledge": 0.35714285714285715,
+        "patterns": 0,
+        "corrections": 0,
+        "memories": 0
+      },
+      "calibration": {},
+      "best_strategy": {
+        "strategy": "learn_from_miss",
+        "uses": 34,
+        "avg_outcome": 0.6999999999999996
+      },
+      "attention_weights": {
+        "predictions": 0.5001092372502646,
+        "distilled_knowledge": 0.8646129341547713,
+        "patterns": 1.0,
+        "corrections": 1.0,
+        "memories": 1.0
+      },
+      "learning_rates": {
+        "connections": 0.1,
+        "patterns": 0.05,
+        "corrections": 0.2,
+        "insights": 0.1
+      }
+    },
+    {
+      "epoch": 7,
+      "timestamp": 1766656305.03307,
+      "source_effectiveness": {
+        "predictions": 0.0,
+        "distilled_knowledge": 0.38202247191011235,
+        "patterns": 0,
+        "corrections": 0,
+        "memories": 0
+      },
+      "calibration": {},
+      "best_strategy": {
+        "strategy": "learn_from_miss",
+        "uses": 34,
+        "avg_outcome": 0.6999999999999996
+      },
+      "attention_weights": {
+        "predictions": 0.5000645035039089,
+        "distilled_knowledge": 0.8664800196933176,
+        "patterns": 1.0,
+        "corrections": 1.0,
+        "memories": 1.0
+      },
+      "learning_rates": {
+        "connections": 0.1,
+        "patterns": 0.05,
+        "corrections": 0.2,
+        "insights": 0.1
+      }
+    },
+    {
+      "epoch": 8,
+      "timestamp": 1766659457.025771,
+      "source_effectiveness": {
+        "predictions": 0.0,
+        "distilled_knowledge": 0.3979591836734694,
+        "patterns": 0,
+        "corrections": 0,
+        "memories": 0
+      },
+      "calibration": {},
+      "best_strategy": {
+        "strategy": "learn_from_miss",
+        "uses": 40,
+        "avg_outcome": 0.6999999999999995
+      },
+      "attention_weights": {
+        "predictions": 0.5000132806994441,
+        "distilled_knowledge": 0.8839668051834167,
+        "patterns": 1.0,
+        "corrections": 1.0,
+        "memories": 1.0
+      },
+      "learning_rates": {
+        "connections": 0.1,
+        "patterns": 0.05,
+        "corrections": 0.2,
+        "insights": 0.1
+      }
+    },
+    {
+      "epoch": 9,
+      "timestamp": 1766696764.297266,
+      "source_effectiveness": {
+        "predictions": 0.0,
+        "distilled_knowledge": 0.39622641509433965,
+        "patterns": 0,
+        "corrections": 0,
+        "memories": 0
+      },
+      "calibration": {},
+      "best_strategy": {
+        "strategy": "learn_from_miss",
+        "uses": 40,
+        "avg_outcome": 0.6999999999999995
+      },
+      "attention_weights": {
+        "predictions": 0.5000057169056367,
+        "distilled_knowledge": 0.8902165503517165,
+        "patterns": 1.0,
+        "corrections": 1.0,
+        "memories": 1.0
+      },
+      "learning_rates": {
+        "connections": 0.1,
+        "patterns": 0.05,
+        "corrections": 0.2,
+        "insights": 0.1
+      }
+    },
+    {
+      "epoch": 10,
+      "timestamp": 1766963542.7769952,
+      "source_effectiveness": {
+        "predictions": 0.0,
+        "distilled_knowledge": 0.4357142857142857,
+        "patterns": 0,
+        "corrections": 0,
+        "memories": 0
+      },
+      "calibration": {},
+      "best_strategy": {
+        "strategy": "learn_from_miss",
+        "uses": 48,
+        "avg_outcome": 0.6999999999999997
+      },
+      "attention_weights": {
+        "predictions": 0.5000000684457397,
+        "distilled_knowledge": 0.9170929532988856,
+        "patterns": 1.0,
+        "corrections": 1.0,
+        "memories": 1.0
+      },
+      "learning_rates": {
+        "connections": 0.1,
+        "patterns": 0.05,
+        "corrections": 0.2,
+        "insights": 0.1
+      }
+    },
+    {
+      "epoch": 11,
+      "timestamp": 1766967739.43521,
+      "source_effectiveness": {
+        "predictions": 0.0,
+        "distilled_knowledge": 0.4482758620689655,
+        "patterns": 0,
+        "corrections": 0,
+        "memories": 0
+      },
+      "calibration": {},
+      "best_strategy": {
+        "strategy": "learn_from_miss",
+        "uses": 48,
+        "avg_outcome": 0.6999999999999997
+      },
+      "attention_weights": {
+        "predictions": 0.5000000404165249,
+        "distilled_knowledge": 0.9285612974326253,
+        "patterns": 1.0,
+        "corrections": 1.0,
+        "memories": 1.0
+      },
+      "learning_rates": {
+        "connections": 0.1,
+        "patterns": 0.05,
+        "corrections": 0.2,
+        "insights": 0.1
+      }
+    },
+    {
+      "epoch": 12,
+      "timestamp": 1766975606.356669,
+      "source_effectiveness": {
+        "predictions": 0.0,
+        "distilled_knowledge": 0.45394736842105265,
+        "patterns": 0,
+        "corrections": 0,
+        "memories": 0
+      },
+      "calibration": {},
+      "best_strategy": {
+        "strategy": "learn_from_miss",
+        "uses": 56,
+        "avg_outcome": 0.7000000000000002
+      },
+      "attention_weights": {
+        "predictions": 0.5000000083214043,
+        "distilled_knowledge": 0.944252575428393,
+        "patterns": 1.0,
+        "corrections": 1.0,
+        "memories": 1.0
+      },
+      "learning_rates": {
+        "connections": 0.1,
+        "patterns": 0.05,
+        "corrections": 0.2,
+        "insights": 0.1
+      }
+    },
+    {
+      "epoch": 13,
+      "timestamp": 1766976937.749923,
+      "source_effectiveness": {
+        "predictions": 0.0,
+        "distilled_knowledge": 0.45222929936305734,
+        "patterns": 0,
+        "corrections": 0,
+        "memories": 0
+      },
+      "calibration": {},
+      "best_strategy": {
+        "strategy": "learn_from_miss",
+        "uses": 56,
+        "avg_outcome": 0.7000000000000002
+      },
+      "attention_weights": {
+        "predictions": 0.5000000049137062,
+        "distilled_knowledge": 0.9472400809126988,
+        "patterns": 1.0,
+        "corrections": 1.0,
+        "memories": 1.0
+      },
+      "learning_rates": {
+        "connections": 0.1,
+        "patterns": 0.05,
+        "corrections": 0.2,
+        "insights": 0.1
+      }
+    },
+    {
+      "epoch": 14,
+      "timestamp": 1766979383.895786,
+      "source_effectiveness": {
+        "predictions": 0.0,
+        "distilled_knowledge": 0.4567901234567901,
+        "patterns": 0,
+        "corrections": 0,
+        "memories": 0
+      },
+      "calibration": {},
+      "best_strategy": {
+        "strategy": "learn_from_miss",
+        "uses": 56,
+        "avg_outcome": 0.7000000000000002
+      },
+      "attention_weights": {
+        "predictions": 0.5000000029014945,
+        "distilled_knowledge": 0.9509015503088237,
+        "patterns": 1.0,
+        "corrections": 1.0,
+        "memories": 1.0
+      },
+      "learning_rates": {
+        "connections": 0.1,
+        "patterns": 0.05,
+        "corrections": 0.2,
+        "insights": 0.1
+      }
+    },
+    {
+      "epoch": 15,
+      "timestamp": 1767234999.0345879,
+      "source_effectiveness": {
+        "predictions": 0.0,
+        "distilled_knowledge": 0.4523809523809524,
+        "patterns": 0,
+        "corrections": 0,
+        "memories": 0
+      },
+      "calibration": {},
+      "best_strategy": {
+        "strategy": "learn_from_miss",
+        "uses": 61,
+        "avg_outcome": 0.7000000000000004
+      },
+      "attention_weights": {
+        "predictions": 0.5000000009105199,
+        "distilled_knowledge": 0.9506106321016539,
+        "patterns": 1.0,
+        "corrections": 1.0,
+        "memories": 1.0
+      },
+      "learning_rates": {
+        "connections": 0.1,
+        "patterns": 0.05,
+        "corrections": 0.2,
+        "insights": 0.1
+      }
+    },
+    {
+      "epoch": 16,
+      "timestamp": 1767260133.2234821,
+      "source_effectiveness": {
+        "predictions": 0.0,
+        "distilled_knowledge": 0.4581005586592179,
+        "patterns": 0,
+        "corrections": 0,
+        "memories": 0
+      },
+      "calibration": {},
+      "best_strategy": {
+        "strategy": "learn_from_miss",
+        "uses": 63,
+        "avg_outcome": 0.7000000000000005
+      },
+      "attention_weights": {
+        "predictions": 0.5000000002314422,
+        "distilled_knowledge": 0.9558173095772261,
+        "patterns": 1.0,
+        "corrections": 1.0,
+        "memories": 1.0
+      },
+      "learning_rates": {
+        "connections": 0.1,
+        "patterns": 0.05,
+        "corrections": 0.2,
+        "insights": 0.1
+      }
+    },
+    {
+      "epoch": 17,
+      "timestamp": 1767262583.508916,
+      "source_effectiveness": {
+        "predictions": 0.0,
+        "distilled_knowledge": 0.45989304812834225,
+        "patterns": 0,
+        "corrections": 0,
+        "memories": 0
+      },
+      "calibration": {},
+      "best_strategy": {
+        "strategy": "learn_from_miss",
+        "uses": 65,
+        "avg_outcome": 0.7000000000000005
+      },
+      "attention_weights": {
+        "predictions": 0.5000000000806991,
+        "distilled_knowledge": 0.9574895075656558,
+        "patterns": 1.0,
+        "corrections": 1.0,
+        "memories": 1.0
+      },
+      "learning_rates": {
+        "connections": 0.1,
+        "patterns": 0.05,
+        "corrections": 0.2,
+        "insights": 0.1
+      }
+    }
+  ],
+  "epoch": 17,
+  "attention_weights": {
+    "predictions": 0.5000000000653664,
+    "distilled_knowledge": 0.95824718333014,
+    "patterns": 1.0,
+    "corrections": 1.0,
+    "memories": 1.0
+  }
+}
